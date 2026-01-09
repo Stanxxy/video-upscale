@@ -1,0 +1,12 @@
+# Data / output artifacts
+analysis_*
+enhanced_*
+input_video.mp4
+input_video_hybrid_tracked.json
+input_video_hybrid_tracket.json
+
+# OS / Python noise
+.DS_Store
+__pycache__/
+*.py[cod]
+venv/
