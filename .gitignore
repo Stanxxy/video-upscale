@@ -1,12 +1,68 @@
-# Data / output artifacts
-analysis_*
-enhanced_*
-input_video.mp4
-input_video_hybrid_tracked.json
-input_video_hybrid_tracket.json
+# ── Videos ────────────────────────────────────────────────────────────────────
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm
+*.flv
+*.wmv
 
-# OS / Python noise
+# ── Images ────────────────────────────────────────────────────────────────────
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.bmp
+*.tiff
+*.tif
+*.heic
+*.raw
+
+# ── Model weights ─────────────────────────────────────────────────────────────
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.pkl
+*.onnx
+*.pt
+
+# ── Large data / output artifacts ─────────────────────────────────────────────
+analysis_*/
+enhanced_*/
+*_tracked.json
+*_tracket.json
+
+# ── Credentials / secrets ─────────────────────────────────────────────────────
+.env*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+*_credentials.*
+service_account.json
+token.json
+
+# ── Runtime / process files ───────────────────────────────────────────────────
+*.log
+*.pid
+.service.pid
+
+# ── OS noise ──────────────────────────────────────────────────────────────────
 .DS_Store
+Thumbs.db
+
+# ── Python noise ──────────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
 venv/
+.venv/
+env/
