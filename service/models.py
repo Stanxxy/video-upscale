@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from enum import Enum
-from typing import Optional, List
+from typing import Dict, Optional, List
 from uuid import UUID, uuid4
 
 
@@ -52,6 +52,9 @@ class TrackRequest(BaseModel):
     analyzer_mode: AnalyzerMode = AnalyzerMode.SINGLE
     method: str = "esrgan"
     sns_topic_arn: Optional[str] = None
+
+    # Player reference images for athlete identification
+    player_references: Optional[List[Dict[str, str]]] = None
 
 
 class TrackResponse(BaseModel):

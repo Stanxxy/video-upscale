@@ -19,7 +19,7 @@ class BJJTechniqueAnalyzer:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
 
-    def analyze_sequence(self, frames, frame_indices, previous_context=None):
+    def analyze_sequence(self, frames, frame_indices, previous_context=None, player_references=None):
         if not frames:
             return "No frames."
 
@@ -34,6 +34,13 @@ class BJJTechniqueAnalyzer:
 
         You are analyzing a chunk of video frames.
         """
+
+        # Build player reference instruction if available
+        ref_instruction = ""
+        if player_references:
+            ref_names = ", ".join(ref["player_name"] for ref in player_references)
+            ref_instruction = f"""
+        7. **Athlete Identification**: Reference images of the athletes are provided below. Use them to identify who is performing each technique. The athletes are: {ref_names}. Use their names in the "role" field instead of generic descriptions."""
 
         prompt = f"""
         Here is a sequence of {len(frames)} frames from a BJJ match.
@@ -63,11 +70,18 @@ class BJJTechniqueAnalyzer:
                     "confidence": 0.0-1.0
                 }}
             ]
-        }}
+        }}{ref_instruction}
         """
 
         try:
             contents = [prompt]
+
+            # Add player reference images before the crop frames
+            if player_references:
+                for ref in player_references:
+                    contents.append(f"Reference image of {ref['player_name']}:")
+                    contents.append(ref["image"])
+
             contents.extend(frames)
 
             logger.info(
@@ -111,11 +125,18 @@ class BJJMultiAgentAnalyzer:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
 
-    async def run_agent(self, role_name, system_prompt, frames, frame_indices, context, temperature=0.7):
+    async def run_agent(self, role_name, system_prompt, frames, frame_indices, context, temperature=0.7, player_references=None):
         """Runs a single agent with a specific persona."""
         system_instruction_base = """
         You are a BJJ Analyst. Analyze the video frames provided.
         """
+
+        ref_instruction = ""
+        if player_references:
+            ref_names = ", ".join(ref["player_name"] for ref in player_references)
+            ref_instruction = f"""
+        Reference images of the athletes are provided. Use them to identify who is performing each technique.
+        The athletes are: {ref_names}. Use their names instead of generic descriptions."""
 
         prompt = f"""
         You are acting as the {role_name}.
@@ -126,12 +147,19 @@ class BJJMultiAgentAnalyzer:
         Output your analysis. Be specific and detailed according to your role.
         For each technique or action identified, specify which athlete performs it
         by their visual appearance (e.g. "athlete in white gi", "athlete in blue gi",
-        "top athlete", "bottom athlete").
+        "top athlete", "bottom athlete").{ref_instruction}
         Do NOT output JSON. Output a raw analysis paragraph.
         """
 
         try:
             contents = [prompt]
+
+            # Add player reference images before the crop frames
+            if player_references:
+                for ref in player_references:
+                    contents.append(f"Reference image of {ref['player_name']}:")
+                    contents.append(ref["image"])
+
             contents.extend(frames)
 
             logger.info("Gemini multi-agent: sending %d frames to %s agent",
@@ -152,7 +180,7 @@ class BJJMultiAgentAnalyzer:
                          exc_info=True)
             return f"--- {role_name} FAILED ---\nError: {str(e)}\n"
 
-    async def analyze_sequence_async(self, frames, frame_indices, previous_context=None):
+    async def analyze_sequence_async(self, frames, frame_indices, previous_context=None, player_references=None):
         if not frames:
             return "No frames."
 
@@ -164,6 +192,7 @@ class BJJMultiAgentAnalyzer:
                 "Biomechanist",
                 "Focus ONLY on the physics. Describe limb positions, joint angles, leverage points, and entanglements. Identify which specific joints are under pressure. Always specify which athlete (by appearance) is performing each action.",
                 frames, frame_indices, previous_context, temperature=0.8,
+                player_references=player_references,
             )
         )
 
@@ -173,6 +202,7 @@ class BJJMultiAgentAnalyzer:
                 "Referee",
                 "Focus on IBJJF/ADCC scoring standards. Has a position been held for 3 seconds? Is a submission 'real' or just a setup? Is the pass complete? Always specify which athlete (by appearance) scores or attacks.",
                 frames, frame_indices, previous_context, temperature=0.6,
+                player_references=player_references,
             )
         )
 
@@ -182,6 +212,7 @@ class BJJMultiAgentAnalyzer:
                 "Tactician",
                 "Focus on the 'Why'. What is the attacker trying to do? Are they baiting? Describe the strategic flow of the match. Always specify which athlete (by appearance) is driving the action.",
                 frames, frame_indices, previous_context, temperature=0.9,
+                player_references=player_references,
             )
         )
 
@@ -257,7 +288,7 @@ class BJJMultiAgentAnalyzer:
 
 
 # Wrapper for synchronous calls
-def analyze_sequence_sync(analyzer, frames, frame_indices, previous_context):
+def analyze_sequence_sync(analyzer, frames, frame_indices, previous_context, player_references=None):
     return asyncio.run(
-        analyzer.analyze_sequence_async(frames, frame_indices, previous_context)
+        analyzer.analyze_sequence_async(frames, frame_indices, previous_context, player_references=player_references)
     )
