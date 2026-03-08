@@ -3,7 +3,10 @@ from google.genai import types
 import os
 import asyncio
 import json
+import logging
 from PIL import Image
+
+logger = logging.getLogger(__name__)
 
 
 class BJJTechniqueAnalyzer:
@@ -11,7 +14,7 @@ class BJJTechniqueAnalyzer:
         if not api_key:
             raise ValueError("API Key is required for BJJTechniqueAnalyzer")
         self.client = genai.Client(api_key=api_key)
-        self.model_id = "gemini-2.0-flash-thinking-exp-01-21"
+        self.model_id = "gemini-3-flash-preview"
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
@@ -43,15 +46,18 @@ class BJJTechniqueAnalyzer:
         2. **Resolve Ambiguity**: Use biomechanics.
         3. **Context Awareness**: Use PREVIOUS CONTEXT.
         4. **Identify the Actor**: For each technique, identify which athlete performs it by their visual appearance (e.g. "athlete in white gi", "athlete in blue gi", "top athlete", "bottom athlete").
-        5. **Generate Output**: Return ONLY valid JSON matching this format:
+        5. **Use Enum Values**: The `action` and `technique` fields MUST use exact values from the taxonomy. Do NOT invent new values.
+        6. **Generate Output**: Return ONLY valid JSON matching this format:
         {{
             "current_context_summary": "string",
             "clips": [
                 {{
                     "start_frame": int,
                     "end_frame": int,
+                    "action": "one of the Action Type enum values from the taxonomy (e.g. takedown, submission_attempt, pass, sweep, guard_bottom, mount, back_control, etc.)",
+                    "technique": "one of the Technique Type enum values from the taxonomy (e.g. double_leg, armbar, guillotine, knee_cut_pass, etc.) — use 'other' if nothing fits",
                     "category": "STANDUP_GAME|GUARD_PLAY|GUARD_PASSING|POSITIONAL_DOMINANCE|SUBMISSION_OFFENSE|DEFENSE_ESCAPES",
-                    "specific_technique": "string",
+                    "specific_technique": "string (human-readable name, e.g. 'Double Leg Takedown')",
                     "role": "string describing which athlete performs the technique",
                     "reasoning": "string",
                     "confidence": 0.0-1.0
@@ -64,17 +70,26 @@ class BJJTechniqueAnalyzer:
             contents = [prompt]
             contents.extend(frames)
 
+            logger.info(
+                "Gemini single-agent: sending %d frames to model %s",
+                len(frames), self.model_id,
+            )
             response = self.client.models.generate_content(
                 model=self.model_id,
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     temperature=0.2,
-                    thinking_config=types.ThinkingConfig(include_thoughts=True),
                 ),
             )
 
             text = response.text
+            logger.info(
+                "Gemini single-agent: received response (%d chars)",
+                len(text) if text else 0,
+            )
+            logger.debug("Gemini raw response: %.500s", text)
+
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0]
             elif "```" in text:
@@ -82,6 +97,7 @@ class BJJTechniqueAnalyzer:
 
             return text.strip()
         except Exception as e:
+            logger.error("Gemini single-agent call failed: %s", e, exc_info=True)
             return json.dumps({"error": str(e)})
 
 
@@ -118,6 +134,8 @@ class BJJMultiAgentAnalyzer:
             contents = [prompt]
             contents.extend(frames)
 
+            logger.info("Gemini multi-agent: sending %d frames to %s agent",
+                        len(frames), role_name)
             response = await self.client.aio.models.generate_content(
                 model=self.model_id,
                 contents=contents,
@@ -126,8 +144,12 @@ class BJJMultiAgentAnalyzer:
                     temperature=temperature,
                 ),
             )
+            logger.info("Gemini multi-agent %s: received response (%d chars)",
+                        role_name, len(response.text) if response.text else 0)
             return f"--- {role_name} REPORT ---\n{response.text}\n"
         except Exception as e:
+            logger.error("Gemini multi-agent %s failed: %s", role_name, e,
+                         exc_info=True)
             return f"--- {role_name} FAILED ---\nError: {str(e)}\n"
 
     async def analyze_sequence_async(self, frames, frame_indices, previous_context=None):
@@ -177,15 +199,18 @@ class BJJMultiAgentAnalyzer:
         1. Synthesize these views into a single ground truth.
         2. Resolve conflicts.
         3. For each technique, identify which athlete performs it by their visual appearance.
-        4. Output the final analysis in the required JSON format:
+        4. Use EXACT enum values from the taxonomy for `action` and `technique` fields. Do NOT invent new values.
+        5. Output the final analysis in the required JSON format:
         {{
             "current_context_summary": "string",
             "clips": [
                 {{
                     "start_frame": int,
                     "end_frame": int,
+                    "action": "one of the Action Type enum values from the taxonomy (e.g. takedown, submission_attempt, pass, sweep, guard_bottom, mount, back_control, etc.)",
+                    "technique": "one of the Technique Type enum values from the taxonomy (e.g. double_leg, armbar, guillotine, knee_cut_pass, etc.) — use 'other' if nothing fits",
                     "category": "STANDUP_GAME|GUARD_PLAY|GUARD_PASSING|POSITIONAL_DOMINANCE|SUBMISSION_OFFENSE|DEFENSE_ESCAPES",
-                    "specific_technique": "string",
+                    "specific_technique": "string (human-readable name, e.g. 'Double Leg Takedown')",
                     "role": "string describing which athlete performs the technique",
                     "reasoning": "string",
                     "confidence": 0.0-1.0
@@ -194,7 +219,7 @@ class BJJMultiAgentAnalyzer:
         }}
 
         TAXONOMY REFERENCE:
-        (See system instruction)
+        (See system instruction — it contains the full list of valid Action Type and Technique Type enum values)
         """
 
         try:
@@ -204,6 +229,7 @@ class BJJMultiAgentAnalyzer:
             except Exception:
                 taxonomy_text = ""
 
+            logger.info("Gemini multi-agent Judge: synthesizing reports")
             response = await self.client.aio.models.generate_content(
                 model=self.model_id,
                 contents=judge_prompt,
@@ -214,6 +240,10 @@ class BJJMultiAgentAnalyzer:
             )
 
             text = response.text
+            logger.info("Gemini multi-agent Judge: received response (%d chars)",
+                        len(text) if text else 0)
+            logger.debug("Gemini Judge raw response: %.500s", text)
+
             if "```json" in text:
                 text = text.split("```json")[1].split("```")[0]
             elif "```" in text:
@@ -222,6 +252,7 @@ class BJJMultiAgentAnalyzer:
             return text.strip()
 
         except Exception as e:
+            logger.error("Gemini multi-agent Judge failed: %s", e, exc_info=True)
             return json.dumps({"error": str(e)})
 
 
