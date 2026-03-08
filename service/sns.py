@@ -2,6 +2,7 @@ import boto3
 import json
 from uuid import UUID, uuid4
 from service.models import VideoEventWithCandidates, VideoEventCandidate, AnalysisCompleteEvent
+from service.taxonomy_mapper import map_to_frontend_taxonomy
 
 
 def frame_to_timestamp(frame: int, fps: float) -> str:
@@ -17,11 +18,19 @@ def frame_to_timestamp(frame: int, fps: float) -> str:
 
 def clip_to_event(clip: dict, video_id: UUID, fps: float) -> VideoEventWithCandidates:
     """Transform a pipeline clip dict into a VideoEventWithCandidates."""
+    # Map pipeline taxonomy to frontend enum values
+    taxonomy = map_to_frontend_taxonomy(
+        category=clip.get("category", "UNKNOWN"),
+        specific_technique=clip.get("specific_technique", "Unknown"),
+        role=clip.get("role", "Unknown"),
+    )
     candidate = VideoEventCandidate(
         role=clip.get("role", "Unknown"),
         skill_name=clip.get("specific_technique", "Unknown"),
         category=clip.get("category", "UNKNOWN"),
         confidence=clip.get("confidence", 0.0),
+        action=taxonomy["action"],
+        technique=taxonomy["technique"],
     )
     return VideoEventWithCandidates(
         video_id=video_id,
@@ -32,8 +41,22 @@ def clip_to_event(clip: dict, video_id: UUID, fps: float) -> VideoEventWithCandi
 
 
 class SNSPublisher:
-    def __init__(self, region: str, topic_arn: str):
-        self.client = boto3.client("sns", region_name=region)
+    def __init__(
+        self,
+        region: str,
+        topic_arn: str,
+        endpoint_url: str | None = None,
+        access_key_id: str | None = None,
+        secret_access_key: str | None = None,
+    ):
+        kwargs = {"region_name": region}
+        if endpoint_url:
+            kwargs["endpoint_url"] = endpoint_url
+        if access_key_id:
+            kwargs["aws_access_key_id"] = access_key_id
+        if secret_access_key:
+            kwargs["aws_secret_access_key"] = secret_access_key
+        self.client = boto3.client("sns", **kwargs)
         self.topic_arn = topic_arn
 
     def publish_events(
