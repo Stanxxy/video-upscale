@@ -7,6 +7,7 @@ from typing import Optional
 # Valid frontend enum values
 # ---------------------------------------------------------------------------
 
+# Canonical source: bjj-vision-backend/shared_lib/src/shared_lib/models/bjj_taxonomy.py
 VALID_ACTIONS = frozenset({
     "guard_top", "guard_bottom", "half_guard_top", "half_guard_bottom",
     "side_control", "mount", "back_control", "knee_on_belly",
@@ -17,6 +18,7 @@ VALID_ACTIONS = frozenset({
     "escape", "standing", "clinch", "reset", "other",
 })
 
+# Canonical source: bjj-vision-backend/shared_lib/src/shared_lib/models/bjj_taxonomy.py
 VALID_TECHNIQUES = frozenset({
     # Chokes
     "rear_naked_choke", "guillotine", "darce", "anaconda", "arm_triangle",
@@ -80,11 +82,8 @@ TECHNIQUE_ALIASES: dict[str, str] = {
     "anaconda_choke": "anaconda",
     "guillotine_choke": "guillotine",
     "ezekiel_choke": "ezekiel",
-    "loop_choke": "loop_choke",
     "bow_and_arrow_choke": "bow_and_arrow",
-    "clock_choke": "clock_choke",
     "baseball_bat": "baseball_bat_choke",
-    "north_south_choke": "north_south_choke",
     "paper_cutter_choke": "paper_cutter",
     "cross_collar": "cross_collar_choke",
     "cross_choke": "cross_collar_choke",
@@ -114,8 +113,6 @@ TECHNIQUE_ALIASES: dict[str, str] = {
     "over_under": "over_under_pass",
     "double_under": "double_under_pass",
     "long_step": "long_step_pass",
-    "body_lock_pass": "body_lock_pass",
-    "x_pass": "x_pass",
     "shrimp": "hip_escape",
     "upa": "trap_and_roll",
     "bumpa": "trap_and_roll",
@@ -228,7 +225,7 @@ def _infer_guard_play_action(normalized: str, technique: str) -> str:
     if technique in _HALF_GUARD_TECHNIQUES:
         return "half_guard_bottom"
     # Check if technique is a guard type -> guard_bottom
-    if technique.endswith("_guard") or technique in VALID_TECHNIQUES and "guard" in technique:
+    if technique.endswith("_guard") or (technique in VALID_TECHNIQUES and "guard" in technique):
         return "guard_bottom"
     return "guard_bottom"
 
