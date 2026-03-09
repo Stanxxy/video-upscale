@@ -57,6 +57,13 @@ class TrackRequest(BaseModel):
     player_references: Optional[List[Dict[str, str]]] = None
 
 
+class ResumeRequest(BaseModel):
+    """Request body for POST /jobs/{job_id}/resume — delivers corrected bounding boxes."""
+    box_a: List[float]  # [x,y,w,h] bounding box for athlete A
+    box_b: List[float]  # [x,y,w,h] bounding box for athlete B
+    player_mapping: Optional[Dict[str, str]] = None  # optional name mapping
+
+
 class TrackResponse(BaseModel):
     """Response for POST /track."""
     job_id: str
