@@ -66,3 +66,6 @@ build/
 venv/
 .venv/
 env/
+
+# Agent scratch paper — in-session memory offload only
+working_log/knowledge-base/scratch/*.md
