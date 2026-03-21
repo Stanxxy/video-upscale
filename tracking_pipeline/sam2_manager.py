@@ -292,14 +292,6 @@ class SAM2Manager:
     # Legacy init_video (kept for standalone test_tracking usage)
     # ------------------------------------------------------------------
 
-    def init_video(self, video_path, start_frame=0, end_frame=None):
-        """Extract ALL frames and init SAM2 state (legacy, high memory).
-
-        Prefer init_video_meta() + load_batch() for memory-bounded operation.
-        """
-        self.init_video_meta(video_path, start_frame, end_frame)
-        self.load_batch(0, self.total_local_frames)
-
     # ------------------------------------------------------------------
     # Tracking operations
     # ------------------------------------------------------------------

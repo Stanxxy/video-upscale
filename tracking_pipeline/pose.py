@@ -90,15 +90,3 @@ class PoseEstimator:
 
         return keypoints[0][:, :2], scores[0]
 
-    def estimate_batch(self, frame, boxes):
-        """
-        Estimate keypoints for multiple boxes.
-
-        Returns:
-            List of (keypoints, scores) tuples.
-        """
-        results = []
-        for box in boxes:
-            kp, sc = self.estimate(frame, box)
-            results.append((kp, sc))
-        return results

@@ -557,8 +557,8 @@ def run_tracking(
                 if progress_callback is not None:
                     try:
                         progress_callback(frames_processed, total_local)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"[tracking] progress_callback error (non-fatal): {e}")
 
             # Release per-frame objects to reduce GC pressure
             del frame_bgr, frame_rgb, masks_sam2
@@ -811,28 +811,10 @@ def _append_frame_to_json(json_file, is_first, global_idx, local_idx, fps,
         "timestamp": round(global_idx / fps, 4),
         "state": state.value,
         "iou": round(iou, 4),
-        "athletes": [],
+        "athletes": _build_athlete_dicts(
+            frame_boxes, frame_kpts, frame_scores, frame_sources, display_map
+        ),
     }
-    for track_id, box in frame_boxes.items():
-        disp_id = display_map.get(track_id, track_id)
-        athlete = {
-            "track_id": disp_id,
-            "box": [round(c, 1) for c in box],
-            "source": frame_sources.get(track_id, "unknown"),
-        }
-        kpts = frame_kpts.get(track_id)
-        if kpts is not None:
-            if hasattr(kpts, "tolist"):
-                athlete["keypoints"] = kpts.tolist()
-            else:
-                athlete["keypoints"] = kpts
-        kpt_sc = frame_scores.get(track_id)
-        if kpt_sc is not None:
-            if hasattr(kpt_sc, "tolist"):
-                athlete["keypoint_scores"] = kpt_sc.tolist()
-            else:
-                athlete["keypoint_scores"] = kpt_sc
-        frame_entry["athletes"].append(athlete)
 
     if not is_first:
         json_file.write(",\n")
