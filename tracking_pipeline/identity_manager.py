@@ -47,7 +47,7 @@ class IdentityManager:
         tensor = (tensor - self.mean) / self.std
         return tensor
 
-    def extract_dino_features(self, frame, box=None, mask=None):
+    def extract_global_features(self, frame, box=None, mask=None):
         """Extract DINOv2 features from a box or mask region."""
         if mask is not None:
             y_indices, x_indices = np.where(mask)
@@ -81,7 +81,7 @@ class IdentityManager:
 
         return torch.nn.functional.normalize(features, dim=1).cpu()
 
-    def extract_multi_bin_features(self, frame, keypoints, scores=None):
+    def extract_regional_features(self, frame, keypoints, scores=None):
         """
         Extract features from body parts based on keypoints.
 
@@ -154,9 +154,9 @@ class IdentityManager:
                        keypoints=None, scores=None):
         """Update the identity gallery for an athlete."""
         entry = {}
-        entry["full"] = self.extract_dino_features(frame, box, mask)
+        entry["full"] = self.extract_global_features(frame, box, mask)
         if keypoints is not None:
-            bins = self.extract_multi_bin_features(frame, keypoints, scores)
+            bins = self.extract_regional_features(frame, keypoints, scores)
             entry.update(bins)
         entry["hist"] = self.compute_color_histogram(frame, mask, box)
         self.gallery[obj_id] = entry
@@ -167,10 +167,10 @@ class IdentityManager:
         Return similarity scores for all gallery identities.
         Scoring: 0.5×global_dino + 0.3×color + 0.2×torso
         """
-        query_full = self.extract_dino_features(frame, box, mask)
+        query_full = self.extract_global_features(frame, box, mask)
         query_hist = self.compute_color_histogram(frame, mask, box)
         query_bins = (
-            self.extract_multi_bin_features(frame, keypoints, scores)
+            self.extract_regional_features(frame, keypoints, scores)
             if keypoints is not None else {}
         )
 

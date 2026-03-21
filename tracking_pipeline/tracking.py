@@ -213,16 +213,16 @@ def run_tracking(
     init_boxes = {1: box_a, 2: box_b}
 
     # Add initial boxes to SAM2 + build identity gallery
-    for obj_id, box in init_boxes.items():
-        mask = sam2_mgr.add_initial_box(0, obj_id, box)
+    for track_id, box in init_boxes.items():
+        mask = sam2_mgr.add_initial_box(0, track_id, box)
         kpts, scores = pose_est.estimate(frame0, box)
         identity_mgr.update_gallery(
-            obj_id, frame0_rgb,
+            track_id, frame0_rgb,
             mask=mask, box=box,
             keypoints=kpts, scores=scores,
         )
-        label = "A" if obj_id == 1 else "B"
-        print(f"  Athlete {label} (track {obj_id}): "
+        label = "A" if track_id == 1 else "B"
+        print(f"  Athlete {label} (track {track_id}): "
               f"box={[round(c) for c in box]}, mask={mask.sum()} px")
 
     # ===== 4. Setup output =====
@@ -262,13 +262,13 @@ def run_tracking(
     print("=" * 60)
 
     current_local = 0
-    last_known_boxes = {}  # {obj_id: box} for batch carry-over
+    last_known_boxes = {}  # {track_id: box} for batch carry-over
     frames_processed = 0
     user_cancelled = False
 
     # Loss detection state
     missing_frames = {1: 0, 2: 0}
-    initial_mask_areas = {}  # {obj_id: pixel_count} from first valid mask
+    initial_mask_areas = {}  # {track_id: pixel_count} from first valid mask
     MIN_MASK_PIXELS = 50
     MASK_AREA_COLLAPSE_RATIO = 0.10  # lost if < 10% of initial area
 
@@ -314,7 +314,7 @@ def run_tracking(
 
             # --- SAM2 masks ---
             masks_sam2 = {}
-            for i, oid in enumerate(obj_ids):
+            for i, track_id in enumerate(obj_ids):
                 m = (mask_logits[i] > 0.0).cpu().numpy().squeeze()
                 if m.shape != (video_io.height, video_io.width):
                     m = cv2.resize(
@@ -323,7 +323,7 @@ def run_tracking(
                         interpolation=cv2.INTER_NEAREST,
                     ).astype(bool)
                 if m.sum() > 50:
-                    masks_sam2[oid] = m
+                    masks_sam2[track_id] = m
             del mask_logits  # Release GPU tensor immediately
 
             # --- Scene/fade detection ---
@@ -347,17 +347,17 @@ def run_tracking(
                       f"{curr_state.name} (IoU={iou:.2f})")
 
             # --- Build per-frame results ---
-            final_boxes = {}
-            final_kpts = {}
-            final_scores = {}
-            final_masks = {}
-            final_sources = {}
+            frame_boxes = {}
+            frame_kpts = {}
+            frame_scores = {}
+            frame_masks = {}
+            frame_sources = {}
 
             # ==============================
             # RE_ID_MODE: user intervention required
             # ==============================
             if curr_state == TrackingState.RE_ID_MODE:
-                new_boxes = _request_user_boxes(
+                new_boxes = _detect_and_request_boxes(
                     frame_bgr, global_idx, detection_callback,
                     detector, yolo_model, detection_threshold, device,
                 )
@@ -379,20 +379,20 @@ def run_tracking(
 
                 # User cancelled — write empty frame and stay in RE_ID
                 _write_viz_frame(
-                    out, frame_bgr, final_boxes, final_masks,
-                    final_kpts, final_scores, final_sources, display_map,
+                    out, frame_bgr, frame_boxes, frame_masks,
+                    frame_kpts, frame_scores, frame_sources, display_map,
                     curr_state, iou, global_idx, debug_dir, local_idx,
                 )
                 if _json_file is not None:
-                    _json_first_frame = _stream_frame_json(
+                    _json_first_frame = _append_frame_to_json(
                         _json_file, _json_first_frame,
                         global_idx, local_idx, fps, curr_state, iou,
-                        final_boxes, final_kpts, final_scores,
-                        final_sources, display_map,
+                        frame_boxes, frame_kpts, frame_scores,
+                        frame_sources, display_map,
                     )
                 frames_processed += 1
                 del frame_bgr, frame_rgb, masks_sam2
-                del final_boxes, final_kpts, final_scores, final_masks, final_sources
+                del frame_boxes, frame_kpts, frame_scores, frame_masks, frame_sources
                 current_local = local_idx + 1
                 sam2_mgr.prune_memory(max_history, flush_cache=False)
                 continue  # Stay in RE_ID mode
@@ -431,51 +431,51 @@ def run_tracking(
             # ==============================
             timestamp = global_idx / fps  # seconds, for OneEuro filters
 
-            for obj_id in [1, 2]:
-                if obj_id in masks_sam2:
-                    mask = masks_sam2[obj_id]
+            for track_id in [1, 2]:
+                if track_id in masks_sam2:
+                    mask = masks_sam2[track_id]
                     mask_area = int(mask.sum())
                     ys, xs = np.where(mask)
 
                     # Record initial mask area for collapse detection
-                    if obj_id not in initial_mask_areas and mask_area > MIN_MASK_PIXELS:
-                        initial_mask_areas[obj_id] = mask_area
+                    if track_id not in initial_mask_areas and mask_area > MIN_MASK_PIXELS:
+                        initial_mask_areas[track_id] = mask_area
 
                     # Check for mask collapse (track loss detection)
-                    init_area = initial_mask_areas.get(obj_id, mask_area)
+                    init_area = initial_mask_areas.get(track_id, mask_area)
                     area_ratio = mask_area / max(init_area, 1)
                     if mask_area < MIN_MASK_PIXELS or area_ratio < MASK_AREA_COLLAPSE_RATIO:
-                        missing_frames[obj_id] += 1
+                        missing_frames[track_id] += 1
                     else:
-                        missing_frames[obj_id] = 0
+                        missing_frames[track_id] = 0
 
                     if len(ys) > 0 and mask_area >= MIN_MASK_PIXELS:
                         raw_box = [float(xs.min()), float(ys.min()),
                                    float(xs.max()), float(ys.max())]
                         # Smooth bounding box (reduces mask-edge jitter)
-                        box = box_smoother.smooth(obj_id, raw_box, timestamp)
-                        final_boxes[obj_id] = box
-                        final_masks[obj_id] = mask
-                        final_sources[obj_id] = "SAM2"
+                        box = box_smoother.smooth(track_id, raw_box, timestamp)
+                        frame_boxes[track_id] = box
+                        frame_masks[track_id] = mask
+                        frame_sources[track_id] = "SAM2"
 
                         # Pose on smoothed box → more stable crop
                         kpts, sc = pose_est.estimate(frame_bgr, box)
                         # Smooth keypoints with confidence filtering
                         kpts_s, sc_adj = kpt_smoother.smooth(
-                            obj_id, kpts, sc, timestamp,
+                            track_id, kpts, sc, timestamp,
                         )
-                        final_kpts[obj_id] = kpts_s
-                        final_scores[obj_id] = sc_adj
+                        frame_kpts[track_id] = kpts_s
+                        frame_scores[track_id] = sc_adj
                 else:
-                    missing_frames[obj_id] += 1
+                    missing_frames[track_id] += 1
 
             # ==============================
             # Identity verification after scramble exit
             # ==============================
             if (prev_state == TrackingState.SCRAMBLE
                     and curr_state == TrackingState.TRACKING):
-                _verify_identity_after_scramble(
-                    final_boxes, final_masks, frame_rgb,
+                _correct_identity_swap_after_scramble(
+                    frame_boxes, frame_masks, frame_rgb,
                     identity_mgr, display_map, global_idx,
                 )
 
@@ -483,16 +483,16 @@ def run_tracking(
             # Loss detection: trigger user intervention when track lost
             # ==============================
             any_lost = any(
-                missing_frames[oid] > max_missing_frames for oid in [1, 2]
+                missing_frames[track_id] > max_missing_frames for track_id in [1, 2]
             )
             if any_lost and curr_state == TrackingState.TRACKING:
-                lost_ids = [oid for oid in [1, 2]
-                            if missing_frames[oid] > max_missing_frames]
+                lost_ids = [track_id for track_id in [1, 2]
+                            if missing_frames[track_id] > max_missing_frames]
                 print(f"  Frame {global_idx}: TRACK LOST for athlete(s) "
                       f"{lost_ids} (missing > {max_missing_frames} frames)")
                 state_machine.state = TrackingState.RE_ID_MODE
 
-                new_boxes = _request_user_boxes(
+                new_boxes = _detect_and_request_boxes(
                     frame_bgr, global_idx, detection_callback,
                     detector, yolo_model, detection_threshold, device,
                 )
@@ -516,33 +516,33 @@ def run_tracking(
             # Write output frame
             # ==============================
             _write_viz_frame(
-                out, frame_bgr, final_boxes, final_masks,
-                final_kpts, final_scores, final_sources, display_map,
+                out, frame_bgr, frame_boxes, frame_masks,
+                frame_kpts, frame_scores, frame_sources, display_map,
                 curr_state, iou, global_idx, debug_dir, local_idx,
             )
 
             if _json_file is not None:
-                _json_first_frame = _stream_frame_json(
+                _json_first_frame = _append_frame_to_json(
                     _json_file, _json_first_frame,
                     global_idx, local_idx, fps, curr_state, iou,
-                    final_boxes, final_kpts, final_scores,
-                    final_sources, display_map,
+                    frame_boxes, frame_kpts, frame_scores,
+                    frame_sources, display_map,
                 )
 
-            if frame_callback is not None and final_boxes:
+            if frame_callback is not None and frame_boxes:
                 try:
                     athletes = _build_athlete_dicts(
-                        final_boxes, final_kpts, final_scores,
-                        final_sources, display_map,
+                        frame_boxes, frame_kpts, frame_scores,
+                        frame_sources, display_map,
                     )
                     frame_callback(frame_bgr, global_idx, athletes)
                 except Exception as _cb_err:
                     print(f"  [frame_callback] error at frame {global_idx}: {_cb_err}")
 
             # Track last-known boxes for batch carry-over
-            if final_boxes:
-                for obj_id, box in final_boxes.items():
-                    last_known_boxes[obj_id] = box
+            if frame_boxes:
+                for track_id, box in frame_boxes.items():
+                    last_known_boxes[track_id] = box
 
             frames_processed += 1
             if frames_processed % 30 == 0:
@@ -550,7 +550,7 @@ def run_tracking(
                 pct = frames_processed / total_local * 100
                 print(f"  [{pct:.0f}%] Frame {global_idx} | "
                       f"{curr_state.value} | "
-                      f"Tracks: {len(final_boxes)} | {elapsed:.0f}s")
+                      f"Tracks: {len(frame_boxes)} | {elapsed:.0f}s")
                 if should_stop is not None and should_stop():
                     user_cancelled = True
                     break
@@ -562,7 +562,7 @@ def run_tracking(
 
             # Release per-frame objects to reduce GC pressure
             del frame_bgr, frame_rgb, masks_sam2
-            del final_boxes, final_kpts, final_scores, final_masks, final_sources
+            del frame_boxes, frame_kpts, frame_scores, frame_masks, frame_sources
 
             current_local = local_idx + 1
 
@@ -631,24 +631,24 @@ def run_tracking(
 # Helper functions
 # ---------------------------------------------------------------------------
 
-def _build_athlete_dicts(final_boxes, final_kpts, final_scores,
-                         final_sources, display_map):
+def _build_athlete_dicts(frame_boxes, frame_kpts, frame_scores,
+                         frame_sources, display_map):
     """Build the athlete dict list for frame_callback."""
     athletes = []
-    for obj_id, box in final_boxes.items():
-        disp_id = display_map.get(obj_id, obj_id)
+    for track_id, box in frame_boxes.items():
+        disp_id = display_map.get(track_id, track_id)
         athlete = {
             "track_id": disp_id,
             "box": [round(c, 1) for c in box],
-            "source": final_sources.get(obj_id, "unknown"),
+            "source": frame_sources.get(track_id, "unknown"),
         }
-        kpts = final_kpts.get(obj_id)
+        kpts = frame_kpts.get(track_id)
         if kpts is not None:
             if hasattr(kpts, "tolist"):
                 athlete["keypoints"] = kpts.tolist()
             else:
                 athlete["keypoints"] = kpts
-        kpt_sc = final_scores.get(obj_id)
+        kpt_sc = frame_scores.get(track_id)
         if kpt_sc is not None:
             if hasattr(kpt_sc, "tolist"):
                 athlete["keypoint_scores"] = kpt_sc.tolist()
@@ -658,7 +658,7 @@ def _build_athlete_dicts(final_boxes, final_kpts, final_scores,
     return athletes
 
 
-def _request_user_boxes(frame_bgr, global_idx, detection_callback,
+def _detect_and_request_boxes(frame_bgr, global_idx, detection_callback,
                         detector, yolo_model, detection_threshold, device):
     """Lazy-load YOLO, detect persons, and request user-verified boxes.
 
@@ -697,19 +697,19 @@ def _request_user_boxes(frame_bgr, global_idx, detection_callback,
         return None
 
 
-def _verify_identity_after_scramble(final_boxes, final_masks, frame_rgb,
+def _correct_identity_swap_after_scramble(frame_boxes, frame_masks, frame_rgb,
                                     identity_mgr, display_map, global_idx):
     """After exiting SCRAMBLE, check if identities got swapped."""
     print(f"  Frame {global_idx}: Exiting SCRAMBLE — verifying identities...")
 
-    if 1 not in final_boxes or 2 not in final_boxes:
+    if 1 not in frame_boxes or 2 not in frame_boxes:
         return
 
     s1 = identity_mgr.query_identity_scores(
-        frame_rgb, final_boxes[1], mask=final_masks.get(1),
+        frame_rgb, frame_boxes[1], mask=frame_masks.get(1),
     )
     s2 = identity_mgr.query_identity_scores(
-        frame_rgb, final_boxes[2], mask=final_masks.get(2),
+        frame_rgb, frame_boxes[2], mask=frame_masks.get(2),
     )
 
     s1_as_1 = s1.get(1, 0)
@@ -734,27 +734,27 @@ _SKELETON_EDGES = [
 ]
 
 
-def _write_viz_frame(out, frame_bgr, final_boxes, final_masks,
-                     final_kpts, final_scores, final_sources, display_map,
+def _write_viz_frame(out, frame_bgr, frame_boxes, frame_masks,
+                     frame_kpts, frame_scores, frame_sources, display_map,
                      state, iou, global_idx, debug_dir, local_idx):
     """Draw masks, boxes, skeleton, labels, and status on frame, then write to video."""
     viz = frame_bgr.copy()
     colors = {1: (0, 255, 0), 2: (255, 0, 0)}  # Green=A, Blue=B
 
-    for obj_id, box in final_boxes.items():
-        disp_id = display_map.get(obj_id, obj_id)
+    for track_id, box in frame_boxes.items():
+        disp_id = display_map.get(track_id, track_id)
         color = colors.get(disp_id, (255, 255, 255))
         x1, y1, x2, y2 = map(int, box)
 
         # Semi-transparent mask overlay
-        if obj_id in final_masks:
+        if track_id in frame_masks:
             overlay = np.zeros_like(viz)
-            overlay[final_masks[obj_id]] = color
+            overlay[frame_masks[track_id]] = color
             viz = cv2.addWeighted(viz, 1.0, overlay, 0.4, 0)
 
         # Pose skeleton (confidence-aware: suppress low-confidence limbs)
-        kpts = final_kpts.get(obj_id)
-        kpt_sc = final_scores.get(obj_id)
+        kpts = frame_kpts.get(track_id)
+        kpt_sc = frame_scores.get(track_id)
         if kpts is not None:
             pts = kpts if isinstance(kpts, list) else kpts.tolist()
             scs = None
@@ -779,7 +779,7 @@ def _write_viz_frame(out, frame_bgr, final_boxes, final_masks,
 
         # Bounding box + label
         cv2.rectangle(viz, (x1, y1), (x2, y2), color, 2)
-        source = final_sources.get(obj_id, "?")
+        source = frame_sources.get(track_id, "?")
         label = f"ID {disp_id} ({source})"
         cv2.putText(viz, label, (x1, y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
@@ -798,9 +798,9 @@ def _write_viz_frame(out, frame_bgr, final_boxes, final_masks,
         )
 
 
-def _stream_frame_json(json_file, is_first, global_idx, local_idx, fps,
-                       state, iou, final_boxes, final_kpts, final_scores,
-                       final_sources, display_map):
+def _append_frame_to_json(json_file, is_first, global_idx, local_idx, fps,
+                       state, iou, frame_boxes, frame_kpts, frame_scores,
+                       frame_sources, display_map):
     """Write one frame's data directly to the JSON file (streaming).
 
     Returns updated is_first flag.
@@ -813,20 +813,20 @@ def _stream_frame_json(json_file, is_first, global_idx, local_idx, fps,
         "iou": round(iou, 4),
         "athletes": [],
     }
-    for obj_id, box in final_boxes.items():
-        disp_id = display_map.get(obj_id, obj_id)
+    for track_id, box in frame_boxes.items():
+        disp_id = display_map.get(track_id, track_id)
         athlete = {
             "track_id": disp_id,
             "box": [round(c, 1) for c in box],
-            "source": final_sources.get(obj_id, "unknown"),
+            "source": frame_sources.get(track_id, "unknown"),
         }
-        kpts = final_kpts.get(obj_id)
+        kpts = frame_kpts.get(track_id)
         if kpts is not None:
             if hasattr(kpts, "tolist"):
                 athlete["keypoints"] = kpts.tolist()
             else:
                 athlete["keypoints"] = kpts
-        kpt_sc = final_scores.get(obj_id)
+        kpt_sc = frame_scores.get(track_id)
         if kpt_sc is not None:
             if hasattr(kpt_sc, "tolist"):
                 athlete["keypoint_scores"] = kpt_sc.tolist()
