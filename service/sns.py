@@ -5,11 +5,11 @@ from service.models import VideoEventWithCandidates, VideoEventCandidate, Analys
 from service.taxonomy_mapper import map_to_frontend_taxonomy
 
 
-def frame_to_timestamp(frame: int, fps: float) -> str:
-    """Convert frame number to HH:MM:SS timestamp."""
+def frame_to_timestamp(frame_idx: int, fps: float) -> str:
+    """Convert frame index to HH:MM:SS timestamp."""
     if fps <= 0:
         return "00:00:00"
-    total_seconds = int(frame / fps)
+    total_seconds = int(frame_idx / fps)
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
     seconds = total_seconds % 60

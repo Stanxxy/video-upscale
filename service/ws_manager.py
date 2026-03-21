@@ -63,7 +63,7 @@ class WSManager:
             "percent": round(percent, 1),
         })
 
-    async def send_detection_required(
+    async def send_detection_needed(
         self,
         job_id: str,
         frame_idx: int,

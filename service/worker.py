@@ -121,7 +121,7 @@ async def run_job(
 
             # ALWAYS send to human for verification
             frame_b64 = base64.b64encode(frame_jpeg).decode()
-            await ws_manager.send_detection_required(
+            await ws_manager.send_detection_needed(
                 job_id,
                 frame_idx=frame_idx,
                 frame_b64=frame_b64,
@@ -527,7 +527,7 @@ def _make_detection_cb(
 
             # Send to human via WebSocket
             frame_b64 = base64.b64encode(frame_jpeg).decode()
-            await ws_manager.send_detection_required(
+            await ws_manager.send_detection_needed(
                 job_id,
                 frame_idx=global_frame_idx,
                 frame_b64=frame_b64,
