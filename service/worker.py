@@ -651,8 +651,8 @@ def _run_upscale_analysis(
                 player_references=player_ref_images,
             )
 
-    # Load root pipeline.py explicitly — test_tracking/pipeline.py shadows it
-    # on sys.path after tracking/__init__.py inserts test_tracking/ at position 0.
+    # Load root pipeline.py explicitly — tracking_pipeline/pipeline.py shadows it
+    # on sys.path after tracking/__init__.py inserts tracking_pipeline/ at position 0.
     import importlib.util as _ilu
     _root_pipeline_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "pipeline.py",
