@@ -445,7 +445,7 @@ function handleMessage(msg) {
     setProgress(p, s);
     setStatus(`Processing`, s, 'working');
   }
-  else if (t === 'manual_detection_required') {
+  else if (t === 'detection_needed') {
     log(`DETECTION REQUIRED  reason=${msg.reason}  candidates=${(msg.candidates||[]).length}  suggested=${!!msg.suggested_boxes}`, 'log-info');
     setStatus('Waiting for detection', msg.reason, 'working');
     showDetectionPanel(msg);
@@ -505,7 +505,7 @@ function showDetectionPanel(msg) {
     detectionState.scale = scale;
     redrawDetection();
   };
-  img.src = 'data:image/jpeg;base64,' + msg.frame_base64;
+  img.src = 'data:image/jpeg;base64,' + msg.frame_b64;
 
   updateBadges();
   document.getElementById('btn-confirm').disabled = true;

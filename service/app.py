@@ -21,7 +21,23 @@ async def lifespan(app: FastAPI):
     job_store = InMemoryJobStore()
     ws_manager = WSManager()
     init_routes(config, job_store, ws_manager)
-    yield
+
+    async def _periodic_cleanup():
+        from service.routes import _cleanup_orphaned_tasks
+        while True:
+            await asyncio.sleep(30)
+            await _cleanup_orphaned_tasks()
+
+    import asyncio
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 
 def create_app() -> FastAPI:
