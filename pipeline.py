@@ -1,3 +1,12 @@
+"""
+CLI analysis pipeline for offline debugging and isolated testing.
+
+Provides process_video() for end-to-end upscale + Gemini analysis via CLI (main.py).
+NOT used by the production service — service/worker.py handles that code path.
+
+The live run_pipeline() for tracking jobs lives in tracking_pipeline/pipeline.py,
+accessed via the tracking/ shim.
+"""
 import cv2
 import json
 import os

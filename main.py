@@ -1,3 +1,13 @@
+"""
+CLI entry point for offline engine testing and debugging.
+
+Usage:
+    python main.py --video input_video.mp4 [--analyze] [--multi_agent]
+
+This is NOT the production entry point (that is service/app.py via service.sh).
+Use this for quick local validation of the upscale + analysis pipeline without
+running the full FastAPI service.
+"""
 import argparse
 from pipeline import process_video
 
