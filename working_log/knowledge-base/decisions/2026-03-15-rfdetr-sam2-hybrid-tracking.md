@@ -19,11 +19,11 @@ Identity association across cuts and scrambles uses DINOv2 feature embeddings + 
 histogram similarity scores.
 
 Key files:
-- `test_tracking/detect.py` — RF-DETR wrapper
-- `test_tracking/sam2_manager.py` — SAM2 propagation wrapper
-- `test_tracking/identity_manager.py` — DINOv2 + color histogram re-ID
-- `test_tracking/tracking.py` — main hybrid tracking loop
-- `test_tracking/state_machine.py` — handles scrambles / scene cuts / fades
+- `tracking_pipeline/detect.py` — RF-DETR wrapper
+- `tracking_pipeline/sam2_manager.py` — SAM2 propagation wrapper
+- `tracking_pipeline/identity_manager.py` — DINOv2 + color histogram re-ID
+- `tracking_pipeline/tracking.py` — main hybrid tracking loop
+- `tracking_pipeline/state_machine.py` — handles scrambles / scene cuts / fades
 
 ## Rationale
 SAM2 alone loses identity under occlusion (common in BJJ). RF-DETR provides high-recall
@@ -32,5 +32,5 @@ robust to positional changes; color histogram catches gi color differences quick
 
 ## Impact
 All service tracking jobs go through `service/tracking_runner.py` which delegates to
-`tracking/__init__.py` shim → `test_tracking/tracking.py`. Any change to the tracking
-algorithm lives in `test_tracking/`.
+`tracking/__init__.py` shim → `tracking_pipeline/tracking.py`. Any change to the tracking
+algorithm lives in `tracking_pipeline/`.

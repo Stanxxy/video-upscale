@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BJJ Tracking Service — QA Client</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #6c8cff;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 20px; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; color: var(--text-dim); }
+
+  /* Layout */
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  /* Form */
+  label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; margin-top: 10px; }
+  label:first-child { margin-top: 0; }
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+
+  .checkbox-row {
+    display: flex; align-items: center; gap: 8px; margin-top: 12px;
+  }
+  .checkbox-row input { width: auto; }
+  .checkbox-row label { margin: 0; font-size: 0.85rem; color: var(--text); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 18px;
+    border: none; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s;
+    width: 100%; margin-top: 14px;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-success { background: var(--green); color: #000; }
+  .btn-sm { padding: 6px 12px; font-size: 0.8rem; width: auto; margin-top: 0; }
+
+  /* Status */
+  .status-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--text-dim); flex-shrink: 0;
+  }
+  .status-dot.connected { background: var(--green); }
+  .status-dot.error { background: var(--red); }
+  .status-dot.working { background: var(--yellow); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+  .status-text { font-size: 0.85rem; flex: 1; }
+  .status-phase {
+    font-size: 0.75rem; color: var(--text-dim);
+    background: var(--bg); padding: 3px 8px; border-radius: 4px;
+  }
+
+  /* Progress */
+  .progress-wrap { margin-bottom: 16px; }
+  .progress-bar {
+    height: 6px; background: var(--border); border-radius: 3px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: var(--accent); border-radius: 3px;
+    transition: width 0.3s ease;
+  }
+  .progress-label {
+    display: flex; justify-content: space-between;
+    font-size: 0.75rem; color: var(--text-dim); margin-top: 4px;
+  }
+
+  /* Log */
+  #log {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 260px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .log-entry { white-space: pre-wrap; word-break: break-all; }
+  .log-ts { color: var(--text-dim); }
+  .log-in { color: var(--green); }
+  .log-out { color: var(--accent); }
+  .log-err { color: var(--red); }
+  .log-info { color: var(--yellow); }
+
+  /* Detection panel */
+  #detection-panel { display: none; }
+  #detection-panel.active { display: block; }
+  .canvas-wrap {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+    cursor: crosshair;
+  }
+  #det-canvas { display: block; width: 100%; }
+  .det-info {
+    font-size: 0.8rem; color: var(--text-dim);
+    padding: 8px 0;
+    line-height: 1.6;
+  }
+  .det-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+  /* Selection indicators */
+  .selection-badges { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+  .badge {
+    font-size: 0.75rem; padding: 4px 10px; border-radius: 4px;
+    font-weight: 500;
+  }
+  .badge-a { background: rgba(74,222,128,0.15); color: var(--green); border: 1px solid rgba(74,222,128,0.3); }
+  .badge-b { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .badge-hint { background: rgba(251,191,36,0.15); color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>BJJ Tracking Service — QA Client</h1>
+
+  <div class="grid">
+    <!-- LEFT PANEL: Config + Log -->
+    <div class="left-panel">
+      <div class="card">
+        <h2>Job Configuration</h2>
+        <label>Service URL</label>
+        <input id="service-url" value="http://localhost:8000">
+
+        <label>S3 Bucket</label>
+        <input id="bucket" value="bjj-videos" placeholder="my-bucket">
+
+        <label>S3 Key (video path)</label>
+        <input id="key" placeholder="videos/match1.mp4">
+
+        <div class="row">
+          <div>
+            <label>YOLO Model</label>
+            <select id="yolo-model">
+              <option value="yolo26n">yolo26n (nano)</option>
+              <option value="yolo26s">yolo26s (small)</option>
+              <option value="yolo26m" selected>yolo26m (medium)</option>
+              <option value="yolo26l">yolo26l (large)</option>
+              <option value="yolo26x">yolo26x (xlarge)</option>
+            </select>
+          </div>
+          <div>
+            <label>Threshold</label>
+            <input id="threshold" type="number" value="0.5" min="0.1" max="1" step="0.05">
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Start Time</label>
+            <input id="start-time" placeholder="MM:SS (optional)">
+          </div>
+          <div>
+            <label>End Time</label>
+            <input id="end-time" placeholder="MM:SS (optional)">
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <input id="skip-upscale" type="checkbox" checked>
+          <label for="skip-upscale">Skip upscale (tracking only)</label>
+        </div>
+
+        <button id="btn-submit" class="btn btn-primary" onclick="submitJob()">Submit Job</button>
+        <button id="btn-cancel" class="btn btn-danger" onclick="cancelJob()" disabled>Cancel Job</button>
+      </div>
+
+      <div class="card">
+        <h2>Message Log</h2>
+        <div id="log"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Status + Detection -->
+    <div class="right-panel">
+      <div class="status-bar">
+        <div id="status-dot" class="status-dot"></div>
+        <span id="status-text" class="status-text">Idle</span>
+        <span id="status-phase" class="status-phase">—</span>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-bar"><div id="progress-fill" class="progress-fill" style="width:0%"></div></div>
+        <div class="progress-label">
+          <span id="progress-state">—</span>
+          <span id="progress-pct">0%</span>
+        </div>
+      </div>
+
+      <!-- Detection verification UI -->
+      <div id="detection-panel" class="card">
+        <h2 id="det-title">Detection Verification</h2>
+        <div class="det-info" id="det-info"></div>
+        <div class="selection-badges" id="det-badges"></div>
+        <div class="canvas-wrap">
+          <canvas id="det-canvas"></canvas>
+        </div>
+        <div class="det-actions">
+          <button class="btn btn-sm btn-primary" onclick="resetSelection()">Reset</button>
+          <button class="btn btn-sm btn-success" id="btn-confirm" onclick="confirmDetection()" disabled>Confirm Selection</button>
+          <button class="btn btn-sm btn-danger" onclick="cancelDetection()">Cancel Detection</button>
+        </div>
+      </div>
+
+      <!-- Completion card -->
+      <div id="result-panel" class="card" style="display:none">
+        <h2>Result</h2>
+        <pre id="result-json" style="font-size:0.8rem; color:var(--green); white-space:pre-wrap;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+let ws = null;
+let jobId = null;
+let detectionState = {
+  candidates: [],
+  suggestedBoxes: null,
+  selectedA: null,   // [x1,y1,x2,y2]
+  selectedB: null,
+  image: null,       // HTMLImageElement
+  scale: 1,
+  drawing: false,
+  drawStart: null,
+};
+
+// ============================================================
+// Logging
+// ============================================================
+function log(text, cls = '') {
+  const el = document.getElementById('log');
+  const ts = new Date().toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-ts">[${ts}]</span> <span class="${cls}">${escHtml(text)}</span>`;
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================================================
+// Status helpers
+// ============================================================
+function setStatus(text, phase, dotClass) {
+  document.getElementById('status-text').textContent = text;
+  document.getElementById('status-phase').textContent = phase;
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot ' + (dotClass || '');
+}
+
+function setProgress(pct, state) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = Math.round(pct) + '%';
+  if (state) document.getElementById('progress-state').textContent = state;
+}
+
+// ============================================================
+// Submit job
+// ============================================================
+async function submitJob() {
+  const base = document.getElementById('service-url').value.replace(/\/+$/, '');
+  const bucket = document.getElementById('bucket').value;
+  const key = document.getElementById('key').value;
+
+  if (!bucket || !key) { alert('Bucket and Key are required'); return; }
+
+  const body = {
+    bucket,
+    key,
+    yolo_model: document.getElementById('yolo-model').value,
+    detection_threshold: parseFloat(document.getElementById('threshold').value),
+    skip_upscale: document.getElementById('skip-upscale').checked,
+  };
+
+  const st = document.getElementById('start-time').value.trim();
+  const et = document.getElementById('end-time').value.trim();
+  if (st) body.start_time = st;
+  if (et) body.end_time = et;
+
+  document.getElementById('btn-submit').disabled = true;
+  document.getElementById('result-panel').style.display = 'none';
+  setStatus('Submitting...', 'POST /track', 'working');
+  log(`POST /track ${JSON.stringify(body)}`, 'log-out');
+
+  try {
+    const resp = await fetch(base + '/track', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || JSON.stringify(data));
+    }
+
+    jobId = data.job_id;
+    log(`Job created: ${jobId}`, 'log-info');
+    log(`Connecting WS: ${data.ws_url}`, 'log-info');
+
+    document.getElementById('btn-cancel').disabled = false;
+
+    connectWs(data.ws_url);
+  } catch (e) {
+    log(`Error: ${e.message}`, 'log-err');
+    setStatus('Submit failed', 'error', 'error');
+    document.getElementById('btn-submit').disabled = false;
+  }
+}
+
+// ============================================================
+// Cancel job
+// ============================================================
+async function cancelJob() {
+  if (!jobId) return;
+  const base = document.getElementById('service-url').value.replace(/\/+$/, '');
+  try {
+    await fetch(base + '/job/' + jobId, { method: 'DELETE' });
+    log('Job cancelled', 'log-err');
+  } catch (e) {
+    log(`Cancel failed: ${e.message}`, 'log-err');
+  }
+}
+
+// ============================================================
+// WebSocket
+// ============================================================
+function connectWs(url) {
+  if (ws) { ws.close(); }
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    setStatus('Connected', 'WebSocket', 'connected');
+    log('WebSocket connected', 'log-in');
+  };
+
+  ws.onclose = (e) => {
+    setStatus('Disconnected', `code=${e.code}`, '');
+    log(`WebSocket closed (code=${e.code})`, 'log-info');
+    document.getElementById('btn-submit').disabled = false;
+    document.getElementById('btn-cancel').disabled = true;
+    // Hide stale detection panel — confirm can't work without a WS
+    if (document.getElementById('detection-panel').classList.contains('active')) {
+      document.getElementById('detection-panel').classList.remove('active');
+      log('Detection panel closed (connection lost). Please resubmit.', 'log-err');
+    }
+    ws = null;
+  };
+
+  ws.onerror = () => {
+    log('WebSocket error', 'log-err');
+  };
+
+  ws.onmessage = (evt) => {
+    let msg;
+    try { msg = JSON.parse(evt.data); } catch { return; }
+    handleMessage(msg);
+  };
+
+  // Keepalive ping every 25s
+  const ping = setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({type: 'ping'}));
+    } else {
+      clearInterval(ping);
+    }
+  }, 25000);
+}
+
+// ============================================================
+// Message handler
+// ============================================================
+function handleMessage(msg) {
+  const t = msg.type;
+
+  if (t === 'pong') return;
+
+  // Compact log for progress, full for others
+  if (t === 'progress') {
+    const s = msg.state || '?';
+    const p = msg.percent || 0;
+    log(`progress: ${s} ${p.toFixed(1)}%  frame=${msg.frame_idx}/${msg.total_frames}`, 'log-in');
+    setProgress(p, s);
+    setStatus(`Processing`, s, 'working');
+  }
+  else if (t === 'manual_detection_required') {
+    log(`DETECTION REQUIRED  reason=${msg.reason}  candidates=${(msg.candidates||[]).length}  suggested=${!!msg.suggested_boxes}`, 'log-info');
+    setStatus('Waiting for detection', msg.reason, 'working');
+    showDetectionPanel(msg);
+  }
+  else if (t === 'completed') {
+    log(`COMPLETED  bucket=${msg.result_bucket}  key=${msg.result_key}  tracking=${msg.tracking_key||'—'}`, 'log-in');
+    setStatus('Completed', 'done', 'connected');
+    setProgress(100, 'completed');
+    document.getElementById('result-panel').style.display = 'block';
+    document.getElementById('result-json').textContent = JSON.stringify(msg, null, 2);
+    document.getElementById('btn-submit').disabled = false;
+    document.getElementById('btn-cancel').disabled = true;
+  }
+  else if (t === 'error') {
+    log(`ERROR: ${msg.message}`, 'log-err');
+    setStatus('Failed', 'error', 'error');
+    document.getElementById('btn-submit').disabled = false;
+    document.getElementById('btn-cancel').disabled = true;
+  }
+  else {
+    log(`Unknown message: ${JSON.stringify(msg)}`, 'log-info');
+  }
+}
+
+// ============================================================
+// Detection panel
+// ============================================================
+function showDetectionPanel(msg) {
+  const panel = document.getElementById('detection-panel');
+  panel.classList.add('active');
+
+  detectionState.candidates = msg.candidates || [];
+  detectionState.suggestedBoxes = msg.suggested_boxes || null;
+  detectionState.selectedA = null;
+  detectionState.selectedB = null;
+  detectionState.drawing = false;
+
+  // Info text
+  const info = document.getElementById('det-info');
+  let html = `<b>Reason:</b> ${msg.reason} &nbsp; <b>Frame:</b> ${msg.frame_idx} &nbsp; <b>Candidates:</b> ${detectionState.candidates.length}`;
+  if (detectionState.suggestedBoxes) {
+    html += `<br><span class="badge badge-hint">VLLM suggested athlete pair (shown as dashed green/red)</span>`;
+  }
+  html += `<br>Click a candidate box to select, or drag anywhere to draw a custom box (even over candidates). First = Athlete A (green), second = Athlete B (red).`;
+  info.innerHTML = html;
+
+  // Load image
+  const img = new Image();
+  img.onload = () => {
+    detectionState.image = img;
+    const canvas = document.getElementById('det-canvas');
+    // Fit to container width
+    const maxW = canvas.parentElement.clientWidth;
+    const scale = Math.min(1, maxW / img.width);
+    canvas.width = img.width * scale;
+    canvas.height = img.height * scale;
+    detectionState.scale = scale;
+    redrawDetection();
+  };
+  img.src = 'data:image/jpeg;base64,' + msg.frame_base64;
+
+  updateBadges();
+  document.getElementById('btn-confirm').disabled = true;
+}
+
+function updateBadges() {
+  const el = document.getElementById('det-badges');
+  let html = '';
+  if (detectionState.selectedA) {
+    html += `<span class="badge badge-a">A: [${detectionState.selectedA.map(v=>Math.round(v)).join(', ')}]</span>`;
+  } else {
+    html += `<span class="badge badge-a" style="opacity:0.4">A: not selected</span>`;
+  }
+  if (detectionState.selectedB) {
+    html += `<span class="badge badge-b">B: [${detectionState.selectedB.map(v=>Math.round(v)).join(', ')}]</span>`;
+  } else {
+    html += `<span class="badge badge-b" style="opacity:0.4">B: not selected</span>`;
+  }
+  el.innerHTML = html;
+  document.getElementById('btn-confirm').disabled = !(detectionState.selectedA && detectionState.selectedB);
+}
+
+function redrawDetection() {
+  const canvas = document.getElementById('det-canvas');
+  const ctx = canvas.getContext('2d');
+  const s = detectionState.scale;
+  const img = detectionState.image;
+  if (!img) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  // Draw candidate boxes (yellow dashed)
+  detectionState.candidates.forEach(c => {
+    const [x1,y1,x2,y2] = c.box;
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x1*s, y1*s, (x2-x1)*s, (y2-y1)*s);
+    ctx.setLineDash([]);
+    // Label
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    const label = `#${c.candidate_id} (${(c.confidence*100).toFixed(0)}%)`;
+    const tm = ctx.measureText(label);
+    ctx.fillRect(x1*s, y1*s - 18, tm.width + 8, 18);
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '12px monospace';
+    ctx.fillText(label, x1*s + 4, y1*s - 5);
+    ctx.restore();
+  });
+
+  // Draw VLLM suggestions (dashed green/red, thinner)
+  if (detectionState.suggestedBoxes) {
+    const sg = detectionState.suggestedBoxes;
+    if (sg.athlete_a) drawBox(ctx, sg.athlete_a, s, '#4ade80', [4,4], 1.5, 'VLLM-A');
+    if (sg.athlete_b) drawBox(ctx, sg.athlete_b, s, '#f87171', [4,4], 1.5, 'VLLM-B');
+  }
+
+  // Draw selections (solid)
+  if (detectionState.selectedA) drawBox(ctx, detectionState.selectedA, s, '#4ade80', [], 3, 'A');
+  if (detectionState.selectedB) drawBox(ctx, detectionState.selectedB, s, '#f87171', [], 3, 'B');
+
+  // Draw in-progress drag (only once past threshold)
+  if (detectionState.drawing && detectionState.drawStart && detectionState.drawCurrent) {
+    const st = detectionState.drawStart;
+    const cu = detectionState.drawCurrent;
+    const dx = Math.abs(cu.x - st.x);
+    const dy = Math.abs(cu.y - st.y);
+    if (dx >= 8 || dy >= 8) {
+      ctx.save();
+      ctx.strokeStyle = detectionState.selectedA ? '#f87171' : '#4ade80';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3,3]);
+      ctx.strokeRect(st.x, st.y, cu.x - st.x, cu.y - st.y);
+      ctx.restore();
+    }
+  }
+}
+
+function drawBox(ctx, box, s, color, dash, lw, label) {
+  const [x1,y1,x2,y2] = box;
+  ctx.save();
+  ctx.setLineDash(dash);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.strokeRect(x1*s, y1*s, (x2-x1)*s, (y2-y1)*s);
+  ctx.setLineDash([]);
+  if (label) {
+    ctx.fillStyle = color;
+    ctx.font = 'bold 14px monospace';
+    ctx.fillText(label, x1*s + 4, y1*s - 4);
+  }
+  ctx.restore();
+}
+
+// ============================================================
+// Canvas interaction
+// ============================================================
+(function setupCanvas() {
+  const canvas = document.getElementById('det-canvas');
+  const DRAG_THRESHOLD = 8; // px in canvas space
+
+  function canvasCoords(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function toImageCoords(cx, cy) {
+    const s = detectionState.scale;
+    return [cx / s, cy / s];
+  }
+
+  // mousedown: always record start — intent decided on mouseup
+  canvas.addEventListener('mousedown', (e) => {
+    if (!detectionState.image) return;
+    const pos = canvasCoords(e);
+    detectionState.drawing = true;
+    detectionState.drawStart = pos;
+    detectionState.drawCurrent = pos;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!detectionState.drawing) return;
+    detectionState.drawCurrent = canvasCoords(e);
+    redrawDetection();
+  });
+
+  // mouseup: short distance = click (select candidate), long = drag (custom box)
+  canvas.addEventListener('mouseup', (e) => {
+    if (!detectionState.drawing) return;
+    detectionState.drawing = false;
+    const st = detectionState.drawStart;
+    const en = canvasCoords(e);
+    const s = detectionState.scale;
+    const dx = Math.abs(en.x - st.x);
+    const dy = Math.abs(en.y - st.y);
+
+    if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) {
+      // Short click: try candidate selection
+      const [ix, iy] = toImageCoords(st.x, st.y);
+      for (const c of detectionState.candidates) {
+        const [x1,y1,x2,y2] = c.box;
+        if (ix >= x1 && ix <= x2 && iy >= y1 && iy <= y2) {
+          selectBox(c.box);
+          redrawDetection();
+          return;
+        }
+      }
+      redrawDetection();
+    } else if (dx >= 10 && dy >= 10) {
+      // Drag: create custom bounding box
+      const x1 = Math.min(st.x, en.x) / s;
+      const y1 = Math.min(st.y, en.y) / s;
+      const x2 = Math.max(st.x, en.x) / s;
+      const y2 = Math.max(st.y, en.y) / s;
+      selectBox([x1, y1, x2, y2]);
+    } else {
+      // Drag too narrow in one dimension — ignore
+      redrawDetection();
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    if (detectionState.drawing) {
+      detectionState.drawing = false;
+      redrawDetection();
+    }
+  });
+})();
+
+function selectBox(box) {
+  if (!detectionState.selectedA) {
+    detectionState.selectedA = box;
+    log(`Selected Athlete A: [${box.map(v=>Math.round(v)).join(', ')}]`, 'log-info');
+  } else if (!detectionState.selectedB) {
+    detectionState.selectedB = box;
+    log(`Selected Athlete B: [${box.map(v=>Math.round(v)).join(', ')}]`, 'log-info');
+  } else {
+    // Replace B
+    detectionState.selectedB = box;
+    log(`Replaced Athlete B: [${box.map(v=>Math.round(v)).join(', ')}]`, 'log-info');
+  }
+  updateBadges();
+  redrawDetection();
+}
+
+function resetSelection() {
+  detectionState.selectedA = null;
+  detectionState.selectedB = null;
+  updateBadges();
+  redrawDetection();
+}
+
+// ============================================================
+// Send detection response
+// ============================================================
+function confirmDetection() {
+  if (!detectionState.selectedA || !detectionState.selectedB) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    log('Cannot confirm: WebSocket disconnected. Please resubmit the job.', 'log-err');
+    document.getElementById('detection-panel').classList.remove('active');
+    return;
+  }
+
+  const msg = {
+    type: 'detection_response',
+    box_a: detectionState.selectedA.map(v => Math.round(v)),
+    box_b: detectionState.selectedB.map(v => Math.round(v)),
+  };
+  ws.send(JSON.stringify(msg));
+  log(`Sent detection_response: A=[${msg.box_a}] B=[${msg.box_b}]`, 'log-out');
+
+  document.getElementById('detection-panel').classList.remove('active');
+  setStatus('Processing', 'detection confirmed', 'working');
+}
+
+function cancelDetection() {
+  if (!ws) return;
+  ws.send(JSON.stringify({ type: 'detection_cancelled' }));
+  log('Sent detection_cancelled', 'log-out');
+  document.getElementById('detection-panel').classList.remove('active');
+}
+</script>
+</body>
+</html>

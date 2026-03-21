@@ -4,8 +4,7 @@ set -euo pipefail
 # ── Configuration ──────────────────────────────────────────────
 APP_MODULE="service.app:app"
 HOST="${BJJ_HOST:-0.0.0.0}"
-PORT="${BJJ_PORT:-9001}"
-WORKERS="${BJJ_WORKERS:-1}"
+PORT="${BJJ_PORT:-8000}"
 LOG_LEVEL="${BJJ_LOG_LEVEL:-info}"
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -46,10 +45,26 @@ cmd_start() {
     echo "Starting service on $HOST:$PORT ..."
     cd "$PROJECT_DIR"
 
-    nohup uvicorn "$APP_MODULE" \
+    # Locate virtual environment python
+    local venv_python="$PROJECT_DIR/venv/bin/python"
+    if [[ ! -x "$venv_python" ]]; then
+        red "Virtual environment not found at $PROJECT_DIR/venv"
+        echo "  Create one with: python3 -m venv venv && venv/bin/pip install -r requirements-service.txt"
+        return 1
+    fi
+
+    # Load .env if present (without overriding existing vars)
+    if [[ -f "$PROJECT_DIR/.env" ]]; then
+        set -a
+        # shellcheck disable=SC1091
+        source "$PROJECT_DIR/.env"
+        set +a
+    fi
+
+    # Single worker required: WebSocket + in-memory state don't survive forking
+    nohup "$venv_python" -m uvicorn "$APP_MODULE" \
         --host "$HOST" \
         --port "$PORT" \
-        --workers "$WORKERS" \
         --log-level "$LOG_LEVEL" \
         >> "$LOG_FILE" 2>&1 &
 
@@ -140,8 +155,7 @@ Commands:
 
 Environment variables:
   BJJ_HOST        Listen host     (default: 0.0.0.0)
-  BJJ_PORT        Listen port     (default: 9001)
-  BJJ_WORKERS     Uvicorn workers (default: 1)
+  BJJ_PORT        Listen port     (default: 8000)
   BJJ_LOG_LEVEL   Log level       (default: info)
 EOF
 }

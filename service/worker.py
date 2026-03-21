@@ -275,12 +275,14 @@ async def run_job(
         )
         await ws_manager.send_progress(job_id, 0, 0, "upscaling", 55.0)
 
+        async def _update_upscale_progress(pct: float):
+            await job_store.update_job(job_id, progress_percent=pct)
+            await ws_manager.send_progress(job_id, 0, 0, "upscaling", pct)
+
         def _upscale_progress(pct_within_stage: float):
             overall = 55.0 + pct_within_stage * 25.0  # 55%–80%
             asyncio.run_coroutine_threadsafe(
-                ws_manager.send_progress(
-                    job_id, 0, 0, "upscaling", overall,
-                ),
+                _update_upscale_progress(overall),
                 loop,
             )
 

@@ -1,2 +1,0 @@
-rfdetr>=1.4.0
-supervision>=0.25.0

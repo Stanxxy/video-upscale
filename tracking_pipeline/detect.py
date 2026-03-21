@@ -1,5 +1,5 @@
 """
-RF-DETR person detection for initial frame(s).
+YOLO26 person detection for initial frame(s).
 
 Usage:
     python detect.py --video ../input_video.mp4 --frame 0 --threshold 0.5
@@ -11,17 +11,17 @@ import os
 import time
 
 import cv2
-from PIL import Image
+from ultralytics import YOLO
 
 from device import get_device
 
 PERSON_CLASS_ID = 0  # COCO class 0 = person
 
 
-def detect_persons(video_path, frame_idx=0, threshold=0.5, model_size="base",
+def detect_persons(video_path, frame_idx=0, threshold=0.5, yolo_model="yolo26m",
                    force_cpu=False):
     """
-    Run RF-DETR on a single frame, filter to person detections only.
+    Run YOLO26 on a single frame, filter to person detections only.
 
     Returns:
         persons: list of {"box": [x1,y1,x2,y2], "confidence": float, "track_id": int}
@@ -38,42 +38,40 @@ def detect_persons(video_path, frame_idx=0, threshold=0.5, model_size="base",
     if not ret:
         raise RuntimeError(f"Could not read frame {frame_idx} from {video_path}")
 
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    pil_image = Image.fromarray(frame_rgb)
-
-    print(f"[detect] Loading RF-DETR {model_size}...")
+    model_name = yolo_model if yolo_model.endswith(".pt") else f"{yolo_model}.pt"
+    print(f"[detect] Loading {model_name}...")
     t0 = time.time()
 
     try:
-        if model_size == "large":
-            from rfdetr import RFDETRLarge
-            model = RFDETRLarge()
-        else:
-            from rfdetr import RFDETRBase
-            model = RFDETRBase()
-
-        detections = model.predict(pil_image, threshold=threshold)
+        model = YOLO(model_name)
+        results = model(
+            frame,
+            conf=threshold,
+            classes=[PERSON_CLASS_ID],
+            verbose=False,
+            device=str(device),
+        )[0]
         print(f"[detect] Inference took {time.time() - t0:.2f}s")
 
     except Exception as e:
-        print(f"[detect] RF-DETR failed: {e}")
+        print(f"[detect] YOLO26 failed: {e}")
         if not force_cpu:
             print("[detect] Retrying on CPU...")
-            return detect_persons(video_path, frame_idx, threshold, model_size,
+            return detect_persons(video_path, frame_idx, threshold, yolo_model,
                                   force_cpu=True)
         raise
 
-    # Filter to persons only
+    # Parse results — classes=[0] already filters to persons
     persons = []
-    for i in range(len(detections.xyxy)):
-        if detections.class_id[i] == PERSON_CLASS_ID:
-            box = detections.xyxy[i].tolist()
-            conf = float(detections.confidence[i])
-            persons.append({
-                "box": [round(c, 1) for c in box],
-                "confidence": round(conf, 4),
-                "track_id": len(persons) + 1,
-            })
+    boxes = results.boxes
+    for i in range(len(boxes)):
+        box = boxes.xyxy[i].cpu().tolist()
+        conf = float(boxes.conf[i].cpu())
+        persons.append({
+            "box": [round(c, 1) for c in box],
+            "confidence": round(conf, 4),
+            "track_id": len(persons) + 1,
+        })
 
     print(f"[detect] Found {len(persons)} person(s) (threshold={threshold})")
     for p in persons:
@@ -83,20 +81,20 @@ def detect_persons(video_path, frame_idx=0, threshold=0.5, model_size="base",
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="RF-DETR Person Detection")
+    parser = argparse.ArgumentParser(description="YOLO26 Person Detection")
     parser.add_argument("--video", required=True, help="Path to input video")
     parser.add_argument("--frame", type=int, default=0,
                         help="Frame index to detect on")
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="Detection confidence threshold")
-    parser.add_argument("--model_size", default="base",
-                        choices=["base", "large"])
+    parser.add_argument("--yolo_model", default="yolo26m",
+                        choices=["yolo26n", "yolo26s", "yolo26m", "yolo26l", "yolo26x"])
     parser.add_argument("--cpu", action="store_true", help="Force CPU")
     parser.add_argument("--output", default="output/detections.json")
     args = parser.parse_args()
 
     persons, (h, w) = detect_persons(args.video, args.frame, args.threshold,
-                                     args.model_size, args.cpu)
+                                     args.yolo_model, args.cpu)
 
     result = {
         "video": args.video,

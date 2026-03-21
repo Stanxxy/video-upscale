@@ -77,11 +77,11 @@ async def qa_client():
 
 @router.post("/track", response_model=TrackResponse)
 async def create_track_job(request: TrackRequest):
+    # Proactively clean up completed/orphaned tasks before checking capacity
+    await _cleanup_orphaned_tasks()
+
     if _job_semaphore.locked():
-        # Try to clean up orphaned tasks (no active WS) before giving up
-        await _cleanup_orphaned_tasks()
-        if _job_semaphore.locked():
-            raise HTTPException(429, "Server is at capacity. Try again later.")
+        raise HTTPException(429, "Server is at capacity. Try again later.")
 
     job = await _job_store.create_job(request)
     ws_url = f"ws://localhost:{_config.service_port}/ws/{job.job_id}"

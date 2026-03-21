@@ -38,7 +38,7 @@ whole-video-analysis/
 │   ├── s3.py              # S3 operations
 │   ├── sns.py             # SNS event publishing
 │   └── ws_manager.py      # WebSocket manager
-├── test_tracking/         # Tracking pipeline modules (imported via tracking/ shim)
+├── tracking_pipeline/         # Tracking pipeline modules (imported via tracking/ shim)
 │   ├── tracking.py        # Main hybrid tracking loop
 │   ├── detect.py          # RF-DETR detection
 │   ├── sam2_manager.py    # SAM2 propagation
@@ -46,7 +46,7 @@ whole-video-analysis/
 │   ├── state_machine.py   # Scramble/cut/fade state
 │   ├── pipeline.py        # CLI orchestrator
 │   └── ...                # Pose, video I/O, smoothing, etc.
-├── tracking/              # Package shim (re-exports from test_tracking/)
+├── tracking/              # Package shim (re-exports from tracking_pipeline/)
 │   └── __init__.py
 ├── tests/                 # pytest unit tests
 ├── qa_client/             # Manual QA client scripts

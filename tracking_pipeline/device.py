@@ -1,7 +1,7 @@
 """
 Device detection with MPS fallback for Apple Silicon.
 Sets PYTORCH_ENABLE_MPS_FALLBACK=1 before any torch import
-to handle unimplemented MPS operators in RF-DETR and SAM2.
+to handle unimplemented MPS operators in YOLO26 and SAM2.
 """
 import os
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
@@ -25,3 +25,16 @@ def get_dtype(device):
     if device.type in ("mps", "cuda"):
         return torch.bfloat16
     return torch.float32
+
+
+def empty_cache():
+    """Free device memory (works on CUDA, MPS, or no-op on CPU).
+
+    On MPS, synchronize first to ensure all pending GPU operations complete
+    before releasing memory — otherwise async ops may keep tensors alive.
+    """
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    elif torch.backends.mps.is_available():
+        torch.mps.synchronize()
+        torch.mps.empty_cache()
