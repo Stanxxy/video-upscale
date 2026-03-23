@@ -13,6 +13,7 @@ See `bjj-team-meta` skill for how to add entries.
 - [2026-03-15 - Taxonomy Mapper for Frontend Enum Bridging](decisions/2026-03-15-taxonomy-mapper-frontend-bridge.md) — tags: service, api, taxonomy
 - [2026-03-15 - Single-Job Concurrency Model](decisions/2026-03-15-single-job-concurrency.md) — tags: service, architecture, concurrency
 - [2026-03-15 - tracking Package Shim to Avoid Name Collision](decisions/2026-03-15-tracking-package-shim.md) — tags: python, packaging, tracking
+- [2026-03-21 - SAM3 for Mid-Tracking Re-Detection](decisions/2026-03-21-sam3-redetection-strategy.md) — tags: tracking, architecture, ml, sam3, redetection
 
 ## Insights
 

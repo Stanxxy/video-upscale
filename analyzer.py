@@ -14,7 +14,7 @@ class BJJTechniqueAnalyzer:
         if not api_key:
             raise ValueError("API Key is required for BJJTechniqueAnalyzer")
         self.client = genai.Client(api_key=api_key)
-        self.model_id = "gemini-3-flash-preview"
+        self.model_id = "gemini-3.1-flash-lite-preview"
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
@@ -120,7 +120,7 @@ class BJJMultiAgentAnalyzer:
         if not api_key:
             raise ValueError("API Key is required for BJJMultiAgentAnalyzer")
         self.client = genai.Client(api_key=api_key)
-        self.model_id = "gemini-3-flash-preview"
+        self.model_id = "gemini-3.1-flash-lite-preview"
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
