@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 
 import torch
@@ -20,6 +21,8 @@ _QA_HTML = os.path.join(
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+DEBUG_LOG_PATH = "/Users/stanliu/Documents/bjj-proj/.cursor/debug-0e7454.log"
+DEBUG_SESSION_ID = "0e7454"
 
 # Set during app lifespan via init_routes()
 _config: ServiceConfig | None = None
@@ -27,6 +30,24 @@ _job_store: InMemoryJobStore | None = None
 _ws_manager: WSManager | None = None
 _job_semaphore: asyncio.Semaphore | None = None
 _active_tasks: dict[str, asyncio.Task] = {}  # job_id -> task
+
+
+def _agent_log(hypothesis_id: str, location: str, message: str, data: dict) -> None:
+    # region agent log
+    try:
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as debug_file:
+            debug_file.write(json.dumps({
+                "sessionId": DEBUG_SESSION_ID,
+                "runId": "initial",
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data,
+                "timestamp": int(time.time() * 1000),
+            }) + "\n")
+    except Exception:
+        pass
+    # endregion
 
 
 def init_routes(
@@ -175,6 +196,17 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
 
     await websocket.accept()
     _ws_manager.register(job_id, websocket)
+    # region agent log
+    _agent_log(
+        "H2",
+        "routes.py:websocket_endpoint",
+        "Vision engine websocket accepted",
+        {
+            "jobId": job_id,
+            "jobStatus": str(job.status),
+        },
+    )
+    # endregion
 
     # Retrieve the original request and start the pipeline
     request = _job_store.get_request(job_id)
@@ -206,11 +238,34 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for job %s", job_id)
+        # region agent log
+        _agent_log(
+            "H2",
+            "routes.py:websocket_endpoint",
+            "Vision engine websocket disconnected",
+            {
+                "jobId": job_id,
+                "jobStatus": str(job.status),
+                "taskDone": task.done(),
+            },
+        )
+        # endregion
     except Exception as e:
         logger.warning("WebSocket error for job %s: %s", job_id, e)
     finally:
         _ws_manager.unregister(job_id)
         if not task.done():
+            # region agent log
+            _agent_log(
+                "H2",
+                "routes.py:websocket_endpoint",
+                "Vision engine finalizer cancelling active job task",
+                {
+                    "jobId": job_id,
+                    "jobStatus": str(job.status),
+                },
+            )
+            # endregion
             task.cancel()
             try:
                 await task

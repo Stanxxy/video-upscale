@@ -14,6 +14,7 @@ class S3Client:
         access_key_id: str | None = None,
         secret_access_key: str | None = None,
     ):
+        self._endpoint_url = endpoint_url
         kwargs = {"region_name": region}
         if endpoint_url:
             kwargs["endpoint_url"] = endpoint_url
@@ -24,7 +25,9 @@ class S3Client:
         self.client = boto3.client("s3", **kwargs)
 
     def ensure_bucket(self, bucket: str) -> None:
-        """Create bucket if it doesn't exist (for LocalStack dev environments)."""
+        """Create bucket if it doesn't exist (for LocalStack dev environments only)."""
+        if not self._endpoint_url:
+            return  # Real AWS bucket is pre-provisioned; skip auto-creation.
         try:
             self.client.head_bucket(Bucket=bucket)
         except self.client.exceptions.ClientError as e:
@@ -49,6 +52,11 @@ class S3Client:
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         self.client.download_file(bucket, key, local_path)
         return local_path
+
+    def download_json(self, bucket: str, key: str) -> dict:
+        """Download and parse a JSON object from S3."""
+        resp = self.client.get_object(Bucket=bucket, Key=key)
+        return json.loads(resp["Body"].read())
 
     def upload_json(self, data: dict, bucket: str, key: str) -> str:
         self.client.put_object(

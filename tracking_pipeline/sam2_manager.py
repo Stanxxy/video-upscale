@@ -99,8 +99,8 @@ class SAM2Manager:
             self.predictor = SAM2VideoPredictor.from_pretrained(
                 model_id, device=str(device),
             )
-        except (RuntimeError, NotImplementedError, TypeError) as e:
-            if hasattr(device, "type") and device.type != "cpu":
+        except Exception as e:
+            if isinstance(e, (RuntimeError, NotImplementedError, TypeError)) and hasattr(device, "type") and device.type != "cpu":
                 print(f"[sam2] {device} failed ({e}), falling back to CPU...")
                 device = torch.device("cpu")
                 self.device = device

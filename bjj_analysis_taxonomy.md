@@ -80,24 +80,11 @@ You MUST classify each clip's specific technique using exactly one of these valu
 
 ---
 
-## Legacy Category Mapping (for `category` field)
-
-Also classify each clip into one of these 6 high-level categories for backward compatibility:
-
-1. **STANDUP_GAME:** Any exchange while both athletes are on their feet (takedowns, throws, guard pulls).
-2. **GUARD_PLAY:** Offensive actions by the bottom athlete (sweeps, guard retention, leg entanglement entries).
-3. **GUARD_PASSING:** Offensive actions by the top athlete against a bottom player (passing the legs, forcing half-guard).
-4. **POSITIONAL_DOMINANCE:** Consolidation of a major control position past the guard (side control, knee-on-belly, mount, back control).
-5. **SUBMISSION_OFFENSE:** A distinct attempt to finish via joint lock or strangle. Capture **attempts** as well as finishes.
-6. **DEFENSE_ESCAPES:** Technical movements to exit a bad position or evade a submission (bridging, shrimping, grip breaks).
-
----
-
 ## Operational Rules for Clip Selection
 
 1. **The "Climax" Rule:** Center the clip around the *point of maximum impact or transition*.
 2. **Significance Filter:** Do not select low-activity stalling or minor grip fighting. Only select sequences where the match state changes or a major technique is clearly applied.
-3. **Capture Attempts:** Do not wait for a tap-out. If a submission setup is deep and forces a reaction, classify the `action` as `submission_attempt` and set the `technique` to the specific submission (e.g., `armbar`). Also set `category` to `SUBMISSION_OFFENSE`.
+3. **Capture Attempts:** Do not wait for a tap-out. If a submission setup is deep and forces a reaction, classify the `action` as `submission_attempt` and set the `technique` to the specific submission (e.g., `armbar`).
 
 ---
 
@@ -113,7 +100,6 @@ Each `clip` entry must include:
 - `end_frame`: (Integer) The frame index where the action ends.
 - `action`: (String) One of the Action Type values listed above. **Must be an exact match.**
 - `technique`: (String) One of the Technique Type values listed above. **Must be an exact match.**
-- `category`: (String) One of: `STANDUP_GAME`, `GUARD_PLAY`, `GUARD_PASSING`, `POSITIONAL_DOMINANCE`, `SUBMISSION_OFFENSE`, `DEFENSE_ESCAPES`.
 - `specific_technique`: (String) A human-readable description (e.g., "Double Leg Takedown", "Triangle Choke Attempt").
 - `role`: (String) Which athlete performs the technique, by visual appearance.
 - `reasoning`: (String) A brief biomechanical explanation of why this clip was selected.
@@ -129,7 +115,6 @@ Each `clip` entry must include:
       "end_frame": 150,
       "action": "takedown",
       "technique": "hip_throw",
-      "category": "STANDUP_GAME",
       "specific_technique": "Uchi Mata",
       "role": "athlete in white gi",
       "reasoning": "Athlete A secures a collar grip and overhook, off-balances Athlete B forward, and uses the inner thigh to elevate and throw B to the mat.",
@@ -140,7 +125,6 @@ Each `clip` entry must include:
       "end_frame": 245,
       "action": "submission_attempt",
       "technique": "guillotine",
-      "category": "SUBMISSION_OFFENSE",
       "specific_technique": "Guillotine Choke Attempt",
       "role": "athlete in white gi",
       "reasoning": "As Athlete B shot for a takedown, Athlete A wrapped the neck and snapped closed the guard. Athlete B eventually popped their head out.",

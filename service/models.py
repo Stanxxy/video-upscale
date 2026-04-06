@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from enum import Enum
 from typing import Dict, Optional, List
 from uuid import UUID, uuid4
+from shared_lib.models.sns_event_models import VideoEventCandidate, VideoEventWithCandidates  # noqa: F401
 
 
 class AnalyzerMode(str, Enum):
@@ -56,6 +57,10 @@ class TrackRequest(BaseModel):
     # Player reference images for athlete identification
     player_references: Optional[List[Dict[str, str]]] = None
 
+    # Resume from partial tracking (Phase 2 — mid-tracking checkpoint resume)
+    resume_tracking_s3_key: Optional[str] = None  # S3 key for partial tracking JSON
+    resume_from_frame: Optional[int] = None  # frame index to resume tracking from
+
 
 class ResumeRequest(BaseModel):
     """Request body for POST /jobs/{job_id}/resume — delivers corrected bounding boxes."""
@@ -85,25 +90,7 @@ class JobResponse(BaseModel):
     updated_at: str
 
 
-# SNS event models (unchanged)
-
-class VideoEventCandidate(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
-    role: str
-    skill_name: str
-    category: str
-    confidence: float
-    action: Optional[str] = None      # Frontend ActionType enum value
-    technique: Optional[str] = None   # Frontend TechniqueType enum value
-
-
-class VideoEventWithCandidates(BaseModel):
-    id: UUID = Field(default_factory=uuid4)
-    video_id: UUID
-    start_time: str  # HH:MM:SS format
-    end_time: str  # HH:MM:SS format
-    event_candidates: List[VideoEventCandidate]
-
+# SNS event models — imported from shared_lib (VideoEventCandidate, VideoEventWithCandidates)
 
 class AnalysisCompleteEvent(BaseModel):
     video_id: UUID

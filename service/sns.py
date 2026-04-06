@@ -2,7 +2,7 @@ import boto3
 import json
 from uuid import UUID, uuid4
 from service.models import VideoEventWithCandidates, VideoEventCandidate, AnalysisCompleteEvent
-from service.taxonomy_mapper import map_to_frontend_taxonomy
+from service.taxonomy_mapper import VALID_ACTIONS, VALID_TECHNIQUES
 
 
 def frame_to_timestamp(frame_idx: int, fps: float) -> str:
@@ -18,19 +18,20 @@ def frame_to_timestamp(frame_idx: int, fps: float) -> str:
 
 def clip_to_event(clip: dict, video_id: UUID, fps: float) -> VideoEventWithCandidates:
     """Transform a pipeline clip dict into a VideoEventWithCandidates."""
-    # Map pipeline taxonomy to frontend enum values
-    taxonomy = map_to_frontend_taxonomy(
-        category=clip.get("category", "UNKNOWN"),
-        specific_technique=clip.get("specific_technique", "Unknown"),
-        role=clip.get("role", "Unknown"),
-    )
+    # Use action/technique fields directly — Gemini outputs valid ActionType/TechniqueType values
+    action = clip.get("action", "other")
+    technique = clip.get("technique", "other")
+    # Validate against frontend enum sets; fall back to "other" for anything unrecognised
+    if action not in VALID_ACTIONS:
+        action = "other"
+    if technique not in VALID_TECHNIQUES:
+        technique = "other"
     candidate = VideoEventCandidate(
         role=clip.get("role", "Unknown"),
-        skill_name=clip.get("specific_technique", "Unknown"),
-        category=clip.get("category", "UNKNOWN"),
+        action=action,
+        technique=technique,
         confidence=clip.get("confidence", 0.0),
-        action=taxonomy["action"],
-        technique=taxonomy["technique"],
+        notes=clip.get("specific_technique", ""),
     )
     return VideoEventWithCandidates(
         video_id=video_id,
@@ -76,10 +77,6 @@ class SNSPublisher:
                 TopicArn=self.topic_arn,
                 Message=json.dumps(message, default=str),
                 MessageAttributes={
-                    "category": {
-                        "DataType": "String",
-                        "StringValue": clip.get("category", "UNKNOWN"),
-                    },
                     "event_type": {
                         "DataType": "String",
                         "StringValue": "bjj_event_detected",
