@@ -8,11 +8,13 @@ from service.ws_manager import WSManager
 from service.routes import router, init_routes
 
 # Ensure service loggers emit INFO (uvicorn only configures its own loggers)
-logging.getLogger("service").setLevel(logging.INFO)
-if not logging.getLogger("service").handlers:
+service_logger = logging.getLogger("service")
+service_logger.setLevel(logging.INFO)
+service_logger.propagate = False
+if not service_logger.handlers:
     _h = logging.StreamHandler()
     _h.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
-    logging.getLogger("service").addHandler(_h)
+    service_logger.addHandler(_h)
 
 
 @asynccontextmanager

@@ -148,13 +148,13 @@ def _draw_caption_banner(
     # Draw clip info
     y = banner_top + padding + line_height
     for i, clip in enumerate(active_clips[:3]):
-        category = clip.get("category", "UNKNOWN")
-        technique = clip.get("specific_technique", "")
+        action = clip.get("action", clip.get("category", "other"))
+        technique = clip.get("specific_technique", clip.get("technique", ""))
         role = clip.get("role", "")
         confidence = clip.get("confidence", 0)
 
-        # Line 1: category + technique (bold/large)
-        text1 = f"{_format_category(category)}: {technique}"
+        # Line 1: action + technique (bold/large)
+        text1 = f"{_format_category(action)}: {technique}"
         cv2.putText(
             frame, text1, (padding, y),
             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2, cv2.LINE_AA,

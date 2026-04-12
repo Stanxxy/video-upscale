@@ -34,13 +34,13 @@ def deduplicate_clips(all_analysis_results):
     for role, clips in by_role.items():
         clips.sort(key=lambda x: x["start_frame"])
 
-        # Phase 1: merge same-category adjacent/overlapping clips (original logic, now per-athlete)
+        # Phase 1: merge same-action adjacent/overlapping clips (original logic, now per-athlete)
         merged = [clips[0].copy()]
         for nxt in clips[1:]:
             cur = merged[-1]
             overlap_len = max(0, min(cur["end_frame"], nxt["end_frame"])
                                - max(cur["start_frame"], nxt["start_frame"]))
-            is_same_cat = cur["category"] == nxt["category"]
+            is_same_cat = cur.get("action", cur.get("category", "")) == nxt.get("action", nxt.get("category", ""))
             is_close = (nxt["start_frame"] - cur["end_frame"]) < 30
             if is_same_cat and (overlap_len > 0 or is_close):
                 new_start = min(cur["start_frame"], nxt["start_frame"])

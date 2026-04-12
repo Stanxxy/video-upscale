@@ -9,6 +9,7 @@ import base64
 import json
 import logging
 import os
+import re
 import shutil
 from uuid import uuid4
 
@@ -20,6 +21,38 @@ from service.sns import SNSPublisher
 from service.ws_manager import WSManager
 
 logger = logging.getLogger(__name__)
+
+
+def _load_partial_tracking_dict(partial_path: str) -> dict:
+    """Parse tracking.json; tolerate truncated streaming output from abrupt cancellation."""
+    with open(partial_path, encoding="utf-8") as f:
+        content = f.read()
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+    m = re.search(r",\s*\"frames\"\s*:\s*\[", content)
+    if not m:
+        raise json.JSONDecodeError("no frames array in partial tracking", content, 0)
+    header_raw = content[: m.start()] + "}"
+    header = json.loads(header_raw)
+    tail = content[m.end() :]
+    dec = json.JSONDecoder()
+    frames = []
+    pos = 0
+    n = len(tail)
+    while pos < n:
+        while pos < n and tail[pos] in " \t\n\r,":
+            pos += 1
+        if pos >= n:
+            break
+        try:
+            obj, end = dec.raw_decode(tail, pos)
+            frames.append(obj)
+            pos = end
+        except json.JSONDecodeError:
+            break
+    return {**header, "frames": frames}
 
 
 async def run_job(
@@ -64,6 +97,11 @@ async def run_job(
         start_frame, end_frame = _parse_time_range(
             video_path, request.start_time, request.end_time,
         )
+
+        # Phase 2: Override start_frame if resuming from checkpoint
+        if request.resume_from_frame is not None:
+            start_frame = request.resume_from_frame
+            logger.info("Job %s: resuming tracking from frame %d", job_id, start_frame)
 
         # ============================================================
         # STAGE 2: DETECT + HUMAN VERIFY (10–15%)
@@ -189,6 +227,16 @@ async def run_job(
             eff_max_history,
             eff_max_missing_frames,
         )
+        # Phase 2: Download partial tracking if resuming from checkpoint
+        partial_tracking_data = None
+        if request.resume_tracking_s3_key:
+            logger.info("Job %s: downloading partial tracking from %s", job_id, request.resume_tracking_s3_key)
+            partial_bucket = request.output_bucket or request.bucket
+            partial_tracking_data = await loop.run_in_executor(
+                None, s3.download_json, partial_bucket, request.resume_tracking_s3_key,
+            )
+            logger.info("Job %s: partial tracking has %d frames", job_id, len(partial_tracking_data.get("frames", [])))
+
         tracking_json_path = await loop.run_in_executor(
             None,
             lambda: run_tracking_job(
@@ -209,6 +257,18 @@ async def run_job(
                 should_stop=lambda: job_store.is_cancelled(job_id),
             ),
         )
+
+        # Phase 2: Merge partial tracking with new tracking
+        if partial_tracking_data:
+            with open(tracking_json_path) as f:
+                new_tracking = json.load(f)
+            merged_frames = partial_tracking_data.get("frames", []) + new_tracking.get("frames", [])
+            merged = {**new_tracking, "frames": merged_frames, "start_frame": partial_tracking_data.get("start_frame", 0)}
+            with open(tracking_json_path, "w") as f:
+                json.dump(merged, f)
+            logger.info("Job %s: merged %d partial + %d new = %d total frames",
+                        job_id, len(partial_tracking_data.get("frames", [])),
+                        len(new_tracking.get("frames", [])), len(merged_frames))
 
         # ==============================================================
         # TRACKING-ONLY SHORT-CIRCUIT (skip_upscale=True)
@@ -444,6 +504,24 @@ async def run_job(
         await ws_manager.send_error(job_id, str(e))
 
     finally:
+        # Phase 2: Save partial tracking.json to S3 if job failed/cancelled
+        # and partial data exists. This enables resume without reprocessing.
+        try:
+            job_status = await job_store.get_job(job_id)
+            partial_tracking = os.path.join(work_dir, "tracking", "tracking.json")
+            if (job_status and job_status.status in (JobStatus.FAILED, JobStatus.CANCELLED)
+                    and os.path.isfile(partial_tracking)
+                    and os.path.getsize(partial_tracking) > 100):
+                partial_key = f"checkpoints/{job_id}/partial_tracking.json"
+                bucket = request.output_bucket or request.bucket
+                partial_data = _load_partial_tracking_dict(partial_tracking)
+                await loop.run_in_executor(
+                    None, s3.upload_json, partial_data, bucket, partial_key,
+                )
+                logger.info("Job %s: saved partial tracking to s3://%s/%s", job_id, bucket, partial_key)
+        except Exception as e:
+            logger.warning("Job %s: failed to save partial tracking: %s", job_id, e)
+
         shutil.rmtree(work_dir, ignore_errors=True)
 
 

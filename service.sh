@@ -2,10 +2,11 @@
 set -euo pipefail
 
 # ── Configuration ──────────────────────────────────────────────
-APP_MODULE="service.app:app"
+APP_MODULE="${BJJ_APP_MODULE:-service.app:app}"
 HOST="${BJJ_HOST:-0.0.0.0}"
 PORT="${BJJ_PORT:-8000}"
 LOG_LEVEL="${BJJ_LOG_LEVEL:-info}"
+STOP_TIMEOUT_SECONDS="${BJJ_STOP_TIMEOUT_SECONDS:-10}"
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_FILE="$PROJECT_DIR/.service.pid"
@@ -26,12 +27,74 @@ is_running() {
         # Stale pid file
         rm -f "$PID_FILE"
     fi
+
+    if recover_pid_file; then
+        return 0
+    fi
+
     return 1
 }
 
 get_pid() {
     if [[ -f "$PID_FILE" ]]; then
         cat "$PID_FILE"
+    fi
+}
+
+find_service_pid() {
+    local lsof_bin=""
+    for candidate in "$(command -v lsof 2>/dev/null || true)" /usr/sbin/lsof /usr/bin/lsof; do
+        if [[ -n "$candidate" && -x "$candidate" ]]; then
+            lsof_bin="$candidate"
+            break
+        fi
+    done
+
+    if [[ -z "$lsof_bin" ]]; then
+        return 1
+    fi
+
+    local pid
+    while IFS= read -r pid; do
+        [[ -n "$pid" ]] || continue
+
+        local command
+        command=$(ps -p "$pid" -o command= 2>/dev/null || true)
+        if [[ "$command" == *"uvicorn"* && "$command" == *"$APP_MODULE"* && "$command" == *"--port $PORT"* ]]; then
+            printf '%s\n' "$pid"
+            return 0
+        fi
+    done < <("$lsof_bin" -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null || true)
+
+    return 1
+}
+
+recover_pid_file() {
+    local pid
+    if ! pid=$(find_service_pid); then
+        return 1
+    fi
+
+    echo "$pid" > "$PID_FILE"
+    return 0
+}
+
+stop_pid() {
+    local pid="$1"
+    echo "Stopping service (PID $pid) ..."
+
+    kill "$pid" 2>/dev/null || true
+
+    # Wait for graceful shutdown before escalating.
+    local waited=0
+    while kill -0 "$pid" 2>/dev/null && (( waited < STOP_TIMEOUT_SECONDS )); do
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    if kill -0 "$pid" 2>/dev/null; then
+        yellow "Graceful stop timed out, sending SIGKILL ..."
+        kill -9 "$pid" 2>/dev/null || true
     fi
 }
 
@@ -49,7 +112,10 @@ cmd_start() {
     local venv_python="$PROJECT_DIR/venv/bin/python"
     if [[ ! -x "$venv_python" ]]; then
         red "Virtual environment not found at $PROJECT_DIR/venv"
-        echo "  Create one with: python3 -m venv venv && venv/bin/pip install -r requirements-service.txt"
+        echo "  Create one with:"
+        echo "    python3 -m venv venv"
+        echo "    venv/bin/pip install -r requirements-service.txt"
+        echo "    venv/bin/pip install 'git+https://github.com/facebookresearch/sam2.git'"
         return 1
     fi
 
@@ -92,21 +158,7 @@ cmd_stop() {
 
     local pid
     pid=$(get_pid)
-    echo "Stopping service (PID $pid) ..."
-
-    kill "$pid"
-
-    # Wait up to 10s for graceful shutdown
-    local waited=0
-    while kill -0 "$pid" 2>/dev/null && (( waited < 10 )); do
-        sleep 1
-        (( waited++ ))
-    done
-
-    if kill -0 "$pid" 2>/dev/null; then
-        yellow "Graceful stop timed out, sending SIGKILL ..."
-        kill -9 "$pid" 2>/dev/null || true
-    fi
+    stop_pid "$pid"
 
     rm -f "$PID_FILE"
     green "Service stopped"
