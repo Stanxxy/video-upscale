@@ -31,27 +31,26 @@ pip install -r test_tracking/requirements.txt
 
 ## Usage
 
-```bash
-cd test_tracking
+From the **whole-video-analysis** repo root (venv activated, cwd on `PYTHONPATH` or `pip install -e .`):
 
+```bash
 # Track a time range with human verification (default)
-python pipeline.py --video ../input_video.mp4 --start_time 0:04 --end_time 0:30
+python -m tracking_pipeline --video path/to/video.mp4 --start_time 0:04 --end_time 0:30
 
 # Auto mode: skip verification, use top 2 RF-DETR detections
-python pipeline.py --video ../input_video.mp4 --start_time 0:04 --end_time 0:30 --auto
-
-# Full video, SAM2 only (no per-frame RF-DETR)
-python pipeline.py --video ../input_video.mp4 --detect_interval 0
+python -m tracking_pipeline --video path/to/video.mp4 --start_time 0:04 --end_time 0:30 --auto
 
 # Force CPU if MPS has issues
-python pipeline.py --video ../input_video.mp4 --start_time 0:04 --end_time 0:30 --cpu
+python -m tracking_pipeline --video path/to/video.mp4 --start_time 0:04 --end_time 0:30 --cpu
 
 # Larger SAM2 model for better masks
-python pipeline.py --video ../input_video.mp4 --sam2_model large
+python -m tracking_pipeline --video path/to/video.mp4 --sam2_model large
 
-# Step by step (detection only):
-python detect.py --video ../input_video.mp4 --frame 0 --threshold 0.5
+# Detection only (YOLO26 on one frame)
+python -m tracking_pipeline.detect --video path/to/video.mp4 --frame 0 --threshold 0.5
 ```
+
+Note: run as a module (`python -m tracking_pipeline…`) so package-relative imports resolve. The legacy `cd … && python pipeline.py` flow is no longer supported.
 
 ### Human Verification Mode (default)
 
@@ -110,7 +109,7 @@ All outputs go to `output/`:
 | `advanced_tracking.py` | Online MLP classifiers (DINOv2 joint features) |
 | `state_machine.py` | Tracking state transitions (scramble, cut, fade handling) |
 | `video_io.py` | Scene cut and fade detection |
-| `tracking.py` | Main hybrid tracking loop (orchestrates all managers) |
+| `hybrid_tracking.py` | Main hybrid tracking loop (orchestrates all managers) |
 | `pipeline.py` | CLI orchestrator: detect → verify → track |
 
 ## Key Features

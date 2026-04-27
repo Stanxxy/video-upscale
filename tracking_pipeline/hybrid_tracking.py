@@ -6,7 +6,7 @@ Adapted for Mac M4 Max: MPS/CPU, YOLO26 for on-demand detection, RTMPose for key
 SAM2 is the sole tracker; YOLO26 only runs when a track is lost (user intervention required).
 
 Usage:
-    Called from pipeline.py — not meant to be run standalone.
+    Imported by ``tracking_pipeline.pipeline``; not meant to be run standalone.
 """
 
 import gc
@@ -20,13 +20,13 @@ import numpy as np
 import torch
 from ultralytics import YOLO
 
-from device import get_device, empty_cache
-from sam2_manager import SAM2Manager
-from pose import PoseEstimator
-from identity_manager import IdentityManager
-from state_machine import StateMachine, TrackingState
-from video_io import VideoIO
-from smoothing import BoxSmoother, KeypointSmoother
+from .device import get_device, empty_cache
+from .sam2_manager import SAM2Manager
+from .pose import PoseEstimator
+from .identity_manager import IdentityManager
+from .state_machine import StateMachine, TrackingState
+from .video_io import VideoIO
+from .smoothing import BoxSmoother, KeypointSmoother
 
 
 class NumpyEncoder(json.JSONEncoder):

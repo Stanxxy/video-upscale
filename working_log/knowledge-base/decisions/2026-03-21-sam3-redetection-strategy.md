@@ -26,7 +26,7 @@ poses better than YOLO26 bounding box regression.
 
 ## Key Files
 - `tracking_pipeline/sam3_detector.py` — **to be created**: SAM3 wrapper with same interface as `YOLO26Detector.detect_persons()` → returns `[{"box", "confidence", "track_id"}]`
-- `tracking_pipeline/tracking.py` — `_detect_and_request_boxes()` gains `use_sam3_redetection` param (lines 360, 495: the two re-detection call sites)
+- `tracking_pipeline/hybrid_tracking.py` — `_detect_and_request_boxes()` gains `use_sam3_redetection` param (lines 360, 495: the two re-detection call sites)
 - `tracking_pipeline/pipeline.py` — threads flag through `run_pipeline()` → `run_tracking()`
 - `service/models.py` — `TrackRequest.use_sam3_redetection: bool = False`
 - `service/worker.py` — passes flag to `run_pipeline()`

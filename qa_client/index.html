@@ -257,6 +257,21 @@
         </div>
       </div>
 
+      <!-- Memory check (QA debug) -->
+      <div class="card">
+        <div style="display:flex; gap:8px; align-items:center;">
+          <h2 style="margin:0">GPU Memory</h2>
+          <button class="btn btn-sm btn-primary" onclick="checkMemory()">Check</button>
+        </div>
+        <pre id="memory-info" style="font-size:0.8rem; color:var(--text-dim); margin-top:8px;">—</pre>
+      </div>
+
+      <!-- Resume history -->
+      <div class="card" id="history-panel" style="display:none">
+        <h2>Resume History</h2>
+        <div id="history-list" style="font-size:0.8rem; color:var(--text-dim);"></div>
+      </div>
+
       <!-- Completion card -->
       <div id="result-panel" class="card" style="display:none">
         <h2>Result</h2>
@@ -270,8 +285,9 @@
 // ============================================================
 // State
 // ============================================================
-let ws = null;
+let eventSource = null;
 let jobId = null;
+let jobHistory = []; // lineage of resumed jobs
 let detectionState = {
   candidates: [],
   suggestedBoxes: null,
@@ -357,12 +373,12 @@ async function submitJob() {
     }
 
     jobId = data.job_id;
+    jobHistory = [jobId];
     log(`Job created: ${jobId}`, 'log-info');
-    log(`Connecting WS: ${data.ws_url}`, 'log-info');
 
     document.getElementById('btn-cancel').disabled = false;
 
-    connectWs(data.ws_url);
+    connectSSE(jobId);
   } catch (e) {
     log(`Error: ${e.message}`, 'log-err');
     setStatus('Submit failed', 'error', 'error');
@@ -385,48 +401,71 @@ async function cancelJob() {
 }
 
 // ============================================================
-// WebSocket
+// SSE (Server-Sent Events) — replaces WebSocket
 // ============================================================
-function connectWs(url) {
-  if (ws) { ws.close(); }
-  ws = new WebSocket(url);
+function connectSSE(id) {
+  if (eventSource) { eventSource.close(); }
+  const base = document.getElementById('service-url').value.replace(/\/+$/, '');
+  const url = base + '/jobs/' + id + '/events';
+  log(`Connecting SSE: ${url}`, 'log-info');
 
-  ws.onopen = () => {
-    setStatus('Connected', 'WebSocket', 'connected');
-    log('WebSocket connected', 'log-in');
+  eventSource = new EventSource(url);
+
+  eventSource.onopen = () => {
+    setStatus('Connected', 'SSE', 'connected');
+    log('SSE connected', 'log-in');
   };
 
-  ws.onclose = (e) => {
-    setStatus('Disconnected', `code=${e.code}`, '');
-    log(`WebSocket closed (code=${e.code})`, 'log-info');
+  eventSource.addEventListener('progress', (e) => {
+    try { handleMessage(JSON.parse(e.data)); } catch {}
+  });
+
+  eventSource.addEventListener('detection_needed', (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      msg.type = 'detection_needed';
+      handleMessage(msg);
+    } catch {}
+  });
+
+  eventSource.addEventListener('completed', (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      msg.type = 'completed';
+      handleMessage(msg);
+    } catch {
+      handleMessage({type: 'completed'});
+    }
+    eventSource.close();
+    eventSource = null;
+  });
+
+  eventSource.addEventListener('job_error', (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      msg.type = 'error';
+      handleMessage(msg);
+    } catch {
+      handleMessage({type: 'error', message: 'SSE error'});
+    }
+    eventSource.close();
+    eventSource = null;
+  });
+
+  eventSource.addEventListener('interrupted', () => {
+    log('Job INTERRUPTED — engine restarted. Resume available.', 'log-err');
+    setStatus('Interrupted', 'bounce', 'error');
     document.getElementById('btn-submit').disabled = false;
     document.getElementById('btn-cancel').disabled = true;
-    // Hide stale detection panel — confirm can't work without a WS
-    if (document.getElementById('detection-panel').classList.contains('active')) {
-      document.getElementById('detection-panel').classList.remove('active');
-      log('Detection panel closed (connection lost). Please resubmit.', 'log-err');
-    }
-    ws = null;
-  };
+    eventSource.close();
+    eventSource = null;
+  });
 
-  ws.onerror = () => {
-    log('WebSocket error', 'log-err');
+  // Generic SSE error (connection lost)
+  eventSource.onerror = () => {
+    log('SSE connection lost — will retry...', 'log-err');
+    setStatus('Reconnecting', 'SSE', '');
   };
-
-  ws.onmessage = (evt) => {
-    let msg;
-    try { msg = JSON.parse(evt.data); } catch { return; }
-    handleMessage(msg);
-  };
-
-  // Keepalive ping every 25s
-  const ping = setInterval(() => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({type: 'ping'}));
-    } else {
-      clearInterval(ping);
-    }
-  }, 25000);
 }
 
 // ============================================================
@@ -447,8 +486,18 @@ function handleMessage(msg) {
   }
   else if (t === 'detection_needed') {
     log(`DETECTION REQUIRED  reason=${msg.reason}  candidates=${(msg.candidates||[]).length}  suggested=${!!msg.suggested_boxes}`, 'log-info');
-    setStatus('Waiting for detection', msg.reason, 'working');
-    showDetectionPanel(msg);
+    setStatus('Awaiting correction', msg.reason, 'working');
+    // If frame_b64 is missing, load from S3 presigned URL (frame_s3_key)
+    if (!msg.frame_b64 && msg.frame_s3_key) {
+      const base = document.getElementById('service-url').value.replace(/\/+$/, '');
+      log(`Loading frame from S3: ${msg.frame_s3_key}`, 'log-info');
+      // For QA direct-to-engine, fetch the job details which should include the frame
+      fetch(base + '/job/' + jobId).then(r => r.json()).then(() => {
+        showDetectionPanel(msg);
+      }).catch(() => showDetectionPanel(msg));
+    } else {
+      showDetectionPanel(msg);
+    }
   }
   else if (t === 'completed') {
     log(`COMPLETED  bucket=${msg.result_bucket}  key=${msg.result_key}  tracking=${msg.tracking_key||'—'}`, 'log-in');
@@ -703,31 +752,78 @@ function resetSelection() {
 // ============================================================
 // Send detection response
 // ============================================================
-function confirmDetection() {
+async function confirmDetection() {
   if (!detectionState.selectedA || !detectionState.selectedB) return;
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    log('Cannot confirm: WebSocket disconnected. Please resubmit the job.', 'log-err');
-    document.getElementById('detection-panel').classList.remove('active');
-    return;
-  }
+  const base = document.getElementById('service-url').value.replace(/\/+$/, '');
 
-  const msg = {
-    type: 'detection_response',
+  const body = {
     box_a: detectionState.selectedA.map(v => Math.round(v)),
     box_b: detectionState.selectedB.map(v => Math.round(v)),
   };
-  ws.send(JSON.stringify(msg));
-  log(`Sent detection_response: A=[${msg.box_a}] B=[${msg.box_b}]`, 'log-out');
 
+  log(`POST /jobs/${jobId}/detection_response: A=[${body.box_a}] B=[${body.box_b}]`, 'log-out');
   document.getElementById('detection-panel').classList.remove('active');
-  setStatus('Processing', 'detection confirmed', 'working');
+  setStatus('Resuming...', 'submitting correction', 'working');
+
+  try {
+    const resp = await fetch(base + '/jobs/' + jobId + '/detection_response', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+
+    const newJobId = data.job_id;
+    log(`Resume job created: ${newJobId} (from ${jobId})`, 'log-info');
+    jobHistory.push(newJobId);
+    jobId = newJobId;
+    updateHistory();
+
+    // Connect SSE to the new (resumed) job
+    connectSSE(newJobId);
+  } catch (e) {
+    log(`Detection response failed: ${e.message}`, 'log-err');
+    setStatus('Resume failed', 'error', 'error');
+  }
 }
 
-function cancelDetection() {
-  if (!ws) return;
-  ws.send(JSON.stringify({ type: 'detection_cancelled' }));
-  log('Sent detection_cancelled', 'log-out');
+async function cancelDetection() {
+  const base = document.getElementById('service-url').value.replace(/\/+$/, '');
+  try {
+    await fetch(base + '/job/' + jobId, { method: 'DELETE' });
+    log('Detection cancelled (job deleted)', 'log-err');
+  } catch (e) {
+    log(`Cancel detection failed: ${e.message}`, 'log-err');
+  }
   document.getElementById('detection-panel').classList.remove('active');
+}
+// ============================================================
+// Debug helpers
+// ============================================================
+async function checkMemory() {
+  const base = document.getElementById('service-url').value.replace(/\/+$/, '');
+  try {
+    const resp = await fetch(base + '/debug/memory');
+    const data = await resp.json();
+    document.getElementById('memory-info').textContent = JSON.stringify(data, null, 2);
+    log(`GPU memory: ${data.allocated_mb}MB allocated, ${data.reserved_mb || 0}MB reserved`, 'log-info');
+  } catch (e) {
+    document.getElementById('memory-info').textContent = 'Error: ' + e.message;
+  }
+}
+
+// Update resume history display when jobHistory changes
+function updateHistory() {
+  if (jobHistory.length <= 1) {
+    document.getElementById('history-panel').style.display = 'none';
+    return;
+  }
+  document.getElementById('history-panel').style.display = 'block';
+  const el = document.getElementById('history-list');
+  el.innerHTML = jobHistory.map((id, i) =>
+    `<div>${i === 0 ? '🟢' : '→'} ${id}${i === jobHistory.length - 1 ? ' (current)' : ''}</div>`
+  ).join('');
 }
 </script>
 </body>

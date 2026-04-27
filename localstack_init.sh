@@ -14,13 +14,13 @@
 #   ./localstack_init.sh --status   — check LocalStack health only
 #
 # Requirements:
-#   - LocalStack running on 100.79.167.101:4566
+#   - LocalStack running on localhost:4566
 #   - AWS CLI installed
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────────
-ENDPOINT="http://100.79.167.101:4566"
+ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localhost:4566}"
 REGION="us-east-1"
 ACCOUNT_ID="000000000000"   # LocalStack fixed account ID
 

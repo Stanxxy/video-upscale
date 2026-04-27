@@ -18,7 +18,7 @@ import numpy as np
 import torch
 from sam2.sam2_video_predictor import SAM2VideoPredictor
 
-from device import get_device, empty_cache
+from .device import get_device, empty_cache
 
 
 def _apply_mps_float32_patch():

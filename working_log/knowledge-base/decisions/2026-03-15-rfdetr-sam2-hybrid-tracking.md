@@ -22,7 +22,7 @@ Key files:
 - `tracking_pipeline/detect.py` — RF-DETR wrapper
 - `tracking_pipeline/sam2_manager.py` — SAM2 propagation wrapper
 - `tracking_pipeline/identity_manager.py` — DINOv2 + color histogram re-ID
-- `tracking_pipeline/tracking.py` — main hybrid tracking loop
+- `tracking_pipeline/hybrid_tracking.py` — main hybrid tracking loop
 - `tracking_pipeline/state_machine.py` — handles scrambles / scene cuts / fades
 
 ## Rationale
@@ -32,5 +32,5 @@ robust to positional changes; color histogram catches gi color differences quick
 
 ## Impact
 All service tracking jobs go through `service/tracking_runner.py` which delegates to
-`tracking/__init__.py` shim → `tracking_pipeline/tracking.py`. Any change to the tracking
+`tracking/__init__.py` shim → `tracking_pipeline/hybrid_tracking.py`. Any change to the tracking
 algorithm lives in `tracking_pipeline/`.

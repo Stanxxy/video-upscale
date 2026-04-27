@@ -8,7 +8,7 @@ class ServiceConfig(BaseSettings):
     aws_region: str = "us-east-1"
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
-    s3_endpoint_url: str = ""  # leave empty for real AWS; set for LocalStack etc.
+    s3_endpoint_url: str = ""  # leave empty for AWS production; set only for local S3 emulators.
     sns_topic_arn: str = ""
 
     # Gemini (credential – set in .env, do not commit)

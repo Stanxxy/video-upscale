@@ -38,16 +38,17 @@ whole-video-analysis/
 │   ├── s3.py              # S3 operations
 │   ├── sns.py             # SNS event publishing
 │   └── ws_manager.py      # WebSocket manager
-├── tracking_pipeline/         # Tracking pipeline modules (imported via tracking/ shim)
-│   ├── tracking.py        # Main hybrid tracking loop
+├── tracking_pipeline/         # Installable package (hybrid tracking implementation)
+│   ├── hybrid_tracking.py # Main hybrid tracking loop
 │   ├── detect.py          # RF-DETR detection
 │   ├── sam2_manager.py    # SAM2 propagation
 │   ├── identity_manager.py# DINOv2 + color re-ID
 │   ├── state_machine.py   # Scramble/cut/fade state
-│   ├── pipeline.py        # CLI orchestrator
+│   ├── pipeline.py        # CLI orchestrator (run: python -m tracking_pipeline)
 │   └── ...                # Pose, video I/O, smoothing, etc.
-├── tracking/              # Package shim (re-exports from tracking_pipeline/)
+├── tracking/              # Public API re-exports (from tracking_pipeline)
 │   └── __init__.py
+├── pyproject.toml         # setuptools: packages tracking + tracking_pipeline
 ├── tests/                 # pytest unit tests
 ├── qa_client/             # Manual QA client scripts
 ├── working_log/           # Planning docs, knowledge base
@@ -76,7 +77,7 @@ curl -s http://localhost:9001/health | python -m json.tool
 ```
 
 Infrastructure dependencies:
-- **LocalStack** (S3, SNS): `http://100.79.167.101:4566`
+- **AWS** (production S3/SNS): configure credentials and region via `BJJ_AWS_*` env vars
 - **Gemini API**: key in `.env` as `GEMINI_API_KEY`
 
 ---
@@ -149,4 +150,4 @@ See `working_log/knowledge-base/INDEX.md` for the full list. Critical ones to kn
 1. **Hybrid tracking**: RF-DETR + SAM2 + DINOv2 re-ID — see `decisions/2026-03-15-rfdetr-sam2-hybrid-tracking.md`
 2. **Taxonomy mapper**: bridges Gemini output to frontend enums — see `decisions/2026-03-15-taxonomy-mapper-frontend-bridge.md`
 3. **Single-job concurrency**: GPU constraint, intentional — see `decisions/2026-03-15-single-job-concurrency.md`
-4. **tracking/ shim**: avoids Python name collision — see `decisions/2026-03-15-tracking-package-shim.md`
+4. **tracking/ + tracking_pipeline**: package layout and public imports — see `decisions/2026-03-15-tracking-package-shim.md`

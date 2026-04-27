@@ -5,7 +5,7 @@ Provides process_video() for end-to-end upscale + Gemini analysis via CLI (main.
 NOT used by the production service — service/worker.py handles that code path.
 
 The live run_pipeline() for tracking jobs lives in tracking_pipeline/pipeline.py,
-accessed via the tracking/ shim.
+imported as ``tracking_pipeline.pipeline`` or via the ``tracking`` re-export package.
 """
 import cv2
 import json

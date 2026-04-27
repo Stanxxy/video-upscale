@@ -14,6 +14,14 @@ class JobCancelledError(Exception):
     """Raised when tracking is stopped early via should_stop (e.g. DELETE /job/{id})."""
 
 
+class JobSuspendedError(Exception):
+    """Raised when the job needs human input (bounding box correction).
+
+    The worker catches this to cleanly release models and persist
+    checkpoint state to Keyspaces + S3 before exiting.
+    """
+
+
 class JobStatus(str, Enum):
     PENDING = "pending"
     DOWNLOADING = "downloading"
@@ -26,6 +34,8 @@ class JobStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    AWAITING_CORRECTION = "awaiting_correction"
+    INTERRUPTED = "interrupted"
 
 
 class TrackRequest(BaseModel):
@@ -33,6 +43,7 @@ class TrackRequest(BaseModel):
     bucket: str
     key: str
     output_bucket: Optional[str] = None
+    user_id: Optional[str] = None
     sam2_model: str = "facebook/sam2.1-hiera-base-plus"
 
     # Tracking config
@@ -57,9 +68,14 @@ class TrackRequest(BaseModel):
     # Player reference images for athlete identification
     player_references: Optional[List[Dict[str, str]]] = None
 
-    # Resume from partial tracking (Phase 2 — mid-tracking checkpoint resume)
+    # Resume from checkpoint (Keyspaces-backed suspend/resume)
+    resume_from_job_id: Optional[str] = None  # job_id to load checkpoints from Keyspaces
     resume_tracking_s3_key: Optional[str] = None  # S3 key for partial tracking JSON
     resume_from_frame: Optional[int] = None  # frame index to resume tracking from
+    # Stage 4 resume hints (analysis window checkpoint)
+    analysis_raw_s3_key: Optional[str] = None
+    analysis_window_count: Optional[int] = None
+    analysis_current_context: Optional[str] = None
 
 
 class ResumeRequest(BaseModel):
@@ -72,7 +88,7 @@ class ResumeRequest(BaseModel):
 class TrackResponse(BaseModel):
     """Response for POST /track."""
     job_id: str
-    ws_url: str
+    ws_url: str = ""  # TODO: deprecated — kept for backward compat; SSE is the new transport
     status: str = "pending"
 
 

@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 import torch
 
-from device import get_device
+from .device import get_device
 
 
 class IdentityManager:

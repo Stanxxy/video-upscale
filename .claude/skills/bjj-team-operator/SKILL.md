@@ -1,3 +1,18 @@
+---
+name: bjj-team-operator
+description: Guides service lifecycle operations and codebase hygiene tasks for BJJ Vision environments. Use when starting, stopping, troubleshooting services, or planning cleanup work.
+when_to_use: Trigger for service lifecycle operations, infra troubleshooting, health-check failures, and codebase hygiene planning/execution.
+paths:
+  - scripts/**
+  - bjj-vision-backend/**
+  - bjj-vision-frontend/**
+  - standalone-analyzer-backend/**
+  - working_log/**
+  - whole-video-analysis/**
+  - whole-video-analysis/working_log/**
+user-invocable: true
+---
+
 # Operator - Service Lifecycle & Codebase Health
 
 ## Trigger
@@ -5,6 +20,26 @@
 **Mode 1 — Service Lifecycle**: Starting/stopping services, health checks, deployment issues, service misbehavior, environment problems.
 
 **Mode 2 — Codebase Hygiene**: "clean up", "remove cruft", "find dead code", "what can we delete", "codebase health", "disk usage", or after a major refactor/migration.
+
+## Knowledge Base Preflight (Always-On)
+Before any operator workflow:
+
+1. Read `working_log/knowledge-base/INDEX.md`.
+2. Query entries related to impacted services, infra dependencies, and operational incidents.
+3. Extract known runbooks, recurring failures, and prior remediation constraints.
+4. If no relevant entry exists, proceed and note the KB gap for post-task maintenance.
+
+## KB Update Triggers (Moderate Auto-Create)
+Create or update a KB candidate when any of these are true:
+- An accepted plan changes service lifecycle behavior, environment assumptions, or operational architecture.
+- A nontrivial operational bug is fixed (startup crash pattern, infra mismatch, repeated health-check failure) with evidence.
+- Hygiene work reveals persistent integration debt patterns worth preserving.
+
+Skip KB writes for ephemeral local noise with no reusable operational value.
+
+When KB update criteria are met:
+- Record evidence (commands run, logs, affected services/files, verification outcomes).
+- Hand off lifecycle ownership to `bjj-team-meta` for strict alignment checks and safe-auto maintenance.
 
 ---
 
@@ -98,6 +133,36 @@ See `references/service-runbook.md` for detailed troubleshooting steps.
 - **LocalStack** (S3, DynamoDB): `http://100.79.167.101:4566`
 - **Supabase**: Cloud-hosted PostgreSQL + Auth
 - **Cassandra**: `100.79.167.101:9042`, keyspace `video_analysis`
+
+### Governance Planning Inputs (Architecture-Impacting Work)
+When Engineer governance planning is required, Operator must provide infra/runtime inputs for the migration and rollout runbook:
+
+1. **Dependency map**
+   - impacted services and startup order
+   - required external dependencies (Supabase, LocalStack, Cassandra, queues/storage)
+2. **Runtime assumptions**
+   - required env vars and secrets boundaries
+   - port/profile conflicts and resource constraints
+   - expected failure domains and blast radius
+3. **Operational readiness checks**
+   - health endpoints and readiness assertions
+   - observability/log checks needed during rollout
+   - rollback prerequisites and rollback verification checks
+4. **Deployment risk notes**
+   - backward compatibility risks
+   - data migration timing risks
+   - cross-service coordination risks
+
+### Operator Governance Output Block (Required When Requested)
+```markdown
+## Governance Infra/Runtime Input
+- Impacted services and startup order: [...]
+- External dependencies and connectivity requirements: [...]
+- Runtime assumptions and env requirements: [...]
+- Rollout checks: [...]
+- Rollback checks: [...]
+- Known infra risks: [...]
+```
 
 ### Service Lifecycle Gates
 - Service responds to `/health` endpoint
@@ -292,3 +357,14 @@ find whole-video-analysis/test_tracking/ -name "*.pt" -o -name "*.pth" | xargs l
 - Use `working_log/knowledge-base/scratch/` for intermediate debugging notes during a session
 - Record operational issues in `working_log/knowledge-base/mistakes/OPS-xxx-*.md` with quick-fix commands
 - Review past mistakes before troubleshooting — the fix might already be documented
+
+## Required Output Contract (Mandatory)
+Every Operator response must include these sections:
+
+1. `## Operational Scope`
+2. `## Commands Run and Output Evidence`
+3. `## System Status`
+4. `## Next Handoff`
+
+`Next Handoff` must explicitly name `bjj-team-engineer` or `bjj-team-meta` based on outcome.
+For bug-fix flows, prefer `bjj-team-product-manager` after environment triage so PM can understand and reproduce the bug before implementation loop starts.

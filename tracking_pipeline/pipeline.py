@@ -6,10 +6,10 @@ Orchestrates:
 2. Human verification / manual box selection
 3. SAM2 tracking with user intervention on track loss
 
-Usage:
-    python pipeline.py --video ../input_video.mp4 --start_time 0:04 --end_time 0:30
-    python pipeline.py --video ../input_video.mp4 --auto
-    python pipeline.py --video ../input_video.mp4 --cpu --step_size 30
+Usage (from repo root):
+    python -m tracking_pipeline.pipeline --video ../input_video.mp4 --start_time 0:04 --end_time 0:30
+    python -m tracking_pipeline --video ../input_video.mp4 --auto
+    python -m tracking_pipeline.pipeline --video ../input_video.mp4 --cpu --step_size 30
 """
 import argparse
 import json
@@ -18,9 +18,9 @@ import time
 
 import cv2
 
-from detect import detect_persons
-from select_boxes import select_boxes_from_detections, manual_draw_boxes, read_frame
-from tracking import run_tracking
+from .detect import detect_persons
+from .select_boxes import select_boxes_from_detections, manual_draw_boxes, read_frame
+from .hybrid_tracking import run_tracking
 
 
 # --- SAM2 model ID mapping ---
@@ -246,7 +246,7 @@ def run_pipeline(
     return json_path
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         description="BJJ Athlete Tracking: YOLO26 + SAM2 + State Machine",
     )
@@ -294,3 +294,7 @@ if __name__ == "__main__":
         start_time=args.start_time,
         end_time=args.end_time,
     )
+
+
+if __name__ == "__main__":
+    main()

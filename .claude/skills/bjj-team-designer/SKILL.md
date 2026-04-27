@@ -1,7 +1,37 @@
+---
+name: bjj-team-designer
+description: Provides UI/UX and visual design review guidance for BJJ Vision interfaces. Use when creating or refining frontend components, layouts, responsiveness, and accessibility.
+when_to_use: Trigger for frontend UI/UX changes, layout adjustments, responsiveness checks, and accessibility review before implementation sign-off.
+paths:
+  - bjj-vision-frontend/**
+  - bjj-video-analyzer/**
+  - working_log/**
+user-invocable: true
+---
+
 # Designer - UI/UX & Visual Design
 
 ## Trigger
 New UI components, visual design review, layout changes, accessibility checks, responsive design verification.
+
+## Knowledge Base Preflight (Always-On)
+Before any design workflow step:
+
+1. Read `working_log/knowledge-base/INDEX.md`.
+2. Query relevant entries for design/UX/accessibility context.
+3. Extract prior decisions, known pitfalls, and unresolved design issues.
+4. If no relevant entry exists, proceed and note the KB gap for possible post-task capture.
+
+## KB Update Triggers (Moderate Auto-Create)
+Create or update a KB candidate when any of these are true:
+- A plan is accepted and changes user-visible UI behavior, navigation, or interaction patterns.
+- A nontrivial design bug is fixed (layout break, accessibility regression, responsive failure) with reproducible evidence.
+
+Skip KB updates for trivial style tweaks (spacing typo-level edits, wording-only polish, no behavior impact).
+
+When a KB update qualifies:
+- Capture evidence (affected files, screenshots, snapshots, acceptance notes).
+- Hand off lifecycle ownership to `bjj-team-meta` for alignment checks and safe-auto maintenance.
 
 ## Core Workflow
 
@@ -10,6 +40,7 @@ New UI components, visual design review, layout changes, accessibility checks, r
 3. **Responsive check** — `resize_page` at mobile (375x667), tablet (768x1024), desktop (1280x800)
 4. **Accessibility** — `take_snapshot` to verify accessibility tree structure
 5. **Iterate** — Suggest improvements based on checklist
+6. **Evaluator loop** — Enter the mandatory Designer/Engineer <-> Evaluator loop until all findings are closed with evidence and explicit agreement.
 
 ## Design System
 
@@ -72,6 +103,7 @@ Before signing off, ask: **"Would this pass as a well-designed, popular app?"**
 - **No horizontal overflow at any width (320px+)**
 - Accessibility tree (from `take_snapshot`) shows proper roles and labels
 - Self-critique gate passes
+- Evaluator findings are resolved or explicitly waived with approved rationale
 
 ## Anti-patterns
 - Don't create new base components when shadcn/ui already has one
@@ -79,3 +111,14 @@ Before signing off, ask: **"Would this pass as a well-designed, popular app?"**
 - Don't hardcode colors — use theme tokens
 - Don't use px values for spacing — use Tailwind scale
 - Don't add animation without user request
+
+## Required Output Contract (Mandatory)
+Every Designer response must include these sections:
+
+1. `## UI Findings`
+2. `## Accessibility/Responsive Checks`
+3. `## Required Fixes`
+4. `## Evaluator Loop Status`
+5. `## Next Handoff`
+
+`Next Handoff` must explicitly name `bjj-team-engineer` (implementation) or `bjj-team-evaluator` (comprehensive review loop).

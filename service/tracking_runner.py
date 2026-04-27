@@ -16,10 +16,7 @@ from service.models import JobCancelledError
 
 logger = logging.getLogger(__name__)
 
-# Lazy import: tracking package inserts tracking_pipeline/ into sys.path
-import tracking  # noqa: E402 (triggers the shim)
-from detect import detect_persons as _detect_persons  # noqa: E402
-from tracking import run_tracking as _run_tracking  # noqa: E402
+from tracking import detect_persons as _detect_persons, run_tracking as _run_tracking
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +142,13 @@ def run_tracking_job(
     )
 
     if json_path is None:
-        raise JobCancelledError("Tracking stopped by user (job cancelled)")
+        # Check if should_stop was the cause (user cancel) vs detection_cb
+        # returning None (suspend for correction). If should_stop is set,
+        # it's a real cancellation. Otherwise, return None so the worker
+        # can raise JobSuspendedError.
+        if should_stop and should_stop():
+            raise JobCancelledError("Tracking stopped by user (job cancelled)")
+        return None
 
     return os.path.abspath(json_path)
 

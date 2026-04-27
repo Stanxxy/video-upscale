@@ -49,6 +49,8 @@ token.json
 *.log
 *.pid
 .service.pid
+# SAM2 frame extraction in process cwd (tracking_pipeline/sam2_manager.py)
+temp_sam2_frames*
 
 # ── OS noise ──────────────────────────────────────────────────────────────────
 .DS_Store
@@ -69,3 +71,6 @@ env/
 
 # Agent scratch paper — in-session memory offload only
 working_log/knowledge-base/scratch/*.md
+
+# Agent implementation worktrees
+.worktrees/

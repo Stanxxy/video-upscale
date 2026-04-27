@@ -5,14 +5,15 @@ import os
 from datetime import datetime, timezone
 
 import torch
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse, StreamingResponse
 
+from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.models import TrackRequest, TrackResponse, JobResponse, ResumeRequest, JobStatus
 from service.job_store import InMemoryJobStore
+from service.jobs_store import JobsStore
 from service.worker import run_job
 from service.config import ServiceConfig
-from service.ws_manager import WSManager
 
 _QA_HTML = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "qa_client", "index.html"
@@ -24,41 +25,39 @@ router = APIRouter()
 # Set during app lifespan via init_routes()
 _config: ServiceConfig | None = None
 _job_store: InMemoryJobStore | None = None
-_ws_manager: WSManager | None = None
+_jobs_store: JobsStore | None = None
 _job_semaphore: asyncio.Semaphore | None = None
+_instance_id: str = ""
 _active_tasks: dict[str, asyncio.Task] = {}  # job_id -> task
 
 
 def init_routes(
     config: ServiceConfig,
     job_store: InMemoryJobStore,
-    ws_manager: WSManager,
+    jobs_store: JobsStore,
+    instance_id: str = "",
 ):
-    global _config, _job_store, _ws_manager, _job_semaphore
+    global _config, _job_store, _jobs_store, _job_semaphore, _instance_id
     _config = config
     _job_store = job_store
-    _ws_manager = ws_manager
+    _jobs_store = jobs_store
     _job_semaphore = asyncio.Semaphore(config.max_concurrent_jobs)
+    _instance_id = instance_id
 
 
 async def _run_with_semaphore(job_id: str, request: TrackRequest):
-    async with _job_semaphore:
-        await run_job(job_id, request, _config, _job_store, _ws_manager)
+    _jobs_store.register_owned_job(job_id)
+    try:
+        async with _job_semaphore:
+            await run_job(job_id, request, _config, _job_store, _jobs_store)
+    finally:
+        _jobs_store.unregister_owned_job(job_id)
 
 
 async def _cleanup_orphaned_tasks():
-    """Cancel tasks whose WebSocket is no longer connected."""
+    """Remove completed tasks from the active-tasks dict."""
     for jid, task in list(_active_tasks.items()):
         if task.done():
-            _active_tasks.pop(jid, None)
-            continue
-        if not _ws_manager.is_connected(jid):
-            logger.info("Cleaning up orphaned task for job %s", jid)
-            task.cancel()
-            try:
-                await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
-                pass
             _active_tasks.pop(jid, None)
 
 
@@ -75,21 +74,51 @@ async def qa_client():
 # REST endpoints
 # ---------------------------------------------------------------------------
 
+# TODO: user id needs to be passed in from the request. update TrackRequest model to include user_id.
+# The track request should ONLY be used for starting a new job. NOT for resuming a job.
 @router.post("/track", response_model=TrackResponse)
 async def create_track_job(request: TrackRequest):
-    # Proactively clean up completed/orphaned tasks before checking capacity
+    # Proactively clean up completed tasks before checking capacity
     await _cleanup_orphaned_tasks()
 
     if _job_semaphore.locked():
         raise HTTPException(429, "Server is at capacity. Try again later.")
 
     job = await _job_store.create_job(request)
-    ws_url = f"ws://localhost:{_config.service_port}/ws/{job.job_id}"
-    return TrackResponse(job_id=job.job_id, ws_url=ws_url, status="pending")
+    job_id = job.job_id
+
+    # Persist to Keyspaces (user_id="" for engine-direct jobs; the analysis
+    # service populates it when submitting via POST /tracking/analyze)
+
+    # TODO: user id needs to be passed in from the request. update TrackRequest model to include user_id.
+    await _jobs_store.create_lifecycle(job_id, request.video_id, request.user_id or "", "", owner_instance_id=_instance_id)
+    await _jobs_store.save_request(job_id, request.model_dump_json())
+    if request.video_id:
+        await _jobs_store.set_latest(str(request.video_id), job_id, JobState.PENDING)
+
+    # Start the job immediately (no WS handshake needed)
+    task = asyncio.create_task(_run_with_semaphore(job_id, request))
+    _active_tasks[job_id] = task
+
+    return TrackResponse(job_id=job_id, status="pending")
 
 
 @router.get("/job/{job_id}", response_model=JobResponse)
 async def get_job(job_id: str):
+    # Try Keyspaces first
+    lifecycle = await _jobs_store.get_lifecycle(job_id)
+    if lifecycle:
+        return JobResponse(
+            job_id=lifecycle["job_id"],
+            status=lifecycle["job_state"].lower(),
+            progress_percent=lifecycle.get("progress_percent", 0.0),
+            current_frame=lifecycle.get("current_frame"),
+            total_frames=lifecycle.get("total_frames"),
+            error_message=lifecycle.get("error_message"),
+            created_at=str(lifecycle.get("started_at", "")),
+            updated_at=str(lifecycle.get("updated_at", "")),
+        )
+    # Fall back to in-memory
     job = await _job_store.get_job(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")
@@ -102,6 +131,8 @@ async def cancel_job(job_id: str):
     if job is None:
         raise HTTPException(404, "Job not found")
     await _job_store.set_cancelled(job_id)
+    await _jobs_store.set_state(job_id, JobState.CANCELLED)
+    # TODO update not only the job lifecycle but also the checkpoint data, latest job.
     # Stop the running job task so tracking (and later stages) exit promptly
     task = _active_tasks.get(job_id)
     if task is not None and not task.done():
@@ -110,47 +141,177 @@ async def cancel_job(job_id: str):
     return {"status": "cancelled", "job_id": job_id}
 
 
+# ---------------------------------------------------------------------------
+# SSE endpoint -- this is used to stream job events to the QA client.
+# ---------------------------------------------------------------------------
+
+@router.get("/jobs/{job_id}/events")
+async def job_events_sse(job_id: str):
+    """Server-Sent Events endpoint that tails the Keyspaces job_lifecycle row."""
+
+    async def event_generator():
+        last_state = None
+        last_pct = -1.0
+        consecutive_failures = 0
+        tick = 0
+        while True:
+            try:
+                lifecycle = await _jobs_store.get_lifecycle(job_id)
+                if not lifecycle:
+                    yield f"event: job_error\ndata: {{\"message\": \"Job not found\"}}\n\n"
+                    return
+
+                consecutive_failures = 0  # reset on success
+                state = lifecycle["job_state"]
+                stage = lifecycle.get("stage", "")
+                pct = lifecycle.get("progress_percent", 0.0)
+
+                # TODO: to reduce CPU burden, we should go with sleep 1 second instead of checking without sleep.
+
+                # Only send when something changed
+                if state != last_state or abs(pct - last_pct) >= 0.5:
+                    last_state = state
+                    last_pct = pct
+
+                    if state == JobState.AWAITING_CORRECTION.value:
+                        for stage_name in (PipelineStage.DETECT, PipelineStage.TRACK):
+                            cp = await _jobs_store.get_checkpoint(job_id, stage_name)
+                            if cp and cp.get("checkpoint_data", {}).get("pending_detection"):
+                                det = cp["checkpoint_data"]["pending_detection"]
+                                yield f"event: detection_needed\ndata: {json.dumps(det)}\n\n"
+                                break
+                    elif state == JobState.COMPLETED.value:
+                        yield f"event: completed\ndata: {{\"job_id\": \"{job_id}\"}}\n\n"
+                        return
+                    elif state in (JobState.FAILED.value, JobState.CANCELLED.value):
+                        msg = lifecycle.get("error_message", state)
+                        yield f"event: job_error\ndata: {{\"message\": \"{msg}\"}}\n\n"
+                        return
+                    elif state == JobState.INTERRUPTED.value:
+                        yield f"event: interrupted\ndata: {{\"job_id\": \"{job_id}\"}}\n\n"
+                        return
+                    else:
+                        progress = {
+                            "type": "progress",
+                            "state": stage,
+                            "percent": round(pct, 1),
+                            "frame_idx": lifecycle.get("current_frame", 0),
+                            "total_frames": lifecycle.get("total_frames", 0),
+                        }
+                        yield f"event: progress\ndata: {json.dumps(progress)}\n\n"
+
+            except Exception as e:
+                consecutive_failures += 1
+                logger.warning("SSE error for job %s (failure %d): %s", job_id, consecutive_failures, e)
+                if consecutive_failures >= 30:
+                    yield f"event: job_error\ndata: {{\"message\": \"Service unavailable\"}}\n\n"
+                    return
+
+            await asyncio.sleep(1.0)
+            tick += 1
+            # Send keepalive comment every 15s to prevent proxy idle timeouts
+            if tick % 15 == 0:
+                yield ": keepalive\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Detection response (async human-in-the-loop)
+# ---------------------------------------------------------------------------
+
+@router.post("/jobs/{job_id}/detection_response")
+async def submit_detection_response(job_id: str, body: ResumeRequest):
+    """Submit corrected bounding boxes for an AWAITING_CORRECTION job.
+
+    Creates a new resume job with the provided boxes and returns its ID.
+    """
+    lifecycle = await _jobs_store.get_lifecycle(job_id)
+    if not lifecycle:
+        raise HTTPException(404, "Job not found")
+    if lifecycle["job_state"] != JobState.AWAITING_CORRECTION.value:
+        raise HTTPException(409, f"Job state is {lifecycle['job_state']}, not AWAITING_CORRECTION")
+
+    # Read the original request params
+    request_json = await _jobs_store.get_request(job_id)
+    if not request_json:
+        raise HTTPException(404, "Original request not found")
+
+    orig_request = json.loads(request_json)
+
+    # Read checkpoints to get resume hints
+
+    # TODO: by default resume should use the latest checkpoint. Detection response should 
+    # only be about detection during track. If the latest checkpoint in track stage is not available, use the latest checkpoint.
+    # then dont bother with handing detection response.
+    checkpoints = await _jobs_store.get_all_checkpoints(job_id)
+    
+    cp_map = {cp["stage_name"]: cp.get("checkpoint_data", {}) for cp in checkpoints}
+    # TODO: get the latest checkpoint in track stage.
+    track_cp = cp_map.get("track", {})
+
+
+    # Build resume request
+    resume_params = {
+        **orig_request,
+        "box_a": body.box_a,
+        "box_b": body.box_b,
+    }
+
+    # If mid-track loss, include partial tracking resume hints
+    if track_cp.get("partial_tracking_s3_key"):
+        resume_params["resume_from_job_id"] = job_id
+        resume_params["resume_tracking_s3_key"] = track_cp["partial_tracking_s3_key"]
+        resume_params["resume_from_frame"] = track_cp.get("frame_count", 0) # 
+
+    # Create new job
+    new_request = TrackRequest(**resume_params)
+    new_job = await _job_store.create_job(new_request)
+    new_job_id = new_job.job_id
+
+    # Write to Keyspaces
+    video_id = orig_request.get("video_id", "")
+    await _jobs_store.create_lifecycle(new_job_id, str(video_id), lifecycle.get("user_id", ""), new_job_id, owner_instance_id=_instance_id)
+    await _jobs_store.save_request(new_job_id, new_request.model_dump_json())
+    if video_id:
+        await _jobs_store.set_latest(str(video_id), new_job_id, JobState.PENDING)
+
+    # Mark old job as CANCELLED (no longer awaiting)
+    # TODO: This should be removed without hesitation: job should be canceled 
+    # before it is resumed.
+    await _jobs_store.set_state(job_id, JobState.CANCELLED)
+
+    # Store the verified boxes in the detect checkpoint
+    # TODO: this is a resumed job the stage should be track.
+    await _jobs_store.write_checkpoint(new_job_id, PipelineStage.TRACK, False, {
+        "verified_box_a": body.box_a,
+        "verified_box_b": body.box_b,
+    })
+
+    # Start the new job
+    task = asyncio.create_task(_run_with_semaphore(new_job_id, new_request))
+    _active_tasks[new_job_id] = task
+
+    return {"status": "resumed", "job_id": new_job_id, "origin_job_id": job_id}
+
+# This is called by /checkpoints/{job_id}/correct endpoint in analysis service.
 @router.post("/jobs/{job_id}/resume")
 async def resume_job(job_id: str, body: ResumeRequest):
     """Deliver corrected bounding boxes to a job waiting for detection.
 
-    This is the REST equivalent of sending a ``detection_response`` message
-    over the WebSocket.  It allows async correction: the user can come back
-    hours later and provide boxes via a regular HTTP call.
+    Delegates to the detection_response endpoint logic: creates a new
+    resume job with the corrected boxes.
     """
-    job = await _job_store.get_job(job_id)
-    if job is None:
-        raise HTTPException(404, "Job not found")
+    return await submit_detection_response(job_id, body)
 
-    terminal_states = {
-        JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED,
-    }
-    if job.status in terminal_states:
-        raise HTTPException(
-            409,
-            f"Job is in terminal state '{job.status}' and cannot be resumed",
-        )
 
-    if job.status != JobStatus.WAITING_FOR_DETECTION:
-        raise HTTPException(
-            409,
-            f"Job is in state '{job.status}', not 'waiting_for_detection'",
-        )
-
-    # Deliver the detection payload (same shape the WS handler uses)
-    payload = {
-        "type": "detection_response",
-        "box_a": body.box_a,
-        "box_b": body.box_b,
-    }
-    if body.player_mapping:
-        payload["player_mapping"] = body.player_mapping
-
-    _ws_manager.deliver_detection(job_id, payload)
-    logger.info("Resume endpoint delivered detection for job %s", job_id)
-
-    return {"status": "resumed", "job_id": job_id}
-
+# ---------------------------------------------------------------------------
+# Health & debug
+# ---------------------------------------------------------------------------
 
 @router.get("/health")
 async def health():
@@ -162,58 +323,18 @@ async def health():
     }
 
 
-# ---------------------------------------------------------------------------
-# WebSocket endpoint
-# ---------------------------------------------------------------------------
-
-@router.websocket("/ws/{job_id}")
-async def websocket_endpoint(websocket: WebSocket, job_id: str):
-    job = await _job_store.get_job(job_id)
-    if job is None:
-        await websocket.close(code=4004, reason="Job not found")
-        return
-
-    await websocket.accept()
-    _ws_manager.register(job_id, websocket)
-
-    # Retrieve the original request and start the pipeline
-    request = _job_store.get_request(job_id)
-    if request is None:
-        await websocket.send_json({"type": "error", "message": "Request data lost"})
-        await websocket.close()
-        _ws_manager.unregister(job_id)
-        return
-
-    task = asyncio.create_task(_run_with_semaphore(job_id, request))
-    _active_tasks[job_id] = task
-
-    try:
-        while True:
-            raw = await websocket.receive_text()
-            try:
-                msg = json.loads(raw)
-            except json.JSONDecodeError:
-                continue
-
-            msg_type = msg.get("type")
-
-            if msg_type == "detection_response":
-                _ws_manager.deliver_detection(job_id, msg)
-            elif msg_type == "detection_cancelled":
-                _ws_manager.cancel_detection(job_id)
-            elif msg_type == "ping":
-                await websocket.send_json({"type": "pong"})
-
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected for job %s", job_id)
-    except Exception as e:
-        logger.warning("WebSocket error for job %s: %s", job_id, e)
-    finally:
-        _ws_manager.unregister(job_id)
-        if not task.done():
-            task.cancel()
-            try:
-                await task
-            except (asyncio.CancelledError, Exception):
-                pass
-        _active_tasks.pop(job_id, None)
+@router.get("/debug/memory")
+async def debug_memory():
+    """Return GPU/MPS memory usage for QA verification of model offload."""
+    result = {"gpu_available": False, "allocated_mb": 0, "reserved_mb": 0}
+    if torch.cuda.is_available():
+        result["gpu_available"] = True
+        result["allocated_mb"] = round(torch.cuda.memory_allocated() / 1024 / 1024, 1)
+        result["reserved_mb"] = round(torch.cuda.memory_reserved() / 1024 / 1024, 1)
+    elif hasattr(torch, "mps") and torch.backends.mps.is_available():
+        result["gpu_available"] = True
+        try:
+            result["allocated_mb"] = round(torch.mps.current_allocated_memory() / 1024 / 1024, 1)
+        except Exception:
+            pass
+    return result

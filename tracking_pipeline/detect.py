@@ -13,7 +13,7 @@ import time
 import cv2
 from ultralytics import YOLO
 
-from device import get_device
+from .device import get_device
 
 PERSON_CLASS_ID = 0  # COCO class 0 = person
 

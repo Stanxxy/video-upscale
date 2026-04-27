@@ -18,7 +18,7 @@ python -m service.app
 |----------|---------|-------------|
 | `SERVICE_HOST` | `0.0.0.0` | Host to bind |
 | `SERVICE_PORT` | `8000` | Port to bind |
-| `S3_ENDPOINT_URL` | `http://localhost:4566` | S3/LocalStack endpoint |
+| `S3_ENDPOINT_URL` | _(unset)_ | Optional custom S3 endpoint (leave empty for AWS production) |
 | `DETECTION_TIMEOUT` | `300.0` | Seconds to wait for manual detection response |
 | `AWS_ACCESS_KEY_ID` | `test` | S3 credentials |
 | `AWS_SECRET_ACCESS_KEY` | `test` | S3 credentials |
@@ -201,7 +201,8 @@ GET /job/{id}        →  poll final status + result location
 - **Input**: `s3://{bucket}/{key}` — MP4 video
 - **Output**: `s3://{bucket}/{base}_tracked.json` — JSON tracking result
 
-The service auto-creates buckets on LocalStack if they don't exist.
+When `S3_ENDPOINT_URL` is set (local emulators), the service can auto-create missing buckets.
+In AWS production, buckets should be pre-provisioned and `S3_ENDPOINT_URL` should remain unset.
 
 ## Python Client SDK
 

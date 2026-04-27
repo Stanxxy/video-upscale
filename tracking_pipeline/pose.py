@@ -6,7 +6,7 @@ Uses rtmlib for top-down pose estimation on CPU.
 """
 import numpy as np
 
-from device import get_device
+from .device import get_device
 
 
 class PoseEstimator:

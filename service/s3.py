@@ -25,7 +25,7 @@ class S3Client:
         self.client = boto3.client("s3", **kwargs)
 
     def ensure_bucket(self, bucket: str) -> None:
-        """Create bucket if it doesn't exist (for LocalStack dev environments only)."""
+        """Create bucket only when using an explicit non-AWS endpoint (local dev emulators)."""
         if not self._endpoint_url:
             return  # Real AWS bucket is pre-provisioned; skip auto-creation.
         try:
@@ -33,7 +33,7 @@ class S3Client:
         except self.client.exceptions.ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "")
             # 404 = bucket doesn't exist; 403 = exists but owned by another
-            # account (common with LocalStack credential mismatches).
+            # account (common with local emulator credential mismatches).
             if error_code in ("404", "NoSuchBucket"):
                 logger.info("Creating bucket %s", bucket)
                 try:
@@ -80,3 +80,15 @@ class S3Client:
             ExtraArgs={"ContentType": content_type},
         )
         return f"s3://{bucket}/{key}"
+
+    def put_object(self, bucket: str, key: str, body: bytes, content_type: str = "application/octet-stream") -> str:
+        self.client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=body,
+            ContentType=content_type,
+        )
+        return f"s3://{bucket}/{key}"
+
+    def get_object(self, bucket: str, key: str) -> bytes:
+        return self.client.get_object(Bucket=bucket, Key=key)

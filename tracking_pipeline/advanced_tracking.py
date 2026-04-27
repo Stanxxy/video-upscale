@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from device import get_device, empty_cache
+from .device import get_device, empty_cache
 
 logger = logging.getLogger("bjj_tracking")
 
