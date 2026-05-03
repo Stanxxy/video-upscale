@@ -19,6 +19,12 @@ import time
 from uuid import uuid4
 
 from service.analysis_keyspaces_enums import JobState, PipelineStage
+from service.checkpoints import (
+    WorkerStateSnapshot,
+    build_detect_initial_pending,
+    build_download_completed,
+    build_track_mid_loss,
+)
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.jobs_store import JobsStore
@@ -34,6 +40,22 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # GPU / model cleanup
 # ---------------------------------------------------------------------------
+
+def _make_worker_state(
+    *,
+    progress_percent: float,
+    current_frame: int = 0,
+    total_frames: int = 0,
+    stage_progress_fraction: float = 0.0,
+) -> WorkerStateSnapshot:
+    """Snapshot the in-memory worker progress for a checkpoint write."""
+    return WorkerStateSnapshot(
+        progress_percent=progress_percent,
+        current_frame=current_frame,
+        total_frames=total_frames,
+        stage_progress_fraction=stage_progress_fraction,
+    )
+
 
 def _ensure_models_released():
     """Release all ML models from GPU/RAM."""
@@ -140,6 +162,14 @@ async def run_job(
         # get the progress percent based on the lifecycle of the original job.
         await job_store.update_job(job_id, progress_percent=10.0) # progress_percent should be based on checkpoint of the original job
         await jobs_store.update_progress(job_id, PipelineStage.DOWNLOAD, 10.0) # progress_percent should be based on checkpoint of the original job
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.DOWNLOAD, False,
+            build_download_completed(
+                worker_state=_make_worker_state(
+                    progress_percent=10.0, stage_progress_fraction=1.0,
+                ),
+            ),
+        )
         logger.info("Job %s: download finished local_path=%s", job_id, video_path)
 
         if _is_cancelled(job_id, job_store):
@@ -231,16 +261,19 @@ async def run_job(
             )
 
             # Write checkpoint to Keyspaces and suspend
-            await jobs_store.write_checkpoint(job_id, PipelineStage.DETECT, False, {
-                "pending_detection": {
-                    "frame_idx": frame_idx,
-                    "frame_s3_key": frame_s3_key,
-                    "frame_bucket": request.bucket,
-                    "candidates": candidates,
-                    "suggested_boxes": suggested_boxes,
-                    "reason": "initial",
-                }
-            })
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.DETECT, False,
+                build_detect_initial_pending(
+                    frame_idx=frame_idx,
+                    frame_s3_key=frame_s3_key,
+                    frame_bucket=request.bucket,
+                    candidates=candidates,
+                    suggested_boxes=suggested_boxes,
+                    worker_state=_make_worker_state(
+                        progress_percent=10.0, stage_progress_fraction=0.0,
+                    ),
+                ),
+            )
             await jobs_store.set_state(job_id, JobState.AWAITING_CORRECTION)
             raise JobSuspendedError("Awaiting initial detection verification")
 
@@ -781,46 +814,56 @@ def _make_detection_cb(
                 except Exception as e:
                     logger.warning("VLLM mid-tracking suggestion failed: %s", e)
 
-            # Upload detection frame to S3
+            # Upload detection frame to S3 — put_object takes raw bytes;
+            # upload_file would treat the JPEG bytes as a local path.
             frame_s3_key = f"checkpoints/{job_id}/frame_{global_frame_idx}.jpg"
             await loop.run_in_executor(
                 None,
-                lambda: s3.upload_file(
-                    frame_jpeg,
+                lambda: s3.put_object(
                     request.bucket,
                     frame_s3_key,
+                    frame_jpeg,
                     "image/jpeg",
                 ),
             )
 
-            # Save partial tracking to S3 if available
+            # Save partial tracking to S3 if available. Use the same bucket
+            # the resume route reads from (output_bucket when set).
             tracking_json_path = os.path.join(work_dir, "tracking", "tracking.json")
-            # TODO: we need a standard schema for checkpoint data.
-            checkpoint_data = {
-                "start_frame": 0,
-                "frame_count": global_frame_idx,
-                "pending_detection": {
-                    "frame_idx": global_frame_idx,
-                    "frame_s3_key": frame_s3_key,
-                    "frame_bucket": request.bucket,
-                    "candidates": candidates,
-                    "suggested_boxes": suggested_boxes,
-                    "reason": reason,
-                },
-            }
-
+            partial_key: str | None = None
             if os.path.isfile(tracking_json_path):
                 try:
-                    partial_key = f"checkpoints/{job_id}/partial_tracking.json" #
+                    partial_key = f"checkpoints/{job_id}/partial_tracking.json"
                     partial_data = _load_partial_tracking_dict(tracking_json_path)
+                    upload_bucket = request.output_bucket or request.bucket
                     await loop.run_in_executor(
-                        None, s3.upload_json, partial_data, request.bucket, partial_key,
+                        None, s3.upload_json, partial_data, upload_bucket, partial_key,
                     )
-                    checkpoint_data["partial_tracking_s3_key"] = partial_key
                 except Exception as e:
-                    logger.warning("Failed to save partial tracking during mid-track suspend: %s", e)
+                    logger.warning(
+                        "Failed to save partial tracking during mid-track suspend: %s", e,
+                    )
+                    partial_key = None
 
-            await jobs_store.write_checkpoint(job_id, PipelineStage.TRACK, False, checkpoint_data)
+            mid_loss_ws = _make_worker_state(
+                progress_percent=15.0,
+                current_frame=global_frame_idx,
+                total_frames=0,
+                stage_progress_fraction=0.0,
+            )
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.TRACK, False,
+                build_track_mid_loss(
+                    frame_idx=global_frame_idx,
+                    frame_s3_key=frame_s3_key,
+                    frame_bucket=request.bucket,
+                    candidates=candidates,
+                    suggested_boxes=suggested_boxes,
+                    partial_tracking_s3_key=partial_key,
+                    resume_from_frame=global_frame_idx,
+                    worker_state=mid_loss_ws,
+                ),
+            )
             await jobs_store.set_state(job_id, JobState.AWAITING_CORRECTION)
 
         future = asyncio.run_coroutine_threadsafe(_async_suspend(), loop)
