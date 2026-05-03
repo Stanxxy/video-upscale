@@ -159,6 +159,118 @@ async def test_make_detection_cb_writes_track_mid_loss_envelope(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Periodic track_progress helper (Task 4: 30-second cadence)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_track_progress_helper_uploads_partial_and_writes_checkpoint(
+    mock_jobs_store, tmp_path,
+):
+    """When upload_partial is true and tracking.json exists, the helper
+    uploads to S3 and writes a V1 track checkpoint pointing at the upload."""
+    from service import worker
+
+    config = ServiceConfig(temp_dir=str(tmp_path), s3_endpoint_url="http://x")
+    job_store = InMemoryJobStore()
+    request = _track_request(box_a=[1, 2, 3, 4], box_b=[5, 6, 7, 8], output_bucket="out")
+    s3 = _stub_s3()
+
+    work_dir = tmp_path / "wd"
+    (work_dir / "tracking").mkdir(parents=True)
+    (work_dir / "tracking" / "tracking.json").write_text(
+        '{"start_frame":0,"frames":[{"frame_idx":1199,"athletes":[]}]}'
+    )
+
+    await worker._update_tracking_progress_with_partial(
+        "job-track",
+        1200, 3600, 35.0,
+        job_store, mock_jobs_store,
+        request, str(work_dir), s3,
+        write_lifecycle=True,
+        upload_partial=True,
+    )
+
+    # Partial tracking JSON was uploaded to the output bucket.
+    assert s3.upload_json.called
+    upload_args, _ = s3.upload_json.call_args
+    assert upload_args[1] == "out"  # output_bucket
+    assert upload_args[2].endswith("partial_tracking.json")
+
+    cp = mock_jobs_store._checkpoints[("job-track", PipelineStage.TRACK.value)]
+    data = cp["checkpoint_data"]
+    _assert_envelope(data)
+    assert data["reason"] == "tracking_progress"
+    assert data["artifacts"]["partial_tracking_s3_key"].endswith("partial_tracking.json")
+    assert data["artifacts"]["resume_from_frame"] == 1200
+    assert data["worker_state"]["current_frame"] == 1200
+    assert data["worker_state"]["total_frames"] == 3600
+    assert data["worker_state"]["progress_percent"] == 35.0
+    assert data["resume_cursor"] == {"frame_idx": 1200}
+
+
+@pytest.mark.asyncio
+async def test_track_progress_helper_no_op_when_neither_flag_set(
+    mock_jobs_store, tmp_path,
+):
+    """write_lifecycle=False and upload_partial=False → no S3 upload, no checkpoint."""
+    from service import worker
+
+    config = ServiceConfig(temp_dir=str(tmp_path), s3_endpoint_url="http://x")
+    job_store = InMemoryJobStore()
+    request = _track_request(box_a=[1, 2, 3, 4], box_b=[5, 6, 7, 8])
+    s3 = _stub_s3()
+
+    work_dir = tmp_path / "wd"
+    work_dir.mkdir()
+
+    await worker._update_tracking_progress_with_partial(
+        "job-track",
+        500, 1000, 35.0,
+        job_store, mock_jobs_store,
+        request, str(work_dir), s3,
+        write_lifecycle=False,
+        upload_partial=False,
+    )
+
+    assert not s3.upload_json.called
+    assert ("job-track", PipelineStage.TRACK.value) not in mock_jobs_store._checkpoints
+
+
+@pytest.mark.asyncio
+async def test_track_progress_helper_skips_partial_when_file_missing(
+    mock_jobs_store, tmp_path,
+):
+    """upload_partial=True but no tracking.json on disk → no upload, no checkpoint."""
+    from service import worker
+
+    config = ServiceConfig(temp_dir=str(tmp_path), s3_endpoint_url="http://x")
+    job_store = InMemoryJobStore()
+    request = _track_request(box_a=[1, 2, 3, 4], box_b=[5, 6, 7, 8])
+    s3 = _stub_s3()
+
+    work_dir = tmp_path / "wd"
+    work_dir.mkdir()  # no tracking subdir / tracking.json
+
+    await worker._update_tracking_progress_with_partial(
+        "job-track",
+        500, 1000, 35.0,
+        job_store, mock_jobs_store,
+        request, str(work_dir), s3,
+        write_lifecycle=False,
+        upload_partial=True,
+    )
+
+    assert not s3.upload_json.called
+    assert ("job-track", PipelineStage.TRACK.value) not in mock_jobs_store._checkpoints
+
+
+# ---------------------------------------------------------------------------
+# Existing integration test: download + initial-detect envelope
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.asyncio
 async def test_run_job_writes_download_then_detect_checkpoints(
     mock_jobs_store, tmp_path,

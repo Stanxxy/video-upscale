@@ -23,7 +23,9 @@ from service.checkpoints import (
     WorkerStateSnapshot,
     build_detect_initial_pending,
     build_download_completed,
+    build_track_completed,
     build_track_mid_loss,
+    build_track_progress,
 )
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
@@ -294,24 +296,31 @@ async def run_job(
 
         from service.tracking_runner import run_tracking_job
 
-        # Build sync progress callback -> async Keyspaces (throttled)
+        # Build sync progress callback -> async Keyspaces (two cadences):
+        #   1-second  → lifecycle row update (heartbeat)
+        #   30-second → partial-tracking S3 upload + V1 track_progress checkpoint
         # Tracking spans 15%-55% (40% range)
         _last_ks_write = 0.0
+        _last_partial_upload = 0.0
+        PARTIAL_UPLOAD_INTERVAL = 30.0
 
-        # TODO: update job lifecycle and checkpoint here as well. 
-        # The checkpoint should be updated like a mid-track checkpoint. and the flag completed should be False.
-        # checkpoint data will be used to resume the job when service crashed or user resume the job with new detection response.
         def tracking_progress_cb(frames_done: int, total: int):
-            nonlocal _last_ks_write
+            nonlocal _last_ks_write, _last_partial_upload
             pct = 15.0 + (frames_done / max(total, 1)) * 40.0
             now = time.monotonic()
-            should_write_ks = (now - _last_ks_write) >= 1.0
-            if should_write_ks:
+            write_lifecycle = (now - _last_ks_write) >= 1.0
+            upload_partial = (now - _last_partial_upload) >= PARTIAL_UPLOAD_INTERVAL
+            if write_lifecycle:
                 _last_ks_write = now
+            if upload_partial:
+                _last_partial_upload = now
             asyncio.run_coroutine_threadsafe(
-                _update_tracking_progress(
-                    job_id, frames_done, total, pct, job_store, jobs_store,
-                    write_ks=should_write_ks,
+                _update_tracking_progress_with_partial(
+                    job_id, frames_done, total, pct,
+                    job_store, jobs_store,
+                    request, work_dir, s3,
+                    write_lifecycle=write_lifecycle,
+                    upload_partial=upload_partial,
                 ),
                 loop,
             )
@@ -395,18 +404,24 @@ async def run_job(
                         job_id, len(partial_tracking_data.get("frames", [])),
                         len(new_tracking.get("frames", [])), len(merged_frames))
 
-        # Write completed tracking checkpoint
-        # TODO: Give a big fix of the checkpoint data here as when the job is cancelled during 
-        # processing, the checkpoint must be updated like a mid-track checkpoint. and the flag completed should be False.
+        # Write completed tracking checkpoint (pre-upload; the post-upload
+        # re-write in the upload stage adds artifacts.tracking_s3_key).
         with open(tracking_json_path) as _f:
             _track_data = json.load(_f)
-
-        # TODO: check what should be included in the checkpoint data.
-        # Write completed tracking checkpoint
-        await jobs_store.write_checkpoint(job_id, PipelineStage.TRACK, False, {
-            "start_frame": start_frame,
-            "frame_count": len(_track_data.get("frames", [])),
-        })
+        _frame_count = len(_track_data.get("frames", []))
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.TRACK, False,
+            build_track_completed(
+                start_frame=start_frame,
+                frame_count=_frame_count,
+                worker_state=_make_worker_state(
+                    progress_percent=55.0,
+                    current_frame=_frame_count,
+                    total_frames=_frame_count,
+                    stage_progress_fraction=1.0,
+                ),
+            ),
+        )
 
         # TODO: when waiting for detection correciotn, jump to the finally block.
         # A logic should be setup to check if the tracking is trully completed.
@@ -745,6 +760,62 @@ def _is_cancelled(job_id: str, job_store: InMemoryJobStore) -> bool:
         logger.info("Job %s cancelled", job_id)
         return True
     return False
+
+
+async def _update_tracking_progress_with_partial(
+    job_id: str,
+    frames_done: int,
+    total: int,
+    pct: float,
+    job_store: InMemoryJobStore,
+    jobs_store: JobsStore,
+    request: TrackRequest,
+    work_dir: str,
+    s3: S3Client,
+    *,
+    write_lifecycle: bool,
+    upload_partial: bool,
+):
+    """Lifecycle progress + (every 30s) partial-tracking S3 upload + V1 checkpoint.
+
+    The two cadences are independent: ``write_lifecycle`` is the 1-second
+    Keyspaces lifecycle heartbeat; ``upload_partial`` is the 30-second
+    partial-tracking durable checkpoint.
+    """
+    if write_lifecycle:
+        await _update_tracking_progress(
+            job_id, frames_done, total, pct, job_store, jobs_store, write_ks=True,
+        )
+    if not upload_partial:
+        return
+    tracking_json_path = os.path.join(work_dir, "tracking", "tracking.json")
+    if not os.path.isfile(tracking_json_path):
+        return
+    partial_key = f"checkpoints/{job_id}/partial_tracking.json"
+    upload_bucket = request.output_bucket or request.bucket
+    try:
+        partial_data = _load_partial_tracking_dict(tracking_json_path)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None, s3.upload_json, partial_data, upload_bucket, partial_key,
+        )
+    except Exception as e:
+        logger.warning("Periodic partial-tracking upload failed: %s", e)
+        return
+    ws = _make_worker_state(
+        progress_percent=pct,
+        current_frame=frames_done,
+        total_frames=total,
+        stage_progress_fraction=(frames_done / max(total, 1)),
+    )
+    await jobs_store.write_checkpoint(
+        job_id, PipelineStage.TRACK, False,
+        build_track_progress(
+            partial_tracking_s3_key=partial_key,
+            resume_from_frame=frames_done,
+            worker_state=ws,
+        ),
+    )
 
 
 async def _update_tracking_progress(
