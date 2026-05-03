@@ -12,7 +12,33 @@ BJJ_UVICORN_EXTRA="${BJJ_UVICORN_EXTRA:-}"
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_FILE="$PROJECT_DIR/.service.pid"
-LOG_FILE="$PROJECT_DIR/service.log"
+LOG_DIR="${BJJ_LOG_DIR:-$PROJECT_DIR/logs}"
+CURRENT_LOG_POINTER="$PROJECT_DIR/.service-current-log"
+
+# Pick a new log file name: YYYYMMDD-HHMMSS + zero-padded serial (increments if two
+# starts share the same second). Writes path to .service-current-log and symlinks
+# service.log -> that file for ./service.sh logs and tail -f service.log.
+allocate_log_file() {
+    mkdir -p "$LOG_DIR"
+    local stamp state_file last_stamp last_seq seq
+    stamp=$(date +%Y%m%d-%H%M%S)
+    state_file="$LOG_DIR/.service-log-naming"
+    last_stamp=""
+    last_seq=0
+    if [[ -f "$state_file" ]]; then
+        IFS=' ' read -r last_stamp last_seq <"$state_file" || true
+        [[ "$last_seq" =~ ^[0-9]+$ ]] || last_seq=0
+    fi
+    if [[ "$last_stamp" == "$stamp" ]]; then
+        seq=$((last_seq + 1))
+    else
+        seq=1
+    fi
+    printf '%s %s\n' "$stamp" "$seq" >"$state_file"
+    LOG_FILE="$LOG_DIR/service-${stamp}-$(printf '%03d' "$seq").log"
+    printf '%s\n' "$LOG_FILE" >"$CURRENT_LOG_POINTER"
+    ln -sf "$LOG_FILE" "$PROJECT_DIR/service.log"
+}
 
 # ── Helpers ────────────────────────────────────────────────────
 red()   { printf '\033[0;31m%s\033[0m\n' "$*"; }
@@ -149,11 +175,12 @@ cmd_start() {
     fi
 
     if [[ "${BJJ_FOREGROUND:-}" == 1 ]]; then
-        yellow "BJJ_FOREGROUND=1: logs go to terminal (not $LOG_FILE)"
+        yellow "BJJ_FOREGROUND=1: logs go to terminal (no log file for this process)"
         exec "${uvicorn_cmd[@]}"
     fi
 
-    nohup "${uvicorn_cmd[@]}" >> "$LOG_FILE" 2>&1 &
+    allocate_log_file
+    nohup "${uvicorn_cmd[@]}" >>"$LOG_FILE" 2>&1 &
 
     local pid=$!
     echo "$pid" > "$PID_FILE"
@@ -207,11 +234,15 @@ cmd_status() {
 }
 
 cmd_logs() {
-    if [[ ! -f "$LOG_FILE" ]]; then
-        yellow "No log file found"
+    local log_path=""
+    if [[ -f "$CURRENT_LOG_POINTER" ]]; then
+        log_path=$(<"$CURRENT_LOG_POINTER")
+    fi
+    if [[ -z "$log_path" || ! -f "$log_path" ]]; then
+        yellow "No log file found (start the service with ./service.sh start first)"
         return 1
     fi
-    tail -f "$LOG_FILE"
+    tail -f "$log_path"
 }
 
 cmd_dev() {
@@ -262,16 +293,17 @@ usage() {
 Usage: $(basename "$0") {start|dev|stop|restart|status|logs}
 
 Commands:
-  start     Start the service in the background (nohup -> $LOG_FILE)
+  start     Start in the background (nohup -> logs/service-YYYYMMDD-HHMMSS-NNN.log)
   dev       Start in the foreground with uvicorn --reload (local development)
   stop      Stop the running service
   restart   Restart the service
   status    Check if the service is running
-  logs      Tail the service log file
+  logs      Tail the log file from the last background start
 
 Environment variables:
   BJJ_HOST           Listen host     (default: 0.0.0.0)
   BJJ_PORT           Listen port     (default: 8000)
+  BJJ_LOG_DIR        Log directory   (default: <repo>/logs)
   BJJ_LOG_LEVEL      Log level       (default: info for start, debug for dev)
   BJJ_FOREGROUND=1   With start: run in foreground (logs to terminal, no nohup)
   BJJ_RELOAD=1       With start: add --reload (prefer ./service.sh dev)

@@ -49,6 +49,8 @@ token.json
 *.log
 *.pid
 .service.pid
+.service-current-log
+logs/.service-log-naming
 # SAM2 frame extraction in process cwd (tracking_pipeline/sam2_manager.py)
 temp_sam2_frames*
 
