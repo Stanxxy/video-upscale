@@ -27,9 +27,9 @@ Implemented behavior (per task):
 ## Verification
 
 - Per-task TDD cycle: every task wrote the failing test first (verified RED), then minimal implementation (verified GREEN), then committed.
-- Final sweep: `source venv/bin/activate && pytest tests/ -v` → **147 tests pass** in 40.6s.
-- Per-task targeted sweeps after each commit: 44 → 50 → 51 → 53 → 54 → 56 → 57 (lifecycle + checkpoint + worker tests).
-- Full pytest output captured during Task 10 commit covers checkpoint schema, worker checkpoints, resume endpoint, job cancellation, jobs_store, reconciler, service script, and taxonomy mapper.
+- Final sweep after evaluator-fix round 2: `source venv/bin/activate && pytest tests/ -v` → **154 tests pass** in 50.2s.
+- Round 1 baseline at Task 10 was 147; round 2 added 7 tests covering H1 (recover_interrupted_job direct test), M1 (`_run_upscale_analysis` orchestration), and M4 (5 cadence-flag unit tests).
+- Per-task targeted sweeps after each commit: 44 → 50 → 51 → 53 → 54 → 56 → 57 → 154 (lifecycle + checkpoint + worker + service + taxonomy tests).
 
 ## Rationale
 
@@ -51,8 +51,8 @@ Primary files:
 - `service/jobs_store.py` (`create_lifecycle` extended with progress kwargs)
 - `tests/conftest.py` (shared fixtures)
 - `tests/test_checkpoint_schema.py` (29 unit tests)
-- `tests/test_worker_checkpoints.py` (9 worker-integration tests)
-- `tests/test_resume_endpoint.py` (10 route tests)
+- `tests/test_worker_checkpoints.py` (15 worker-integration tests including 5 cadence-flag unit tests added in evaluator round 2)
+- `tests/test_resume_endpoint.py` (11 route tests, includes the round-2 `recover_interrupted_job` direct test)
 - `tests/test_job_cancellation.py` (3 route tests, V1 envelope assertions)
 
 Companion contracts (sharable with `bjj-vision-backend`):
