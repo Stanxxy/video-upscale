@@ -9,6 +9,13 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 
 from service.analysis_keyspaces_enums import JobState, PipelineStage
+from service.checkpoints import (
+    WorkerStateSnapshot,
+    build_cancellation_checkpoint,
+    build_verified_boxes_checkpoint,
+    next_unprocessed_frame,
+    select_correction_checkpoint,
+)
 from service.models import TrackRequest, TrackResponse, JobResponse, ResumeRequest, JobStatus
 from service.job_store import InMemoryJobStore
 from service.jobs_store import JobsStore
@@ -61,6 +68,16 @@ async def _cleanup_orphaned_tasks():
             _active_tasks.pop(jid, None)
 
 
+def _require_write(ok: bool, operation: str) -> None:
+    if not ok:
+        raise HTTPException(500, f"Failed to persist {operation}")
+
+
+def _schedule_job(job_id: str, request: TrackRequest) -> None:
+    task = asyncio.create_task(_run_with_semaphore(job_id, request))
+    _active_tasks[job_id] = task
+
+
 # ---------------------------------------------------------------------------
 # QA client
 # ---------------------------------------------------------------------------
@@ -91,14 +108,28 @@ async def create_track_job(request: TrackRequest):
     # service populates it when submitting via POST /tracking/analyze)
 
     # TODO: user id needs to be passed in from the request. update TrackRequest model to include user_id.
-    await _jobs_store.create_lifecycle(job_id, request.video_id, request.user_id or "", "", owner_instance_id=_instance_id)
-    await _jobs_store.save_request(job_id, request.model_dump_json())
+    _require_write(
+        await _jobs_store.create_lifecycle(
+            job_id,
+            request.video_id,
+            request.user_id or "",
+            "",
+            owner_instance_id=_instance_id,
+        ),
+        "job lifecycle",
+    )
+    _require_write(
+        await _jobs_store.save_request(job_id, request.model_dump_json()),
+        "job request",
+    )
     if request.video_id:
-        await _jobs_store.set_latest(str(request.video_id), job_id, JobState.PENDING)
+        _require_write(
+            await _jobs_store.set_latest(str(request.video_id), job_id, JobState.PENDING),
+            "latest job",
+        )
 
     # Start the job immediately (no WS handshake needed)
-    task = asyncio.create_task(_run_with_semaphore(job_id, request))
-    _active_tasks[job_id] = task
+    _schedule_job(job_id, request)
 
     return TrackResponse(job_id=job_id, status="pending")
 
@@ -127,12 +158,50 @@ async def get_job(job_id: str):
 
 @router.delete("/job/{job_id}")
 async def cancel_job(job_id: str):
+    lifecycle = await _jobs_store.get_lifecycle(job_id)
+    if lifecycle and lifecycle.get("replacement_job_id"):
+        raise HTTPException(
+            409,
+            f"Job has replacement {lifecycle['replacement_job_id']}; cancel latest job instead",
+        )
+
     job = await _job_store.get_job(job_id)
-    if job is None:
+    if job is None and lifecycle is None:
         raise HTTPException(404, "Job not found")
-    await _job_store.set_cancelled(job_id)
-    await _jobs_store.set_state(job_id, JobState.CANCELLED)
-    # TODO update not only the job lifecycle but also the checkpoint data, latest job.
+
+    if job is not None:
+        await _job_store.set_cancelled(job_id)
+
+    frame_idx = lifecycle.get("current_frame", 0) if lifecycle else 0
+    total_frames = lifecycle.get("total_frames", 0) if lifecycle else 0
+    progress_percent = lifecycle.get("progress_percent", 0.0) if lifecycle else 0.0
+    cancel_ws = WorkerStateSnapshot(
+        progress_percent=progress_percent,
+        current_frame=frame_idx,
+        total_frames=total_frames,
+        stage_progress_fraction=(
+            (frame_idx / total_frames) if total_frames > 0 else 0.0
+        ),
+    )
+    _require_write(
+        await _jobs_store.write_checkpoint(
+            job_id,
+            PipelineStage.TRACK,
+            False,
+            build_cancellation_checkpoint(
+                reason="user_cancelled",
+                frame_idx=frame_idx,
+                progress_percent=progress_percent,
+                worker_state=cancel_ws,
+            ),
+        ),
+        "cancellation checkpoint",
+    )
+    _require_write(
+        await _jobs_store.set_state(job_id, JobState.CANCELLED),
+        "job cancellation state",
+    )
+
     # Stop the running job task so tracking (and later stages) exit promptly
     task = _active_tasks.get(job_id)
     if task is not None and not task.done():
@@ -235,6 +304,11 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
         raise HTTPException(404, "Job not found")
     if lifecycle["job_state"] != JobState.AWAITING_CORRECTION.value:
         raise HTTPException(409, f"Job state is {lifecycle['job_state']}, not AWAITING_CORRECTION")
+    if lifecycle.get("replacement_job_id"):
+        raise HTTPException(
+            409,
+            f"Job already has replacement {lifecycle['replacement_job_id']}",
+        )
 
     # Read the original request params
     request_json = await _jobs_store.get_request(job_id)
@@ -243,16 +317,8 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
 
     orig_request = json.loads(request_json)
 
-    # Read checkpoints to get resume hints
-
-    # TODO: by default resume should use the latest checkpoint. Detection response should 
-    # only be about detection during track. If the latest checkpoint in track stage is not available, use the latest checkpoint.
-    # then dont bother with handing detection response.
     checkpoints = await _jobs_store.get_all_checkpoints(job_id)
-    
-    cp_map = {cp["stage_name"]: cp.get("checkpoint_data", {}) for cp in checkpoints}
-    # TODO: get the latest checkpoint in track stage.
-    track_cp = cp_map.get("track", {})
+    correction_stage, correction_cp = select_correction_checkpoint(checkpoints)
 
 
     # Build resume request
@@ -263,38 +329,71 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
     }
 
     # If mid-track loss, include partial tracking resume hints
-    if track_cp.get("partial_tracking_s3_key"):
+    if correction_cp.get("partial_tracking_s3_key"):
         resume_params["resume_from_job_id"] = job_id
-        resume_params["resume_tracking_s3_key"] = track_cp["partial_tracking_s3_key"]
-        resume_params["resume_from_frame"] = track_cp.get("frame_count", 0) # 
+        resume_params["resume_tracking_s3_key"] = correction_cp["partial_tracking_s3_key"]
+        resume_params["resume_from_frame"] = next_unprocessed_frame(correction_cp)
 
     # Create new job
     new_request = TrackRequest(**resume_params)
     new_job = await _job_store.create_job(new_request)
     new_job_id = new_job.job_id
 
-    # Write to Keyspaces
-    video_id = orig_request.get("video_id", "")
-    await _jobs_store.create_lifecycle(new_job_id, str(video_id), lifecycle.get("user_id", ""), new_job_id, owner_instance_id=_instance_id)
-    await _jobs_store.save_request(new_job_id, new_request.model_dump_json())
+    video_id = orig_request.get("video_id") or lifecycle.get("video_id", "")
+    origin_job_id = lifecycle.get("origin_job_id") or job_id
+    _require_write(
+        await _jobs_store.create_lifecycle(
+            new_job_id,
+            str(video_id),
+            lifecycle.get("user_id", ""),
+            origin_job_id=origin_job_id,
+            parent_job_id=job_id,
+            owner_instance_id=_instance_id,
+        ),
+        "replacement job lifecycle",
+    )
+    _require_write(
+        await _jobs_store.save_request(new_job_id, new_request.model_dump_json()),
+        "replacement job request",
+    )
+    claimed = await _jobs_store.claim_replacement(job_id, new_job_id)
+    if not claimed:
+        await _jobs_store.set_state(new_job_id, JobState.CANCELLED, sync_latest=False)
+        raise HTTPException(409, "Job replacement claim was already taken")
+
     if video_id:
-        await _jobs_store.set_latest(str(video_id), new_job_id, JobState.PENDING)
+        _require_write(
+            await _jobs_store.set_latest(str(video_id), new_job_id, JobState.PENDING),
+            "latest replacement job",
+        )
 
-    # Mark old job as CANCELLED (no longer awaiting)
-    # TODO: This should be removed without hesitation: job should be canceled 
-    # before it is resumed.
-    await _jobs_store.set_state(job_id, JobState.CANCELLED)
+    _require_write(
+        await _jobs_store.set_state(job_id, JobState.CANCELLED, sync_latest=False),
+        "source job cancellation state",
+    )
 
-    # Store the verified boxes in the detect checkpoint
-    # TODO: this is a resumed job the stage should be track.
-    await _jobs_store.write_checkpoint(new_job_id, PipelineStage.TRACK, False, {
-        "verified_box_a": body.box_a,
-        "verified_box_b": body.box_b,
-    })
+    # New job starts post-detect-verification at 15% progress; tracking has not yet begun.
+    verified_ws = WorkerStateSnapshot(
+        progress_percent=15.0,
+        current_frame=0,
+        total_frames=0,
+        stage_progress_fraction=1.0,
+    )
+    _require_write(
+        await _jobs_store.write_checkpoint(
+            new_job_id,
+            PipelineStage.TRACK,
+            False,
+            build_verified_boxes_checkpoint(
+                body.box_a, body.box_b, correction_stage,
+                worker_state=verified_ws,
+            ),
+        ),
+        "verified boxes checkpoint",
+    )
 
     # Start the new job
-    task = asyncio.create_task(_run_with_semaphore(new_job_id, new_request))
-    _active_tasks[new_job_id] = task
+    _schedule_job(new_job_id, new_request)
 
     return {"status": "resumed", "job_id": new_job_id, "origin_job_id": job_id}
 
@@ -307,6 +406,62 @@ async def resume_job(job_id: str, body: ResumeRequest):
     resume job with the corrected boxes.
     """
     return await submit_detection_response(job_id, body)
+
+
+async def recover_interrupted_job(lifecycle: dict) -> None:
+    """Create and schedule a replacement job for an interrupted worker job."""
+    job_id = lifecycle["job_id"]
+    if lifecycle.get("replacement_job_id"):
+        return
+
+    request_json = await _jobs_store.get_request(job_id)
+    if not request_json:
+        raise RuntimeError(f"Original request not found for interrupted job {job_id}")
+
+    resume_params = json.loads(request_json)
+    checkpoints = await _jobs_store.get_all_checkpoints(job_id)
+    _, correction_cp = select_correction_checkpoint(checkpoints)
+    if correction_cp.get("partial_tracking_s3_key"):
+        resume_params["resume_from_job_id"] = job_id
+        resume_params["resume_tracking_s3_key"] = correction_cp["partial_tracking_s3_key"]
+        resume_params["resume_from_frame"] = next_unprocessed_frame(correction_cp)
+
+    new_request = TrackRequest(**resume_params)
+    new_job = await _job_store.create_job(new_request)
+    new_job_id = new_job.job_id
+
+    video_id = resume_params.get("video_id") or lifecycle.get("video_id", "")
+    origin_job_id = lifecycle.get("origin_job_id") or job_id
+    _require_write(
+        await _jobs_store.create_lifecycle(
+            new_job_id,
+            str(video_id),
+            lifecycle.get("user_id", ""),
+            origin_job_id=origin_job_id,
+            parent_job_id=job_id,
+            owner_instance_id=_instance_id,
+        ),
+        "recovery replacement lifecycle",
+    )
+    _require_write(
+        await _jobs_store.save_request(new_job_id, new_request.model_dump_json()),
+        "recovery replacement request",
+    )
+    claimed = await _jobs_store.claim_replacement(
+        job_id,
+        new_job_id,
+        expected_state=JobState.INTERRUPTED,
+    )
+    if not claimed:
+        await _jobs_store.set_state(new_job_id, JobState.CANCELLED, sync_latest=False)
+        return
+
+    if video_id:
+        _require_write(
+            await _jobs_store.set_latest(str(video_id), new_job_id, JobState.PENDING),
+            "latest recovery replacement",
+        )
+    _schedule_job(new_job_id, new_request)
 
 
 # ---------------------------------------------------------------------------
