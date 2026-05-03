@@ -21,8 +21,10 @@ from uuid import uuid4
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import (
     WorkerStateSnapshot,
+    build_annotate_completed,
     build_detect_initial_pending,
     build_download_completed,
+    build_publish_completed,
     build_track_completed,
     build_track_mid_loss,
     build_track_progress,
@@ -655,7 +657,8 @@ async def run_job(
         # Tracking JSON was already uploaded before the upscale stage so the
         # upscale_analyze checkpoint could record artifacts.tracking_s3_key.
 
-        # Upload analysis JSON (if upscaling was done)
+        # Upload analysis JSON (if upscaling was done) and update upload row.
+        analysis_uploaded_key: str | None = None
         if analysis_result is not None:
             await loop.run_in_executor(
                 None,
@@ -664,8 +667,20 @@ async def run_job(
                 output_bucket,
                 analysis_result_key,
             )
+            analysis_uploaded_key = analysis_result_key
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.UPLOAD, False,
+                build_upload_incremental(
+                    tracking_s3_key=tracking_result_key,
+                    analysis_s3_key=analysis_uploaded_key,
+                    worker_state=_make_worker_state(
+                        progress_percent=88.3, stage_progress_fraction=0.66,
+                    ),
+                ),
+            )
 
-        # Upload annotated video
+        # Upload annotated video and update upload row + write annotate row.
+        annotated_uploaded_key: str | None = None
         if annotated_video_path and os.path.isfile(annotated_video_path):
             await loop.run_in_executor(
                 None,
@@ -675,10 +690,33 @@ async def run_job(
                 annotated_video_key,
                 "video/mp4",
             )
+            annotated_uploaded_key = annotated_video_key
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.UPLOAD, False,
+                build_upload_incremental(
+                    tracking_s3_key=tracking_result_key,
+                    analysis_s3_key=analysis_uploaded_key,
+                    annotated_video_s3_key=annotated_uploaded_key,
+                    worker_state=_make_worker_state(
+                        progress_percent=90.0, stage_progress_fraction=1.0,
+                    ),
+                ),
+            )
+
+        # Annotate stage's checkpoint reflects the durable result of the
+        # annotation step — empty artifacts if annotation failed/skipped.
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.ANNOTATE, False,
+            build_annotate_completed(
+                annotated_video_s3_key=annotated_uploaded_key,
+                worker_state=_make_worker_state(
+                    progress_percent=85.0, stage_progress_fraction=1.0,
+                ),
+            ),
+        )
 
         await job_store.update_job(job_id, progress_percent=90.0)
         await jobs_store.update_progress(job_id, PipelineStage.UPLOAD, 90.0)
-
 
         if _is_cancelled(job_id, job_store):
             return
@@ -686,9 +724,9 @@ async def run_job(
         # ============================================================
         # STAGE 6: PUBLISH SNS (90-95%) -- optional
         # ============================================================
-        # TODO: need to find a way to recover from the sns publish if the service is crashed during the sns publish.
         topic_arn = request.sns_topic_arn or config.sns_topic_arn
         event_count = 0
+        sns_completion_sent = False
         if topic_arn and analysis_result is not None:
             logger.info("Job %s: stage SNS publish topic configured", job_id)
             try:
@@ -710,6 +748,7 @@ async def run_job(
                     analysis_result, video_id, fps,
                     job_id=job_id, result_s3_uri=result_uri,
                 )
+                sns_completion_sent = True
             except Exception as e:
                 logger.warning("SNS publish failed (non-fatal): %s", e)
         else:
@@ -720,11 +759,18 @@ async def run_job(
                 analysis_result is not None,
             )
 
-        # Write completed publish checkpoint
-        await jobs_store.write_checkpoint(job_id, PipelineStage.PUBLISH, True, {
-            "sns_published_clip_count": event_count,
-            "sns_completion_sent": True,
-        })
+        # Terminal publish row — completed=True closes out the job pipeline.
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.PUBLISH, True,
+            build_publish_completed(
+                sns_topic_arn=topic_arn or "",
+                sns_event_count=event_count,
+                sns_completion_sent=sns_completion_sent,
+                worker_state=_make_worker_state(
+                    progress_percent=100.0, stage_progress_fraction=1.0,
+                ),
+            ),
+        )
 
         # ============================================================
         # COMPLETED
