@@ -267,6 +267,66 @@ async def test_track_progress_helper_skips_partial_when_file_missing(
 
 
 # ---------------------------------------------------------------------------
+# Upscale analysis flush helper (Task 6: every 5 windows + final)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_flush_analysis_checkpoint_uploads_and_writes_v1(
+    mock_jobs_store, tmp_path,
+):
+    """The async flush helper uploads analysis_raw.json and writes a V1
+    upscale_analyze checkpoint with cursor + artifacts populated."""
+    from service import worker
+
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+    s3 = _stub_s3()
+    analysis_results = [
+        {"window": 1, "frames": [0, 15], "analysis": {"clips": []}},
+        {"window": 2, "frames": [16, 30], "analysis": {"clips": []}},
+    ]
+
+    raw_key = await worker._flush_analysis_checkpoint(
+        job_id="job-up",
+        jobs_store=mock_jobs_store,
+        s3=s3,
+        output_bucket="out",
+        output_dir=str(output_dir),
+        tracking_s3_key="checkpoints/job-up/tracking.json",
+        analysis_results=analysis_results,
+        current_context="ctx-after-window-2",
+        next_frame_idx=31,
+        progress_percent=58.5,
+        total_tracking_frames=120,
+        stage_progress_fraction=0.14,
+    )
+
+    # Local file written
+    assert (output_dir / "analysis_raw.json").is_file()
+    # S3 upload happened to the supplied bucket and the returned key.
+    assert s3.upload_json.called
+    upload_args, _ = s3.upload_json.call_args
+    assert upload_args[1] == "out"
+    assert upload_args[2] == raw_key
+    assert raw_key.endswith("analysis_raw.json")
+
+    cp = mock_jobs_store._checkpoints[("job-up", PipelineStage.UPSCALE_ANALYZE.value)]
+    data = cp["checkpoint_data"]
+    _assert_envelope(data)
+    assert data["reason"] == "analysis_window_completed"
+    assert data["resume_cursor"]["frame_idx"] == 31
+    assert data["resume_cursor"]["analysis_window_count"] == 2
+    assert data["analysis_current_context"] == "ctx-after-window-2"
+    assert data["artifacts"]["tracking_s3_key"].endswith("tracking.json")
+    assert data["artifacts"]["analysis_raw_s3_key"] == raw_key
+    assert data["worker_state"]["progress_percent"] == 58.5
+    assert data["worker_state"]["current_frame"] == 31
+    assert data["worker_state"]["total_frames"] == 120
+    assert data["worker_state"]["stage_progress_fraction"] == 0.14
+
+
+# ---------------------------------------------------------------------------
 # skip_upscale path — track post-upload re-write + upload terminal write
 # ---------------------------------------------------------------------------
 

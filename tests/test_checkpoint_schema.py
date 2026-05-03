@@ -532,6 +532,19 @@ def test_worker_state_from_returns_none_when_absent():
     assert ws is None
 
 
+def test_should_flush_analysis_only_at_multiples_of_n():
+    from service.checkpoints import should_flush_analysis
+    assert should_flush_analysis(0) is False
+    assert should_flush_analysis(1) is False
+    assert should_flush_analysis(4) is False
+    assert should_flush_analysis(5) is True
+    assert should_flush_analysis(9) is False
+    assert should_flush_analysis(10) is True
+    # Custom every_n
+    assert should_flush_analysis(3, every_n=3) is True
+    assert should_flush_analysis(2, every_n=3) is False
+
+
 def test_worker_state_from_skips_stages_without_worker_state():
     """A track row without worker_state is ignored; the download row's worker_state is returned."""
     cps = [

@@ -27,6 +27,9 @@ from service.checkpoints import (
     build_track_mid_loss,
     build_track_progress,
     build_upload_incremental,
+    build_upscale_started,
+    build_upscale_window_progress,
+    should_flush_analysis,
 )
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
@@ -507,19 +510,64 @@ async def run_job(
             )
             return
 
-        # TODO: encapsulate the logic of this stage to a method.
+        # ============================================================
+        # Pre-upscale: upload tracking JSON so the durable input is in S3
+        # before the upscale stage starts. The upscale checkpoint contract
+        # requires artifacts.tracking_s3_key, so this upload must happen
+        # before _run_upscale_analysis writes its first checkpoint.
+        # ============================================================
+        output_bucket = request.output_bucket or request.bucket
+        base_key = os.path.splitext(request.key)[0]
+        tracking_result_key = f"{base_key}_tracked.json"
+        analysis_result_key = f"{base_key}_analysis.json"
+        annotated_video_key = f"{base_key}_annotated.mp4"
+
+        s3.ensure_bucket(output_bucket)
+        with open(tracking_json_path) as f:
+            _full_tracking = json.load(f)
+        await loop.run_in_executor(
+            None, s3.upload_json, _full_tracking,
+            output_bucket, tracking_result_key,
+        )
+
+        # Re-write the track row with the durable tracking_s3_key.
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.TRACK, False,
+            build_track_completed(
+                start_frame=start_frame,
+                frame_count=_frame_count,
+                tracking_s3_key=tracking_result_key,
+                worker_state=_make_worker_state(
+                    progress_percent=55.0,
+                    current_frame=_frame_count,
+                    total_frames=_frame_count,
+                    stage_progress_fraction=1.0,
+                ),
+            ),
+        )
+
+        # First upload row (additive on artifacts as later artifacts land).
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.UPLOAD, False,
+            build_upload_incremental(
+                tracking_s3_key=tracking_result_key,
+                worker_state=_make_worker_state(
+                    progress_percent=55.0, stage_progress_fraction=0.33,
+                ),
+            ),
+        )
+
         # ============================================================
         # STAGE 4: UPSCALE + ANALYSIS -- second pass (55-80%)
         # ============================================================
         logger.info("Job %s: stage upscale+analysis (55-80%%)", job_id)
         await job_store.update_job(
             job_id, status=JobStatus.UPSCALING, progress_percent=55.0,
-        ) # progress_percent should be based on checkpoint of the original job
-        await jobs_store.update_progress(job_id, PipelineStage.UPSCALE_ANALYZE, 55.0) # progress_percent should be based on checkpoint of the original job
+        )
+        await jobs_store.update_progress(job_id, PipelineStage.UPSCALE_ANALYZE, 55.0)
 
         _last_upscale_ks_write = 0.0
 
-        
         async def _update_upscale_progress(pct: float):
             nonlocal _last_upscale_ks_write
             await job_store.update_job(job_id, progress_percent=pct)
@@ -535,13 +583,14 @@ async def run_job(
                 loop,
             )
 
-        # TODO: in parallel the upscale and analysis.
-        # The analysis json should be saved to s3 during the upscale & analysis
-        # checkpoint, job_lifecycle should be updated as well. In order to resume the job from the checkpoint.
         analysis_result, fps = await loop.run_in_executor(
             None,
             lambda: _run_upscale_analysis(
                 video_path, tracking_json_path, config, request, work_dir,
+                job_id=job_id,
+                jobs_store=jobs_store,
+                loop=loop,
+                tracking_s3_key=tracking_result_key,
                 progress_cb=_upscale_progress,
             ),
         )
@@ -551,17 +600,6 @@ async def run_job(
             fps,
             analysis_result is not None,
         )
-
-        # Write completed upscale+analysis checkpoint
-        output_bucket = request.output_bucket or request.bucket
-        base_key = os.path.splitext(request.key)[0]
-        tracking_result_key = f"{base_key}_tracked.json"
-        analysis_result_key = f"{base_key}_analysis.json"
-        annotated_video_key = f"{base_key}_annotated.mp4"
-
-        await jobs_store.write_checkpoint(job_id, PipelineStage.UPSCALE_ANALYZE, False, {
-            "tracking_s3_key": tracking_result_key,
-        })
 
         # ============================================================
         # STAGE 4.5: ANNOTATE VIDEO (80-85%)
@@ -614,16 +652,8 @@ async def run_job(
 
         s3.ensure_bucket(output_bucket)
 
-        # Upload tracking JSON
-        with open(tracking_json_path) as f:
-            tracking_data = json.load(f)
-        await loop.run_in_executor(
-            None,
-            s3.upload_json,
-            tracking_data,
-            output_bucket,
-            tracking_result_key,
-        )
+        # Tracking JSON was already uploaded before the upscale stage so the
+        # upscale_analyze checkpoint could record artifacts.tracking_s3_key.
 
         # Upload analysis JSON (if upscaling was done)
         if analysis_result is not None:
@@ -787,6 +817,54 @@ def _is_cancelled(job_id: str, job_store: InMemoryJobStore) -> bool:
         logger.info("Job %s cancelled", job_id)
         return True
     return False
+
+
+async def _flush_analysis_checkpoint(
+    *,
+    job_id: str,
+    jobs_store: JobsStore,
+    s3: S3Client,
+    output_bucket: str,
+    output_dir: str,
+    tracking_s3_key: str,
+    analysis_results: list[dict],
+    current_context: str,
+    next_frame_idx: int,
+    progress_percent: float,
+    total_tracking_frames: int,
+    stage_progress_fraction: float,
+) -> str:
+    """Persist analysis_raw.json locally + S3 + V1 upscale_analyze checkpoint.
+
+    Called every ``should_flush_analysis(window_count)`` and once at the
+    final flush. Returns the S3 key the raw analysis was uploaded to.
+    """
+    raw_path = os.path.join(output_dir, "analysis_raw.json")
+    with open(raw_path, "w") as f:
+        json.dump(analysis_results, f, indent=2)
+    raw_key = f"checkpoints/{job_id}/analysis_raw.json"
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(
+        None, s3.upload_json, analysis_results, output_bucket, raw_key,
+    )
+    ws = _make_worker_state(
+        progress_percent=progress_percent,
+        current_frame=next_frame_idx,
+        total_frames=total_tracking_frames,
+        stage_progress_fraction=stage_progress_fraction,
+    )
+    await jobs_store.write_checkpoint(
+        job_id, PipelineStage.UPSCALE_ANALYZE, False,
+        build_upscale_window_progress(
+            frame_idx=next_frame_idx,
+            analysis_window_count=len(analysis_results),
+            analysis_current_context=current_context,
+            tracking_s3_key=tracking_s3_key,
+            analysis_raw_s3_key=raw_key,
+            worker_state=ws,
+        ),
+    )
+    return raw_key
 
 
 async def _update_tracking_progress_with_partial(
@@ -981,6 +1059,11 @@ def _run_upscale_analysis(
     config: ServiceConfig,
     request: TrackRequest,
     work_dir: str,
+    *,
+    job_id: str,
+    jobs_store: JobsStore,
+    loop: asyncio.AbstractEventLoop,
+    tracking_s3_key: str,
     progress_cb=None,
 ):
     """
@@ -988,6 +1071,11 @@ def _run_upscale_analysis(
 
     Runs AFTER tracking is complete so SAM2/RTMPose are fully unloaded and
     the upscaler can use all available GPU memory.
+
+    Writes V1 ``upscale_analyze`` checkpoints:
+      - one ``analysis_started`` row at the top of the stage
+      - one ``analysis_window_completed`` row every 5 windows
+      - one ``analysis_window_completed`` row at the final flush
 
     Returns (analysis_result, fps):
       - analysis_result: dict with clips or None if no Gemini key
@@ -998,16 +1086,18 @@ def _run_upscale_analysis(
     from utils import get_union_box, get_padded_square_box
 
     # -- Load tracking data --------------------------------------------------
-    # TODO: the data shoule be loaded from s3 instead of local file if the job is resumed from a crash 
-    # need to update the tracking json file upload to s3 when the job is completed.
     with open(tracking_json_path) as f:
         tracking_data = json.load(f)
 
-    cap = cv2.VideoCapture(video_path)
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    output_bucket = request.output_bucket or request.bucket
+    s3_for_writes = _make_s3(config)
+    total_tracking_frames = len(tracking_data.get("frames", []))
 
     output_dir = os.path.join(work_dir, "output")
     os.makedirs(output_dir, exist_ok=True)
+
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
     # -- Initialize restorer -------------------------------------------------
     if request.method == "diffusion":
@@ -1104,6 +1194,33 @@ def _run_upscale_analysis(
                 )
         except Exception as e:
             logger.warning("Failed to load analysis checkpoint: %s", e)
+
+    # -- Write analysis_started checkpoint -----------------------------------
+    started_ws = _make_worker_state(
+        progress_percent=55.0,
+        current_frame=resume_start_frame,
+        total_frames=total_tracking_frames,
+        stage_progress_fraction=(
+            resume_start_frame / max(total_tracking_frames, 1)
+        ),
+    )
+    try:
+        asyncio.run_coroutine_threadsafe(
+            jobs_store.write_checkpoint(
+                job_id, PipelineStage.UPSCALE_ANALYZE, False,
+                build_upscale_started(
+                    tracking_s3_key=tracking_s3_key,
+                    analysis_raw_s3_key=request.analysis_raw_s3_key or None,
+                    resume_from_frame=resume_start_frame,
+                    analysis_window_count=len(analysis_results),
+                    analysis_current_context=current_context,
+                    worker_state=started_ws,
+                ),
+            ),
+            loop,
+        ).result(timeout=10)
+    except Exception as e:
+        logger.warning("analysis_started checkpoint write failed: %s", e)
 
     method_prefix = {
         "diffusion": "diff_", "swinir": "swinir_", "hat": "hat_",
@@ -1237,6 +1354,37 @@ def _run_upscale_analysis(
                     ) as f:
                         json.dump(analysis_results, f, indent=2)
 
+                    # Periodic durable flush every 5 windows.
+                    if should_flush_analysis(len(analysis_results)):
+                        last_frame = (
+                            (analysis_results[-1].get("frames") or [resume_start_frame])[-1]
+                        )
+                        progress_pct = 55.0 + (processed / max(total, 1)) * 25.0
+                        try:
+                            asyncio.run_coroutine_threadsafe(
+                                _flush_analysis_checkpoint(
+                                    job_id=job_id,
+                                    jobs_store=jobs_store,
+                                    s3=s3_for_writes,
+                                    output_bucket=output_bucket,
+                                    output_dir=output_dir,
+                                    tracking_s3_key=tracking_s3_key,
+                                    analysis_results=analysis_results,
+                                    current_context=current_context,
+                                    next_frame_idx=last_frame + 1,
+                                    progress_percent=progress_pct,
+                                    total_tracking_frames=total_tracking_frames,
+                                    stage_progress_fraction=(
+                                        processed / max(total, 1)
+                                    ),
+                                ),
+                                loop,
+                            ).result(timeout=30)
+                        except Exception as e:
+                            logger.warning(
+                                "Periodic analysis flush failed: %s", e,
+                            )
+
             processed += 1
             if progress_cb and total > 0:
                 progress_cb(processed / total)
@@ -1254,6 +1402,33 @@ def _run_upscale_analysis(
     )
     if sliding_buffer:
         _analyze_window(sliding_buffer)
+
+    # Final durable flush — always write a checkpoint at the end of the stage,
+    # whether or not we hit the every-5 boundary on the last window.
+    if analysis_results:
+        last_frame_final = (
+            (analysis_results[-1].get("frames") or [resume_start_frame])[-1]
+        )
+        try:
+            asyncio.run_coroutine_threadsafe(
+                _flush_analysis_checkpoint(
+                    job_id=job_id,
+                    jobs_store=jobs_store,
+                    s3=s3_for_writes,
+                    output_bucket=output_bucket,
+                    output_dir=output_dir,
+                    tracking_s3_key=tracking_s3_key,
+                    analysis_results=analysis_results,
+                    current_context=current_context,
+                    next_frame_idx=last_frame_final + 1,
+                    progress_percent=80.0,
+                    total_tracking_frames=total_tracking_frames,
+                    stage_progress_fraction=1.0,
+                ),
+                loop,
+            ).result(timeout=30)
+        except Exception as e:
+            logger.warning("Final analysis flush failed: %s", e)
 
     ok_windows = sum(
         1 for r in analysis_results

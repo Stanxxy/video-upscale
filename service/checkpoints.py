@@ -283,6 +283,11 @@ def build_publish_completed(
     )
 
 
+def should_flush_analysis(window_count: int, every_n: int = 5) -> bool:
+    """Return True when the analysis loop should write a periodic checkpoint."""
+    return window_count > 0 and window_count % every_n == 0
+
+
 def build_replaced_by_new_job(
     *,
     replacement_job_id: str,
