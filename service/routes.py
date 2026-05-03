@@ -12,9 +12,11 @@ from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import (
     WorkerStateSnapshot,
     build_cancellation_checkpoint,
+    build_replaced_by_new_job,
+    build_resume_overrides,
     build_verified_boxes_checkpoint,
-    next_unprocessed_frame,
     select_correction_checkpoint,
+    worker_state_from,
 )
 from service.models import TrackRequest, TrackResponse, JobResponse, ResumeRequest, JobStatus
 from service.job_store import InMemoryJobStore
@@ -318,21 +320,17 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
     orig_request = json.loads(request_json)
 
     checkpoints = await _jobs_store.get_all_checkpoints(job_id)
-    correction_stage, correction_cp = select_correction_checkpoint(checkpoints)
+    correction_stage, _ = select_correction_checkpoint(checkpoints)
 
-
-    # Build resume request
+    # Build resume request: original params + boxes from body + checkpoint-derived overrides.
     resume_params = {
         **orig_request,
         "box_a": body.box_a,
         "box_b": body.box_b,
+        **build_resume_overrides(checkpoints),
     }
-
-    # If mid-track loss, include partial tracking resume hints
-    if correction_cp.get("partial_tracking_s3_key"):
+    if "resume_tracking_s3_key" in resume_params:
         resume_params["resume_from_job_id"] = job_id
-        resume_params["resume_tracking_s3_key"] = correction_cp["partial_tracking_s3_key"]
-        resume_params["resume_from_frame"] = next_unprocessed_frame(correction_cp)
 
     # Create new job
     new_request = TrackRequest(**resume_params)
@@ -366,6 +364,30 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
             await _jobs_store.set_latest(str(video_id), new_job_id, JobState.PENDING),
             "latest replacement job",
         )
+
+    # Terminal write on the OLD job: pipeline work has been handed off,
+    # so completed=True. worker_state snapshots the OLD job's progress at
+    # handoff for analytics + lifecycle replay.
+    old_ws_dict = worker_state_from(checkpoints) or {
+        "progress_percent": 0.0,
+        "current_frame": 0,
+        "total_frames": 0,
+        "stage_progress_fraction": 0.0,
+    }
+    old_ws = WorkerStateSnapshot(**old_ws_dict)
+    terminal_stage = correction_stage or PipelineStage.TRACK
+    _require_write(
+        await _jobs_store.write_checkpoint(
+            job_id,
+            terminal_stage,
+            True,
+            build_replaced_by_new_job(
+                replacement_job_id=new_job_id,
+                worker_state=old_ws,
+            ),
+        ),
+        "old job replacement checkpoint",
+    )
 
     _require_write(
         await _jobs_store.set_state(job_id, JobState.CANCELLED, sync_latest=False),
@@ -420,11 +442,11 @@ async def recover_interrupted_job(lifecycle: dict) -> None:
 
     resume_params = json.loads(request_json)
     checkpoints = await _jobs_store.get_all_checkpoints(job_id)
-    _, correction_cp = select_correction_checkpoint(checkpoints)
-    if correction_cp.get("partial_tracking_s3_key"):
-        resume_params["resume_from_job_id"] = job_id
-        resume_params["resume_tracking_s3_key"] = correction_cp["partial_tracking_s3_key"]
-        resume_params["resume_from_frame"] = next_unprocessed_frame(correction_cp)
+    correction_stage, _ = select_correction_checkpoint(checkpoints)
+    overrides = build_resume_overrides(checkpoints)
+    if "resume_tracking_s3_key" in overrides:
+        overrides["resume_from_job_id"] = job_id
+    resume_params.update(overrides)
 
     new_request = TrackRequest(**resume_params)
     new_job = await _job_store.create_job(new_request)
@@ -461,6 +483,30 @@ async def recover_interrupted_job(lifecycle: dict) -> None:
             await _jobs_store.set_latest(str(video_id), new_job_id, JobState.PENDING),
             "latest recovery replacement",
         )
+
+    # Terminal write on the OLD interrupted job — pipeline work has been
+    # handed off to the replacement.
+    old_ws_dict = worker_state_from(checkpoints) or {
+        "progress_percent": 0.0,
+        "current_frame": 0,
+        "total_frames": 0,
+        "stage_progress_fraction": 0.0,
+    }
+    old_ws = WorkerStateSnapshot(**old_ws_dict)
+    terminal_stage = correction_stage or PipelineStage.TRACK
+    _require_write(
+        await _jobs_store.write_checkpoint(
+            job_id,
+            terminal_stage,
+            True,
+            build_replaced_by_new_job(
+                replacement_job_id=new_job_id,
+                worker_state=old_ws,
+            ),
+        ),
+        "interrupted job replacement checkpoint",
+    )
+
     _schedule_job(new_job_id, new_request)
 
 

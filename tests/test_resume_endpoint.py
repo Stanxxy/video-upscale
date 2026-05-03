@@ -166,6 +166,99 @@ async def test_resume_delegates_to_detection_response(service_client, awaiting_j
 
 
 @pytest.mark.asyncio
+async def test_detection_response_writes_replaced_by_new_job_on_old(
+    service_client, awaiting_job, service_components,
+):
+    """The old job receives a final replaced_by_new_job checkpoint with
+    completed=True and the new job's id under artifacts."""
+    _, _, jobs_store = service_components
+    job_id = awaiting_job
+    # Seed a track row carrying worker_state so build_replaced_by_new_job can
+    # snapshot the old job's progress.
+    await jobs_store.write_checkpoint(job_id, PipelineStage.TRACK, False, {
+        "schema_version": 1, "pending_detection": None, "artifacts": {},
+        "worker_state": {
+            "progress_percent": 35.0, "current_frame": 7432,
+            "total_frames": 21600, "stage_progress_fraction": 0.34,
+        },
+    })
+
+    resp = await service_client.post(
+        f"/jobs/{job_id}/detection_response",
+        json={"box_a": [10, 20, 100, 200], "box_b": [300, 20, 400, 200]},
+    )
+    assert resp.status_code == 200
+    new_job_id = resp.json()["job_id"]
+
+    # Find the replaced_by_new_job row on the OLD job.
+    replaced = [
+        cp for (jid, _), cp in jobs_store._checkpoints.items()
+        if jid == job_id
+        and cp["checkpoint_data"].get("reason") == "replaced_by_new_job"
+    ]
+    assert len(replaced) == 1
+    cp = replaced[0]
+    assert cp["completed"] is True
+    data = cp["checkpoint_data"]
+    assert data["schema_version"] == 1
+    assert data["artifacts"]["replacement_job_id"] == new_job_id
+    assert data["worker_state"]["current_frame"] == 7432
+
+
+@pytest.mark.asyncio
+async def test_detection_response_forwards_upscale_artifacts_via_overrides(
+    service_client, service_components,
+):
+    """If the awaiting job has an upscale_analyze checkpoint, the resume
+    request inherits analysis_raw_s3_key + window_count + current_context
+    and uses the END_OF_TRACKING_SENTINEL for resume_from_frame."""
+    _, job_store, jobs_store = service_components
+    req = TrackRequest(bucket="b", key="v.mp4")
+    job = await job_store.create_job(req)
+    await jobs_store.create_lifecycle(job.job_id, "vid", "u")
+    await jobs_store.save_request(job.job_id, req.model_dump_json())
+    await jobs_store.set_state(job.job_id, JobState.AWAITING_CORRECTION)
+    await jobs_store.write_checkpoint(job.job_id, PipelineStage.DETECT, False, {
+        "schema_version": 1,
+        "pending_detection": {"reason": "initial", "frame_idx": 0},
+        "artifacts": {},
+        "worker_state": {
+            "progress_percent": 10.0, "current_frame": 0,
+            "total_frames": 0, "stage_progress_fraction": 0.0,
+        },
+    })
+    await jobs_store.write_checkpoint(job.job_id, PipelineStage.UPSCALE_ANALYZE, False, {
+        "schema_version": 1, "pending_detection": None,
+        "reason": "analysis_window_completed",
+        "resume_cursor": {"frame_idx": 9120, "analysis_window_count": 12},
+        "analysis_current_context": "north-south",
+        "artifacts": {
+            "tracking_s3_key": "checkpoints/orig/tracking.json",
+            "analysis_raw_s3_key": "checkpoints/orig/analysis_raw.json",
+        },
+        "worker_state": {
+            "progress_percent": 67.5, "current_frame": 9120,
+            "total_frames": 21600, "stage_progress_fraction": 0.5,
+        },
+    })
+
+    resp = await service_client.post(
+        f"/jobs/{job.job_id}/resume",
+        json={"box_a": [1, 2, 3, 4], "box_b": [5, 6, 7, 8]},
+    )
+    assert resp.status_code == 200
+    new_job_id = resp.json()["job_id"]
+
+    rec = json.loads(await jobs_store.get_request(new_job_id))
+    assert rec["resume_tracking_s3_key"] == "checkpoints/orig/tracking.json"
+    assert rec["analysis_raw_s3_key"] == "checkpoints/orig/analysis_raw.json"
+    assert rec["analysis_window_count"] == 12
+    assert rec["analysis_current_context"] == "north-south"
+    # END_OF_TRACKING_SENTINEL = 10**9 — well past any plausible video frame
+    assert rec["resume_from_frame"] >= 10**9
+
+
+@pytest.mark.asyncio
 async def test_detection_response_not_found(service_client):
     """404 when job_id does not exist in Keyspaces."""
     resp = await service_client.post(
