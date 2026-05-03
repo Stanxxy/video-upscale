@@ -49,6 +49,27 @@ logger = logging.getLogger(__name__)
 # GPU / model cleanup
 # ---------------------------------------------------------------------------
 
+PARTIAL_UPLOAD_INTERVAL = 30.0
+LIFECYCLE_HEARTBEAT_INTERVAL = 1.0
+
+
+def _tracking_progress_flags(
+    now: float,
+    last_ks_write: float,
+    last_partial_upload: float,
+    *,
+    ks_interval: float = LIFECYCLE_HEARTBEAT_INTERVAL,
+    partial_interval: float = PARTIAL_UPLOAD_INTERVAL,
+) -> tuple[bool, bool]:
+    """Decide whether the tracking-progress callback should write to the
+    lifecycle row (1s cadence) and/or upload a partial-tracking checkpoint
+    (30s cadence). Pure function — easy to unit test without a fake clock."""
+    return (
+        (now - last_ks_write) >= ks_interval,
+        (now - last_partial_upload) >= partial_interval,
+    )
+
+
 def _make_worker_state(
     *,
     progress_percent: float,
@@ -308,14 +329,14 @@ async def run_job(
         # Tracking spans 15%-55% (40% range)
         _last_ks_write = 0.0
         _last_partial_upload = 0.0
-        PARTIAL_UPLOAD_INTERVAL = 30.0
 
         def tracking_progress_cb(frames_done: int, total: int):
             nonlocal _last_ks_write, _last_partial_upload
             pct = 15.0 + (frames_done / max(total, 1)) * 40.0
             now = time.monotonic()
-            write_lifecycle = (now - _last_ks_write) >= 1.0
-            upload_partial = (now - _last_partial_upload) >= PARTIAL_UPLOAD_INTERVAL
+            write_lifecycle, upload_partial = _tracking_progress_flags(
+                now, _last_ks_write, _last_partial_upload,
+            )
             if write_lifecycle:
                 _last_ks_write = now
             if upload_partial:

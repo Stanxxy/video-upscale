@@ -327,6 +327,202 @@ async def test_flush_analysis_checkpoint_uploads_and_writes_v1(
 
 
 # ---------------------------------------------------------------------------
+# Tracking cadence flag computation (Task 4: 1s lifecycle + 30s partial)
+# ---------------------------------------------------------------------------
+
+
+def test_tracking_progress_flags_below_thresholds_returns_false_pair():
+    from service.worker import _tracking_progress_flags
+    write_lc, upload_partial = _tracking_progress_flags(
+        now=0.5, last_ks_write=0.0, last_partial_upload=0.0,
+    )
+    assert write_lc is False
+    assert upload_partial is False
+
+
+def test_tracking_progress_flags_crosses_1s_only():
+    from service.worker import _tracking_progress_flags
+    write_lc, upload_partial = _tracking_progress_flags(
+        now=1.5, last_ks_write=0.0, last_partial_upload=0.0,
+    )
+    assert write_lc is True
+    assert upload_partial is False
+
+
+def test_tracking_progress_flags_crosses_30s_threshold():
+    from service.worker import _tracking_progress_flags
+    write_lc, upload_partial = _tracking_progress_flags(
+        now=30.0, last_ks_write=29.5, last_partial_upload=0.0,
+    )
+    assert write_lc is False  # only 0.5s since last lifecycle write
+    assert upload_partial is True
+
+
+def test_tracking_progress_flags_crosses_both_thresholds():
+    from service.worker import _tracking_progress_flags
+    write_lc, upload_partial = _tracking_progress_flags(
+        now=100.0, last_ks_write=0.0, last_partial_upload=32.0,
+    )
+    assert write_lc is True
+    assert upload_partial is True
+
+
+def test_tracking_progress_flags_respects_custom_intervals():
+    from service.worker import _tracking_progress_flags
+    write_lc, upload_partial = _tracking_progress_flags(
+        now=2.0, last_ks_write=0.0, last_partial_upload=0.0,
+        ks_interval=5.0, partial_interval=60.0,
+    )
+    assert write_lc is False
+    assert upload_partial is False
+
+
+# ---------------------------------------------------------------------------
+# _run_upscale_analysis orchestration (Task 6 wiring)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_upscale_analysis_writes_started_and_final_flush(
+    mock_jobs_store, tmp_path,
+):
+    """End-to-end exercise of _run_upscale_analysis with stubbed cv2 /
+    restorer / analyzer / PIL / utils. With 30 sampled frames and an
+    analyzer present, the function must emit:
+      - exactly one 'analysis_started' upscale_analyze checkpoint at the top,
+      - at least one 'analysis_window_completed' (final flush) at the end.
+    """
+    import json as _json
+    import sys
+    from unittest.mock import patch as _patch
+
+    # Build a tracking JSON with 30 frames each carrying a single athlete box.
+    tracking = {
+        "start_frame": 0,
+        "frames": [
+            {"frame_idx": i, "athletes": [{"box": [0, 0, 100, 100]}]}
+            for i in range(30)
+        ],
+    }
+    tracking_json_path = tmp_path / "tracking.json"
+    tracking_json_path.write_text(_json.dumps(tracking))
+
+    work_dir = tmp_path / "wd"
+    work_dir.mkdir()
+
+    config = ServiceConfig(
+        temp_dir=str(tmp_path), s3_endpoint_url="http://x",
+        gemini_api_key="fake", model_path="ignored",
+    )
+    request = _track_request(box_a=[1, 2, 3, 4], box_b=[5, 6, 7, 8])
+    s3 = _stub_s3()
+
+    # cv2 stub — VideoCapture returns (True, fake-frame) reads.
+    cv2_mock = MagicMock()
+    cv2_mock.IMWRITE_JPEG_QUALITY = 1
+    cv2_mock.CAP_PROP_FPS = 0
+    cv2_mock.CAP_PROP_POS_FRAMES = 0
+    cv2_mock.COLOR_BGR2RGB = 0
+    cv2_mock.INTER_LANCZOS4 = 0
+
+    class FakeFrame:
+        shape = (720, 1280, 3)
+
+        def __getitem__(self, _slice):
+            return FakeFrame()
+
+        @property
+        def size(self):
+            return 720 * 1280 * 3
+
+    cap_mock = MagicMock()
+    cap_mock.read.return_value = (True, FakeFrame())
+    cap_mock.get.return_value = 30.0
+    cv2_mock.VideoCapture.return_value = cap_mock
+    cv2_mock.imwrite.return_value = True
+    cv2_mock.cvtColor.side_effect = lambda frame, _code: frame
+    cv2_mock.resize.side_effect = lambda frame, *_a, **_kw: frame
+
+    # PIL stub — Image.fromarray returns a sentinel placeholder.
+    pil_image_mock = MagicMock()
+    pil_image_mock.fromarray.return_value = MagicMock(name="PILImage")
+    pil_mock = MagicMock(Image=pil_image_mock)
+
+    # utils stub — geometry helpers return canned boxes.
+    utils_mock = MagicMock(
+        get_union_box=lambda boxes: boxes[0],
+        get_padded_square_box=lambda *_a, **_kw: (0, 0, 100, 100),
+    )
+
+    # restorer stub — RealESRGANRestorer.enhance returns the input frame.
+    restorer_class = MagicMock()
+    restorer_instance = MagicMock()
+    restorer_instance.enhance.side_effect = lambda crop, **_kw: crop
+    restorer_class.return_value = restorer_instance
+    restorer_mod_mock = MagicMock(RealESRGANRestorer=restorer_class)
+
+    # analyzer stub — analyze_sequence returns one valid clips JSON.
+    analyzer_instance = MagicMock()
+    analyzer_instance.analyze_sequence.return_value = _json.dumps({
+        "clips": [],
+        "current_context_summary": "ctx-after-window",
+    })
+    analyzer_class = MagicMock(return_value=analyzer_instance)
+    analyzer_mod_mock = MagicMock(BJJTechniqueAnalyzer=analyzer_class)
+
+    sys_modules_patches = {
+        "cv2": cv2_mock,
+        "PIL": pil_mock,
+        "PIL.Image": pil_image_mock,
+        "utils": utils_mock,
+        "restorer": restorer_mod_mock,
+        "analyzer": analyzer_mod_mock,
+    }
+
+    loop = asyncio.get_event_loop()
+
+    from service import worker
+
+    with _patch.dict(sys.modules, sys_modules_patches), \
+         _patch.object(worker, "_make_s3", return_value=s3):
+        await loop.run_in_executor(
+            None,
+            lambda: worker._run_upscale_analysis(
+                video_path=str(tmp_path / "video.mp4"),
+                tracking_json_path=str(tracking_json_path),
+                config=config,
+                request=request,
+                work_dir=str(work_dir),
+                job_id="job-up",
+                jobs_store=mock_jobs_store,
+                loop=loop,
+                tracking_s3_key="checkpoints/job-up/tracking.json",
+                progress_cb=None,
+            ),
+        )
+
+    cp = mock_jobs_store._checkpoints.get(
+        ("job-up", PipelineStage.UPSCALE_ANALYZE.value)
+    )
+    assert cp is not None, "expected at least one upscale_analyze checkpoint"
+    data = cp["checkpoint_data"]
+    _assert_envelope(data)
+    # Latest write should be the final flush after the one analysis window.
+    assert data["reason"] == "analysis_window_completed"
+    assert data["resume_cursor"]["analysis_window_count"] >= 1
+    assert data["analysis_current_context"] == "ctx-after-window"
+    assert data["artifacts"]["tracking_s3_key"].endswith("tracking.json")
+    assert data["artifacts"]["analysis_raw_s3_key"].endswith("analysis_raw.json")
+    # 30 frames → buffer hits WINDOW_SIZE once mid-loop, then a leftover
+    # buffer of STRIDE=15 frames is analyzed by the final-drain step. So
+    # exactly 2 analyses run.
+    assert analyzer_instance.analyze_sequence.call_count == 2
+    assert data["resume_cursor"]["analysis_window_count"] == 2
+    # analysis_raw.json was uploaded to the output bucket at least once.
+    assert s3.upload_json.called
+
+
+# ---------------------------------------------------------------------------
 # skip_upscale path — track post-upload re-write + upload terminal write
 # ---------------------------------------------------------------------------
 
@@ -482,6 +678,25 @@ async def test_full_path_writes_annotate_upload_publish_envelopes(
     assert annotate_data["reason"] == "annotate_completed"
     assert annotate_data["artifacts"]["annotated_video_s3_key"].endswith("_annotated.mp4")
 
+    # TRACK row was re-written after the pre-upscale tracking JSON upload.
+    track = mock_jobs_store._checkpoints[(job.job_id, PipelineStage.TRACK.value)]
+    track_data = track["checkpoint_data"]
+    _assert_envelope(track_data)
+    assert track_data["reason"] == "track_completed"
+    assert track_data["artifacts"]["tracking_s3_key"].endswith("_tracked.json")
+    # The track row history must include both the pre-upload write (no
+    # tracking_s3_key) and the post-upload re-write (with tracking_s3_key).
+    track_history = mock_jobs_store._checkpoint_history[
+        (job.job_id, PipelineStage.TRACK.value)
+    ]
+    track_artifacts_seq = [
+        rec["checkpoint_data"]["artifacts"].get("tracking_s3_key")
+        for rec in track_history
+        if rec["checkpoint_data"].get("reason") == "track_completed"
+    ]
+    assert track_artifacts_seq[0] is None  # pre-upload write
+    assert track_artifacts_seq[-1].endswith("_tracked.json")  # post-upload re-write
+
     # UPLOAD row carries all three artifacts after the annotated video lands.
     upload = mock_jobs_store._checkpoints[(job.job_id, PipelineStage.UPLOAD.value)]
     upload_data = upload["checkpoint_data"]
@@ -491,6 +706,21 @@ async def test_full_path_writes_annotate_upload_publish_envelopes(
     assert arts["analysis_s3_key"].endswith("_analysis.json")
     assert arts["annotated_video_s3_key"].endswith("_annotated.mp4")
     assert upload_data["reason"] == "annotated_video_uploaded"
+
+    # The upload row was written incrementally: tracking_uploaded first
+    # (before upscale), then analysis_uploaded, then annotated_video_uploaded.
+    upload_history = mock_jobs_store._checkpoint_history[
+        (job.job_id, PipelineStage.UPLOAD.value)
+    ]
+    reasons = [rec["checkpoint_data"]["reason"] for rec in upload_history]
+    assert reasons == ["tracking_uploaded", "analysis_uploaded", "annotated_video_uploaded"]
+    # Each step's artifacts is a strict superset of the previous.
+    arts_seq = [rec["checkpoint_data"]["artifacts"] for rec in upload_history]
+    assert "tracking_s3_key" in arts_seq[0]
+    assert {"tracking_s3_key", "analysis_s3_key"} <= arts_seq[1].keys()
+    assert {
+        "tracking_s3_key", "analysis_s3_key", "annotated_video_s3_key",
+    } <= arts_seq[2].keys()
 
     # PUBLISH terminal row, completed=True with SNS metadata.
     publish = mock_jobs_store._checkpoints[(job.job_id, PipelineStage.PUBLISH.value)]

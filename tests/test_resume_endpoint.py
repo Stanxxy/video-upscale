@@ -292,6 +292,95 @@ async def test_resume_seeds_new_lifecycle_progress_from_old_worker_state(
     assert new_lc["total_frames"] == 21600
 
 
+# ---------------------------------------------------------------------------
+# Recovery path — recover_interrupted_job (Task 8 + Task 9 wiring)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_recover_interrupted_job_writes_replaced_row_and_forwards_artifacts(
+    service_components,
+):
+    """recover_interrupted_job:
+      - composes resume_params via build_resume_overrides (forwards
+        analysis_raw_s3_key + window_count + current_context for upscale crash),
+      - writes replaced_by_new_job row with completed=True on the OLD job,
+      - seeds the NEW lifecycle row from the OLD worker_state.
+    """
+    from service.routes import recover_interrupted_job
+
+    _, job_store, jobs_store = service_components
+    req = TrackRequest(bucket="b", key="folder/v.mp4")
+    job = await job_store.create_job(req)
+    old_job_id = job.job_id
+    await jobs_store.create_lifecycle(old_job_id, "vid-77", "user-77")
+    await jobs_store.save_request(old_job_id, req.model_dump_json())
+    # Simulate INTERRUPTED job that crashed mid-upscale.
+    await jobs_store.set_state(old_job_id, JobState.INTERRUPTED)
+    await jobs_store.write_checkpoint(
+        old_job_id, PipelineStage.TRACK, False, {
+            "schema_version": 1, "pending_detection": None,
+            "artifacts": {"tracking_s3_key": "checkpoints/orig/tracking.json"},
+            "worker_state": {
+                "progress_percent": 55.0, "current_frame": 21600,
+                "total_frames": 21600, "stage_progress_fraction": 1.0,
+            },
+        },
+    )
+    await jobs_store.write_checkpoint(
+        old_job_id, PipelineStage.UPSCALE_ANALYZE, False, {
+            "schema_version": 1, "pending_detection": None,
+            "reason": "analysis_window_completed",
+            "resume_cursor": {"frame_idx": 9120, "analysis_window_count": 12},
+            "analysis_current_context": "north-south",
+            "artifacts": {
+                "tracking_s3_key": "checkpoints/orig/tracking.json",
+                "analysis_raw_s3_key": "checkpoints/orig/analysis_raw.json",
+            },
+            "worker_state": {
+                "progress_percent": 67.5, "current_frame": 9120,
+                "total_frames": 21600, "stage_progress_fraction": 0.5,
+            },
+        },
+    )
+
+    lifecycle = await jobs_store.get_lifecycle(old_job_id)
+    await recover_interrupted_job(lifecycle)
+
+    # The OLD job got a replaced_by_new_job row with completed=True.
+    new_job_id = (await jobs_store.get_lifecycle(old_job_id))["replacement_job_id"]
+    assert new_job_id and new_job_id != old_job_id
+    replaced = [
+        cp for (jid, _), cp in jobs_store._checkpoints.items()
+        if jid == old_job_id
+        and cp["checkpoint_data"].get("reason") == "replaced_by_new_job"
+    ]
+    assert len(replaced) == 1
+    cp = replaced[0]
+    assert cp["completed"] is True
+    assert cp["checkpoint_data"]["artifacts"]["replacement_job_id"] == new_job_id
+    # OLD job's worker_state was snapshotted into the row (latest stage = upscale_analyze)
+    assert cp["checkpoint_data"]["worker_state"]["progress_percent"] == 67.5
+    assert cp["checkpoint_data"]["worker_state"]["current_frame"] == 9120
+
+    # The NEW request was saved with upscale-crash overrides forwarded.
+    rec = json.loads(await jobs_store.get_request(new_job_id))
+    assert rec["resume_tracking_s3_key"] == "checkpoints/orig/tracking.json"
+    assert rec["analysis_raw_s3_key"] == "checkpoints/orig/analysis_raw.json"
+    assert rec["analysis_window_count"] == 12
+    assert rec["analysis_current_context"] == "north-south"
+    assert rec["resume_from_frame"] >= 10**9  # END_OF_TRACKING_SENTINEL
+    assert rec["resume_from_job_id"] == old_job_id
+
+    # The NEW lifecycle row was seeded from the OLD worker_state.
+    new_lc = await jobs_store.get_lifecycle(new_job_id)
+    assert new_lc["origin_job_id"] == old_job_id
+    assert new_lc["parent_job_id"] == old_job_id
+    assert new_lc["progress_percent"] == 67.5
+    assert new_lc["current_frame"] == 9120
+    assert new_lc["total_frames"] == 21600
+
+
 @pytest.mark.asyncio
 async def test_detection_response_not_found(service_client):
     """404 when job_id does not exist in Keyspaces."""

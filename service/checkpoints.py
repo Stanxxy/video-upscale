@@ -408,6 +408,14 @@ def build_resume_overrides(checkpoints: list[dict[str, Any]]) -> dict[str, Any]:
 
     Used by both submit_detection_response (manual resume) and
     recover_interrupted_job (automatic recovery) so they stay in sync.
+
+    Priority: when both a track checkpoint with `partial_tracking_s3_key`
+    AND an upscale_analyze checkpoint with `analysis_raw_s3_key` are
+    present, the upscale_analyze checkpoint TAKES PRECEDENCE because
+    tracking is logically complete (the upscale stage already started).
+    `resume_tracking_s3_key` is overwritten to point at the full tracking
+    JSON, and `resume_from_frame` is set to `END_OF_TRACKING_SENTINEL`
+    so the worker's tracking pass becomes a no-op.
     """
     overrides: dict[str, Any] = {}
     by_stage = checkpoint_by_stage(checkpoints)

@@ -33,6 +33,11 @@ def make_mock_jobs_store() -> MagicMock:
     _lifecycles: dict[str, dict] = {}
     _requests: dict[str, str] = {}
     _checkpoints: dict[tuple[str, str], dict] = {}
+    # Append-only history of every checkpoint write, keyed by (job_id,
+    # stage_name). Lets tests assert the *sequence* of incremental writes
+    # (e.g. tracking_uploaded → analysis_uploaded → annotated_video_uploaded
+    # for the upload row) without losing data when the same row is overwritten.
+    _checkpoint_history: dict[tuple[str, str], list[dict]] = {}
     _latest: dict[str, dict] = {}
 
     async def create_lifecycle(
@@ -95,11 +100,13 @@ def make_mock_jobs_store() -> MagicMock:
 
     async def write_checkpoint(job_id, stage_name, completed, data):
         sn = stage_name.value if hasattr(stage_name, "value") else stage_name
-        _checkpoints[(job_id, sn)] = {
+        record = {
             "stage_name": sn,
             "completed": completed,
             "checkpoint_data": data,
         }
+        _checkpoints[(job_id, sn)] = record
+        _checkpoint_history.setdefault((job_id, sn), []).append(record)
         return True
 
     async def get_checkpoint(job_id, stage_name):
@@ -148,6 +155,7 @@ def make_mock_jobs_store() -> MagicMock:
     store._lifecycles = _lifecycles
     store._requests = _requests
     store._checkpoints = _checkpoints
+    store._checkpoint_history = _checkpoint_history
     store._latest = _latest
     return store
 

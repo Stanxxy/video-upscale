@@ -22,10 +22,18 @@ See `bjj-team-meta` skill for how to add entries.
 - [2026-03-15 - DINOv2 + Color Histogram Re-ID Strategy](insights/2026-03-15-dinov2-color-histogram-reid.md) — tags: tracking, ml, identity
 - [2026-04-19 - Service Open Questions and TODO Reality Snapshot](insights/2026-04-19-service-open-questions-and-todos.md) — tags: service, lifecycle, resume, todo, open-questions
 - [2026-04-25 - Job Start and Resume Workflow Reference](insights/2026-04-25-job-start-resume-workflow-reference.md) — tags: service, lifecycle, resume, crash-recovery, keyspaces, refactor
+- [2026-05-01 - Lifecycle Resume and Recovery Implementation](insights/2026-05-01-lifecycle-resume-recovery-implementation.md) — tags: service, lifecycle, resume, recovery, keyspaces, implementation
+- [2026-05-03 - Worker Checkpoint Standardization Implementation](insights/2026-05-03-worker-checkpoint-standardization-implementation.md) — tags: service, worker, checkpoints, schema, recovery, tests, implementation
 
 ## Requirements
 
 - [2026-04-19 - Job Pause and Resume Open Questions](requirements/2026-04-19-job-pause-and-resume-open-questions.md) — tags: service, resume, lifecycle, keyspaces
 - [2026-04-26 - Job Lifecycle Resume Refactor Plan](requirements/2026-04-26-job-lifecycle-resume-refactor-plan.md) — tags: service, lifecycle, resume, crash-recovery, keyspaces, governance
+- [2026-05-01 - Keyspaces Schema Migration — Job Lineage and Recovery Index](requirements/2026-05-01-keyspaces-schema-migration-job-recovery.md) — tags: keyspaces, schema, migration, ops
+- [2026-05-02 - Worker Checkpoint Standardization, Shape Tests, Durable Artifact Recovery](requirements/2026-05-02-worker-checkpoint-standardization-plan.md) — tags: service, worker, checkpoints, schema, recovery, tests
+
+## Contracts (sharable with bjj-vision-backend)
+
+- [Checkpoint Artifacts V1 Addendum](../contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md) — companion to `CHECKPOINT_DATA_SCHEMA_V1.md`; defines `upscale_analyze`/`annotate`/`upload`/`publish` artifact keys.
 
 ## Mistakes
