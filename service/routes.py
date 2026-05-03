@@ -339,6 +339,7 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
 
     video_id = orig_request.get("video_id") or lifecycle.get("video_id", "")
     origin_job_id = lifecycle.get("origin_job_id") or job_id
+    seed_ws = worker_state_from(checkpoints) or {}
     _require_write(
         await _jobs_store.create_lifecycle(
             new_job_id,
@@ -347,6 +348,9 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
             origin_job_id=origin_job_id,
             parent_job_id=job_id,
             owner_instance_id=_instance_id,
+            progress_percent=seed_ws.get("progress_percent", 0.0),
+            current_frame=seed_ws.get("current_frame", 0),
+            total_frames=seed_ws.get("total_frames", 0),
         ),
         "replacement job lifecycle",
     )
@@ -454,6 +458,7 @@ async def recover_interrupted_job(lifecycle: dict) -> None:
 
     video_id = resume_params.get("video_id") or lifecycle.get("video_id", "")
     origin_job_id = lifecycle.get("origin_job_id") or job_id
+    seed_ws = worker_state_from(checkpoints) or {}
     _require_write(
         await _jobs_store.create_lifecycle(
             new_job_id,
@@ -462,6 +467,9 @@ async def recover_interrupted_job(lifecycle: dict) -> None:
             origin_job_id=origin_job_id,
             parent_job_id=job_id,
             owner_instance_id=_instance_id,
+            progress_percent=seed_ws.get("progress_percent", 0.0),
+            current_frame=seed_ws.get("current_frame", 0),
+            total_frames=seed_ws.get("total_frames", 0),
         ),
         "recovery replacement lifecycle",
     )

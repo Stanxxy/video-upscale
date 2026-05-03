@@ -37,27 +37,48 @@ class JobsStore:
     def unregister_owned_job(self, job_id: str) -> None:
         self.owned_jobs.discard(job_id)
 
+    @staticmethod
+    def heartbeat_bucket_for(dt: datetime) -> str:
+        return dt.astimezone(timezone.utc).strftime("%Y%m%d%H")
+
     async def create_lifecycle(
         self,
         job_id: str,
         video_id: str,
         user_id: str,
         origin_job_id: str | None = None,
+        parent_job_id: str | None = None,
+        replacement_job_id: str | None = None,
         owner_instance_id: str = "",
+        progress_percent: float = 0.0,
+        current_frame: int = 0,
+        total_frames: int = 0,
     ) -> bool:
         now = datetime.now(timezone.utc)
         q = (
             f"INSERT INTO {self._ks}.job_lifecycle "
-            f"(job_id, video_id, user_id, origin_job_id, job_state, stage, "
+            f"(job_id, video_id, user_id, origin_job_id, parent_job_id, "
+            f"replacement_job_id, job_state, stage, "
             f"progress_percent, current_frame, total_frames, stage_message, "
             f"error_message, owner_instance_id, last_heartbeat_at, started_at, "
             f"updated_at, completed_at) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         )
-        return await self._client.execute_write(q, [
-            job_id, video_id, user_id, origin_job_id, JobState.PENDING.value, "",
-            0.0, 0, 0, "", "", owner_instance_id, now, now, now, None,
+        ok = await self._client.execute_write(q, [
+            job_id, video_id, user_id, origin_job_id, parent_job_id,
+            replacement_job_id, JobState.PENDING.value, "",
+            progress_percent, current_frame, total_frames, "",
+            "", owner_instance_id, now, now, now, None,
         ])
+        if ok:
+            return await self.upsert_recovery_index({
+                "job_id": job_id,
+                "video_id": video_id,
+                "job_state": JobState.PENDING.value,
+                "owner_instance_id": owner_instance_id,
+                "last_heartbeat_at": now,
+            })
+        return ok
 
     async def get_lifecycle(self, job_id: str) -> dict[str, Any] | None:
         q = f"SELECT * FROM {self._ks}.job_lifecycle WHERE job_id = %s"
@@ -72,6 +93,8 @@ class JobsStore:
             "video_id": r.video_id or "",
             "user_id": r.user_id or "",
             "origin_job_id": r.origin_job_id,
+            "parent_job_id": getattr(r, "parent_job_id", None),
+            "replacement_job_id": getattr(r, "replacement_job_id", None),
             "job_state": st.value,
             "stage": stg.value if stg else "",
             "progress_percent": r.progress_percent or 0.0,
@@ -114,6 +137,7 @@ class JobsStore:
         job_id: str,
         state: JobState,
         error_message: str = "",
+        sync_latest: bool = True,
     ) -> bool:
         now = datetime.now(timezone.utc)
         completed_at = now if state in states_with_completed_at() else None
@@ -126,14 +150,61 @@ class JobsStore:
         ok = await self._client.execute_write(q, [
             state.value, error_message, now, completed_at, job_id,
         ])
-        if ok and state in states_that_sync_latest_job_row():
+        lifecycle = None
+        if ok:
+            lifecycle = await self.get_lifecycle(job_id)
+            if lifecycle:
+                index_ok = await self.upsert_recovery_index(lifecycle)
+                if not index_ok:
+                    return False
+        if ok and sync_latest and state in states_that_sync_latest_job_row():
             try:
-                lifecycle = await self.get_lifecycle(job_id)
                 if lifecycle and lifecycle.get("video_id"):
                     await self.set_latest(lifecycle["video_id"], job_id, state)
             except Exception as e:
                 logger.warning("Failed to sync latest_job for %s: %s", job_id, e)
         return ok
+
+    async def set_replacement(
+        self, job_id: str, replacement_job_id: str
+    ) -> bool:
+        now = datetime.now(timezone.utc)
+        q = (
+            f"UPDATE {self._ks}.job_lifecycle SET "
+            f"replacement_job_id = %s, updated_at = %s "
+            f"WHERE job_id = %s"
+        )
+        return await self._client.execute_write(q, [
+            replacement_job_id, now, job_id,
+        ])
+
+    async def claim_replacement(
+        self,
+        job_id: str,
+        replacement_job_id: str,
+        expected_state: JobState = JobState.AWAITING_CORRECTION,
+    ) -> bool:
+        now = datetime.now(timezone.utc)
+        q = (
+            f"UPDATE {self._ks}.job_lifecycle SET "
+            f"replacement_job_id = %s, updated_at = %s "
+            f"WHERE job_id = %s "
+            f"IF replacement_job_id = null "
+            f"AND job_state = %s"
+        )
+        rows = await self._client.execute(q, [
+            replacement_job_id,
+            now,
+            job_id,
+            expected_state.value,
+        ])
+        if not rows:
+            return False
+        row = rows[0]
+        if hasattr(row, "_asdict"):
+            row_dict = row._asdict()
+            return bool(row_dict.get("[applied]", row_dict.get("applied", False)))
+        return bool(getattr(row, "applied", False))
 
     async def heartbeat(self, job_id: str, owner_instance_id: str) -> bool:
         now = datetime.now(timezone.utc)
@@ -142,7 +213,117 @@ class JobsStore:
             f"last_heartbeat_at = %s, owner_instance_id = %s "
             f"WHERE job_id = %s"
         )
-        return await self._client.execute_write(q, [now, owner_instance_id, job_id])
+        ok = await self._client.execute_write(q, [now, owner_instance_id, job_id])
+        if ok:
+            lifecycle = await self.get_lifecycle(job_id)
+            if lifecycle:
+                return await self.upsert_recovery_index(lifecycle)
+        return ok
+
+    async def claim_job_for_recovery(
+        self,
+        job_id: str,
+        owner_instance_id: str,
+        expected_owner_instance_id: str,
+        expected_state: JobState = JobState.RUNNING,
+        expected_last_heartbeat_at: datetime | None = None,
+    ) -> bool:
+        now = datetime.now(timezone.utc)
+        heartbeat_condition = "AND last_heartbeat_at = %s" if expected_last_heartbeat_at else ""
+        q = (
+            f"UPDATE {self._ks}.job_lifecycle SET "
+            f"owner_instance_id = %s, last_heartbeat_at = %s, updated_at = %s "
+            f"WHERE job_id = %s "
+            f"IF owner_instance_id = %s AND job_state = %s {heartbeat_condition}"
+        )
+        params = [
+            owner_instance_id,
+            now,
+            now,
+            job_id,
+            expected_owner_instance_id,
+            expected_state.value,
+        ]
+        if expected_last_heartbeat_at:
+            params.append(expected_last_heartbeat_at)
+        rows = await self._client.execute(q, params)
+        if not rows:
+            return False
+        row = rows[0]
+        if hasattr(row, "_asdict"):
+            row_dict = row._asdict()
+            return bool(row_dict.get("[applied]", row_dict.get("applied", False)))
+        return bool(getattr(row, "applied", False))
+
+    async def upsert_recovery_index(self, lifecycle: dict[str, Any]) -> bool:
+        last_heartbeat_at = lifecycle.get("last_heartbeat_at") or datetime.now(timezone.utc)
+        heartbeat_bucket = self.heartbeat_bucket_for(last_heartbeat_at)
+        state = parse_job_state(lifecycle.get("job_state"))
+        recovery_state = (
+            "ACTIVE"
+            if state in (JobState.PENDING, JobState.RUNNING, JobState.INTERRUPTED)
+            else "AWAITING_CORRECTION"
+            if state == JobState.AWAITING_CORRECTION
+            else "TERMINAL"
+        )
+        now = datetime.now(timezone.utc)
+        q = (
+            f"INSERT INTO {self._ks}.job_recovery_index "
+            f"(recovery_state, heartbeat_bucket, last_heartbeat_at, job_id, "
+            f"owner_instance_id, video_id, job_state, updated_at) "
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"
+        )
+        return await self._client.execute_write(q, [
+            recovery_state,
+            heartbeat_bucket,
+            last_heartbeat_at,
+            lifecycle["job_id"],
+            lifecycle.get("owner_instance_id", ""),
+            lifecycle.get("video_id", ""),
+            state.value,
+            now,
+        ])
+
+    async def remove_recovery_index(
+        self,
+        job_id: str,
+        recovery_state: str,
+        heartbeat_bucket: str,
+        last_heartbeat_at: datetime,
+    ) -> bool:
+        q = (
+            f"DELETE FROM {self._ks}.job_recovery_index "
+            f"WHERE recovery_state = %s AND heartbeat_bucket = %s "
+            f"AND last_heartbeat_at = %s AND job_id = %s"
+        )
+        return await self._client.execute_write(q, [
+            recovery_state, heartbeat_bucket, last_heartbeat_at, job_id,
+        ])
+
+    async def list_stale_recovery_candidates(
+        self,
+        heartbeat_buckets: list[str],
+        stale_before: datetime,
+    ) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        q = (
+            f"SELECT * FROM {self._ks}.job_recovery_index "
+            f"WHERE recovery_state = %s AND heartbeat_bucket = %s "
+            f"AND last_heartbeat_at < %s"
+        )
+        for bucket in heartbeat_buckets:
+            rows = await self._client.execute(q, ["ACTIVE", bucket, stale_before])
+            for r in rows:
+                results.append({
+                    "job_id": r.job_id,
+                    "video_id": r.video_id or "",
+                    "job_state": r.job_state or "",
+                    "owner_instance_id": r.owner_instance_id or "",
+                    "last_heartbeat_at": r.last_heartbeat_at,
+                    "heartbeat_bucket": r.heartbeat_bucket,
+                    "updated_at": r.updated_at,
+                })
+        return results
 
     async def save_request(self, job_id: str, request_json: str) -> bool:
         now = datetime.now(timezone.utc)

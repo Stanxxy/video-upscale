@@ -43,6 +43,9 @@ def make_mock_jobs_store() -> MagicMock:
         parent_job_id="",
         replacement_job_id="",
         owner_instance_id="",
+        progress_percent=0.0,
+        current_frame=0,
+        total_frames=0,
     ):
         _lifecycles[job_id] = {
             "job_id": job_id,
@@ -53,9 +56,9 @@ def make_mock_jobs_store() -> MagicMock:
             "replacement_job_id": replacement_job_id,
             "job_state": "PENDING",
             "stage": "",
-            "progress_percent": 0.0,
-            "current_frame": 0,
-            "total_frames": 0,
+            "progress_percent": progress_percent,
+            "current_frame": current_frame,
+            "total_frames": total_frames,
             "stage_message": "",
             "error_message": "",
             "owner_instance_id": owner_instance_id,

@@ -259,6 +259,40 @@ async def test_detection_response_forwards_upscale_artifacts_via_overrides(
 
 
 @pytest.mark.asyncio
+async def test_resume_seeds_new_lifecycle_progress_from_old_worker_state(
+    service_client, awaiting_job, service_components,
+):
+    """The new lifecycle row should start at the OLD job's last-known
+    progress_percent / current_frame / total_frames so the SSE stream
+    does not regress to 0%."""
+    _, _, jobs_store = service_components
+    job_id = awaiting_job
+    await jobs_store.write_checkpoint(job_id, PipelineStage.TRACK, False, {
+        "schema_version": 1,
+        "pending_detection": None,
+        "artifacts": {},
+        "worker_state": {
+            "progress_percent": 35.0,
+            "current_frame": 7432,
+            "total_frames": 21600,
+            "stage_progress_fraction": 0.34,
+        },
+    })
+
+    resp = await service_client.post(
+        f"/jobs/{job_id}/resume",
+        json={"box_a": [10, 20, 100, 200], "box_b": [300, 20, 400, 200]},
+    )
+    assert resp.status_code == 200
+    new_job_id = resp.json()["job_id"]
+
+    new_lc = await jobs_store.get_lifecycle(new_job_id)
+    assert new_lc["progress_percent"] == 35.0
+    assert new_lc["current_frame"] == 7432
+    assert new_lc["total_frames"] == 21600
+
+
+@pytest.mark.asyncio
 async def test_detection_response_not_found(service_client):
     """404 when job_id does not exist in Keyspaces."""
     resp = await service_client.post(
