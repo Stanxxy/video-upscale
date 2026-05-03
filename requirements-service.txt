@@ -1,5 +1,6 @@
 # Service layer
 fastapi
+python-dotenv
 uvicorn[standard]
 boto3
 pydantic-settings

@@ -18,8 +18,8 @@ from service.job_store import InMemoryJobStore
 from service.keyspaces_client import KeyspacesClient
 from service.jobs_store import JobsStore
 from service.heartbeat import HeartbeatTask
-from service.reconciler import Reconciler
-from service.routes import router, init_routes
+from service.reconciler import RecoveryManager
+from service.routes import router, init_routes, recover_interrupted_job
 
 # Ensure service loggers emit INFO (uvicorn only configures its own loggers)
 service_logger = logging.getLogger("service")
@@ -48,14 +48,19 @@ async def lifespan(app: FastAPI):
     heartbeat = HeartbeatTask(jobs_store, INSTANCE_ID)
     heartbeat.start()
 
-    # Run reconciler
-    reconciler = Reconciler(jobs_store, INSTANCE_ID)
-    await reconciler.run_on_startup()
+    # Start recovery manager for stale worker-owned jobs
+    recovery = RecoveryManager(
+        jobs_store,
+        INSTANCE_ID,
+        recover_job=recover_interrupted_job,
+    )
+    recovery.start()
 
     try:
         yield
     finally:
         heartbeat.stop()
+        recovery.stop()
         ks_client.close()
 
 

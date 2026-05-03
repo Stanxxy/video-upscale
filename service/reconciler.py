@@ -1,36 +1,103 @@
-"""Startup reconciler that transitions orphaned jobs to INTERRUPTED.
+"""Scheduled recovery manager for stale worker-owned jobs."""
 
-TODO(PRODUCTION-BLOCKER): This is currently a stub. The bounce-proof guarantee
-requires scanning Keyspaces for rows where last_heartbeat_at is stale and
-job_state is still RUNNING, then transitioning them to INTERRUPTED + emitting
-SNS notifications. Options:
-  1. Persist owned job_ids to a local file; on restart, read + reconcile those IDs.
-  2. Add a GSI/secondary index on owner_instance_id (Keyspaces supports this).
-  3. Use a bounded time-window scan via the video_analysis_latest_job table
-     (small number of rows) and cross-check each job's heartbeat.
-Until this is implemented, orphaned jobs from engine restarts will remain
-in RUNNING state and the analysis service must detect them via stale heartbeats
-when it reads job_lifecycle for status queries.
-"""
-
+import asyncio
 import logging
+from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta, timezone
 
+from service.analysis_keyspaces_enums import JobState
 from service.jobs_store import JobsStore
 
 logger = logging.getLogger(__name__)
 
+RecoverJobCallback = Callable[[dict], Awaitable[None]]
 
-class Reconciler:
-    def __init__(self, jobs_store: JobsStore, instance_id: str):
+
+class RecoveryManager:
+    def __init__(
+        self,
+        jobs_store: JobsStore,
+        instance_id: str,
+        *,
+        interval: float = 30.0,
+        stale_after: float = 90.0,
+        recover_job: RecoverJobCallback | None = None,
+        now_fn: Callable[[], datetime] | None = None,
+    ):
         self._store = jobs_store
         self._instance_id = instance_id
+        self._interval = interval
+        self._stale_after = stale_after
+        self._recover_job = recover_job
+        self._now_fn = now_fn or (lambda: datetime.now(timezone.utc))
+        self._task: asyncio.Task | None = None
 
-    async def run_on_startup(self) -> None:
-        """Check for orphaned jobs from a previous process crash.
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._run())
 
-        Currently a stub — see module docstring for implementation options.
-        """
-        logger.info(
-            "Reconciler: startup check (instance=%s) — stub, no orphan scan yet",
-            self._instance_id,
+    async def _run(self) -> None:
+        while True:
+            try:
+                await self.reconcile_once()
+            except Exception as e:
+                logger.warning("Recovery manager reconcile failed: %s", e)
+            await asyncio.sleep(self._interval)
+
+    def stop(self) -> None:
+        if self._task:
+            self._task.cancel()
+
+    async def reconcile_once(self) -> None:
+        now = self._now_fn()
+        stale_before = now - timedelta(seconds=self._stale_after)
+        buckets = self._heartbeat_buckets(now)
+        candidates = await self._store.list_stale_recovery_candidates(
+            buckets, stale_before,
         )
+        for candidate in candidates:
+            job_id = candidate["job_id"]
+            lifecycle = await self._store.get_lifecycle(job_id)
+            if not lifecycle:
+                continue
+            job_state = lifecycle.get("job_state")
+            if job_state not in (JobState.RUNNING.value, JobState.INTERRUPTED.value):
+                continue
+            if lifecycle.get("replacement_job_id"):
+                continue
+            last_heartbeat_at = lifecycle.get("last_heartbeat_at")
+            if last_heartbeat_at and last_heartbeat_at >= stale_before:
+                continue
+
+            owner_instance_id = lifecycle.get("owner_instance_id", "")
+            expected_state = JobState(job_state)
+            claimed = await self._store.claim_job_for_recovery(
+                job_id,
+                self._instance_id,
+                owner_instance_id,
+                expected_state=expected_state,
+                expected_last_heartbeat_at=last_heartbeat_at,
+            )
+            if not claimed:
+                logger.info("Recovery claim lost for job %s", job_id)
+                continue
+
+            if expected_state == JobState.RUNNING:
+                ok = await self._store.set_state(
+                    job_id,
+                    JobState.INTERRUPTED,
+                    error_message="Worker heartbeat stale; scheduling recovery",
+                )
+                if not ok:
+                    logger.warning("Failed to mark job %s interrupted", job_id)
+                    continue
+            if self._recover_job:
+                await self._recover_job(lifecycle)
+
+    @staticmethod
+    def _heartbeat_buckets(now: datetime) -> list[str]:
+        current = now.strftime("%Y%m%d%H")
+        previous = (now - timedelta(hours=1)).strftime("%Y%m%d%H")
+        return [current, previous] if previous != current else [current]
+
+
+Reconciler = RecoveryManager
