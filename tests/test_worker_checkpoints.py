@@ -267,6 +267,91 @@ async def test_track_progress_helper_skips_partial_when_file_missing(
 
 
 # ---------------------------------------------------------------------------
+# skip_upscale path — track post-upload re-write + upload terminal write
+# ---------------------------------------------------------------------------
+
+
+def _stub_run_tracking_job(*args, **kwargs):
+    """Replacement for service.tracking_runner.run_tracking_job that writes
+    a tiny tracking.json and returns its path."""
+    import json
+    output_dir = kwargs.get("tracking_output_dir") or args[3]
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, "tracking.json")
+    with open(path, "w") as f:
+        json.dump({
+            "start_frame": 0,
+            "frames": [
+                {"frame_idx": 0, "athletes": []},
+                {"frame_idx": 1, "athletes": []},
+            ],
+        }, f)
+    return path
+
+
+@pytest.mark.asyncio
+async def test_skip_upscale_writes_post_upload_track_artifact_and_upload_terminal(
+    mock_jobs_store, tmp_path,
+):
+    """Skip-upscale path: after the tracking JSON lands in S3, the worker
+    re-writes the track row with artifacts.tracking_s3_key, writes an upload
+    row with completed=True, and finishes the job."""
+    from service import worker
+
+    config = ServiceConfig(
+        temp_dir=str(tmp_path), s3_endpoint_url="http://x", gemini_api_key="",
+    )
+    job_store = InMemoryJobStore()
+    request = _track_request(
+        bucket="b",
+        key="folder/v.mp4",
+        box_a=[1, 2, 3, 4],
+        box_b=[5, 6, 7, 8],
+        skip_upscale=True,
+        output_bucket="out",
+    )
+    job = await job_store.create_job(request)
+    await mock_jobs_store.create_lifecycle(job.job_id, "vid", "u")
+
+    s3 = _stub_s3()
+
+    with patch.object(worker, "_make_s3", return_value=s3), \
+         patch.object(worker, "_parse_time_range", return_value=(0, None)), \
+         patch(
+             "service.tracking_runner.run_tracking_job",
+             side_effect=_stub_run_tracking_job,
+         ):
+        await worker.run_job(
+            job.job_id, request, config, job_store, mock_jobs_store,
+        )
+
+    # Track row carries the post-upload tracking_s3_key.
+    track = mock_jobs_store._checkpoints[(job.job_id, PipelineStage.TRACK.value)]
+    track_data = track["checkpoint_data"]
+    _assert_envelope(track_data)
+    assert track_data["reason"] == "track_completed"
+    assert track_data["artifacts"]["tracking_s3_key"].endswith("_tracked.json")
+    # Tracking JSON must be in the output bucket.
+    assert any(
+        call.args[1] == "out" and call.args[2].endswith("_tracked.json")
+        for call in s3.upload_json.call_args_list
+    )
+
+    # Upload row exists, completed=True (skip_upscale terminates at upload).
+    upload = mock_jobs_store._checkpoints[(job.job_id, PipelineStage.UPLOAD.value)]
+    upload_data = upload["checkpoint_data"]
+    _assert_envelope(upload_data)
+    assert upload["completed"] is True
+    assert upload_data["reason"] == "tracking_uploaded"
+    assert upload_data["artifacts"]["tracking_s3_key"].endswith("_tracked.json")
+    assert upload_data["worker_state"]["progress_percent"] == 100.0
+
+    # Lifecycle should be COMPLETED.
+    lc = await mock_jobs_store.get_lifecycle(job.job_id)
+    assert lc["job_state"] == JobState.COMPLETED.value
+
+
+# ---------------------------------------------------------------------------
 # Existing integration test: download + initial-detect envelope
 # ---------------------------------------------------------------------------
 

@@ -26,6 +26,7 @@ from service.checkpoints import (
     build_track_completed,
     build_track_mid_loss,
     build_track_progress,
+    build_upload_incremental,
 )
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
@@ -454,17 +455,43 @@ async def run_job(
                 output_bucket, tracking_result_key,
             )
 
+            # Re-write the track row now that we know the durable key.
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.TRACK, False,
+                build_track_completed(
+                    start_frame=start_frame,
+                    frame_count=_frame_count,
+                    tracking_s3_key=tracking_result_key,
+                    worker_state=_make_worker_state(
+                        progress_percent=55.0,
+                        current_frame=_frame_count,
+                        total_frames=_frame_count,
+                        stage_progress_fraction=1.0,
+                    ),
+                ),
+            )
+
             # Upload tracked video (if it exists)
             tracked_video = os.path.join(
                 tracking_output_dir, "tracked_output.mp4",
             )
-            uploaded_video_key = None
             if os.path.isfile(tracked_video):
                 await loop.run_in_executor(
                     None, s3.upload_file, tracked_video,
                     output_bucket, tracked_video_key, "video/mp4",
                 )
-                uploaded_video_key = tracked_video_key
+
+            # Terminal write for the skip_upscale path: the upload row carries
+            # completed=True because there is no publish stage in this branch.
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.UPLOAD, True,
+                build_upload_incremental(
+                    tracking_s3_key=tracking_result_key,
+                    worker_state=_make_worker_state(
+                        progress_percent=100.0, stage_progress_fraction=1.0,
+                    ),
+                ),
+            )
 
             await job_store.update_job(
                 job_id,
