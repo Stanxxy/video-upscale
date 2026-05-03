@@ -61,10 +61,10 @@ Rejected alternatives:
 ## Task 1: Schema And Store Contract
 
 **Files:**
+
 - Modify: `service/jobs_store.py`
 - Test: `tests/test_resume_endpoint.py`
-
-- [ ] **Step 1: Confirm Keyspaces schema migration outside this repo**
+- **Step 1: Confirm Keyspaces schema migration outside this repo**
 
 Required lifecycle columns:
 
@@ -93,7 +93,7 @@ Use `recovery_state` values such as `ACTIVE`, `AWAITING_CORRECTION`, and `TERMIN
 
 If the actual keyspace/table names differ in the companion backend, update both services together before code uses these columns.
 
-- [ ] **Step 2: Write failing lineage test**
+- **Step 2: Write failing lineage test**
 
 Add a route/store test asserting the replacement lifecycle has root origin and immediate parent:
 
@@ -112,11 +112,11 @@ source venv/bin/activate && pytest tests/test_resume_endpoint.py -v
 
 Expected before implementation: fails because `parent_job_id` and `replacement_job_id` are not supported and persisted `origin_job_id` currently points to the new job.
 
-- [ ] **Step 3: Extend `JobsStore.create_lifecycle`**
+- **Step 3: Extend `JobsStore.create_lifecycle`**
 
 Add optional `parent_job_id` and `replacement_job_id` parameters. Insert and read those columns in `create_lifecycle()` and `get_lifecycle()`.
 
-- [ ] **Step 4: Add replacement pointer helper**
+- **Step 4: Add replacement pointer helper**
 
 Add:
 
@@ -127,7 +127,7 @@ async def set_replacement(self, job_id: str, replacement_job_id: str) -> bool:
 
 It updates `job_lifecycle.replacement_job_id` and `updated_at`.
 
-- [ ] **Step 5: Add recovery index helpers**
+- **Step 5: Add recovery index helpers**
 
 Add helpers to upsert and remove recovery index rows whenever lifecycle state, heartbeat, owner, or latest progress changes:
 
@@ -144,7 +144,7 @@ async def list_stale_recovery_candidates(self, heartbeat_buckets: list[str], sta
 
 Terminal states should either move to `TERMINAL` with short retention or be removed from active recovery scans.
 
-- [ ] **Step 6: Verify store contract**
+- **Step 6: Verify store contract**
 
 Run:
 
@@ -157,19 +157,18 @@ Expected after implementation: lineage assertions pass.
 ## Task 2: Manual Correction Resume
 
 **Files:**
+
 - Modify: `service/routes.py`
 - Modify: `service/checkpoints.py`
 - Test: `tests/test_resume_endpoint.py`
-
-- [ ] **Step 1: Create checkpoint selection tests**
+- **Step 1: Create checkpoint selection tests**
 
 Cover these cases:
 
 - Initial detection: only `detect.pending_detection` exists, resume creates a new job with corrected boxes.
 - Mid-track detection: `track.pending_detection` plus `partial_tracking_s3_key` exists, resume includes `resume_tracking_s3_key` and `resume_from_frame` as the next unprocessed frame.
 - Duplicate resume: old job already has `replacement_job_id`, endpoint returns conflict and does not create another job.
-
-- [ ] **Step 2: Create `service/checkpoints.py`**
+- **Step 2: Create `service/checkpoints.py`**
 
 Define:
 
@@ -191,8 +190,7 @@ Add helper functions:
 - `select_correction_checkpoint(checkpoints)`
 - `next_unprocessed_frame(checkpoint_data)`
 - `build_verified_boxes_checkpoint(box_a, box_b, source_stage)`
-
-- [ ] **Step 3: Fix resume lineage**
+- **Step 3: Fix resume lineage**
 
 In `submit_detection_response`, create the new lifecycle with:
 
@@ -203,22 +201,22 @@ parent_job_id = job_id
 
 Then call `set_replacement(job_id, new_job_id)` after successful new lifecycle creation.
 
-- [ ] **Step 4: Keep `/resume` scoped to `AWAITING_CORRECTION`**
+- **Step 4: Keep `/resume` scoped to `AWAITING_CORRECTION`**
 
 Keep the existing 409 behavior for states other than `AWAITING_CORRECTION`.
 
-- [ ] **Step 5: Update old-job terminal behavior**
+- **Step 5: Update old-job terminal behavior**
 
 After replacement creation, set the old job to terminal `CANCELLED` and persist `replacement_job_id=new_job_id`. The new job becomes the latest job for the video.
 
 ## Task 3: User Cancellation
 
 **Files:**
+
 - Modify: `service/routes.py`
 - Modify: `service/jobs_store.py`
 - Test: `tests/test_job_cancellation.py`
-
-- [ ] **Step 1: Write cancellation tests**
+- **Step 1: Write cancellation tests**
 
 Cover:
 
@@ -226,12 +224,11 @@ Cover:
 - Keyspaces-only job: no in-memory job exists, lifecycle still becomes `CANCELLED`.
 - Job with existing replacement: cancellation returns conflict or targets only the latest replacement job.
 - Cancellation writes final checkpoint with `reason` and `resume_cursor`.
-
-- [ ] **Step 2: Update `DELETE /job/{job_id}` lookup**
+- **Step 2: Update `DELETE /job/{job_id}` lookup**
 
 Use Keyspaces first, then in-memory fallback. Do not return 404 when a lifecycle row exists.
 
-- [ ] **Step 3: Add cancellation checkpoint writer**
+- **Step 3: Add cancellation checkpoint writer**
 
 Write a final checkpoint with:
 
@@ -244,18 +241,18 @@ Write a final checkpoint with:
 }
 ```
 
-- [ ] **Step 4: Guarantee no replacement task**
+- **Step 4: Guarantee no replacement task**
 
 Cancellation must not call resume logic and must not create a new active task.
 
 ## Task 4: Standard Checkpoint Schema
 
 **Files:**
+
 - Create: `service/checkpoints.py`
 - Modify: `service/worker.py`
 - Test: `tests/test_checkpoint_schema.py`
-
-- [ ] **Step 1: Define schema version and common fields**
+- **Step 1: Define schema version and common fields**
 
 Common checkpoint data:
 
@@ -274,7 +271,7 @@ Common checkpoint data:
 
 Do not include `stage` or `status` inside checkpoint data.
 
-- [ ] **Step 2: Define pending detection schema**
+- **Step 2: Define pending detection schema**
 
 Required nested shape:
 
@@ -291,47 +288,46 @@ Required nested shape:
 }
 ```
 
-- [ ] **Step 3: Define artifact semantics**
+- **Step 3: Define artifact semantics**
 
 Use:
 
 - `input_artifacts`: durable inputs needed to resume the stage, such as source video key, partial tracking key, raw analysis key, or player reference keys.
 - `output_artifacts`: durable outputs produced by the stage, such as tracking JSON key, analysis JSON key, annotated video key, SNS publish metadata, or checkpoint frame key.
-
-- [ ] **Step 4: Update worker writes**
+- **Step 4: Update worker writes**
 
 Replace ad hoc checkpoint dictionaries in `worker.py` with helper-built schemas for detect, track, upscale/analyze, annotate, upload, publish, and cancellation.
 
 ## Task 5: Tracking And Detection Checkpoints
 
 **Files:**
+
 - Modify: `service/worker.py`
 - Test: `tests/test_resume_endpoint.py`
-
-- [ ] **Step 1: Fix mid-track frame upload**
+- **Step 1: Fix mid-track frame upload**
 
 Replace `s3.upload_file(frame_jpeg, ...)` with `s3.put_object(request.bucket, frame_s3_key, frame_jpeg, "image/jpeg")`.
 
-- [ ] **Step 2: Store next unprocessed frame**
+- **Step 2: Store next unprocessed frame**
 
 For mid-track detection, checkpoint `resume_cursor.frame_idx` and route `resume_from_frame` should use the next unprocessed frame.
 
-- [ ] **Step 3: Store global and relative frame indices**
+- **Step 3: Store global and relative frame indices**
 
 Partial tracking JSON should preserve global `frame_idx` and include relative frame indices for selected clip-range resume.
 
-- [ ] **Step 4: Keep corrected boxes frame-scoped**
+- **Step 4: Keep corrected boxes frame-scoped**
 
 When resuming mid-track, corrected boxes apply to the resume frame only and should not rewrite earlier athlete identity state.
 
 ## Task 6: Upscale/Analysis Recovery
 
 **Files:**
+
 - Modify: `service/worker.py`
 - Modify: `service/checkpoints.py`
 - Test: `tests/test_checkpoint_schema.py`
-
-- [ ] **Step 1: Upload raw analysis checkpoint artifacts**
+- **Step 1: Upload raw analysis checkpoint artifacts**
 
 When `_run_upscale_analysis` writes local `analysis_raw.json`, upload it to the checkpoint bucket/prefix and write a checkpoint containing:
 
@@ -343,43 +339,43 @@ When `_run_upscale_analysis` writes local `analysis_raw.json`, upload it to the 
 }
 ```
 
-- [ ] **Step 2: Wire resume request fields**
+- **Step 2: Wire resume request fields**
 
 Automatic recovery should set `analysis_raw_s3_key`, `analysis_window_count`, and `analysis_current_context` when the selected checkpoint contains those values.
 
-- [ ] **Step 3: Decide upscaled-frame upload policy**
+- **Step 3: Decide upscaled-frame upload policy**
 
 Use coroutine upload only if profiling shows acceptable resource use. If too expensive, recover by recomputing upscaled frames from tracking and source video.
 
 ## Task 7: Automatic Crash Recovery Manager
 
 **Files:**
+
 - Modify: `service/reconciler.py`
 - Modify: `service/jobs_store.py`
 - Modify: `service/routes.py` or `service/app.py`
 - Test: `tests/test_reconciler.py`
-
-- [ ] **Step 1: Add recovery discovery**
+- **Step 1: Add recovery discovery**
 
 Create and maintain `job_recovery_index` from `JobsStore` writes. The index is the vision engine's durable queue for monitor/recovery work. The companion video analysis backend should not run the monitor loop.
 
-- [ ] **Step 2: Mark stale `RUNNING` jobs `INTERRUPTED`**
+- **Step 2: Mark stale `RUNNING` jobs `INTERRUPTED`**
 
 A job is stale when `job_state == RUNNING` and `last_heartbeat_at` is older than the configured timeout.
 
-- [ ] **Step 3: Claim ownership conditionally**
+- **Step 3: Claim ownership conditionally**
 
 Use a conditional update on `owner_instance_id` before creating the replacement job. The expected behavior is single-winner recovery when multiple workers start.
 
-- [ ] **Step 4: Create automatic replacement job**
+- **Step 4: Create automatic replacement job**
 
 Load original request and latest resumable checkpoint, build a replacement `TrackRequest`, create new lifecycle with root `origin_job_id` and immediate `parent_job_id`, set old `replacement_job_id`, update latest-job pointer, and schedule `_run_with_semaphore`.
 
-- [ ] **Step 5: Do not use manual `/resume` for crash recovery**
+- **Step 5: Do not use manual `/resume` for crash recovery**
 
 Crash recovery must run from startup/background reconciler logic.
 
-- [ ] **Step 6: Run recovery on a schedule**
+- **Step 6: Run recovery on a schedule**
 
 Replace one-shot `Reconciler.run_on_startup()` with a background manager started from `service/app.py` lifespan, similar to `HeartbeatTask`.
 
@@ -398,18 +394,18 @@ class RecoveryManager:
 
 On startup, call `reconcile_once()` immediately, then continue every 30 seconds. The heartbeat interval is currently 5 seconds, so a 90-second stale threshold gives missed-heartbeat tolerance without delaying recovery too long.
 
-- [ ] **Step 7: Use secondary index only for bounded operational lookup**
+- **Step 7: Use secondary index only for bounded operational lookup**
 
 If a Keyspaces secondary index is added, use it to accelerate bounded owner/state lookups, not as the primary recovery queue. The primary recovery scan should remain the bucketed `job_recovery_index` query.
 
 ## Task 8: Upload Stage Split And Retention
 
 **Files:**
+
 - Modify: `service/worker.py`
 - Modify: `service/jobs_store.py`
 - Test: `tests/test_checkpoint_schema.py`
-
-- [ ] **Step 1: Split upload checkpoints**
+- **Step 1: Split upload checkpoints**
 
 Write separate checkpoint updates for:
 
@@ -417,33 +413,32 @@ Write separate checkpoint updates for:
 - analysis JSON uploaded
 - annotated video uploaded
 - SNS publish attempted/sent
-
-- [ ] **Step 2: Add 48-hour retention metadata**
+- **Step 2: Add 48-hour retention metadata**
 
 Store `expires_at` in checkpoint data or artifact metadata for checkpoint frames, partial tracking, raw analysis, and annotated recovery artifacts.
 
-- [ ] **Step 3: Keep SNS non-idempotent for first refactor**
+- **Step 3: Keep SNS non-idempotent for first refactor**
 
 Do not add dedupe keys in this implementation pass.
 
 ## Task 9: Test And Verification Pass
 
 **Files:**
-- Modify: tests listed above
 
-- [ ] **Step 1: Run targeted tests**
+- Modify: tests listed above
+- **Step 1: Run targeted tests**
 
 ```bash
 source venv/bin/activate && pytest tests/test_resume_endpoint.py tests/test_job_cancellation.py tests/test_checkpoint_schema.py tests/test_reconciler.py -v
 ```
 
-- [ ] **Step 2: Run service test suite**
+- **Step 2: Run service test suite**
 
 ```bash
 source venv/bin/activate && pytest tests/ -v
 ```
 
-- [ ] **Step 3: Manual lifecycle smoke test**
+- **Step 3: Manual lifecycle smoke test**
 
 Using local/dev Keyspaces-compatible infra:
 
@@ -475,3 +470,4 @@ Using local/dev Keyspaces-compatible infra:
 
 1. Confirm exact `heartbeat_bucket` granularity for `job_recovery_index` (`YYYYMMDDHH` is recommended).
 2. Confirm whether the secondary index should be on `owner_instance_id`, `job_state`, or both, based on Keyspaces deployment limits and query patterns.
+
