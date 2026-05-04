@@ -98,9 +98,9 @@ Options:
 
 ## Acceptance criteria
 
-- DDL applied to every production/staging Keyspaces keyspace that backs vision-engine job persistence.
-- Companion backend keyspace (if shared) updated in the same change window.
-- Idempotent apply script committed and documented (this file + `scripts/keyspaces/README.md`).
+- [x] DDL applied to every production/staging Keyspaces keyspace that backs vision-engine job persistence. **Verified 2026-05-03** via `python scripts/keyspaces/apply_migrations.py --verify-only` against `cassandra.us-east-1.amazonaws.com`: `job_lifecycle.parent_job_id`, `job_lifecycle.replacement_job_id`, `job_recovery_index` all OK.
+- [ ] Companion backend keyspace (if shared) updated in the same change window.
+- [x] Idempotent apply script committed and documented (this file + `scripts/keyspaces/README.md`).
 
 ## References
 
