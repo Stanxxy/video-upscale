@@ -73,8 +73,8 @@ class KeyspacesClient:
                     None, partial(self.session.execute, query)
                 )
             return result.all()
-        except Exception as e:
-            logger.error("Keyspaces read error: %s", e)
+        except Exception:
+            logger.exception("Keyspaces read error")
             return []
 
     async def execute_write(
@@ -92,8 +92,8 @@ class KeyspacesClient:
                     None, partial(self.session.execute, query)
                 )
             return True
-        except Exception as e:
-            logger.error("Keyspaces write error: %s", e)
+        except Exception:
+            logger.exception("Keyspaces write error")
             return False
 
     def close(self) -> None:

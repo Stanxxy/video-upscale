@@ -23,6 +23,15 @@ from service.keyspaces_client import KeyspacesClient
 logger = logging.getLogger(__name__)
 
 
+def _as_utc_aware(dt: datetime | None) -> datetime | None:
+    """cassandra-driver returns naive UTC wall times from Keyspaces; normalize for Python compares."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 class JobsStore:
     """Async facade over Keyspaces for the 4 analysis-job tables."""
 
@@ -54,6 +63,8 @@ class JobsStore:
         current_frame: int = 0,
         total_frames: int = 0,
     ) -> bool:
+        # Keyspaces columns are text; cassandra-driver binds uuid.UUID as CQL uuid.
+        video_id = "" if video_id is None else str(video_id)
         now = datetime.now(timezone.utc)
         q = (
             f"INSERT INTO {self._ks}.job_lifecycle "
@@ -103,10 +114,10 @@ class JobsStore:
             "stage_message": r.stage_message or "",
             "error_message": r.error_message or "",
             "owner_instance_id": r.owner_instance_id or "",
-            "last_heartbeat_at": r.last_heartbeat_at,
-            "started_at": r.started_at,
-            "updated_at": r.updated_at,
-            "completed_at": r.completed_at,
+            "last_heartbeat_at": _as_utc_aware(r.last_heartbeat_at),
+            "started_at": _as_utc_aware(r.started_at),
+            "updated_at": _as_utc_aware(r.updated_at),
+            "completed_at": _as_utc_aware(r.completed_at),
         }
 
     async def update_progress(
@@ -319,9 +330,9 @@ class JobsStore:
                     "video_id": r.video_id or "",
                     "job_state": r.job_state or "",
                     "owner_instance_id": r.owner_instance_id or "",
-                    "last_heartbeat_at": r.last_heartbeat_at,
+                    "last_heartbeat_at": _as_utc_aware(r.last_heartbeat_at),
                     "heartbeat_bucket": r.heartbeat_bucket,
-                    "updated_at": r.updated_at,
+                    "updated_at": _as_utc_aware(r.updated_at),
                 })
         return results
 
@@ -380,7 +391,7 @@ class JobsStore:
             "stage_name": sn.value,
             "completed": r.completed or False, # what does this flag mean? Global completed or stage completed????
             "checkpoint_data": data,
-            "updated_at": r.updated_at,
+            "updated_at": _as_utc_aware(r.updated_at),
         }
 
     async def get_all_checkpoints(self, job_id: str) -> list[dict[str, Any]]:
@@ -404,7 +415,7 @@ class JobsStore:
                 "stage_name": sn.value,
                 "completed": r.completed or False,
                 "checkpoint_data": data,
-                "updated_at": r.updated_at,
+                "updated_at": _as_utc_aware(r.updated_at),
             })
         return result
 
@@ -428,7 +439,11 @@ class JobsStore:
         if not rows:
             return None
         r = rows[0]
-        return {"job_id": r.job_id, "job_state": r.job_state, "updated_at": r.updated_at}
+        return {
+            "job_id": r.job_id,
+            "job_state": r.job_state,
+            "updated_at": _as_utc_aware(r.updated_at),
+        }
 
     async def list_running_jobs(self, owner_instance_id: str) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []

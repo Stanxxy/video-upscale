@@ -209,8 +209,10 @@ async def run_job(
             video_path, request.start_time, request.end_time,
         )
         logger.info(
-            "Job %s: time range start_frame=%d end_frame=%d",
-            job_id, start_frame, end_frame,
+            "Job %s: time range start_frame=%d end_frame=%s",
+            job_id,
+            start_frame,
+            end_frame if end_frame is not None else "full_video",
         )
 
         # Phase 2: Override start_frame if resuming from checkpoint

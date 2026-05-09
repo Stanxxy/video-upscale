@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 os.environ.setdefault("TQDM_DISABLE", "1")
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 
 # Load .env early so non-prefixed vars (KEYSPACES_*, etc.) are available
 load_dotenv()
@@ -70,6 +70,21 @@ def create_app() -> FastAPI:
         version="2.0.0",
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def log_unhandled_http_exceptions(request: Request, call_next):
+        try:
+            return await call_next(request)
+        except HTTPException:
+            raise
+        except Exception:
+            service_logger.exception(
+                "Unhandled exception for %s %s",
+                request.method,
+                request.url.path,
+            )
+            raise
+
     app.include_router(router)
     return app
 

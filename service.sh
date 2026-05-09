@@ -239,7 +239,7 @@ cmd_logs() {
         log_path=$(<"$CURRENT_LOG_POINTER")
     fi
     if [[ -z "$log_path" || ! -f "$log_path" ]]; then
-        yellow "No log file found (start the service with ./service.sh start first)"
+        yellow "No log file found (run ./service.sh start or ./service.sh dev first)"
         return 1
     fi
     tail -f "$log_path"
@@ -284,7 +284,17 @@ cmd_dev() {
     fi
 
     yellow "Log level: $dev_log_level (set BJJ_LOG_LEVEL to override)"
-    exec "${uvicorn_cmd[@]}"
+
+    allocate_log_file
+    green "Dev logs (tee): terminal + $LOG_FILE"
+    echo "  Symlink: $PROJECT_DIR/service.log"
+
+    local uvicorn_status=0
+    set +e
+    "${uvicorn_cmd[@]}" 2>&1 | tee -a "$LOG_FILE"
+    uvicorn_status=${PIPESTATUS[0]}
+    set -e
+    return "$uvicorn_status"
 }
 
 # ── Usage ──────────────────────────────────────────────────────
@@ -294,11 +304,11 @@ Usage: $(basename "$0") {start|dev|stop|restart|status|logs}
 
 Commands:
   start     Start in the background (nohup -> logs/service-YYYYMMDD-HHMMSS-NNN.log)
-  dev       Start in the foreground with uvicorn --reload (local development)
+  dev       Foreground uvicorn --reload; logs to terminal and logs/service-*.log (same as start)
   stop      Stop the running service
   restart   Restart the service
   status    Check if the service is running
-  logs      Tail the log file from the last background start
+  logs      Tail -f the log file from the last start or dev session
 
 Environment variables:
   BJJ_HOST           Listen host     (default: 0.0.0.0)

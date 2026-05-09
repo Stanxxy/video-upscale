@@ -79,6 +79,22 @@ def _schedule_job(job_id: str, request: TrackRequest) -> None:
     task = asyncio.create_task(_run_with_semaphore(job_id, request))
     _active_tasks[job_id] = task
 
+    def _log_uncaught(t: asyncio.Task) -> None:
+        if t.cancelled():
+            return
+        try:
+            exc = t.exception()
+        except asyncio.CancelledError:
+            return
+        if exc is not None:
+            logger.error(
+                "Background job task %s exited with uncaught exception",
+                job_id,
+                exc_info=exc,
+            )
+
+    task.add_done_callback(_log_uncaught)
+
 
 # ---------------------------------------------------------------------------
 # QA client
