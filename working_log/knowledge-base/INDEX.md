@@ -35,5 +35,6 @@ See `bjj-team-meta` skill for how to add entries.
 ## Contracts (sharable with bjj-vision-backend)
 
 - [Checkpoint Artifacts V1 Addendum](../contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md) — companion to `CHECKPOINT_DATA_SCHEMA_V1.md`; defines `upscale_analyze`/`annotate`/`upload`/`publish` artifact keys.
+- [Job rotation, handoff, and resume](../contracts/bjj_backend/JOB_ROTATION_HANDOFF_AND_RESUME.md) — `video_id` / `latest_job` / `replacement_job_id`; normative rules for the analysis service after correction or crash recovery.
 
 ## Mistakes

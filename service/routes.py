@@ -13,8 +13,9 @@ from service.checkpoints import (
     WorkerStateSnapshot,
     build_cancellation_checkpoint,
     build_replaced_by_new_job,
-    build_resume_overrides,
+    build_resume_plan,
     build_verified_boxes_checkpoint,
+    resume_plan_to_request_fields,
     select_correction_checkpoint,
     worker_state_from,
 )
@@ -338,12 +339,15 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
     checkpoints = await _jobs_store.get_all_checkpoints(job_id)
     correction_stage, _ = select_correction_checkpoint(checkpoints)
 
+    resume_plan = build_resume_plan(checkpoints)
+
     # Build resume request: original params + boxes from body + checkpoint-derived overrides.
     resume_params = {
         **orig_request,
         "box_a": body.box_a,
         "box_b": body.box_b,
-        **build_resume_overrides(checkpoints),
+        **resume_plan.track_request_overrides,
+        **resume_plan_to_request_fields(resume_plan),
     }
     if "resume_tracking_s3_key" in resume_params:
         resume_params["resume_from_job_id"] = job_id
@@ -463,7 +467,20 @@ async def recover_interrupted_job(lifecycle: dict) -> None:
     resume_params = json.loads(request_json)
     checkpoints = await _jobs_store.get_all_checkpoints(job_id)
     correction_stage, _ = select_correction_checkpoint(checkpoints)
-    overrides = build_resume_overrides(checkpoints)
+    resume_plan = build_resume_plan(checkpoints)
+    if resume_plan.pipeline_already_complete:
+        logger.info(
+            "Recovery skip: job %s checkpoints show pipeline already terminal-complete",
+            job_id,
+        )
+        _require_write(
+            await _jobs_store.set_state(job_id, JobState.COMPLETED),
+            "mark stale job completed",
+        )
+        return
+
+    overrides = dict(resume_plan.track_request_overrides)
+    overrides.update(resume_plan_to_request_fields(resume_plan))
     if "resume_tracking_s3_key" in overrides:
         overrides["resume_from_job_id"] = job_id
     resume_params.update(overrides)

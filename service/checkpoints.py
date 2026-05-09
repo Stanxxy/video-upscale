@@ -12,6 +12,7 @@ All builders emit the V1 envelope:
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, NamedTuple
 
 from service.analysis_keyspaces_enums import PipelineStage
@@ -102,6 +103,22 @@ def build_detect_initial_pending(
             "suggested_boxes": suggested_boxes,
         },
     )
+
+
+def build_tracking_started(
+    *,
+    clip_start_frame: int,
+    clip_end_frame: int | None,
+    worker_state: WorkerStateSnapshot,
+) -> dict[str, Any]:
+    """Lightweight checkpoint when SAM2 tracking begins (visibility only)."""
+    extras: dict[str, Any] = {
+        "reason": "tracking_started",
+        "resume_cursor": {"frame_idx": clip_start_frame},
+    }
+    if clip_end_frame is not None:
+        extras["clip_end_frame"] = clip_end_frame
+    return make_envelope(worker_state=worker_state, **extras)
 
 
 def build_track_progress(
@@ -343,9 +360,157 @@ def build_cancellation_checkpoint(
 # ---------------------------------------------------------------------------
 
 
+def _checkpoint_ts(cp: dict[str, Any]) -> datetime | None:
+    """Parse updated_at for ordering duplicate stage rows."""
+    ts = cp.get("updated_at")
+    if ts is None:
+        return None
+    if isinstance(ts, datetime):
+        return ts
+    return None
+
+
+def latest_checkpoint_data_by_stage(
+    checkpoints: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Pick the newest checkpoint row per ``stage_name`` by ``updated_at``.
+
+    Keyspaces may contain multiple INSERTs per (job_id, stage_name); arbitrary
+    iteration order would pick the wrong row. Rows without ``updated_at`` sort
+    first so explicit timestamps win.
+    """
+    def sort_key(cp: dict[str, Any]) -> tuple[float, int]:
+        ts = _checkpoint_ts(cp)
+        if ts is None:
+            return (0.0, id(cp))
+        return (ts.timestamp(), id(cp))
+
+    sorted_cps = sorted(checkpoints, key=sort_key)
+    out: dict[str, dict[str, Any]] = {}
+    for cp in sorted_cps:
+        out[cp["stage_name"]] = cp.get("checkpoint_data") or {}
+    return out
+
+
 def checkpoint_by_stage(checkpoints: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Return checkpoint data keyed by stage name."""
-    return {cp["stage_name"]: cp.get("checkpoint_data", {}) for cp in checkpoints}
+    """Return checkpoint data keyed by stage name (latest row per stage)."""
+    return latest_checkpoint_data_by_stage(checkpoints)
+
+
+class ResumePlan(NamedTuple):
+    """Deterministic resume decisions from durable checkpoints."""
+
+    track_request_overrides: dict[str, Any]
+    """Fields to merge into ``TrackRequest`` (resume keys, analysis hints)."""
+
+    skip_tracking_runner: bool
+    """If True, worker must not call ``run_tracking_job`` — load tracking JSON from S3."""
+
+    pipeline_already_complete: bool
+    """Job finished successfully; recovery should not spawn a replacement worker."""
+
+    seed_progress_floor: float
+    """Minimum lifecycle progress_percent — replacement jobs must not regress below this."""
+
+    existing_upload_artifacts: dict[str, str | None]
+    """Latest cumulative upload-row artifact keys (skip re-upload when they match)."""
+
+    terminal_publish_complete: bool
+    """Latest publish checkpoint indicates SNS stage already finished."""
+
+
+def build_resume_plan(checkpoints: list[dict[str, Any]]) -> ResumePlan:
+    """Compose resume routing from the latest checkpoint row per stage."""
+    by_stage = latest_checkpoint_data_by_stage(checkpoints)
+    overrides: dict[str, Any] = {}
+
+    track_cp = by_stage.get(PipelineStage.TRACK.value, {})
+    track_artifacts = track_cp.get("artifacts") or {}
+    partial_key = track_artifacts.get("partial_tracking_s3_key") or track_cp.get(
+        "partial_tracking_s3_key"
+    )
+    full_tracking_key = track_artifacts.get("tracking_s3_key") or track_cp.get(
+        "tracking_s3_key"
+    )
+
+    upscale_cp = by_stage.get(PipelineStage.UPSCALE_ANALYZE.value, {})
+    upscale_artifacts = upscale_cp.get("artifacts") or {}
+    upscale_cursor = upscale_cp.get("resume_cursor") or {}
+
+    pipeline_already_complete = False
+    for cp in checkpoints:
+        sn = cp.get("stage_name")
+        if sn == PipelineStage.PUBLISH.value and cp.get("completed"):
+            pipeline_already_complete = True
+            break
+        # skip_upscale QA path: terminal upload row has completed=True
+        if sn == PipelineStage.UPLOAD.value and cp.get("completed"):
+            pipeline_already_complete = True
+            break
+
+    seed_ws = worker_state_from(checkpoints) or {}
+    seed_floor = float(seed_ws.get("progress_percent") or 0.0)
+
+    upload_data = by_stage.get(PipelineStage.UPLOAD.value, {})
+    uarts = upload_data.get("artifacts") or {}
+    existing_upload_artifacts: dict[str, str | None] = {
+        "tracking_s3_key": uarts.get("tracking_s3_key"),
+        "analysis_s3_key": uarts.get("analysis_s3_key"),
+        "annotated_video_s3_key": uarts.get("annotated_video_s3_key"),
+    }
+
+    terminal_publish_complete = False
+    pub_latest = by_stage.get(PipelineStage.PUBLISH.value, {})
+    if pub_latest.get("reason") == "publish_completed":
+        terminal_publish_complete = True
+
+    skip_tracking_runner = False
+
+    # 1) Upscale/analysis crash — dominates partial-track resume
+    if upscale_artifacts.get("analysis_raw_s3_key"):
+        upscale_tracking_key = upscale_artifacts.get("tracking_s3_key")
+        if upscale_tracking_key:
+            overrides["resume_tracking_s3_key"] = upscale_tracking_key
+        overrides["resume_from_frame"] = END_OF_TRACKING_SENTINEL
+        overrides["analysis_raw_s3_key"] = upscale_artifacts["analysis_raw_s3_key"]
+        overrides["analysis_window_count"] = int(
+            upscale_cursor.get("analysis_window_count", 0)
+        )
+        overrides["analysis_current_context"] = upscale_cp.get(
+            "analysis_current_context", ""
+        )
+        skip_tracking_runner = True
+
+    # 2) Mid-track partial JSON — resume inside SAM2 / run_tracking_job
+    elif partial_key:
+        overrides["resume_tracking_s3_key"] = partial_key
+        overrides["resume_from_frame"] = next_unprocessed_frame(track_cp)
+
+    # 3) Full tracking JSON in S3 (post-upload) but no analysis checkpoint yet
+    elif full_tracking_key:
+        overrides["resume_tracking_s3_key"] = full_tracking_key
+        overrides["resume_from_frame"] = END_OF_TRACKING_SENTINEL
+        skip_tracking_runner = True
+
+    return ResumePlan(
+        track_request_overrides=overrides,
+        skip_tracking_runner=skip_tracking_runner,
+        pipeline_already_complete=pipeline_already_complete,
+        seed_progress_floor=seed_floor,
+        existing_upload_artifacts=existing_upload_artifacts,
+        terminal_publish_complete=terminal_publish_complete,
+    )
+
+
+def resume_plan_to_request_fields(plan: ResumePlan) -> dict[str, Any]:
+    """Flatten upload/publish hints for :class:`TrackRequest` merge."""
+    eu = plan.existing_upload_artifacts
+    return {
+        "resume_existing_upload_tracking_key": eu.get("tracking_s3_key"),
+        "resume_existing_upload_analysis_key": eu.get("analysis_s3_key"),
+        "resume_existing_upload_annotated_key": eu.get("annotated_video_s3_key"),
+        "resume_terminal_publish_done": plan.terminal_publish_complete,
+    }
 
 
 def select_correction_checkpoint(
@@ -395,7 +560,7 @@ def next_unprocessed_frame(checkpoint_data: dict[str, Any]) -> int:
 
 def worker_state_from(checkpoints: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the latest pipeline-stage checkpoint's worker_state block, if any."""
-    by_stage = checkpoint_by_stage(checkpoints)
+    by_stage = latest_checkpoint_data_by_stage(checkpoints)
     for stage in reversed(STAGE_ORDER):
         data = by_stage.get(stage.value)
         if data and data.get("worker_state"):
@@ -409,44 +574,6 @@ def build_resume_overrides(checkpoints: list[dict[str, Any]]) -> dict[str, Any]:
     Used by both submit_detection_response (manual resume) and
     recover_interrupted_job (automatic recovery) so they stay in sync.
 
-    Priority: when both a track checkpoint with `partial_tracking_s3_key`
-    AND an upscale_analyze checkpoint with `analysis_raw_s3_key` are
-    present, the upscale_analyze checkpoint TAKES PRECEDENCE because
-    tracking is logically complete (the upscale stage already started).
-    `resume_tracking_s3_key` is overwritten to point at the full tracking
-    JSON, and `resume_from_frame` is set to `END_OF_TRACKING_SENTINEL`
-    so the worker's tracking pass becomes a no-op.
+    Delegates to :func:`build_resume_plan` — see ``ResumePlan`` for precedence.
     """
-    overrides: dict[str, Any] = {}
-    by_stage = checkpoint_by_stage(checkpoints)
-
-    # Mid-track partial — set from track stage if either pending_detection or
-    # tracking_progress wrote an artifact pointer.
-    track_cp = by_stage.get(PipelineStage.TRACK.value, {})
-    track_artifacts = track_cp.get("artifacts") or {}
-    partial_key = track_artifacts.get("partial_tracking_s3_key") or track_cp.get(
-        "partial_tracking_s3_key"
-    )
-    if partial_key:
-        overrides["resume_tracking_s3_key"] = partial_key
-        overrides["resume_from_frame"] = next_unprocessed_frame(track_cp)
-
-    # Crash during/after upscale_analyze takes precedence: full tracking is
-    # complete, so set the sentinel and forward analysis fields.
-    upscale_cp = by_stage.get(PipelineStage.UPSCALE_ANALYZE.value, {})
-    upscale_artifacts = upscale_cp.get("artifacts") or {}
-    upscale_cursor = upscale_cp.get("resume_cursor") or {}
-    if upscale_artifacts.get("analysis_raw_s3_key"):
-        upscale_tracking_key = upscale_artifacts.get("tracking_s3_key")
-        if upscale_tracking_key:
-            overrides["resume_tracking_s3_key"] = upscale_tracking_key
-        overrides["resume_from_frame"] = END_OF_TRACKING_SENTINEL
-        overrides["analysis_raw_s3_key"] = upscale_artifacts["analysis_raw_s3_key"]
-        overrides["analysis_window_count"] = int(
-            upscale_cursor.get("analysis_window_count", 0)
-        )
-        overrides["analysis_current_context"] = upscale_cp.get(
-            "analysis_current_context", ""
-        )
-
-    return overrides
+    return dict(build_resume_plan(checkpoints).track_request_overrides)

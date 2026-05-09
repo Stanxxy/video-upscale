@@ -15,6 +15,8 @@ Every builder MUST emit the V1 envelope shape:
 }
 """
 from service.analysis_keyspaces_enums import PipelineStage
+from datetime import datetime, timezone
+
 from service.checkpoints import (
     WorkerStateSnapshot,
     make_envelope,
@@ -32,6 +34,8 @@ from service.checkpoints import (
     build_verified_boxes_checkpoint,
     build_cancellation_checkpoint,
     build_resume_overrides,
+    build_resume_plan,
+    latest_checkpoint_data_by_stage,
     worker_state_from,
     END_OF_TRACKING_SENTINEL,
 )
@@ -561,3 +565,49 @@ def test_worker_state_from_skips_stages_without_worker_state():
     ws = worker_state_from(cps)
     assert ws is not None
     assert ws["progress_percent"] == 10.0
+
+
+def test_build_resume_plan_full_tracking_without_analysis_skips_runner():
+    """Crash after tracking JSON uploaded but before raw analysis checkpoint."""
+    plan = build_resume_plan([
+        _cp_record("track", {
+            "schema_version": 1,
+            "pending_detection": None,
+            "reason": "track_completed",
+            "artifacts": {"tracking_s3_key": "folder/v_tracked.json"},
+            "worker_state": _ws(55.0).to_dict(),
+        }),
+    ])
+    assert plan.skip_tracking_runner is True
+    assert plan.track_request_overrides["resume_tracking_s3_key"] == "folder/v_tracked.json"
+    assert plan.track_request_overrides["resume_from_frame"] == END_OF_TRACKING_SENTINEL
+
+
+def test_build_resume_plan_pipeline_already_complete_publish():
+    plan = build_resume_plan([
+        _cp_record(
+            "publish",
+            {"reason": "publish_completed", "worker_state": _ws(100.0).to_dict()},
+            completed=True,
+        ),
+    ])
+    assert plan.pipeline_already_complete is True
+
+
+def test_latest_checkpoint_data_by_stage_prefers_newer_updated_at():
+    t_old = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    t_new = datetime(2026, 6, 1, tzinfo=timezone.utc)
+    cps = [
+        {
+            "stage_name": "track",
+            "checkpoint_data": {"reason": "old", "worker_state": {"progress_percent": 10.0}},
+            "updated_at": t_old,
+        },
+        {
+            "stage_name": "track",
+            "checkpoint_data": {"reason": "new", "worker_state": {"progress_percent": 55.0}},
+            "updated_at": t_new,
+        },
+    ]
+    by_stage = latest_checkpoint_data_by_stage(cps)
+    assert by_stage["track"]["reason"] == "new"

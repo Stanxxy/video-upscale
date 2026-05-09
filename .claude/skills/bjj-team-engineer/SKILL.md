@@ -84,8 +84,9 @@ If any item applies, mark the task as `architecture-impacting` and enforce the g
 5. **TDD cycle** — Write failing test, implement minimally, verify pass. Compose with `superpowers:test-driven-development` for structured TDD.
 6. **Milestone rechecks** — For architecture-impacting work, complete M1/M2/M3 rechecks and re-review deviations.
 7. **Build/lint check** — Run `npm run build` (frontend) or `pytest` (backend) to verify.
-8. **Evaluator loop** — Hand off to Evaluator and iterate with Designer/Engineer feedback until all evaluator findings are closed with evidence.
+8. **Evaluator loop** — Hand off to Evaluator and iterate with Designer/Engineer feedback until all evaluator findings are closed with evidence. When the Evaluator lists **legacy code or comment removal** (or replacement) in `## Legacy and Dead-Code Findings` or in the **Engineer action list** under `## Next Handoff`, treat those as **mandatory implementation work**: delete dead paths, remove stale comments and commented-out blocks, update or delete obsolete docs in scope—do not leave them as “follow-up notes.” Re-run search and tests to prove the legacy surface is gone or correctly replaced.
 9. **PM verification handoff** — After evaluator convergence, hand off to PM for final requirement-level verification before Meta capture.
+10. **PM verification bounce-back** — When `bjj-team-product-manager` reports **`failed-returned-to-engineering`**, **`blocked-awaiting-engineering`**, or that the feature **cannot be verified** until behavior, harness, env, or docs change: re-enter **`bjj-team-evaluator`** then **`bjj-team-engineer`** until Evaluator converges again; PM re-runs verification. Do not treat work as complete toward Meta until PM `## PM Verification Loop Status` is **`passed`**. If PM is **`blocked-awaiting-user`**, support with docs, runnable URLs, or harnesses as soon as unblocked—do not require Meta until PM passes.
 
 ## Frontend Patterns
 - **Feature modules**: `src/features/{feature-name}/`
@@ -106,11 +107,13 @@ If any item applies, mark the task as `architecture-impacting` and enforce the g
 - The Engineer must enter a review loop with `bjj-team-evaluator` for behavior-impacting changes.
 - Early exit is forbidden. Loop continues until all evaluator findings are resolved or explicitly waived with owner-approved rationale.
 - Every rejection from evaluator must be addressed with concrete diffs and verification evidence.
+- **Legacy and dead-code directives** from the Evaluator (including whole-repo findings outside the original diff) are in scope for the same loop: implement removal or replacement, cite paths touched, and supply verification evidence—same bar as functional bugs.
 - Engineer may challenge evaluator findings, but closure requires explicit mutual agreement.
 
 ## Gates
 - Architecture-impacting work has approved governance package (AIP + task graph + runbook)
 - M1/M2/M3 milestone rechecks completed for architecture-impacting work
+- All `bjj-team-evaluator` **legacy removal / replacement** action items are done or PM-approved `waive` with evidence recorded in the Engineer response
 - `npm run build` exits 0 (frontend)
 - `pytest tests/ -v` exits 0 (backend)
 - No TypeScript `any` types without justification
@@ -138,11 +141,12 @@ If any item applies, mark the task as `architecture-impacting` and enforce the g
 - Don't start architecture-impacting implementation without governance package approval
 - Don't treat local code familiarity as substitute for global architecture review
 - Don't deviate from approved governance package without governance re-review
+- Don't defer `bjj-team-evaluator` legacy removals to a “cleanup PR” unless PM explicitly rescopes and documents the waiver
 
 ## Required Output Contract (Mandatory)
 Every Engineer response must include these sections:
 
-1. `## Changes Implemented`
+1. `## Changes Implemented` — Include paths and symbols for **legacy removal or replacement** when responding to Evaluator directives (not only the original feature delta).
 2. `## Verification Evidence`
 3. `## Governance Gate Status`
 4. `## Risks/Follow-ups`

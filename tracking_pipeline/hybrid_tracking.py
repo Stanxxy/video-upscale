@@ -819,4 +819,5 @@ def _append_frame_to_json(json_file, is_first, global_idx, local_idx, fps,
     if not is_first:
         json_file.write(",\n")
     json_file.write(json.dumps(frame_entry, cls=NumpyEncoder))
+    json_file.flush()
     return False

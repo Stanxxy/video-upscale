@@ -392,6 +392,48 @@ async def test_detection_response_not_found(service_client):
 
 
 @pytest.mark.asyncio
+async def test_recover_interrupted_job_skips_spawn_when_pipeline_terminal(
+    service_components,
+):
+    """Stale INTERRUPTED row with publish terminal checkpoint → mark COMPLETED, no spawn."""
+    from service.routes import recover_interrupted_job
+
+    _, job_store, jobs_store = service_components
+    req = TrackRequest(bucket="b", key="k.mp4")
+    job = await job_store.create_job(req)
+    await jobs_store.create_lifecycle(job.job_id, "vid-term", "u")
+    await jobs_store.save_request(job.job_id, req.model_dump_json())
+    await jobs_store.set_state(job.job_id, JobState.INTERRUPTED)
+    await jobs_store.write_checkpoint(
+        job.job_id,
+        PipelineStage.PUBLISH,
+        True,
+        {
+            "schema_version": 1,
+            "pending_detection": None,
+            "reason": "publish_completed",
+            "artifacts": {
+                "sns_topic_arn": "arn:aws:sns:x",
+                "sns_event_count": 1,
+                "sns_completion_sent": True,
+            },
+            "worker_state": {
+                "progress_percent": 100.0,
+                "current_frame": 0,
+                "total_frames": 0,
+                "stage_progress_fraction": 1.0,
+            },
+        },
+    )
+
+    lifecycle = await jobs_store.get_lifecycle(job.job_id)
+    await recover_interrupted_job(lifecycle)
+
+    lc = await jobs_store.get_lifecycle(job.job_id)
+    assert lc["job_state"] == JobState.COMPLETED.value
+
+
+@pytest.mark.asyncio
 async def test_detection_response_wrong_state(service_client, service_components):
     """409 when job is not in AWAITING_CORRECTION state."""
     _, job_store, jobs_store = service_components

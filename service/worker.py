@@ -20,17 +20,20 @@ from uuid import uuid4
 
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import (
+    END_OF_TRACKING_SENTINEL,
     WorkerStateSnapshot,
     build_annotate_completed,
     build_detect_initial_pending,
     build_download_completed,
     build_publish_completed,
+    build_tracking_started,
     build_track_completed,
     build_track_mid_loss,
     build_track_progress,
     build_upload_incremental,
     build_upscale_started,
     build_upscale_window_progress,
+    build_verified_boxes_checkpoint,
     should_flush_analysis,
 )
 from service.config import ServiceConfig
@@ -84,6 +87,11 @@ def _make_worker_state(
         total_frames=total_frames,
         stage_progress_fraction=stage_progress_fraction,
     )
+
+
+def _pct_at_least(pct: float, floor: float) -> float:
+    """Replacement jobs seed lifecycle progress — never regress below ``floor``."""
+    return max(pct, floor)
 
 
 def _ensure_models_released():
@@ -165,14 +173,24 @@ async def run_job(
         # Mark job as running in Keyspaces (set_state is authoritative for state)
         await jobs_store.set_state(job_id, JobState.RUNNING)
 
+        _lifecycle_row = await jobs_store.get_lifecycle(job_id)
+        progress_floor = float(
+            (_lifecycle_row or {}).get("progress_percent") or 0.0,
+        )
+
         # ============================================================
         # STAGE 1: DOWNLOAD (0-10%) [for both new and resumed jobs]
         # ============================================================
         logger.info("Job %s: stage download (0-10%%)", job_id)
         await job_store.update_job(
-            job_id, status=JobStatus.DOWNLOADING, progress_percent=2.0,
+            job_id,
+            status=JobStatus.DOWNLOADING,
+            progress_percent=_pct_at_least(2.0, progress_floor),
         )
-        await jobs_store.update_progress(job_id, PipelineStage.DOWNLOAD, 2.0)
+        await jobs_store.update_progress(
+            job_id, PipelineStage.DOWNLOAD,
+            _pct_at_least(2.0, progress_floor),
+        )
 
         s3: S3Client = _make_s3(config)
         s3.ensure_bucket(request.bucket)
@@ -189,13 +207,14 @@ async def run_job(
 
         # TODO: to have the right percentage, a method should be called to 
         # get the progress percent based on the lifecycle of the original job.
-        await job_store.update_job(job_id, progress_percent=10.0) # progress_percent should be based on checkpoint of the original job
-        await jobs_store.update_progress(job_id, PipelineStage.DOWNLOAD, 10.0) # progress_percent should be based on checkpoint of the original job
+        dl_pct = _pct_at_least(10.0, progress_floor)
+        await job_store.update_job(job_id, progress_percent=dl_pct)
+        await jobs_store.update_progress(job_id, PipelineStage.DOWNLOAD, dl_pct)
         await jobs_store.write_checkpoint(
             job_id, PipelineStage.DOWNLOAD, False,
             build_download_completed(
                 worker_state=_make_worker_state(
-                    progress_percent=10.0, stage_progress_fraction=1.0,
+                    progress_percent=dl_pct, stage_progress_fraction=1.0,
                 ),
             ),
         )
@@ -204,21 +223,29 @@ async def run_job(
         if _is_cancelled(job_id, job_store):
             return
 
-        # Parse time range BEFORE detection so start_frame is available
-        start_frame, end_frame = _parse_time_range(
+        # Parse time range BEFORE detection so clip bounds are available
+        clip_start_frame, end_frame = _parse_time_range(
             video_path, request.start_time, request.end_time,
         )
         logger.info(
-            "Job %s: time range start_frame=%d end_frame=%s",
+            "Job %s: time range clip_start_frame=%d end_frame=%s",
             job_id,
-            start_frame,
+            clip_start_frame,
             end_frame if end_frame is not None else "full_video",
         )
 
-        # Phase 2: Override start_frame if resuming from checkpoint
-        if request.resume_from_frame is not None:
-            start_frame = request.resume_from_frame
-            logger.info("Job %s: resuming tracking from frame %d", job_id, start_frame)
+        # SAM2 resumes mid-clip from checkpoint; annotate/upscale clip logic uses clip_start_frame.
+        tracking_start_frame = clip_start_frame
+        if (
+            request.resume_from_frame is not None
+            and request.resume_from_frame != END_OF_TRACKING_SENTINEL
+        ):
+            tracking_start_frame = request.resume_from_frame
+            logger.info(
+                "Job %s: resuming tracking from frame %d",
+                job_id,
+                tracking_start_frame,
+            )
 
         # ============================================================
         # STAGE 2: DETECT + HUMAN VERIFY (10-15%)
@@ -233,17 +260,33 @@ async def run_job(
                 "box_a=%s box_b=%s",
                 job_id, box_a, box_b,
             )
+            det_pct = _pct_at_least(15.0, progress_floor)
             await job_store.update_job(
-                job_id, status=JobStatus.DETECTING, progress_percent=15.0,
-            ) # progress_percent should be based on checkpoint of the original job
-            # only detect is the defined stage.
-            await jobs_store.update_progress(job_id, PipelineStage.DETECT, 15.0) # progress_percent should be based on checkpoint of the original job
+                job_id, status=JobStatus.DETECTING, progress_percent=det_pct,
+            )
+            await jobs_store.update_progress(job_id, PipelineStage.DETECT, det_pct)
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.DETECT, False,
+                build_verified_boxes_checkpoint(
+                    box_a,
+                    box_b,
+                    PipelineStage.DETECT,
+                    worker_state=_make_worker_state(
+                        progress_percent=det_pct,
+                        current_frame=0,
+                        total_frames=0,
+                        stage_progress_fraction=1.0,
+                    ),
+                ),
+            )
         else:
+            det_pct_lo = _pct_at_least(10.0, progress_floor)
             await job_store.update_job(
-                job_id, status=JobStatus.DETECTING, progress_percent=10.0,
-            ) # progress_percent should be based on checkpoint of the original job
-            # only detect is the defined stage.
-            await jobs_store.update_progress(job_id, PipelineStage.DETECT, 10.0) # progress_percent should be based on checkpoint of the original job   
+                job_id, status=JobStatus.DETECTING, progress_percent=det_pct_lo,
+            )
+            await jobs_store.update_progress(
+                job_id, PipelineStage.DETECT, det_pct_lo,
+            )
 
             # Import heavy ML deps lazily
             # TODO: the dependency should be imported only once at the start of vision engine.
@@ -251,7 +294,7 @@ async def run_job(
             from service.tracking_runner import run_detect, capture_frame_jpeg
 
             # Detect at the start frame (first frame of the requested range)
-            frame_idx = start_frame
+            frame_idx = tracking_start_frame
             candidates = await loop.run_in_executor(
                 None,
                 lambda: run_detect(
@@ -301,7 +344,7 @@ async def run_job(
                     candidates=candidates,
                     suggested_boxes=suggested_boxes,
                     worker_state=_make_worker_state(
-                        progress_percent=10.0, stage_progress_fraction=0.0,
+                        progress_percent=det_pct_lo, stage_progress_fraction=0.0,
                     ),
                 ),
             )
@@ -314,100 +357,150 @@ async def run_job(
         # ============================================================
         # STAGE 3: TRACKING (15-55%)
         # ============================================================
-        # TODO: tracking progress_percent should be decided based on real frames the total frames in the video.
-        # This is not the case now.
-        # When resuming from checkpoint, the progress_percent should be decided based on the frames in the checkpoint.
         logger.info("Job %s: stage tracking (15-55%%)", job_id)
+        track_stage_pct = _pct_at_least(15.0, progress_floor)
         await job_store.update_job(
-            job_id, status=JobStatus.TRACKING, progress_percent=15.0,
-        ) # progress_percent should be based on checkpoint of the original job
-        await jobs_store.update_progress(job_id, PipelineStage.TRACK, 15.0) # progress_percent should be based on checkpoint of the original job
+            job_id, status=JobStatus.TRACKING, progress_percent=track_stage_pct,
+        )
+        await jobs_store.update_progress(job_id, PipelineStage.TRACK, track_stage_pct)
 
         from service.tracking_runner import run_tracking_job
 
-        # Build sync progress callback -> async Keyspaces (two cadences):
-        #   1-second  → lifecycle row update (heartbeat)
-        #   30-second → partial-tracking S3 upload + V1 track_progress checkpoint
-        # Tracking spans 15%-55% (40% range)
-        _last_ks_write = 0.0
-        _last_partial_upload = 0.0
-
-        def tracking_progress_cb(frames_done: int, total: int):
-            nonlocal _last_ks_write, _last_partial_upload
-            pct = 15.0 + (frames_done / max(total, 1)) * 40.0
-            now = time.monotonic()
-            write_lifecycle, upload_partial = _tracking_progress_flags(
-                now, _last_ks_write, _last_partial_upload,
-            )
-            if write_lifecycle:
-                _last_ks_write = now
-            if upload_partial:
-                _last_partial_upload = now
-            asyncio.run_coroutine_threadsafe(
-                _update_tracking_progress_with_partial(
-                    job_id, frames_done, total, pct,
-                    job_store, jobs_store,
-                    request, work_dir, s3,
-                    write_lifecycle=write_lifecycle,
-                    upload_partial=upload_partial,
-                ),
-                loop,
-            )
-
-        # Build sync detection callback -> async checkpoint + suspend
-        # TODO: suspend is not the expected behavior. Instead, a checkpoint needs to becreated
-        # to help resume the job with new detection response. the job should be interrupted and 
-        # switch off from memory ( consider cancel the job). Wait until user resume the job with new detection response.
-        detection_cb = _make_detection_cb(
-            job_id, loop, jobs_store, s3, config, request, work_dir,
-        )
-        # phase 1: initialize the config for tracking.
         tracking_output_dir = os.path.join(work_dir, "tracking")
-        eff_step_size = request.step_size or config.tracking_step_size
-        eff_max_history = request.max_history or config.tracking_max_history
-        eff_max_missing_frames = (
-            request.max_missing_frames
-            if request.max_missing_frames is not None
-            else config.tracking_max_missing_frames
+        os.makedirs(tracking_output_dir, exist_ok=True)
+
+        skip_tracking_runner = (
+            request.resume_from_frame == END_OF_TRACKING_SENTINEL
+            and bool(request.resume_tracking_s3_key)
         )
-        logger.info(
-            "Job %s tracking config: step_size=%s max_history=%s "
-            "max_missing_frames=%s",
-            job_id,
-            eff_step_size,
-            eff_max_history,
-            eff_max_missing_frames,
-        )
-        # Phase 2: Download partial tracking if resuming from checkpoint
+
         partial_tracking_data = None
-        if request.resume_tracking_s3_key:
-            logger.info("Job %s: downloading partial tracking from %s", job_id, request.resume_tracking_s3_key)
+        if request.resume_tracking_s3_key and not skip_tracking_runner:
+            logger.info(
+                "Job %s: downloading partial tracking from %s",
+                job_id,
+                request.resume_tracking_s3_key,
+            )
             partial_bucket = request.output_bucket or request.bucket
             partial_tracking_data = await loop.run_in_executor(
-                None, s3.download_json, partial_bucket, request.resume_tracking_s3_key,
+                None,
+                s3.download_json,
+                partial_bucket,
+                request.resume_tracking_s3_key,
             )
-            logger.info("Job %s: partial tracking has %d frames", job_id, len(partial_tracking_data.get("frames", [])))
+            logger.info(
+                "Job %s: partial tracking has %d frames",
+                job_id,
+                len(partial_tracking_data.get("frames", [])),
+            )
 
-        tracking_json_path = await loop.run_in_executor(
-            None,
-            lambda: run_tracking_job(
-                video_path,
-                box_a,
-                box_b,
-                tracking_output_dir,
-                sam2_model_id=request.sam2_model,
-                yolo_model=request.yolo_model,
-                detection_threshold=request.detection_threshold,
-                start_frame=start_frame,
-                end_frame=end_frame,
-                step_size=eff_step_size,
-                max_history=eff_max_history,
-                max_missing_frames=eff_max_missing_frames,
-                progress_cb=tracking_progress_cb,
-                detection_cb=detection_cb,
-                should_stop=lambda: job_store.is_cancelled(job_id),
-            ),
-        )
+        tracking_json_path: str | None = None
+        if skip_tracking_runner:
+            logger.info(
+                "Job %s: skipping run_tracking_job — loading tracking JSON from %s",
+                job_id,
+                request.resume_tracking_s3_key,
+            )
+            load_bucket = request.output_bucket or request.bucket
+            full_tracking = await loop.run_in_executor(
+                None,
+                s3.download_json,
+                load_bucket,
+                request.resume_tracking_s3_key,
+            )
+            tracking_json_path = os.path.join(tracking_output_dir, "tracking.json")
+            with open(tracking_json_path, "w") as f:
+                json.dump(full_tracking, f)
+        else:
+            # Build sync progress callback -> async Keyspaces (two cadences):
+            #   1-second  → lifecycle row update (heartbeat)
+            #   30-second → partial-tracking S3 upload + V1 track_progress checkpoint
+            #   immediate → first partial checkpoint once at least one frame exists
+            _last_ks_write = 0.0
+            _last_partial_upload = 0.0
+            _first_partial_upload = False
+
+            def tracking_progress_cb(frames_done: int, total: int):
+                nonlocal _last_ks_write, _last_partial_upload, _first_partial_upload
+                pct = _pct_at_least(
+                    15.0 + (frames_done / max(total, 1)) * 40.0,
+                    progress_floor,
+                )
+                now = time.monotonic()
+                write_lifecycle, upload_partial = _tracking_progress_flags(
+                    now, _last_ks_write, _last_partial_upload,
+                )
+                if frames_done >= 1 and not _first_partial_upload:
+                    upload_partial = True
+                    _first_partial_upload = True
+                if write_lifecycle:
+                    _last_ks_write = now
+                if upload_partial:
+                    _last_partial_upload = now
+                asyncio.run_coroutine_threadsafe(
+                    _update_tracking_progress_with_partial(
+                        job_id, frames_done, total, pct,
+                        job_store, jobs_store,
+                        request, work_dir, s3,
+                        write_lifecycle=write_lifecycle,
+                        upload_partial=upload_partial,
+                    ),
+                    loop,
+                )
+
+            detection_cb = _make_detection_cb(
+                job_id, loop, jobs_store, s3, config, request, work_dir,
+            )
+            eff_step_size = request.step_size or config.tracking_step_size
+            eff_max_history = request.max_history or config.tracking_max_history
+            eff_max_missing_frames = (
+                request.max_missing_frames
+                if request.max_missing_frames is not None
+                else config.tracking_max_missing_frames
+            )
+            logger.info(
+                "Job %s tracking config: step_size=%s max_history=%s "
+                "max_missing_frames=%s",
+                job_id,
+                eff_step_size,
+                eff_max_history,
+                eff_max_missing_frames,
+            )
+
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.TRACK, False,
+                build_tracking_started(
+                    clip_start_frame=clip_start_frame,
+                    clip_end_frame=end_frame,
+                    worker_state=_make_worker_state(
+                        progress_percent=track_stage_pct,
+                        current_frame=tracking_start_frame,
+                        total_frames=0,
+                        stage_progress_fraction=0.0,
+                    ),
+                ),
+            )
+
+            tracking_json_path = await loop.run_in_executor(
+                None,
+                lambda: run_tracking_job(
+                    video_path,
+                    box_a,
+                    box_b,
+                    tracking_output_dir,
+                    sam2_model_id=request.sam2_model,
+                    yolo_model=request.yolo_model,
+                    detection_threshold=request.detection_threshold,
+                    start_frame=tracking_start_frame,
+                    end_frame=end_frame,
+                    step_size=eff_step_size,
+                    max_history=eff_max_history,
+                    max_missing_frames=eff_max_missing_frames,
+                    progress_cb=tracking_progress_cb,
+                    detection_cb=detection_cb,
+                    should_stop=lambda: job_store.is_cancelled(job_id),
+                ),
+            )
         logger.info(
             "Job %s: tracking executor returned path=%s",
             job_id,
@@ -426,7 +519,13 @@ async def run_job(
                 new_tracking = json.load(f)
             merged_frames = partial_tracking_data.get("frames", []) + new_tracking.get("frames", [])
             # TODO: start frame should be the global start frame as this is the merged tracking json.
-            merged = {**new_tracking, "frames": merged_frames, "start_frame": partial_tracking_data.get("start_frame", 0)}
+            merged = {
+                **new_tracking,
+                "frames": merged_frames,
+                "start_frame": partial_tracking_data.get(
+                    "start_frame", clip_start_frame,
+                ),
+            }
             with open(tracking_json_path, "w") as f:
                 json.dump(merged, f)
             logger.info("Job %s: merged %d partial + %d new = %d total frames",
@@ -441,7 +540,7 @@ async def run_job(
         await jobs_store.write_checkpoint(
             job_id, PipelineStage.TRACK, False,
             build_track_completed(
-                start_frame=start_frame,
+                start_frame=clip_start_frame,
                 frame_count=_frame_count,
                 worker_state=_make_worker_state(
                     progress_percent=55.0,
@@ -478,16 +577,17 @@ async def run_job(
             # Upload tracking JSON
             with open(tracking_json_path) as f:
                 tracking_data = json.load(f)
-            await loop.run_in_executor(
-                None, s3.upload_json, tracking_data,
-                output_bucket, tracking_result_key,
-            )
+            if request.resume_existing_upload_tracking_key != tracking_result_key:
+                await loop.run_in_executor(
+                    None, s3.upload_json, tracking_data,
+                    output_bucket, tracking_result_key,
+                )
 
             # Re-write the track row now that we know the durable key.
             await jobs_store.write_checkpoint(
                 job_id, PipelineStage.TRACK, False,
                 build_track_completed(
-                    start_frame=start_frame,
+                    start_frame=clip_start_frame,
                     frame_count=_frame_count,
                     tracking_s3_key=tracking_result_key,
                     worker_state=_make_worker_state(
@@ -550,16 +650,22 @@ async def run_job(
         s3.ensure_bucket(output_bucket)
         with open(tracking_json_path) as f:
             _full_tracking = json.load(f)
-        await loop.run_in_executor(
-            None, s3.upload_json, _full_tracking,
-            output_bucket, tracking_result_key,
-        )
+        if request.resume_existing_upload_tracking_key == tracking_result_key:
+            logger.info(
+                "Job %s: skipping tracking JSON re-upload (key already durable)",
+                job_id,
+            )
+        else:
+            await loop.run_in_executor(
+                None, s3.upload_json, _full_tracking,
+                output_bucket, tracking_result_key,
+            )
 
         # Re-write the track row with the durable tracking_s3_key.
         await jobs_store.write_checkpoint(
             job_id, PipelineStage.TRACK, False,
             build_track_completed(
-                start_frame=start_frame,
+                start_frame=clip_start_frame,
                 frame_count=_frame_count,
                 tracking_s3_key=tracking_result_key,
                 worker_state=_make_worker_state(
@@ -646,7 +752,7 @@ async def run_job(
                     None,
                     lambda: annotate_video(
                         tracked_video_path, analysis_result,
-                        annotated_path, fps, start_frame,
+                        annotated_path, fps, clip_start_frame,
                     ),
                 )
             except Exception as e:
@@ -683,14 +789,21 @@ async def run_job(
         # Upload analysis JSON (if upscaling was done) and update upload row.
         analysis_uploaded_key: str | None = None
         if analysis_result is not None:
-            await loop.run_in_executor(
-                None,
-                s3.upload_json,
-                analysis_result,
-                output_bucket,
-                analysis_result_key,
-            )
-            analysis_uploaded_key = analysis_result_key
+            if request.resume_existing_upload_analysis_key == analysis_result_key:
+                logger.info(
+                    "Job %s: skipping analysis JSON re-upload (recovery)",
+                    job_id,
+                )
+                analysis_uploaded_key = analysis_result_key
+            else:
+                await loop.run_in_executor(
+                    None,
+                    s3.upload_json,
+                    analysis_result,
+                    output_bucket,
+                    analysis_result_key,
+                )
+                analysis_uploaded_key = analysis_result_key
             await jobs_store.write_checkpoint(
                 job_id, PipelineStage.UPLOAD, False,
                 build_upload_incremental(
@@ -705,15 +818,22 @@ async def run_job(
         # Upload annotated video and update upload row + write annotate row.
         annotated_uploaded_key: str | None = None
         if annotated_video_path and os.path.isfile(annotated_video_path):
-            await loop.run_in_executor(
-                None,
-                s3.upload_file,
-                annotated_video_path,
-                output_bucket,
-                annotated_video_key,
-                "video/mp4",
-            )
-            annotated_uploaded_key = annotated_video_key
+            if request.resume_existing_upload_annotated_key == annotated_video_key:
+                logger.info(
+                    "Job %s: skipping annotated video re-upload (recovery)",
+                    job_id,
+                )
+                annotated_uploaded_key = annotated_video_key
+            else:
+                await loop.run_in_executor(
+                    None,
+                    s3.upload_file,
+                    annotated_video_path,
+                    output_bucket,
+                    annotated_video_key,
+                    "video/mp4",
+                )
+                annotated_uploaded_key = annotated_video_key
             await jobs_store.write_checkpoint(
                 job_id, PipelineStage.UPLOAD, False,
                 build_upload_incremental(
@@ -750,7 +870,11 @@ async def run_job(
         topic_arn = request.sns_topic_arn or config.sns_topic_arn
         event_count = 0
         sns_completion_sent = False
-        if topic_arn and analysis_result is not None:
+        if (
+            topic_arn
+            and analysis_result is not None
+            and not request.resume_terminal_publish_done
+        ):
             logger.info("Job %s: stage SNS publish topic configured", job_id)
             try:
                 await job_store.update_job(
@@ -775,12 +899,18 @@ async def run_job(
             except Exception as e:
                 logger.warning("SNS publish failed (non-fatal): %s", e)
         else:
-            logger.info(
-                "Job %s: stage SNS skipped (topic_configured=%s has_analysis=%s)",
-                job_id,
-                bool(topic_arn),
-                analysis_result is not None,
-            )
+            if request.resume_terminal_publish_done:
+                logger.info(
+                    "Job %s: SNS skipped — resume_terminal_publish_done set",
+                    job_id,
+                )
+            else:
+                logger.info(
+                    "Job %s: stage SNS skipped (topic_configured=%s has_analysis=%s)",
+                    job_id,
+                    bool(topic_arn),
+                    analysis_result is not None,
+                )
 
         # Terminal publish row — completed=True closes out the job pipeline.
         await jobs_store.write_checkpoint(
@@ -851,17 +981,47 @@ async def run_job(
             ks_state = ks_lc.get("job_state") if ks_lc else None
             job_status = await job_store.get_job(job_id)
             partial_tracking = os.path.join(work_dir, "tracking", "tracking.json")
-            if (ks_state != JobState.AWAITING_CORRECTION.value
-                    and job_status and job_status.status in (JobStatus.FAILED, JobStatus.CANCELLED)
-                    and os.path.isfile(partial_tracking)
-                    and os.path.getsize(partial_tracking) > 100):
+            _s3 = locals().get("s3")
+            if (
+                _s3 is not None
+                and ks_state != JobState.AWAITING_CORRECTION.value
+                and job_status
+                and job_status.status in (JobStatus.FAILED, JobStatus.CANCELLED)
+                and os.path.isfile(partial_tracking)
+                and os.path.getsize(partial_tracking) > 100
+            ):
                 partial_key = f"checkpoints/{job_id}/partial_tracking.json"
                 bucket = request.output_bucket or request.bucket
                 partial_data = _load_partial_tracking_dict(partial_tracking)
                 await loop.run_in_executor(
-                    None, s3.upload_json, partial_data, bucket, partial_key,
+                    None, _s3.upload_json, partial_data, bucket, partial_key,
                 )
-                logger.info("Job %s: saved partial tracking to s3://%s/%s", job_id, bucket, partial_key)
+                logger.info(
+                    "Job %s: saved partial tracking to s3://%s/%s",
+                    job_id, bucket, partial_key,
+                )
+                frames = partial_data.get("frames") or []
+                resume_frm = len(frames)
+                if frames:
+                    resume_frm = int(
+                        frames[-1].get("frame_idx", resume_frm),
+                    ) + 1
+                pct_fail = float(
+                    ks_lc.get("progress_percent", 0.0) if ks_lc else 0.0,
+                )
+                await jobs_store.write_checkpoint(
+                    job_id, PipelineStage.TRACK, False,
+                    build_track_progress(
+                        partial_tracking_s3_key=partial_key,
+                        resume_from_frame=resume_frm,
+                        worker_state=_make_worker_state(
+                            progress_percent=pct_fail,
+                            current_frame=resume_frm,
+                            total_frames=resume_frm,
+                            stage_progress_fraction=0.0,
+                        ),
+                    ),
+                )
         except Exception as e:
             logger.warning("Job %s: failed to save partial tracking: %s", job_id, e)
 

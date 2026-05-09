@@ -55,6 +55,11 @@ class PoseEstimator:
             cy2 = min(h, int(box[3]) + pad_y)
             crop = frame[cy1:cy2, cx1:cx2]
 
+            # Degenerate box / clamping can yield empty slices; rtmlib YOLOX
+            # preprocess divides by img width and crashes on zero-sized crops.
+            if crop.ndim < 2 or crop.shape[0] < 1 or crop.shape[1] < 1:
+                return np.zeros((17, 2)), np.zeros(17)
+
             keypoints, scores = self.body(crop)
 
             if keypoints is None or len(keypoints) == 0:

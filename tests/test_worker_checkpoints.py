@@ -806,3 +806,64 @@ async def test_run_job_writes_download_then_detect_checkpoints(
     # The detection frame should have been uploaded via put_object (initial
     # detection already used put_object — guard against regression).
     assert s3.put_object.called
+
+
+@pytest.mark.asyncio
+async def test_run_job_skips_run_tracking_when_sentinel_resume(mock_jobs_store, tmp_path):
+    """Recovery loads durable tracking JSON from S3 — never invokes SAM2."""
+    from service import worker
+    from service.checkpoints import END_OF_TRACKING_SENTINEL
+
+    config = ServiceConfig(
+        temp_dir=str(tmp_path),
+        s3_endpoint_url="http://x",
+        gemini_api_key="fake",
+        sns_topic_arn="arn:aws:sns:test",
+    )
+    job_store = InMemoryJobStore()
+    tracking_blob = {
+        "video": "/tmp/v.mp4",
+        "fps": 30.0,
+        "frames": [{"frame_idx": 0, "athletes": []}],
+    }
+    request = _track_request(
+        bucket="b",
+        key="folder/v.mp4",
+        box_a=[1, 2, 3, 4],
+        box_b=[5, 6, 7, 8],
+        resume_from_frame=END_OF_TRACKING_SENTINEL,
+        resume_tracking_s3_key="folder/v_tracked.json",
+        skip_upscale=False,
+        output_bucket="out",
+    )
+    job = await job_store.create_job(request)
+    await mock_jobs_store.create_lifecycle(job.job_id, "vid", "u")
+
+    s3 = _stub_s3()
+    s3.download_json = MagicMock(return_value=tracking_blob)
+
+    tr_dir = tmp_path / job.job_id / "tracking"
+    tr_dir.mkdir(parents=True, exist_ok=True)
+    (tr_dir / "tracked_output.mp4").write_bytes(b"mp4")
+
+    mock_run_track = MagicMock()
+
+    with patch.object(worker, "_make_s3", return_value=s3), \
+         patch.object(worker, "_parse_time_range", return_value=(0, None)), \
+         patch("service.tracking_runner.run_tracking_job", mock_run_track), \
+         patch.object(
+             worker, "_run_upscale_analysis",
+             return_value=({"clips": [], "fps": 30.0}, 30.0),
+         ), \
+         patch(
+             "service.video_annotator.annotate_video",
+             return_value=str(tmp_path / "annotated_output.mp4"),
+         ), \
+         patch("service.worker.SNSPublisher") as sns_cls:
+        sns_cls.return_value.publish_events = MagicMock(return_value=2)
+        await worker.run_job(
+            job.job_id, request, config, job_store, mock_jobs_store,
+        )
+
+    mock_run_track.assert_not_called()
+    assert s3.download_json.called

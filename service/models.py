@@ -77,6 +77,12 @@ class TrackRequest(BaseModel):
     analysis_window_count: Optional[int] = None
     analysis_current_context: Optional[str] = None
 
+    # Recovery hints — populated from prior job checkpoints when replacing INTERRUPTED runs
+    resume_existing_upload_tracking_key: Optional[str] = None
+    resume_existing_upload_analysis_key: Optional[str] = None
+    resume_existing_upload_annotated_key: Optional[str] = None
+    resume_terminal_publish_done: bool = False
+
 
 class ResumeRequest(BaseModel):
     """Request body for POST /jobs/{job_id}/resume — delivers corrected bounding boxes."""
