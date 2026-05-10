@@ -63,3 +63,43 @@ async def test_heartbeat_propagates_recovery_index_failure():
     ok = await store.heartbeat("job-id", "worker")
 
     assert ok is False
+
+
+@pytest.mark.asyncio
+async def test_list_active_recovery_index_rows_newest_first():
+    now = datetime.now(timezone.utc)
+    r1 = SimpleNamespace(
+        job_id="j1",
+        video_id="v1",
+        job_state="PENDING",
+        owner_instance_id="o1",
+        last_heartbeat_at=now,
+    )
+    fake = FakeKeyspacesClient([], [r1])
+    store = JobsStore(fake)
+
+    rows = await store.list_active_recovery_index_rows_newest_first(
+        ["2026010112"],
+        limit_per_bucket=50,
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["job_id"] == "j1"
+    assert rows[0]["heartbeat_bucket"] == "2026010112"
+
+
+@pytest.mark.asyncio
+async def test_claim_pending_job_takeover_reads_applied_flag():
+    class LwtRow:
+        applied = True
+
+    fake = FakeKeyspacesClient([], [LwtRow()])
+    store = JobsStore(fake)
+
+    ok = await store.claim_pending_job_takeover(
+        "job-id",
+        "new-owner",
+        expected_owner_instance_id="old-owner",
+    )
+
+    assert ok is True

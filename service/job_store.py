@@ -27,6 +27,27 @@ class InMemoryJobStore:
             self._cancel_events[job_id] = asyncio.Event()
             return job
 
+    async def hydrate_job(self, job_id: str, request: TrackRequest) -> JobResponse:
+        """Register a job_id already persisted in Keyspaces (post-restart worker resume).
+
+        Idempotent: returns the existing in-memory row if ``job_id`` is already known.
+        """
+        async with self._lock:
+            existing = self._jobs.get(job_id)
+            if existing is not None:
+                return existing
+            now = datetime.now(timezone.utc).isoformat()
+            job = JobResponse(
+                job_id=job_id,
+                status=JobStatus.PENDING,
+                created_at=now,
+                updated_at=now,
+            )
+            self._jobs[job_id] = job
+            self._requests[job_id] = request
+            self._cancel_events[job_id] = asyncio.Event()
+            return job
+
     async def update_job(self, job_id: str, **kwargs) -> None:
         async with self._lock:
             job = self._jobs.get(job_id)

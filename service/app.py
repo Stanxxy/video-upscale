@@ -19,7 +19,12 @@ from service.keyspaces_client import KeyspacesClient
 from service.jobs_store import JobsStore
 from service.heartbeat import HeartbeatTask
 from service.reconciler import RecoveryManager
-from service.routes import router, init_routes, recover_interrupted_job
+from service.routes import (
+    router,
+    init_routes,
+    recover_interrupted_job,
+    drain_orphan_pending_jobs_on_startup,
+)
 
 # Ensure service loggers emit INFO (uvicorn only configures its own loggers)
 service_logger = logging.getLogger("service")
@@ -43,6 +48,8 @@ async def lifespan(app: FastAPI):
     jobs_store = JobsStore(ks_client)
 
     init_routes(config, job_store, jobs_store, instance_id=INSTANCE_ID)
+
+    await drain_orphan_pending_jobs_on_startup(INSTANCE_ID)
 
     # Start heartbeat
     heartbeat = HeartbeatTask(jobs_store, INSTANCE_ID)

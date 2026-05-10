@@ -1,8 +1,13 @@
 """
 Unified pipeline worker: detect → verify → (track → detect)[inloop] → upscale → upload → publish.
 
-Orchestrates the full job lifecycle.  Progress is persisted to Keyspaces
+Orchestrates the full job lifecycle. Progress is persisted to Keyspaces
 via ``JobsStore`` (replacing the former WebSocket-based delivery).
+During tracking, ``job_lifecycle.current_frame`` / ``total_frames`` are
+**clip-global**: ``total_frames`` is the requested clip span
+(``resolved_end − clip_start``), and ``current_frame`` is a 1-based count
+of how far along that clip the tracker has advanced (using absolute
+``frame_idx``), including after mid-track resume.
 When human input is needed (bounding-box correction) the worker writes a
 checkpoint, sets the job state to AWAITING_CORRECTION, and raises
 ``JobSuspendedError`` so models are released and the process can exit
@@ -94,6 +99,87 @@ def _pct_at_least(pct: float, floor: float) -> float:
     return max(pct, floor)
 
 
+def _video_frame_cap(video_path: str) -> int:
+    """Total frames reported by OpenCV (at least 1)."""
+    import cv2
+
+    cap = cv2.VideoCapture(video_path)
+    try:
+        return max(int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0), 1)
+    finally:
+        cap.release()
+
+
+def _resolved_clip_end_and_total(
+    clip_start_frame: int,
+    end_frame: int | None,
+    video_frame_cap: int,
+) -> tuple[int, int]:
+    """Return ``(clip_end_resolved, clip_total_frames)`` for the requested clip."""
+    raw_end = end_frame if end_frame is not None else video_frame_cap
+    clip_end = min(max(raw_end, clip_start_frame + 1), video_frame_cap)
+    clip_total = max(clip_end - clip_start_frame, 1)
+    return clip_end, clip_total
+
+
+def _clip_done_inclusive_through_global(
+    global_idx: int,
+    clip_start_frame: int,
+    clip_total_frames: int,
+) -> int:
+    """1-based count of clip frames from ``clip_start`` through ``global_idx`` inclusive."""
+    return min(max(global_idx - clip_start_frame + 1, 0), clip_total_frames)
+
+
+def _tracking_progress_pct_clip(
+    global_idx: int,
+    clip_start_frame: int,
+    clip_total_frames: int,
+    progress_floor: float,
+) -> tuple[int, float]:
+    """Return (clip_done_1based, tracking-stage percent) for Keyspaces/UI."""
+    done = _clip_done_inclusive_through_global(
+        global_idx, clip_start_frame, clip_total_frames,
+    )
+    frac = done / max(clip_total_frames, 1)
+    pct = _pct_at_least(15.0 + frac * 40.0, progress_floor)
+    return done, pct
+
+
+def _last_global_frame_idx_from_tracking(track_data: dict) -> int | None:
+    frames = track_data.get("frames") or []
+    if not frames:
+        return None
+    last = frames[-1]
+    if "frame_idx" in last:
+        return int(last["frame_idx"])
+    if "frame" in last:
+        return int(last["frame"])
+    return None
+
+
+def _track_completed_clip_worker_state(
+    track_data: dict,
+    clip_start_frame: int,
+    clip_total_frames: int,
+    *,
+    progress_percent: float,
+) -> WorkerStateSnapshot:
+    last_g = _last_global_frame_idx_from_tracking(track_data)
+    if last_g is not None:
+        done = _clip_done_inclusive_through_global(
+            last_g, clip_start_frame, clip_total_frames,
+        )
+    else:
+        done = clip_total_frames
+    return _make_worker_state(
+        progress_percent=progress_percent,
+        current_frame=done,
+        total_frames=clip_total_frames,
+        stage_progress_fraction=(done / max(clip_total_frames, 1)),
+    )
+
+
 def _ensure_models_released():
     """Release all ML models from GPU/RAM."""
     import gc
@@ -160,6 +246,9 @@ async def run_job(
     work_dir = os.path.join(config.temp_dir, job_id)
     os.makedirs(work_dir, exist_ok=True)
     loop = asyncio.get_event_loop()
+    clip_start_frame = 0
+    clip_end_resolved = 1
+    clip_total_frames = 1
     logger.info(
         "Job %s: worker starting work_dir=%s input=s3://%s/%s skip_upscale=%s",
         job_id,
@@ -234,6 +323,18 @@ async def run_job(
             end_frame if end_frame is not None else "full_video",
         )
 
+        _vid_frame_cap = await loop.run_in_executor(None, _video_frame_cap, video_path)
+        clip_end_resolved, clip_total_frames = _resolved_clip_end_and_total(
+            clip_start_frame, end_frame, _vid_frame_cap,
+        )
+        logger.info(
+            "Job %s: clip_end_resolved=%d clip_total_frames=%d (video_cap=%d)",
+            job_id,
+            clip_end_resolved,
+            clip_total_frames,
+            _vid_frame_cap,
+        )
+
         # SAM2 resumes mid-clip from checkpoint; annotate/upscale clip logic uses clip_start_frame.
         tracking_start_frame = clip_start_frame
         if (
@@ -261,10 +362,17 @@ async def run_job(
                 job_id, box_a, box_b,
             )
             det_pct = _pct_at_least(15.0, progress_floor)
+            det_cf = _clip_done_inclusive_through_global(
+                tracking_start_frame, clip_start_frame, clip_total_frames,
+            )
             await job_store.update_job(
                 job_id, status=JobStatus.DETECTING, progress_percent=det_pct,
+                current_frame=det_cf, total_frames=clip_total_frames,
             )
-            await jobs_store.update_progress(job_id, PipelineStage.DETECT, det_pct)
+            await jobs_store.update_progress(
+                job_id, PipelineStage.DETECT, det_pct,
+                current_frame=det_cf, total_frames=clip_total_frames,
+            )
             await jobs_store.write_checkpoint(
                 job_id, PipelineStage.DETECT, False,
                 build_verified_boxes_checkpoint(
@@ -273,8 +381,8 @@ async def run_job(
                     PipelineStage.DETECT,
                     worker_state=_make_worker_state(
                         progress_percent=det_pct,
-                        current_frame=0,
-                        total_frames=0,
+                        current_frame=det_cf,
+                        total_frames=clip_total_frames,
                         stage_progress_fraction=1.0,
                     ),
                 ),
@@ -335,6 +443,9 @@ async def run_job(
             )
 
             # Write checkpoint to Keyspaces and suspend
+            det_cf0 = _clip_done_inclusive_through_global(
+                frame_idx, clip_start_frame, clip_total_frames,
+            )
             await jobs_store.write_checkpoint(
                 job_id, PipelineStage.DETECT, False,
                 build_detect_initial_pending(
@@ -344,7 +455,10 @@ async def run_job(
                     candidates=candidates,
                     suggested_boxes=suggested_boxes,
                     worker_state=_make_worker_state(
-                        progress_percent=det_pct_lo, stage_progress_fraction=0.0,
+                        progress_percent=det_pct_lo,
+                        current_frame=det_cf0,
+                        total_frames=clip_total_frames,
+                        stage_progress_fraction=0.0,
                     ),
                 ),
             )
@@ -359,10 +473,20 @@ async def run_job(
         # ============================================================
         logger.info("Job %s: stage tracking (15-55%%)", job_id)
         track_stage_pct = _pct_at_least(15.0, progress_floor)
+        track_started_cf = min(
+            max(tracking_start_frame - clip_start_frame + 1, 1),
+            clip_total_frames,
+        )
         await job_store.update_job(
             job_id, status=JobStatus.TRACKING, progress_percent=track_stage_pct,
+            current_frame=track_started_cf,
+            total_frames=clip_total_frames,
         )
-        await jobs_store.update_progress(job_id, PipelineStage.TRACK, track_stage_pct)
+        await jobs_store.update_progress(
+            job_id, PipelineStage.TRACK, track_stage_pct,
+            current_frame=track_started_cf,
+            total_frames=clip_total_frames,
+        )
 
         from service.tracking_runner import run_tracking_job
 
@@ -420,12 +544,12 @@ async def run_job(
             _last_partial_upload = 0.0
             _first_partial_upload = False
 
-            def tracking_progress_cb(frames_done: int, total: int):
+            def tracking_progress_cb(frames_done: int, total: int, global_idx: int):
                 nonlocal _last_ks_write, _last_partial_upload, _first_partial_upload
-                pct = _pct_at_least(
-                    15.0 + (frames_done / max(total, 1)) * 40.0,
-                    progress_floor,
+                clip_done, pct = _tracking_progress_pct_clip(
+                    global_idx, clip_start_frame, clip_total_frames, progress_floor,
                 )
+                resume_next_global = global_idx + 1
                 now = time.monotonic()
                 write_lifecycle, upload_partial = _tracking_progress_flags(
                     now, _last_ks_write, _last_partial_upload,
@@ -439,9 +563,10 @@ async def run_job(
                     _last_partial_upload = now
                 asyncio.run_coroutine_threadsafe(
                     _update_tracking_progress_with_partial(
-                        job_id, frames_done, total, pct,
+                        job_id, clip_done, clip_total_frames, pct,
                         job_store, jobs_store,
                         request, work_dir, s3,
+                        resume_next_global=resume_next_global,
                         write_lifecycle=write_lifecycle,
                         upload_partial=upload_partial,
                     ),
@@ -450,6 +575,9 @@ async def run_job(
 
             detection_cb = _make_detection_cb(
                 job_id, loop, jobs_store, s3, config, request, work_dir,
+                clip_start_frame=clip_start_frame,
+                clip_total_frames=clip_total_frames,
+                progress_floor=progress_floor,
             )
             eff_step_size = request.step_size or config.tracking_step_size
             eff_max_history = request.max_history or config.tracking_max_history
@@ -471,12 +599,14 @@ async def run_job(
                 job_id, PipelineStage.TRACK, False,
                 build_tracking_started(
                     clip_start_frame=clip_start_frame,
-                    clip_end_frame=end_frame,
+                    clip_end_frame=clip_end_resolved,
                     worker_state=_make_worker_state(
                         progress_percent=track_stage_pct,
-                        current_frame=tracking_start_frame,
-                        total_frames=0,
-                        stage_progress_fraction=0.0,
+                        current_frame=track_started_cf,
+                        total_frames=clip_total_frames,
+                        stage_progress_fraction=(
+                            track_started_cf / max(clip_total_frames, 1)
+                        ),
                     ),
                 ),
             )
@@ -542,11 +672,9 @@ async def run_job(
             build_track_completed(
                 start_frame=clip_start_frame,
                 frame_count=_frame_count,
-                worker_state=_make_worker_state(
+                worker_state=_track_completed_clip_worker_state(
+                    _track_data, clip_start_frame, clip_total_frames,
                     progress_percent=55.0,
-                    current_frame=_frame_count,
-                    total_frames=_frame_count,
-                    stage_progress_fraction=1.0,
                 ),
             ),
         )
@@ -590,11 +718,9 @@ async def run_job(
                     start_frame=clip_start_frame,
                     frame_count=_frame_count,
                     tracking_s3_key=tracking_result_key,
-                    worker_state=_make_worker_state(
+                    worker_state=_track_completed_clip_worker_state(
+                        tracking_data, clip_start_frame, clip_total_frames,
                         progress_percent=55.0,
-                        current_frame=_frame_count,
-                        total_frames=_frame_count,
-                        stage_progress_fraction=1.0,
                     ),
                 ),
             )
@@ -668,11 +794,9 @@ async def run_job(
                 start_frame=clip_start_frame,
                 frame_count=_frame_count,
                 tracking_s3_key=tracking_result_key,
-                worker_state=_make_worker_state(
+                worker_state=_track_completed_clip_worker_state(
+                    _full_tracking, clip_start_frame, clip_total_frames,
                     progress_percent=55.0,
-                    current_frame=_frame_count,
-                    total_frames=_frame_count,
-                    stage_progress_fraction=1.0,
                 ),
             ),
         )
@@ -1001,11 +1125,14 @@ async def run_job(
                     job_id, bucket, partial_key,
                 )
                 frames = partial_data.get("frames") or []
-                resume_frm = len(frames)
                 if frames:
-                    resume_frm = int(
-                        frames[-1].get("frame_idx", resume_frm),
-                    ) + 1
+                    last_g = int(frames[-1].get("frame_idx", len(frames) - 1))
+                else:
+                    last_g = clip_start_frame - 1
+                resume_frm = last_g + 1
+                clip_done_fail = _clip_done_inclusive_through_global(
+                    last_g, clip_start_frame, clip_total_frames,
+                )
                 pct_fail = float(
                     ks_lc.get("progress_percent", 0.0) if ks_lc else 0.0,
                 )
@@ -1016,9 +1143,11 @@ async def run_job(
                         resume_from_frame=resume_frm,
                         worker_state=_make_worker_state(
                             progress_percent=pct_fail,
-                            current_frame=resume_frm,
-                            total_frames=resume_frm,
-                            stage_progress_fraction=0.0,
+                            current_frame=clip_done_fail,
+                            total_frames=clip_total_frames,
+                            stage_progress_fraction=(
+                                clip_done_fail / max(clip_total_frames, 1)
+                            ),
                         ),
                     ),
                 )
@@ -1098,8 +1227,8 @@ async def _flush_analysis_checkpoint(
 
 async def _update_tracking_progress_with_partial(
     job_id: str,
-    frames_done: int,
-    total: int,
+    clip_done: int,
+    clip_total: int,
     pct: float,
     job_store: InMemoryJobStore,
     jobs_store: JobsStore,
@@ -1107,6 +1236,7 @@ async def _update_tracking_progress_with_partial(
     work_dir: str,
     s3: S3Client,
     *,
+    resume_next_global: int,
     write_lifecycle: bool,
     upload_partial: bool,
 ):
@@ -1115,10 +1245,15 @@ async def _update_tracking_progress_with_partial(
     The two cadences are independent: ``write_lifecycle`` is the 1-second
     Keyspaces lifecycle heartbeat; ``upload_partial`` is the 30-second
     partial-tracking durable checkpoint.
+
+    ``clip_done`` / ``clip_total`` are 1-based position within the requested clip
+    (same semantics as ``job_lifecycle.current_frame`` / ``total_frames``).
+    ``resume_next_global`` is the absolute video frame index to resume SAM2 at
+    (written into checkpoint artifacts).
     """
     if write_lifecycle:
         await _update_tracking_progress(
-            job_id, frames_done, total, pct, job_store, jobs_store, write_ks=True,
+            job_id, clip_done, clip_total, pct, job_store, jobs_store, write_ks=True,
         )
     if not upload_partial:
         return
@@ -1138,15 +1273,15 @@ async def _update_tracking_progress_with_partial(
         return
     ws = _make_worker_state(
         progress_percent=pct,
-        current_frame=frames_done,
-        total_frames=total,
-        stage_progress_fraction=(frames_done / max(total, 1)),
+        current_frame=clip_done,
+        total_frames=clip_total,
+        stage_progress_fraction=(clip_done / max(clip_total, 1)),
     )
     await jobs_store.write_checkpoint(
         job_id, PipelineStage.TRACK, False,
         build_track_progress(
             partial_tracking_s3_key=partial_key,
-            resume_from_frame=frames_done,
+            resume_from_frame=resume_next_global,
             worker_state=ws,
         ),
     )
@@ -1154,8 +1289,8 @@ async def _update_tracking_progress_with_partial(
 
 async def _update_tracking_progress(
     job_id: str,
-    frames_done: int,
-    total: int,
+    clip_done: int,
+    clip_total: int,
     pct: float,
     job_store: InMemoryJobStore,
     jobs_store: JobsStore,
@@ -1164,13 +1299,13 @@ async def _update_tracking_progress(
     await job_store.update_job(
         job_id,
         progress_percent=pct,
-        current_frame=frames_done,
-        total_frames=total,
+        current_frame=clip_done,
+        total_frames=clip_total,
     )
     if write_ks:
         await jobs_store.update_progress(
             job_id, PipelineStage.TRACK, pct,
-            current_frame=frames_done, total_frames=total,
+            current_frame=clip_done, total_frames=clip_total,
         )
 
 
@@ -1182,6 +1317,10 @@ def _make_detection_cb(
     config: ServiceConfig,
     request: TrackRequest,
     work_dir: str,
+    *,
+    clip_start_frame: int,
+    clip_total_frames: int,
+    progress_floor: float,
 ):
     """
     Create a sync detection_callback for run_tracking's detection_callback parameter.
@@ -1250,11 +1389,16 @@ def _make_detection_cb(
                     )
                     partial_key = None
 
+            mid_clip_done, mid_pct = _tracking_progress_pct_clip(
+                global_frame_idx, clip_start_frame, clip_total_frames, progress_floor,
+            )
             mid_loss_ws = _make_worker_state(
-                progress_percent=15.0,
-                current_frame=global_frame_idx,
-                total_frames=0,
-                stage_progress_fraction=0.0,
+                progress_percent=mid_pct,
+                current_frame=mid_clip_done,
+                total_frames=clip_total_frames,
+                stage_progress_fraction=(
+                    mid_clip_done / max(clip_total_frames, 1)
+                ),
             )
             await jobs_store.write_checkpoint(
                 job_id, PipelineStage.TRACK, False,

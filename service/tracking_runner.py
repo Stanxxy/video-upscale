@@ -105,7 +105,8 @@ def run_tracking_job(
         box_b: [x1, y1, x2, y2] for athlete B (confirmed by human).
         output_dir: Directory to write tracking.json and debug artefacts.
         max_missing_frames: Frames of mask collapse before triggering user intervention.
-        progress_cb: Called with (frames_done, total_frames) every ~30 frames.
+        progress_cb: Called with (frames_done, total_frames, global_idx) on the
+            first processed frame and every 30 frames thereafter.
         detection_cb: Called with (reason, frame_jpeg_bytes, **kwargs) when mid-tracking
             human input is needed. kwargs includes yolo_detections=[{box, confidence}, ...].
             Must return (box_a, box_b) or None.

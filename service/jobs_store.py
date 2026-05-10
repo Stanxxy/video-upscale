@@ -311,6 +311,77 @@ class JobsStore:
             recovery_state, heartbeat_bucket, last_heartbeat_at, job_id,
         ])
 
+    async def list_active_recovery_index_rows_newest_first(
+        self,
+        heartbeat_buckets: list[str],
+        *,
+        limit_per_bucket: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Return recent rows from ACTIVE recovery partitions (newest heartbeats first).
+
+        The recovery index appends a row on each heartbeat upsert without deleting
+        prior entries, so the same ``job_id`` may appear multiple times; callers
+        should dedupe by ``job_id``.
+
+        Used on process startup to discover ``PENDING`` jobs that never reached
+        ``RUNNING`` before the previous process exited (e.g. resume handoff).
+        """
+        results: list[dict[str, Any]] = []
+        q = (
+            f"SELECT job_id, video_id, job_state, owner_instance_id, last_heartbeat_at "
+            f"FROM {self._ks}.job_recovery_index "
+            f"WHERE recovery_state = %s AND heartbeat_bucket = %s "
+            f"ORDER BY last_heartbeat_at DESC LIMIT %s"
+        )
+        for bucket in heartbeat_buckets:
+            rows = await self._client.execute(
+                q, ["ACTIVE", bucket, limit_per_bucket],
+            )
+            for r in rows:
+                results.append({
+                    "job_id": r.job_id,
+                    "video_id": getattr(r, "video_id", None) or "",
+                    "job_state": getattr(r, "job_state", None) or "",
+                    "owner_instance_id": getattr(r, "owner_instance_id", None) or "",
+                    "last_heartbeat_at": _as_utc_aware(
+                        getattr(r, "last_heartbeat_at", None),
+                    ),
+                    "heartbeat_bucket": bucket,
+                })
+        return results
+
+    async def claim_pending_job_takeover(
+        self,
+        job_id: str,
+        new_owner_instance_id: str,
+        *,
+        expected_owner_instance_id: str,
+    ) -> bool:
+        """CAS: take ownership of a PENDING row so only one instance re-schedules it."""
+        now = datetime.now(timezone.utc)
+        q = (
+            f"UPDATE {self._ks}.job_lifecycle SET "
+            f"owner_instance_id = %s, last_heartbeat_at = %s, updated_at = %s "
+            f"WHERE job_id = %s "
+            f"IF job_state = %s AND owner_instance_id = %s"
+        )
+        params = [
+            new_owner_instance_id,
+            now,
+            now,
+            job_id,
+            JobState.PENDING.value,
+            expected_owner_instance_id,
+        ]
+        rows = await self._client.execute(q, params)
+        if not rows:
+            return False
+        row = rows[0]
+        if hasattr(row, "_asdict"):
+            row_dict = row._asdict()
+            return bool(row_dict.get("[applied]", row_dict.get("applied", False)))
+        return bool(getattr(row, "applied", False))
+
     async def list_stale_recovery_candidates(
         self,
         heartbeat_buckets: list[str],

@@ -97,6 +97,84 @@ def _schedule_job(job_id: str, request: TrackRequest) -> None:
     task.add_done_callback(_log_uncaught)
 
 
+async def drain_orphan_pending_jobs_on_startup(instance_id: str) -> None:
+    """Re-schedule ``PENDING`` jobs persisted in Keyspaces without a local worker task.
+
+    ``RecoveryManager`` only revives stale ``RUNNING`` / ``INTERRUPTED`` lifecycles.
+    Resume/detection handoff creates a replacement row in ``PENDING`` and then calls
+    ``_schedule_job``; if the process exits before ``run_job`` flips the row to
+    ``RUNNING``, no asyncio task survives restart — this drain reloads the saved
+    ``TrackRequest`` and schedules work again.
+
+    Uses a lightweight CAS on ``(job_state, owner_instance_id)`` so two instances
+    cannot both take the same pending row.
+    """
+    if _jobs_store is None or _job_store is None:
+        return
+
+    from service.reconciler import RecoveryManager
+
+    buckets = RecoveryManager._heartbeat_buckets(datetime.now(timezone.utc))
+    try:
+        index_rows = await _jobs_store.list_active_recovery_index_rows_newest_first(
+            buckets,
+        )
+    except Exception as e:
+        logger.warning("Startup pending drain: recovery index scan failed: %s", e)
+        return
+
+    seen: set[str] = set()
+    for row in index_rows:
+        job_id = row.get("job_id") or ""
+        if not job_id or job_id in seen:
+            continue
+        seen.add(job_id)
+
+        task = _active_tasks.get(job_id)
+        if task is not None and not task.done():
+            continue
+
+        lifecycle = await _jobs_store.get_lifecycle(job_id)
+        if not lifecycle:
+            continue
+        if lifecycle.get("job_state") != JobState.PENDING.value:
+            continue
+        if lifecycle.get("replacement_job_id"):
+            continue
+
+        expected_owner = lifecycle.get("owner_instance_id") or ""
+
+        request_json = await _jobs_store.get_request(job_id)
+        if not request_json:
+            logger.warning(
+                "Startup pending drain: job %s has lifecycle but no request row; skipping",
+                job_id,
+            )
+            continue
+
+        claimed = await _jobs_store.claim_pending_job_takeover(
+            job_id,
+            instance_id,
+            expected_owner_instance_id=expected_owner,
+        )
+        if not claimed:
+            continue
+
+        try:
+            request = TrackRequest(**json.loads(request_json))
+        except Exception as e:
+            logger.error(
+                "Startup pending drain: invalid request JSON for job %s: %s",
+                job_id,
+                e,
+            )
+            continue
+
+        await _job_store.hydrate_job(job_id, request)
+        _schedule_job(job_id, request)
+        logger.info("Startup pending drain: re-scheduled pending job %s", job_id)
+
+
 # ---------------------------------------------------------------------------
 # QA client
 # ---------------------------------------------------------------------------

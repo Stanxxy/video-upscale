@@ -134,8 +134,10 @@ def run_tracking(
             Called when human input is needed mid-tracking (BLACKOUT / tracking_lost).
             Receives yolo_detections=[{box, confidence}, ...] as a keyword arg.
             If it returns None, tracking enters LOST state.
-        progress_callback: Optional callable(frames_done, total_frames).
-            Called every 30 frames to report progress.
+        progress_callback: Optional callable(frames_done, total_frames, global_idx).
+            ``frames_done`` / ``total_frames`` are segment-local (this ``run_tracking``
+            invocation).             ``global_idx`` is the absolute video frame index just processed.
+            Invoked on the first processed frame and every 30 frames thereafter.
         frame_callback: Optional callable(frame_bgr, global_idx, athletes).
             Called after per-frame results are computed, before writing viz frame.
             ``athletes`` is a list of dicts with keys: track_id, box, keypoints, source.
@@ -391,6 +393,13 @@ def run_tracking(
                         frame_sources, display_map,
                     )
                 frames_processed += 1
+                if progress_callback is not None and (
+                    frames_processed == 1 or frames_processed % 30 == 0
+                ):
+                    try:
+                        progress_callback(frames_processed, total_local, global_idx)
+                    except Exception as e:
+                        print(f"[tracking] progress_callback error (non-fatal): {e}")
                 del frame_bgr, frame_rgb, masks_sam2
                 del frame_boxes, frame_kpts, frame_scores, frame_masks, frame_sources
                 current_local = local_idx + 1
@@ -554,11 +563,13 @@ def run_tracking(
                 if should_stop is not None and should_stop():
                     user_cancelled = True
                     break
-                if progress_callback is not None:
-                    try:
-                        progress_callback(frames_processed, total_local)
-                    except Exception as e:
-                        print(f"[tracking] progress_callback error (non-fatal): {e}")
+            if progress_callback is not None and (
+                frames_processed == 1 or frames_processed % 30 == 0
+            ):
+                try:
+                    progress_callback(frames_processed, total_local, global_idx)
+                except Exception as e:
+                    print(f"[tracking] progress_callback error (non-fatal): {e}")
 
             # Release per-frame objects to reduce GC pressure
             del frame_bgr, frame_rgb, masks_sam2

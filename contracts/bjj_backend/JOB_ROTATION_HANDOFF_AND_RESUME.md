@@ -28,6 +28,8 @@ Authoritative fields for **that** job row:
 | `parent_job_id` | Immediate predecessor when this row was created as a **replacement** |
 | `replacement_job_id` | Set on the **old** row when a replacement has been **claimed**; points to the new `job_id` |
 
+**Tracking stage — `current_frame` / `total_frames` (clip-global):** While the worker is in tracking, these fields (and matching `worker_state` in V1 checkpoints) use the **full requested clip**, not the remaining segment after a mid-track resume. **`total_frames`** = `resolved_end_frame − clip_start_frame`. **`current_frame`** is a **1-based** count along that clip from absolute `frame_idx` (`min(global_idx − clip_start + 1, total_frames)`). **Reconcile / resume** still read **checkpoint artifacts** (`resume_from_frame` as an **absolute** global index, partial JSON, etc.); lifecycle frame counts are for **UI progress** and do not control recovery.
+
 `set_state(..., CANCELLED)` on the old job **does not** clear or bump `progress_percent`; the old row can retain the last percentage from before handoff (e.g. **10%** at initial detect suspend).
 
 ### 2.2 `video_analysis_latest_job` (per `video_id`)
@@ -92,6 +94,12 @@ Durable pipeline history and resume inputs. A terminal row with `reason == "repl
 5. Terminal **`replaced_by_new_job`** checkpoint on the **old** `job_id`.
 6. Schedule worker for `new_job_id`.
 
+### 5.1 Process restart — orphan `PENDING` rows
+
+The asyncio worker is **in-memory** only. `RecoveryManager` scans `job_recovery_index` but, by design, only hands **stale `RUNNING` / `INTERRUPTED`** lifecycles to `recover_interrupted_job`. After manual resume (section 4), the replacement row is inserted as **`PENDING`** and the worker is scheduled in-process; if the engine **restarts** before `run_job` flips that row to **`RUNNING`**, no local task survives and the reconciler **does not** pick up pure `PENDING` rows.
+
+On FastAPI lifespan startup the engine runs **`drain_orphan_pending_jobs_on_startup`** (`service/routes.py`, invoked from `service/app.py`): it reads recent **ACTIVE** `job_recovery_index` partitions (newest rows first, deduped by `job_id`), re-fetches **`job_lifecycle`**, and for rows still **`PENDING`** without `replacement_job_id`, performs a CAS **`UPDATE ... IF job_state = PENDING AND owner_instance_id = <expected>`**, loads **`job_request_params`**, hydrates the in-memory job store, and calls the same **`_schedule_job`** path as a fresh submit.
+
 ---
 
 ## 6. User cancellation
@@ -149,6 +157,7 @@ Events are keyed by the **`job_id` in the URL**. After handoff, subscribing to t
 |--------|-----------|
 | Manual handoff + `set_latest` + `sync_latest=False` cancel | `service/routes.py` — `submit_detection_response` |
 | Automatic recovery | `service/routes.py` — `recover_interrupted_job`; `service/reconciler.py` — `RecoveryManager` |
+| Startup orphan `PENDING` drain | `service/routes.py` — `drain_orphan_pending_jobs_on_startup`; `service/app.py` — lifespan; `service/jobs_store.py` — `list_active_recovery_index_rows_newest_first`, `claim_pending_job_takeover` |
 | Lifecycle progress writes | `service/worker.py` — `run_job`, `update_progress` via `JobsStore` |
 | Claim replacement CAS | `service/jobs_store.py` — `claim_replacement` |
 | Latest row upsert | `service/jobs_store.py` — `set_latest` |
@@ -160,4 +169,6 @@ Events are keyed by the **`job_id` in the URL**. After handoff, subscribing to t
 
 | Date | Change |
 |------|--------|
+| 2026-05-09 | Startup drain re-schedules orphaned **`PENDING`** jobs after process restart (CAS takeover + `job_request_params` reload); complements stale `RUNNING`/`INTERRUPTED` recovery. |
+| 2026-05-09 | Document clip-global `current_frame` / `total_frames` during tracking; lifecycle frames are UI-only for recovery. |
 | 2026-05-09 | Initial contract for job rotation and analysis-service resolution rules. |

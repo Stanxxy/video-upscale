@@ -137,6 +137,16 @@ def make_mock_jobs_store() -> MagicMock:
     async def update_progress(*args, **kwargs):
         pass
 
+    async def list_active_recovery_index_rows_newest_first(
+        heartbeat_buckets, *, limit_per_bucket=1000
+    ):
+        return []
+
+    async def claim_pending_job_takeover(
+        job_id, new_owner_instance_id, *, expected_owner_instance_id
+    ):
+        return False
+
     store.create_lifecycle = create_lifecycle
     store.get_lifecycle = get_lifecycle
     store.set_state = set_state
@@ -149,6 +159,10 @@ def make_mock_jobs_store() -> MagicMock:
     store.set_replacement = set_replacement
     store.claim_replacement = claim_replacement
     store.update_progress = update_progress
+    store.list_active_recovery_index_rows_newest_first = (
+        list_active_recovery_index_rows_newest_first
+    )
+    store.claim_pending_job_takeover = claim_pending_job_takeover
     store.register_owned_job = MagicMock()
     store.unregister_owned_job = MagicMock()
     store.owned_jobs = set()

@@ -90,6 +90,9 @@ async def test_make_detection_cb_uses_put_object_not_upload_file(
 
     cb = _make_detection_cb(
         "job-x", loop, mock_jobs_store, s3, config, request, str(work_dir),
+        clip_start_frame=0,
+        clip_total_frames=3600,
+        progress_floor=10.0,
     )
 
     await _invoke_detection_cb(
@@ -136,6 +139,9 @@ async def test_make_detection_cb_writes_track_mid_loss_envelope(
 
     cb = _make_detection_cb(
         "job-mid", loop, mock_jobs_store, s3, config, request, str(work_dir),
+        clip_start_frame=0,
+        clip_total_frames=3600,
+        progress_floor=10.0,
     )
     await _invoke_detection_cb(
         cb,
@@ -188,6 +194,7 @@ async def test_track_progress_helper_uploads_partial_and_writes_checkpoint(
         1200, 3600, 35.0,
         job_store, mock_jobs_store,
         request, str(work_dir), s3,
+        resume_next_global=1201,
         write_lifecycle=True,
         upload_partial=True,
     )
@@ -203,11 +210,11 @@ async def test_track_progress_helper_uploads_partial_and_writes_checkpoint(
     _assert_envelope(data)
     assert data["reason"] == "tracking_progress"
     assert data["artifacts"]["partial_tracking_s3_key"].endswith("partial_tracking.json")
-    assert data["artifacts"]["resume_from_frame"] == 1200
+    assert data["artifacts"]["resume_from_frame"] == 1201
     assert data["worker_state"]["current_frame"] == 1200
     assert data["worker_state"]["total_frames"] == 3600
     assert data["worker_state"]["progress_percent"] == 35.0
-    assert data["resume_cursor"] == {"frame_idx": 1200}
+    assert data["resume_cursor"] == {"frame_idx": 1201}
 
 
 @pytest.mark.asyncio
@@ -230,6 +237,7 @@ async def test_track_progress_helper_no_op_when_neither_flag_set(
         500, 1000, 35.0,
         job_store, mock_jobs_store,
         request, str(work_dir), s3,
+        resume_next_global=501,
         write_lifecycle=False,
         upload_partial=False,
     )
@@ -258,6 +266,7 @@ async def test_track_progress_helper_skips_partial_when_file_missing(
         500, 1000, 35.0,
         job_store, mock_jobs_store,
         request, str(work_dir), s3,
+        resume_next_global=501,
         write_lifecycle=False,
         upload_partial=True,
     )
