@@ -77,6 +77,11 @@ class DiffusionRestorer:
         # Convert back to numpy BGR
         output_rgb = np.array(output)
         output_bgr = cv2.cvtColor(output_rgb, cv2.COLOR_RGB2BGR)
-        
+
+        if self.device.type == "mps" and hasattr(torch.mps, "empty_cache"):
+            torch.mps.empty_cache()
+        elif self.device.type == "cuda":
+            torch.cuda.empty_cache()
+
         return output_bgr
 

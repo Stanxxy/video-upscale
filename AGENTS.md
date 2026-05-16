@@ -34,7 +34,7 @@ whole-video-analysis/
 │   ├── tracking_runner.py # RF-DETR + SAM2 orchestration
 │   ├── video_annotator.py # Video annotation
 │   ├── taxonomy_mapper.py # Pipeline → frontend enum bridging
-│   ├── vllm_selector.py   # VLM model selector
+│   ├── vllm_selector.py   # Gemini athlete hint (>2 YOLO candidates)
 │   ├── s3.py              # S3 operations
 │   ├── sns.py             # SNS event publishing
 │   └── ws_manager.py      # WebSocket manager

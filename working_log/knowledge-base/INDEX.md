@@ -24,6 +24,9 @@ See `bjj-team-meta` skill for how to add entries.
 - [2026-04-25 - Job Start and Resume Workflow Reference](insights/2026-04-25-job-start-resume-workflow-reference.md) — tags: service, lifecycle, resume, crash-recovery, keyspaces, refactor
 - [2026-05-01 - Lifecycle Resume and Recovery Implementation](insights/2026-05-01-lifecycle-resume-recovery-implementation.md) — tags: service, lifecycle, resume, recovery, keyspaces, implementation
 - [2026-05-03 - Worker Checkpoint Standardization Implementation](insights/2026-05-03-worker-checkpoint-standardization-implementation.md) — tags: service, worker, checkpoints, schema, recovery, tests, implementation
+- [2026-05-10 - Recovery index bucket scan window (overnight stale jobs)](insights/2026-05-10-recovery-index-bucket-scan-window.md) — tags: service, recovery, reconciler, keyspaces, job_recovery_index, ops
+- [2026-05-10 - MPS upscale memory: PyTorch cache vs Gemini buffer](insights/2026-05-10-mps-upscale-memory-empty-cache.md) — tags: service, upscale, pytorch, mps, memory, restorer, ops
+- [2026-05-10 - Job handoff chain debugging playbook (Keyspaces + S3)](insights/2026-05-10-job-handoff-chain-debug-playbook.md) — tags: service, lifecycle, resume, keyspaces, checkpoints, s3, debugging, ops
 
 ## Requirements
 
@@ -31,6 +34,7 @@ See `bjj-team-meta` skill for how to add entries.
 - [2026-04-26 - Job Lifecycle Resume Refactor Plan](requirements/2026-04-26-job-lifecycle-resume-refactor-plan.md) — tags: service, lifecycle, resume, crash-recovery, keyspaces, governance
 - [2026-05-01 - Keyspaces Schema Migration — Job Lineage and Recovery Index](requirements/2026-05-01-keyspaces-schema-migration-job-recovery.md) — tags: keyspaces, schema, migration, ops
 - [2026-05-02 - Worker Checkpoint Standardization, Shape Tests, Durable Artifact Recovery](requirements/2026-05-02-worker-checkpoint-standardization-plan.md) — tags: service, worker, checkpoints, schema, recovery, tests
+- [2026-05-10 - Chain artifact merge and durable tracking resume (plan)](requirements/2026-05-10-chain-artifact-merge-durable-tracking-resume-plan.md) — tags: service, lifecycle, resume, checkpoints, s3, tracking, handoff, merge
 
 ## Contracts (sharable with bjj-vision-backend)
 

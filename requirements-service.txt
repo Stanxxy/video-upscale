@@ -4,7 +4,6 @@ python-dotenv
 uvicorn[standard]
 boto3
 pydantic-settings
-openai
 cassandra-driver
 shared-lib @ file:///Users/stanliu/Documents/bjj-proj/bjj-vision-backend/shared_lib
 

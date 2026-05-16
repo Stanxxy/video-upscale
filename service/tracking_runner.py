@@ -109,7 +109,8 @@ def run_tracking_job(
             first processed frame and every 30 frames thereafter.
         detection_cb: Called with (reason, frame_jpeg_bytes, **kwargs) when mid-tracking
             human input is needed. kwargs includes yolo_detections=[{box, confidence}, ...].
-            Must return (box_a, box_b) or None.
+            Return (box_a, box_b), None, or raise HumanVerificationSuspend after persisting
+            suspend state so tracking exits immediately (replacement job can run).
         should_stop: Optional callable() -> bool. If True, tracking exits cleanly
             and JobCancelledError is raised (e.g. when DELETE /job/{id} is called).
 
@@ -143,10 +144,9 @@ def run_tracking_job(
     )
 
     if json_path is None:
-        # Check if should_stop was the cause (user cancel) vs detection_cb
-        # returning None (suspend for correction). If should_stop is set,
-        # it's a real cancellation. Otherwise, return None so the worker
-        # can raise JobSuspendedError.
+        # should_stop → cancel; HumanVerificationSuspend in pipeline → suspend;
+        # detection_cb returned None without suspend → suspend (legacy).
+        # Return None so worker raises JobSuspendedError except on cancel.
         if should_stop and should_stop():
             raise JobCancelledError("Tracking stopped by user (job cancelled)")
         return None

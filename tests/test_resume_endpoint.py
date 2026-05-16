@@ -15,8 +15,16 @@ import json
 import pytest
 import pytest_asyncio
 
+from service import routes as routes_mod
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.models import TrackRequest
+
+
+@pytest.fixture(autouse=True)
+def _noop_schedule_job(monkeypatch):
+    """Resume routes schedule the worker which touches S3 (ensure_bucket); CI may
+    have no LocalStack. These tests assert HTTP + persisted request_json only."""
+    monkeypatch.setattr(routes_mod, "_schedule_job", lambda job_id, request: None)
 
 
 @pytest_asyncio.fixture()

@@ -16,6 +16,7 @@ from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.models import TrackRequest
+from tracking_pipeline.human_verification_suspend import HumanVerificationSuspend
 
 
 V1_KEYS = {"schema_version", "pending_detection", "artifacts", "worker_state"}
@@ -95,13 +96,14 @@ async def test_make_detection_cb_uses_put_object_not_upload_file(
         progress_floor=10.0,
     )
 
-    await _invoke_detection_cb(
-        cb,
-        reason="tracking_lost",
-        frame_jpeg=b"\xff\xd8jpeg-bytes",
-        yolo_detections=[{"box": [10, 20, 100, 200], "confidence": 0.9}],
-        frame_idx=512,
-    )
+    with pytest.raises(HumanVerificationSuspend):
+        await _invoke_detection_cb(
+            cb,
+            reason="tracking_lost",
+            frame_jpeg=b"\xff\xd8jpeg-bytes",
+            yolo_detections=[{"box": [10, 20, 100, 200], "confidence": 0.9}],
+            frame_idx=512,
+        )
 
     # The frame MUST go through put_object, never upload_file (which would
     # treat the bytes blob as a local file path and fail at runtime).
@@ -143,13 +145,14 @@ async def test_make_detection_cb_writes_track_mid_loss_envelope(
         clip_total_frames=3600,
         progress_floor=10.0,
     )
-    await _invoke_detection_cb(
-        cb,
-        reason="tracking_lost",
-        frame_jpeg=b"\xff\xd8jpeg",
-        yolo_detections=[{"box": [10, 20, 100, 200], "confidence": 0.9}],
-        frame_idx=512,
-    )
+    with pytest.raises(HumanVerificationSuspend):
+        await _invoke_detection_cb(
+            cb,
+            reason="tracking_lost",
+            frame_jpeg=b"\xff\xd8jpeg",
+            yolo_detections=[{"box": [10, 20, 100, 200], "confidence": 0.9}],
+            frame_idx=512,
+        )
 
     cp = mock_jobs_store._checkpoints[("job-mid", PipelineStage.TRACK.value)]
     data = cp["checkpoint_data"]

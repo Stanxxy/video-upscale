@@ -21,6 +21,7 @@ class RecoveryManager:
         *,
         interval: float = 30.0,
         stale_after: float = 90.0,
+        heartbeat_bucket_hours: int = 24,
         recover_job: RecoverJobCallback | None = None,
         now_fn: Callable[[], datetime] | None = None,
     ):
@@ -28,6 +29,7 @@ class RecoveryManager:
         self._instance_id = instance_id
         self._interval = interval
         self._stale_after = stale_after
+        self._heartbeat_bucket_hours = max(1, int(heartbeat_bucket_hours))
         self._recover_job = recover_job
         self._now_fn = now_fn or (lambda: datetime.now(timezone.utc))
         self._task: asyncio.Task | None = None
@@ -50,7 +52,9 @@ class RecoveryManager:
     async def reconcile_once(self) -> None:
         now = self._now_fn()
         stale_before = now - timedelta(seconds=self._stale_after)
-        buckets = self._heartbeat_buckets(now)
+        buckets = self.heartbeat_buckets_for_scan(
+            now, hours=self._heartbeat_bucket_hours,
+        )
         candidates = await self._store.list_stale_recovery_candidates(
             buckets, stale_before,
         )
@@ -94,10 +98,23 @@ class RecoveryManager:
                 await self._recover_job(lifecycle)
 
     @staticmethod
-    def _heartbeat_buckets(now: datetime) -> list[str]:
-        current = now.strftime("%Y%m%d%H")
-        previous = (now - timedelta(hours=1)).strftime("%Y%m%d%H")
-        return [current, previous] if previous != current else [current]
+    def heartbeat_buckets_for_scan(now: datetime, *, hours: int = 24) -> list[str]:
+        """Distinct ``YYYYMMDDHH`` buckets for ``now`` and the prior ``hours - 1`` UTC hours.
+
+        Index rows are partitioned by the hour of ``last_heartbeat_at`` at write time; after a
+        long outage the stale row may live in a bucket far behind "now", so recovery must scan
+        a trailing window (default 24h) rather than only the latest two hours.
+        """
+        h = max(1, int(hours))
+        anchor = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+        seen: set[str] = set()
+        ordered: list[str] = []
+        for i in range(h):
+            b = (anchor - timedelta(hours=i)).strftime("%Y%m%d%H")
+            if b not in seen:
+                seen.add(b)
+                ordered.append(b)
+        return ordered
 
 
 Reconciler = RecoveryManager

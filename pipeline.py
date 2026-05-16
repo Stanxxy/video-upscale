@@ -146,13 +146,25 @@ def process_video(
 
         if multi_agent:
             from analyzer import BJJMultiAgentAnalyzer, analyze_sequence_sync
+            from service.config import ServiceConfig
 
-            analyzer = BJJMultiAgentAnalyzer(api_key, taxonomy_path=taxonomy_path)
+            _g_timeout_ms = ServiceConfig().gemini_request_timeout_ms
+            analyzer = BJJMultiAgentAnalyzer(
+                api_key,
+                taxonomy_path=taxonomy_path,
+                request_timeout_ms=_g_timeout_ms,
+            )
             print("Initialized Gemini BJJ Multi-Agent System (3 Agents + Judge).")
         else:
             from analyzer import BJJTechniqueAnalyzer
+            from service.config import ServiceConfig
 
-            analyzer = BJJTechniqueAnalyzer(api_key, taxonomy_path=taxonomy_path)
+            _g_timeout_ms = ServiceConfig().gemini_request_timeout_ms
+            analyzer = BJJTechniqueAnalyzer(
+                api_key,
+                taxonomy_path=taxonomy_path,
+                request_timeout_ms=_g_timeout_ms,
+            )
             print("Initialized Gemini BJJ Single Agent (Thinking Mode).")
 
     os.makedirs(output_dir, exist_ok=True)

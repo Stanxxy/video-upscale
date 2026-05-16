@@ -45,8 +45,10 @@ from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.jobs_store import JobsStore
 from service.models import JobCancelledError, JobSuspendedError, JobStatus, TrackRequest
+from tracking_pipeline.human_verification_suspend import HumanVerificationSuspend
 from service.s3 import S3Client
 from service.sns import SNSPublisher
+from service.tracking_chain_merge import consolidate_tracking_json_with_job_chain
 
 from pipeline import deduplicate_clips
 
@@ -419,7 +421,7 @@ async def run_job(
             if frame_jpeg is None:
                 raise RuntimeError(f"Failed to read frame {frame_idx} from video")
 
-            # VLLM pre-selection if >2 candidates
+            # Optional Gemini hint if >2 candidates
             suggested_boxes = None
             if len(candidates) > 2:
                 try:
@@ -428,7 +430,7 @@ async def run_job(
                         frame_jpeg, candidates, config,
                     )
                 except Exception as e:
-                    logger.warning("VLLM pre-selection failed: %s", e)
+                    logger.warning("Athlete suggestion (Gemini) failed: %s", e)
 
             # Upload detection frame to S3 for human review
             frame_s3_key = f"checkpoints/{job_id}/frame_{frame_idx}.jpg"
@@ -661,6 +663,15 @@ async def run_job(
             logger.info("Job %s: merged %d partial + %d new = %d total frames",
                         job_id, len(partial_tracking_data.get("frames", [])),
                         len(new_tracking.get("frames", [])), len(merged_frames))
+
+        await consolidate_tracking_json_with_job_chain(
+            jobs_store=jobs_store,
+            s3=s3,
+            bucket=request.output_bucket or request.bucket,
+            leaf_job_id=job_id,
+            local_tracking_json_path=tracking_json_path,
+            clip_start_frame=clip_start_frame,
+        )
 
         # Write completed tracking checkpoint (pre-upload; the post-upload
         # re-write in the upload stage adds artifacts.tracking_s3_key).
@@ -1347,7 +1358,7 @@ def _make_detection_cb(
                 for i, d in enumerate(yolo_detections)
             ]
 
-            # VLLM pre-filter if >2 candidates
+            # Optional Gemini hint if >2 candidates
             suggested_boxes = None
             if len(candidates) > 2:
                 try:
@@ -1356,7 +1367,7 @@ def _make_detection_cb(
                         frame_jpeg, candidates, config,
                     )
                 except Exception as e:
-                    logger.warning("VLLM mid-tracking suggestion failed: %s", e)
+                    logger.warning("Mid-track athlete suggestion (Gemini) failed: %s", e)
 
             # Upload detection frame to S3 — put_object takes raw bytes;
             # upload_file would treat the JPEG bytes as a local path.
@@ -1420,8 +1431,9 @@ def _make_detection_cb(
             future.result(timeout=60)
         except Exception as e:
             logger.warning("Mid-tracking suspend failed: %s", e)
+            return None
 
-        return None  # Signal tracking to stop
+        raise HumanVerificationSuspend()
 
     return detection_cb
 
@@ -1520,7 +1532,9 @@ def _run_upscale_analysis(
         if request.analyzer_mode == "multi":
             from analyzer import BJJMultiAgentAnalyzer, analyze_sequence_sync
             _analyzer = BJJMultiAgentAnalyzer(
-                config.gemini_api_key, taxonomy_path=taxonomy_path,
+                config.gemini_api_key,
+                taxonomy_path=taxonomy_path,
+                request_timeout_ms=config.gemini_request_timeout_ms,
             )
             analyze_fn = lambda frames, indices, ctx: analyze_sequence_sync(
                 _analyzer, frames, indices, ctx,
@@ -1529,7 +1543,9 @@ def _run_upscale_analysis(
         else:
             from analyzer import BJJTechniqueAnalyzer
             _analyzer = BJJTechniqueAnalyzer(
-                config.gemini_api_key, taxonomy_path=taxonomy_path,
+                config.gemini_api_key,
+                taxonomy_path=taxonomy_path,
+                request_timeout_ms=config.gemini_request_timeout_ms,
             )
             analyze_fn = lambda frames, indices, ctx: _analyzer.analyze_sequence(
                 frames, indices, ctx,
@@ -1652,10 +1668,20 @@ def _run_upscale_analysis(
     frames = tracking_data.get("frames", [])
     total = len(frames)
     processed = 0
+    _last_upscale_hb = time.monotonic()
+    _hb_interval = float(config.upscale_heartbeat_interval_sec)
 
     try:
         for entry in frames:
             frame_idx = entry["frame_idx"]
+            _now = time.monotonic()
+            if _now - _last_upscale_hb >= _hb_interval:
+                logger.info(
+                    "Job %s upscale heartbeat: frame_idx=%s processed=%d/%d buffer=%d",
+                    job_id, frame_idx, processed, total, len(sliding_buffer),
+                )
+                _last_upscale_hb = _now
+
             athletes = entry.get("athletes", [])
 
             # Skip frames before resume point
@@ -1690,6 +1716,11 @@ def _run_upscale_analysis(
                 continue
 
             try:
+                _t_enh = time.perf_counter()
+                logger.debug(
+                    "Job %s upscale: enhance start frame_idx=%d crop_hw=%dx%d",
+                    job_id, frame_idx, crop.shape[0], crop.shape[1],
+                )
                 if request.method == "diffusion":
                     h_crop, w_crop = crop.shape[:2]
                     if max(h_crop, w_crop) > 768:
@@ -1702,6 +1733,10 @@ def _run_upscale_analysis(
                     enhanced = restorer.enhance(crop, strength=0.5)
                 else:
                     enhanced = restorer.enhance(crop, target_size=1024)
+                logger.debug(
+                    "Job %s upscale: enhance done frame_idx=%d in %.2fs",
+                    job_id, frame_idx, time.perf_counter() - _t_enh,
+                )
             except Exception as e:
                 logger.warning("Upscale failed at frame %d: %s", frame_idx, e)
                 processed += 1

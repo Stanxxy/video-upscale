@@ -72,5 +72,11 @@ class RealESRGANRestorer:
             new_w = int(w * scale)
             new_h = int(h * scale)
             output_bgr = cv2.resize(output_bgr, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
-        
+
+        # Return cached blocks on accelerators so unified memory (esp. Apple MPS) RSS stays bounded.
+        if self.device.type == "mps" and hasattr(torch.mps, "empty_cache"):
+            torch.mps.empty_cache()
+        elif self.device.type == "cuda":
+            torch.cuda.empty_cache()
+
         return output_bgr

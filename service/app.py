@@ -49,7 +49,10 @@ async def lifespan(app: FastAPI):
 
     init_routes(config, job_store, jobs_store, instance_id=INSTANCE_ID)
 
-    await drain_orphan_pending_jobs_on_startup(INSTANCE_ID)
+    await drain_orphan_pending_jobs_on_startup(
+        INSTANCE_ID,
+        heartbeat_bucket_hours=config.recovery_heartbeat_bucket_hours,
+    )
 
     # Start heartbeat
     heartbeat = HeartbeatTask(jobs_store, INSTANCE_ID)
@@ -59,6 +62,7 @@ async def lifespan(app: FastAPI):
     recovery = RecoveryManager(
         jobs_store,
         INSTANCE_ID,
+        heartbeat_bucket_hours=config.recovery_heartbeat_bucket_hours,
         recover_job=recover_interrupted_job,
     )
     recovery.start()

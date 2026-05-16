@@ -1,6 +1,6 @@
 # Job rotation: cancellation, handoff, and resume
 
-**Date:** 2026-05-09  
+**Date:** 2026-05-10  
 **Status:** contract — vision engine (`whole-video-analysis`) + `video_analysis_and_annotation_service`  
 **Scope:** How `job_id` changes across human-in-the-loop resume and crash recovery, how Keyspaces rows are updated, and how a caller should resolve `video_id` → active work → `progress_percent`.  
 **Duplicate:** `working_log/contracts/bjj_backend/JOB_ROTATION_HANDOFF_AND_RESUME.md` (mirror; keep body in sync when editing).  
@@ -79,6 +79,12 @@ Durable pipeline history and resume inputs. A terminal row with `reason == "repl
 
 **Response:** Returns `job_id: new_job_id` (the replacement). Callers **must** treat this as the active pipeline id for subsequent polling/SSE (or rely on `get_latest` as below).
 
+### 4.1 Mid-track suspend and instant `job_id` rotation
+
+When the worker hits **mid-track** (or BLACKOUT) human verification, it writes the `track` checkpoint with `pending_detection`, sets lifecycle to **`AWAITING_CORRECTION`**, and **stops the tracking loop immediately** in the same process (no per-frame RE-ID spin after suspend). The original job’s worker task then finishes and **releases the concurrency semaphore** so the **replacement** job created by this resume flow can start at once.
+
+**Implication for `video_analysis_and_annotation_service` (and any poller):** Do **not** assume the pre-resume `job_id` stays `RUNNING` while tracking “winds down.” After `POST /jobs/{job_id}/resume` returns **`new_job_id`**, switch immediately to that id for **`job_lifecycle`**, progress, heartbeats, and **SSE** (`GET /jobs/{job_id}/events`). Prefer **`get_latest(video_id).job_id`** after each resume response so UI and backends stay aligned with the handoff row (`video_analysis_latest_job` is updated in step 5 above).
+
 ---
 
 ## 5. Automatic recovery (stale worker / crash)
@@ -137,9 +143,10 @@ state = lifecycle.job_state
 **Additional checks:**
 
 1. **Prefer `get_latest(video_id).job_id`** over any client-stored `job_id` after resume/recovery responses.
-2. If you only have a **legacy** `job_id`, read `replacement_job_id` until null, then read **`job_lifecycle`** for that final id.
-3. **Do not** infer progress from `video_analysis_latest_job.job_state` alone; read **`job_lifecycle`** for the resolved `job_id`.
-4. If `video_id` was **missing** on engine job creation / resume, **`set_latest` was skipped**; `get_latest` may be stale or absent — you must persist engine-returned `job_id` from `POST /track` / resume JSON.
+2. After **mid-track resume** (`AWAITING_CORRECTION` → `POST .../resume`), assume **instant rotation** (§4.1): the superseded job is no longer executing tracking; use the returned `new_job_id` immediately.
+3. If you only have a **legacy** `job_id`, read `replacement_job_id` until null, then read **`job_lifecycle`** for that final id.
+4. **Do not** infer progress from `video_analysis_latest_job.job_state` alone; read **`job_lifecycle`** for the resolved `job_id`.
+5. If `video_id` was **missing** on engine job creation / resume, **`set_latest` was skipped**; `get_latest` may be stale or absent — you must persist engine-returned `job_id` from `POST /track` / resume JSON.
 
 **Starting from a known `job_id` only (no `video_id` mapping):** load `get_lifecycle(job_id)` and apply the same `while (replacement_job_id)` walk. A superseded row is usually `CANCELLED` but still carries `replacement_job_id` to the active replacement.
 
@@ -155,6 +162,9 @@ Events are keyed by the **`job_id` in the URL**. After handoff, subscribing to t
 
 | Piece | Location |
 |--------|-----------|
+| Resume plan composition (`build_resume_plan`) | `service/checkpoints.py` — prefers durable **`tracking_s3_key`** over **`partial_tracking_s3_key`** when both exist; scans all checkpoint rows via `resolve_best_tracking_keys_from_checkpoints` (`service/tracking_chain_merge.py`). |
+| S3 preflight before replacement `TrackRequest` persist | `service/routes.py` — `preflight_resume_tracking_overrides` after `build_resume_plan` in `submit_detection_response` and `recover_interrupted_job` |
+| Chain merge before upscale | `service/tracking_chain_merge.py` — `consolidate_tracking_json_with_job_chain`; `service/worker.py` |
 | Manual handoff + `set_latest` + `sync_latest=False` cancel | `service/routes.py` — `submit_detection_response` |
 | Automatic recovery | `service/routes.py` — `recover_interrupted_job`; `service/reconciler.py` — `RecoveryManager` |
 | Startup orphan `PENDING` drain | `service/routes.py` — `drain_orphan_pending_jobs_on_startup`; `service/app.py` — lifespan; `service/jobs_store.py` — `list_active_recovery_index_rows_newest_first`, `claim_pending_job_takeover` |
@@ -169,6 +179,8 @@ Events are keyed by the **`job_id` in the URL**. After handoff, subscribing to t
 
 | Date | Change |
 |------|--------|
+| 2026-05-11 | Document resume routing: full-vs-partial preference, checkpoint-wide key scan, S3 HEAD preflight on handoff, chain merge hook reference. |
+| 2026-05-10 | Mid-track suspend: tracking exits immediately after checkpoint; semaphore releases so replacement runs without delay; analysis service should rotate to returned `job_id` / `get_latest` at once (§4.1). |
 | 2026-05-09 | Startup drain re-schedules orphaned **`PENDING`** jobs after process restart (CAS takeover + `job_request_params` reload); complements stale `RUNNING`/`INTERRUPTED` recovery. |
 | 2026-05-09 | Document clip-global `current_frame` / `total_frames` during tracking; lifecycle frames are UI-only for recovery. |
 | 2026-05-09 | Initial contract for job rotation and analysis-service resolution rules. |

@@ -25,6 +25,7 @@ from .sam2_manager import SAM2Manager
 from .pose import PoseEstimator
 from .identity_manager import IdentityManager
 from .state_machine import StateMachine, TrackingState
+from .human_verification_suspend import HumanVerificationSuspend
 from .video_io import VideoIO
 from .smoothing import BoxSmoother, KeypointSmoother
 
@@ -133,7 +134,9 @@ def run_tracking(
         detection_callback: Optional callable(reason, frame_jpeg, **kwargs) -> (box_a, box_b) | None.
             Called when human input is needed mid-tracking (BLACKOUT / tracking_lost).
             Receives yolo_detections=[{box, confidence}, ...] as a keyword arg.
-            If it returns None, tracking enters LOST state.
+            Return None for CLI "still waiting" / service suspend-not-ready.
+            Raise HumanVerificationSuspend after persisting state to stop this run_tracking
+            immediately (service mode: release worker semaphore after checkpoint).
         progress_callback: Optional callable(frames_done, total_frames, global_idx).
             ``frames_done`` / ``total_frames`` are segment-local (this ``run_tracking``
             invocation).             ``global_idx`` is the absolute video frame index just processed.
@@ -267,6 +270,7 @@ def run_tracking(
     last_known_boxes = {}  # {track_id: box} for batch carry-over
     frames_processed = 0
     user_cancelled = False
+    human_suspend = False
 
     # Loss detection state
     missing_frames = {1: 0, 2: 0}
@@ -359,10 +363,14 @@ def run_tracking(
             # RE_ID_MODE: user intervention required
             # ==============================
             if curr_state == TrackingState.RE_ID_MODE:
-                new_boxes = _detect_and_request_boxes(
-                    frame_bgr, global_idx, detection_callback,
-                    detector, yolo_model, detection_threshold, device,
-                )
+                try:
+                    new_boxes = _detect_and_request_boxes(
+                        frame_bgr, global_idx, detection_callback,
+                        detector, yolo_model, detection_threshold, device,
+                    )
+                except HumanVerificationSuspend:
+                    human_suspend = True
+                    break
                 if new_boxes is not None:
                     detector = new_boxes[2]  # updated detector ref
                     new_box_a, new_box_b = new_boxes[0], new_boxes[1]
@@ -432,6 +440,9 @@ def run_tracking(
                             state_machine.set_tracking()
                             current_local = local_idx + 1
                             break
+                    except HumanVerificationSuspend:
+                        human_suspend = True
+                        break
                     except Exception as _cb_err:
                         print(f"  [detection_callback] BLACKOUT callback failed: {_cb_err}")
 
@@ -501,10 +512,14 @@ def run_tracking(
                       f"{lost_ids} (missing > {max_missing_frames} frames)")
                 state_machine.state = TrackingState.RE_ID_MODE
 
-                new_boxes = _detect_and_request_boxes(
-                    frame_bgr, global_idx, detection_callback,
-                    detector, yolo_model, detection_threshold, device,
-                )
+                try:
+                    new_boxes = _detect_and_request_boxes(
+                        frame_bgr, global_idx, detection_callback,
+                        detector, yolo_model, detection_threshold, device,
+                    )
+                except HumanVerificationSuspend:
+                    human_suspend = True
+                    break
                 if new_boxes is not None:
                     detector = new_boxes[2]  # updated detector ref
                     new_box_a, new_box_b = new_boxes[0], new_boxes[1]
@@ -583,7 +598,7 @@ def run_tracking(
             # frame caused progressive MPS fragmentation spikes.
             sam2_mgr.prune_memory(max_history, flush_cache=False)
 
-        if user_cancelled:
+        if user_cancelled or human_suspend:
             break
         # End of propagation step: heavy cleanup at batch boundary only.
         # flush_cache=True triggers MPS empty_cache here (not mid-propagation).
@@ -595,12 +610,16 @@ def run_tracking(
     out.release()
     video_io.release()
 
-    if user_cancelled:
+    if user_cancelled or human_suspend:
         if _json_file is not None:
             _json_file.write("\n]}\n")
             _json_file.close()
         sam2_mgr.cleanup()
-        print("Tracking cancelled by user.")
+        print(
+            "Tracking cancelled by user."
+            if user_cancelled
+            else "Tracking suspended for human verification.",
+        )
         return None
 
     # Re-encode with H.264 for compatibility
@@ -696,6 +715,8 @@ def _detect_and_request_boxes(frame_bgr, global_idx, detection_callback,
             )
             if cb_result is not None:
                 return (cb_result[0], cb_result[1], detector)
+        except HumanVerificationSuspend:
+            raise
         except Exception as e:
             print(f"  [detection_callback] failed: {e}")
         return None

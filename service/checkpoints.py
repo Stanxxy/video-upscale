@@ -89,7 +89,7 @@ def build_detect_initial_pending(
     frame_s3_key: str,
     frame_bucket: str,
     candidates: list[dict[str, Any]],
-    suggested_boxes: list[list[float]] | None,
+    suggested_boxes: Any | None,
     worker_state: WorkerStateSnapshot,
 ) -> dict[str, Any]:
     return make_envelope(
@@ -144,7 +144,7 @@ def build_track_mid_loss(
     frame_s3_key: str,
     frame_bucket: str,
     candidates: list[dict[str, Any]],
-    suggested_boxes: list[list[float]] | None,
+    suggested_boxes: Any | None,
     partial_tracking_s3_key: str | None,
     resume_from_frame: int,
     worker_state: WorkerStateSnapshot,
@@ -421,16 +421,14 @@ class ResumePlan(NamedTuple):
 
 def build_resume_plan(checkpoints: list[dict[str, Any]]) -> ResumePlan:
     """Compose resume routing from the latest checkpoint row per stage."""
+    from service.tracking_chain_merge import resolve_best_tracking_keys_from_checkpoints
+
     by_stage = latest_checkpoint_data_by_stage(checkpoints)
     overrides: dict[str, Any] = {}
 
     track_cp = by_stage.get(PipelineStage.TRACK.value, {})
-    track_artifacts = track_cp.get("artifacts") or {}
-    partial_key = track_artifacts.get("partial_tracking_s3_key") or track_cp.get(
-        "partial_tracking_s3_key"
-    )
-    full_tracking_key = track_artifacts.get("tracking_s3_key") or track_cp.get(
-        "tracking_s3_key"
+    full_tracking_key, partial_key = resolve_best_tracking_keys_from_checkpoints(
+        checkpoints,
     )
 
     upscale_cp = by_stage.get(PipelineStage.UPSCALE_ANALYZE.value, {})
@@ -481,16 +479,16 @@ def build_resume_plan(checkpoints: list[dict[str, Any]]) -> ResumePlan:
         )
         skip_tracking_runner = True
 
-    # 2) Mid-track partial JSON — resume inside SAM2 / run_tracking_job
-    elif partial_key:
-        overrides["resume_tracking_s3_key"] = partial_key
-        overrides["resume_from_frame"] = next_unprocessed_frame(track_cp)
-
-    # 3) Full tracking JSON in S3 (post-upload) but no analysis checkpoint yet
+    # 2) Full tracking JSON in S3 (post-upload) — prefer over partial tails
     elif full_tracking_key:
         overrides["resume_tracking_s3_key"] = full_tracking_key
         overrides["resume_from_frame"] = END_OF_TRACKING_SENTINEL
         skip_tracking_runner = True
+
+    # 3) Mid-track partial JSON only — resume inside SAM2 / run_tracking_job
+    elif partial_key:
+        overrides["resume_tracking_s3_key"] = partial_key
+        overrides["resume_from_frame"] = next_unprocessed_frame(track_cp)
 
     return ResumePlan(
         track_request_overrides=overrides,

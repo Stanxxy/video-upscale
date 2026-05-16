@@ -4,16 +4,34 @@ import os
 import asyncio
 import json
 import logging
+from typing import Optional
 from PIL import Image
 
 logger = logging.getLogger(__name__)
 
+# Default when caller does not pass request_timeout_ms (matches ServiceConfig default).
+DEFAULT_GEMINI_REQUEST_TIMEOUT_MS = 600_000
+
+
+def _effective_timeout_ms(request_timeout_ms: Optional[int]) -> int:
+    ms = request_timeout_ms if request_timeout_ms is not None else DEFAULT_GEMINI_REQUEST_TIMEOUT_MS
+    return max(5_000, ms)
+
+
+def _gemini_client(api_key: str, timeout_ms: int) -> genai.Client:
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=timeout_ms),
+    )
+
 
 class BJJTechniqueAnalyzer:
-    def __init__(self, api_key, taxonomy_path=None):
+    def __init__(self, api_key, taxonomy_path=None, request_timeout_ms: Optional[int] = None):
         if not api_key:
             raise ValueError("API Key is required for BJJTechniqueAnalyzer")
-        self.client = genai.Client(api_key=api_key)
+        to_ms = _effective_timeout_ms(request_timeout_ms)
+        self.client = _gemini_client(api_key, to_ms)
+        self._request_timeout_ms = to_ms
         self.model_id = "gemini-3.1-flash-lite-preview"
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
@@ -84,8 +102,8 @@ class BJJTechniqueAnalyzer:
             contents.extend(frames)
 
             logger.info(
-                "Gemini single-agent: sending %d frames to model %s",
-                len(frames), self.model_id,
+                "Gemini single-agent: sending %d frames to model %s (http_timeout_ms=%d)",
+                len(frames), self.model_id, self._request_timeout_ms,
             )
             response = self.client.models.generate_content(
                 model=self.model_id,
@@ -115,10 +133,12 @@ class BJJTechniqueAnalyzer:
 
 
 class BJJMultiAgentAnalyzer:
-    def __init__(self, api_key, taxonomy_path=None):
+    def __init__(self, api_key, taxonomy_path=None, request_timeout_ms: Optional[int] = None):
         if not api_key:
             raise ValueError("API Key is required for BJJMultiAgentAnalyzer")
-        self.client = genai.Client(api_key=api_key)
+        to_ms = _effective_timeout_ms(request_timeout_ms)
+        self.client = _gemini_client(api_key, to_ms)
+        self._request_timeout_s = to_ms / 1000.0
         self.model_id = "gemini-3.1-flash-lite-preview"
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
@@ -161,19 +181,30 @@ class BJJMultiAgentAnalyzer:
 
             contents.extend(frames)
 
-            logger.info("Gemini multi-agent: sending %d frames to %s agent",
-                        len(frames), role_name)
-            response = await self.client.aio.models.generate_content(
-                model=self.model_id,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction_base + "\n\n" + system_prompt,
-                    temperature=temperature,
+            logger.info(
+                "Gemini multi-agent: sending %d frames to %s agent (timeout %.0fs)",
+                len(frames), role_name, self._request_timeout_s,
+            )
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.model_id,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction_base + "\n\n" + system_prompt,
+                        temperature=temperature,
+                    ),
                 ),
+                timeout=self._request_timeout_s,
             )
             logger.info("Gemini multi-agent %s: received response (%d chars)",
                         role_name, len(response.text) if response.text else 0)
             return f"--- {role_name} REPORT ---\n{response.text}\n"
+        except asyncio.TimeoutError:
+            logger.error(
+                "Gemini multi-agent %s: timed out after %.0fs",
+                role_name, self._request_timeout_s,
+            )
+            return f"--- {role_name} TIMEOUT ---\nError: request exceeded {self._request_timeout_s:.0f}s\n"
         except Exception as e:
             logger.error("Gemini multi-agent %s failed: %s", role_name, e,
                          exc_info=True)
@@ -215,7 +246,12 @@ class BJJMultiAgentAnalyzer:
             )
         )
 
+        logger.info(
+            "Gemini multi-agent: running 3 specialists in parallel (%.0fs cap each)",
+            self._request_timeout_s,
+        )
         agent_reports = await asyncio.gather(*tasks)
+        logger.info("Gemini multi-agent: specialists finished; starting Judge")
         full_report_text = "\n".join(agent_reports)
 
         # The Judge
@@ -258,14 +294,20 @@ class BJJMultiAgentAnalyzer:
             except Exception:
                 taxonomy_text = ""
 
-            logger.info("Gemini multi-agent Judge: synthesizing reports")
-            response = await self.client.aio.models.generate_content(
-                model=self.model_id,
-                contents=judge_prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=taxonomy_text + "\n\nYou are the Synthesizer. Output JSON only.",
-                    temperature=0.1,
+            logger.info(
+                "Gemini multi-agent Judge: synthesizing reports (timeout %.0fs)",
+                self._request_timeout_s,
+            )
+            response = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.model_id,
+                    contents=judge_prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=taxonomy_text + "\n\nYou are the Synthesizer. Output JSON only.",
+                        temperature=0.1,
+                    ),
                 ),
+                timeout=self._request_timeout_s,
             )
 
             text = response.text
@@ -280,6 +322,12 @@ class BJJMultiAgentAnalyzer:
 
             return text.strip()
 
+        except asyncio.TimeoutError:
+            logger.error(
+                "Gemini multi-agent Judge: timed out after %.0fs",
+                self._request_timeout_s,
+            )
+            return json.dumps({"error": f"judge_timeout_after_{self._request_timeout_s:.0f}s"})
         except Exception as e:
             logger.error("Gemini multi-agent Judge failed: %s", e, exc_info=True)
             return json.dumps({"error": str(e)})

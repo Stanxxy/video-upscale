@@ -8,6 +8,22 @@ from service.analysis_keyspaces_enums import JobState
 from service.reconciler import RecoveryManager
 
 
+def test_heartbeat_buckets_for_scan_default_trailing_window():
+    now = datetime(2026, 4, 26, 15, 30, tzinfo=timezone.utc)
+    buckets = RecoveryManager.heartbeat_buckets_for_scan(now, hours=24)
+    assert len(buckets) == 24
+    assert buckets[0] == "2026042615"
+    assert buckets[-1] == "2026042516"
+    assert "2026042608" in buckets  # 7 hours before anchor hour
+
+
+def test_heartbeat_buckets_for_scan_dedupes_dst_safe():
+    """Consecutive hours always yield distinct bucket strings in UTC."""
+    now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
+    buckets = RecoveryManager.heartbeat_buckets_for_scan(now, hours=3)
+    assert buckets == ["2026042620", "2026042619", "2026042618"]
+
+
 class FakeJobsStore:
     def __init__(self, candidates):
         self.candidates = candidates
@@ -150,6 +166,68 @@ async def test_reconcile_once_recovers_interrupted_job_without_replacement():
     )]
     assert store.states == []
     assert recovered == ["interrupted-job"]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_once_finds_stale_job_in_bucket_many_hours_behind():
+    """Index partition follows last heartbeat hour; wide scan must still see the row."""
+    now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
+    stale_heartbeat = now - timedelta(minutes=3)
+    old_bucket = (now - timedelta(hours=12)).strftime("%Y%m%d%H")
+    recovered = []
+    store = FakeJobsStore([
+        {
+            "job_id": "overnight-stale",
+            "job_state": JobState.RUNNING.value,
+            "owner_instance_id": "dead-worker",
+            "last_heartbeat_at": stale_heartbeat,
+            "heartbeat_bucket": old_bucket,
+        }
+    ])
+
+    async def recover_job(lifecycle):
+        recovered.append(lifecycle["job_id"])
+
+    manager = RecoveryManager(
+        store,
+        "new-worker",
+        recover_job=recover_job,
+        stale_after=90.0,
+        heartbeat_bucket_hours=24,
+        now_fn=lambda: now,
+    )
+
+    await manager.reconcile_once()
+
+    assert recovered == ["overnight-stale"]
+    assert store.claimed[0][0] == "overnight-stale"
+
+
+@pytest.mark.asyncio
+async def test_reconcile_once_narrow_bucket_hours_misses_distant_partition():
+    now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
+    stale_heartbeat = now - timedelta(minutes=3)
+    old_bucket = (now - timedelta(hours=12)).strftime("%Y%m%d%H")
+    store = FakeJobsStore([
+        {
+            "job_id": "too-old-for-two-hour-scan",
+            "job_state": JobState.RUNNING.value,
+            "owner_instance_id": "dead-worker",
+            "last_heartbeat_at": stale_heartbeat,
+            "heartbeat_bucket": old_bucket,
+        }
+    ])
+    manager = RecoveryManager(
+        store,
+        "new-worker",
+        stale_after=90.0,
+        heartbeat_bucket_hours=2,
+        now_fn=lambda: now,
+    )
+
+    await manager.reconcile_once()
+
+    assert store.claimed == []
 
 
 @pytest.mark.asyncio

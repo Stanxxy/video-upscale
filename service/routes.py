@@ -24,6 +24,8 @@ from service.job_store import InMemoryJobStore
 from service.jobs_store import JobsStore
 from service.worker import run_job
 from service.config import ServiceConfig
+from service.s3 import S3Client
+from service.tracking_chain_merge import preflight_resume_tracking_overrides
 
 _QA_HTML = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "qa_client", "index.html"
@@ -76,6 +78,16 @@ def _require_write(ok: bool, operation: str) -> None:
         raise HTTPException(500, f"Failed to persist {operation}")
 
 
+def _s3_client() -> S3Client:
+    assert _config is not None
+    return S3Client(
+        region=_config.aws_region,
+        endpoint_url=_config.s3_endpoint_url or None,
+        access_key_id=_config.aws_access_key_id or None,
+        secret_access_key=_config.aws_secret_access_key or None,
+    )
+
+
 def _schedule_job(job_id: str, request: TrackRequest) -> None:
     task = asyncio.create_task(_run_with_semaphore(job_id, request))
     _active_tasks[job_id] = task
@@ -97,7 +109,11 @@ def _schedule_job(job_id: str, request: TrackRequest) -> None:
     task.add_done_callback(_log_uncaught)
 
 
-async def drain_orphan_pending_jobs_on_startup(instance_id: str) -> None:
+async def drain_orphan_pending_jobs_on_startup(
+    instance_id: str,
+    *,
+    heartbeat_bucket_hours: int = 24,
+) -> None:
     """Re-schedule ``PENDING`` jobs persisted in Keyspaces without a local worker task.
 
     ``RecoveryManager`` only revives stale ``RUNNING`` / ``INTERRUPTED`` lifecycles.
@@ -114,7 +130,10 @@ async def drain_orphan_pending_jobs_on_startup(instance_id: str) -> None:
 
     from service.reconciler import RecoveryManager
 
-    buckets = RecoveryManager._heartbeat_buckets(datetime.now(timezone.utc))
+    buckets = RecoveryManager.heartbeat_buckets_for_scan(
+        datetime.now(timezone.utc),
+        hours=max(1, int(heartbeat_bucket_hours)),
+    )
     try:
         index_rows = await _jobs_store.list_active_recovery_index_rows_newest_first(
             buckets,
@@ -418,13 +437,19 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
     correction_stage, _ = select_correction_checkpoint(checkpoints)
 
     resume_plan = build_resume_plan(checkpoints)
+    track_overrides = dict(resume_plan.track_request_overrides)
+    _bucket = (orig_request.get("output_bucket") or orig_request.get("bucket") or "").strip()
+    if _bucket and track_overrides.get("resume_tracking_s3_key") and _config:
+        track_overrides = preflight_resume_tracking_overrides(
+            track_overrides, checkpoints, _s3_client(), _bucket,
+        )
 
     # Build resume request: original params + boxes from body + checkpoint-derived overrides.
     resume_params = {
         **orig_request,
         "box_a": body.box_a,
         "box_b": body.box_b,
-        **resume_plan.track_request_overrides,
+        **track_overrides,
         **resume_plan_to_request_fields(resume_plan),
     }
     if "resume_tracking_s3_key" in resume_params:
@@ -558,6 +583,13 @@ async def recover_interrupted_job(lifecycle: dict) -> None:
         return
 
     overrides = dict(resume_plan.track_request_overrides)
+    _rbucket = (
+        (resume_params.get("output_bucket") or resume_params.get("bucket") or "").strip()
+    )
+    if _rbucket and overrides.get("resume_tracking_s3_key") and _config:
+        overrides = preflight_resume_tracking_overrides(
+            overrides, checkpoints, _s3_client(), _rbucket,
+        )
     overrides.update(resume_plan_to_request_fields(resume_plan))
     if "resume_tracking_s3_key" in overrides:
         overrides["resume_from_job_id"] = job_id

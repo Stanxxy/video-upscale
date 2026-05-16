@@ -583,6 +583,26 @@ def test_build_resume_plan_full_tracking_without_analysis_skips_runner():
     assert plan.track_request_overrides["resume_from_frame"] == END_OF_TRACKING_SENTINEL
 
 
+def test_build_resume_plan_prefers_full_tracking_when_partial_also_present():
+    """Post-upload full key wins over periodic partial when both appear in history."""
+    plan = build_resume_plan([
+        _cp_record("track", {
+            "schema_version": 1,
+            "pending_detection": None,
+            "artifacts": {
+                "tracking_s3_key": "folder/v_tracked.json",
+                "partial_tracking_s3_key": "checkpoints/job/partial_tracking.json",
+            },
+            "worker_state": _ws(35.0).to_dict(),
+        }),
+    ])
+    assert plan.skip_tracking_runner is True
+    assert plan.track_request_overrides["resume_tracking_s3_key"] == (
+        "folder/v_tracked.json"
+    )
+    assert plan.track_request_overrides["resume_from_frame"] == END_OF_TRACKING_SENTINEL
+
+
 def test_build_resume_plan_pipeline_already_complete_publish():
     plan = build_resume_plan([
         _cp_record(

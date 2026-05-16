@@ -536,7 +536,7 @@ function showDetectionPanel(msg) {
   const info = document.getElementById('det-info');
   let html = `<b>Reason:</b> ${msg.reason} &nbsp; <b>Frame:</b> ${msg.frame_idx} &nbsp; <b>Candidates:</b> ${detectionState.candidates.length}`;
   if (detectionState.suggestedBoxes) {
-    html += `<br><span class="badge badge-hint">VLLM suggested athlete pair (shown as dashed green/red)</span>`;
+    html += `<br><span class="badge badge-hint">Model hint for athlete pair (dashed green/red)</span>`;
   }
   html += `<br>Click a candidate box to select, or drag anywhere to draw a custom box (even over candidates). First = Athlete A (green), second = Athlete B (red).`;
   info.innerHTML = html;
@@ -607,11 +607,11 @@ function redrawDetection() {
     ctx.restore();
   });
 
-  // Draw VLLM suggestions (dashed green/red, thinner)
+  // Draw optional model hints (dashed green/red, thinner)
   if (detectionState.suggestedBoxes) {
     const sg = detectionState.suggestedBoxes;
-    if (sg.athlete_a) drawBox(ctx, sg.athlete_a, s, '#4ade80', [4,4], 1.5, 'VLLM-A');
-    if (sg.athlete_b) drawBox(ctx, sg.athlete_b, s, '#f87171', [4,4], 1.5, 'VLLM-B');
+    if (sg.athlete_a) drawBox(ctx, sg.athlete_a, s, '#4ade80', [4,4], 1.5, 'Hint-A');
+    if (sg.athlete_b) drawBox(ctx, sg.athlete_b, s, '#f87171', [4,4], 1.5, 'Hint-B');
   }
 
   // Draw selections (solid)

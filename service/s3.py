@@ -91,4 +91,16 @@ class S3Client:
         return f"s3://{bucket}/{key}"
 
     def get_object(self, bucket: str, key: str) -> bytes:
-        return self.client.get_object(Bucket=bucket, Key=key)
+        resp = self.client.get_object(Bucket=bucket, Key=key)
+        return resp["Body"].read()
+
+    def object_exists(self, bucket: str, key: str) -> bool:
+        """Return True if ``head_object`` succeeds; False if object is missing."""
+        try:
+            self.client.head_object(Bucket=bucket, Key=key)
+            return True
+        except self.client.exceptions.ClientError as e:
+            code = e.response.get("Error", {}).get("Code", "")
+            if code in ("404", "NoSuchKey", "NotFound"):
+                return False
+            raise

@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,14 +14,16 @@ class ServiceConfig(BaseSettings):
 
     # Gemini (credential – set in .env, do not commit)
     gemini_api_key: str = ""
+    # Per-request HTTP timeout for Gemini (ms). Prevents indefinite hangs on bad networks.
+    gemini_request_timeout_ms: int = Field(
+        default=600_000,
+        description="Gemini HTTP client timeout per generate_content call (milliseconds).",
+    )
+    # Vision model for optional >2-candidate athlete hints (human never auto-applies).
+    gemini_athlete_suggest_model: str = "gemini-3.1-flash-lite-preview"
 
     # Model
     model_path: str = "RealESRGAN_x4plus.pth"
-
-    # VLLM (LM Studio / Qwen VL)
-    vllm_base_url: str = "http://localhost:1234/v1"
-    vllm_model: str = "qwen2.5-vl-7b-instruct"
-    vllm_timeout_sec: float = 30.0
 
     # Detection — 24 hours to allow async corrections via REST
     detection_timeout: float = 86400.0
@@ -35,6 +38,21 @@ class ServiceConfig(BaseSettings):
     max_concurrent_jobs: int = 1
     service_port: int = 8000
     temp_dir: str = "/tmp/bjj-pipeline"
+    # Stale-job recovery scans ``job_recovery_index`` partitions by calendar hour
+    # (``heartbeat_bucket``). Include enough hours so overnight crashes remain visible
+    # after restart (each reconcile tick runs one SELECT per distinct bucket).
+    recovery_heartbeat_bucket_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="How many trailing UTC hour buckets to scan for stale RUNNING/INTERRUPTED recovery.",
+    )
+    # Upscale / second-pass loop: log at most once per interval while iterating frames.
+    upscale_heartbeat_interval_sec: float = Field(
+        default=30.0,
+        ge=5.0,
+        description="Minimum seconds between upscale-stage heartbeat log lines.",
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

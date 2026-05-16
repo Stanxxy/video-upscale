@@ -1,18 +1,13 @@
 """
-VLLM-based athlete pre-selection.
+Gemini-based athlete pre-selection (optional hint when YOLO returns >2 persons).
 
-Uses LM Studio's OpenAI-compatible endpoint (Qwen VL 8B by default) to
-suggest which two bounding boxes correspond to the competing athletes when
-YOLO26 returns more than 2 candidates.
-
-The result is a HINT for the human verifier — it is never applied directly.
-Any failure (network, parse, validation) returns None so the caller can
-proceed with unfiltered YOLO26 candidates.
+Uses the Google Gen AI SDK (same stack as analyzer.py). The suggestion is a HINT
+for the human verifier — it is never applied directly. Any failure returns None.
 """
-import base64
+import asyncio
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -30,32 +25,38 @@ async def suggest_athletes(
     frame_jpeg: bytes,
     candidates: list[dict],
     config,
-) -> Optional[dict]:
+) -> Optional[dict[str, Any]]:
     """
-    Ask the local VLLM to suggest which two candidates are the athletes.
+    Ask Gemini to suggest which two candidates are the athletes.
 
     Args:
         frame_jpeg: Raw JPEG bytes of the detection frame.
         candidates: List of {"candidate_id": int, "box": [...], "confidence": float}.
-        config: ServiceConfig (needs vllm_base_url, vllm_model, vllm_timeout_sec).
+        config: ServiceConfig (needs gemini_api_key, gemini_athlete_suggest_model).
 
     Returns:
-        {"athlete_a": [x1,y1,x2,y2], "athlete_b": [x1,y1,x2,y2], "vllm_model": str}
-        or None on any failure.
+        {"athlete_a": [...], "athlete_b": [...], "suggestion_model": str}
+        or None on any failure or missing API key.
     """
     if not candidates:
         return None
 
-    try:
-        import openai
-    except ImportError:
-        logger.warning("openai package not installed; VLLM pre-filter unavailable")
+    if not getattr(config, "gemini_api_key", ""):
         return None
 
     try:
-        # Build annotated image showing candidate IDs
+        from google import genai
+        from google.genai import types
+    except ImportError:
+        logger.warning("google-genai not installed; athlete suggestion unavailable")
+        return None
+
+    model_id = getattr(
+        config, "gemini_athlete_suggest_model", "gemini-2.0-flash-preview",
+    )
+
+    try:
         annotated_jpeg = _annotate_frame(frame_jpeg, candidates)
-        frame_b64 = base64.b64encode(annotated_jpeg).decode()
 
         candidate_desc = "\n".join(
             f"  Box {c['candidate_id']}: confidence={c['confidence']:.2f}, "
@@ -64,39 +65,37 @@ async def suggest_athletes(
         )
         user_text = f"Candidates:\n{candidate_desc}\n\nWhich two are the competing athletes?"
 
-        client = openai.AsyncOpenAI(
-            base_url=config.vllm_base_url,
-            api_key="lm-studio",
+        client = genai.Client(
+            api_key=config.gemini_api_key,
+            http_options=types.HttpOptions(
+                timeout=int(getattr(config, "gemini_request_timeout_ms", 600_000)),
+            ),
+        )
+        image_part = types.Part.from_bytes(
+            data=annotated_jpeg, mime_type="image/jpeg",
         )
 
-        response = await client.chat.completions.create(
-            model=config.vllm_model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": _PROMPT,
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{frame_b64}"},
-                        },
-                        {"type": "text", "text": user_text},
-                    ],
-                },
-            ],
-            max_tokens=64,
-            temperature=0.0,
-            timeout=config.vllm_timeout_sec,
+        _timeout_s = int(getattr(config, "gemini_request_timeout_ms", 600_000)) / 1000.0
+        response = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=model_id,
+                contents=[_PROMPT + "\n\n" + user_text, image_part],
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=128,
+                ),
+            ),
+            timeout=_timeout_s,
         )
 
-        raw_text = response.choices[0].message.content.strip()
-        return _parse_response(raw_text, candidates, config.vllm_model)
+        raw_text = (response.text or "").strip()
+        return _parse_response(raw_text, candidates, model_id)
 
     except Exception as e:
-        logger.warning("VLLM suggest_athletes failed (%s): %s", type(e).__name__, e)
+        logger.warning(
+            "Gemini suggest_athletes failed (%s): %s — model=%s",
+            type(e).__name__, e, model_id,
+        )
         return None
 
 
@@ -110,7 +109,6 @@ def _annotate_frame(frame_jpeg: bytes, candidates: list[dict]) -> bytes:
     if frame is None:
         return frame_jpeg
 
-    h, w = frame.shape[:2]
     for c in candidates:
         box = c["box"]
         cid = c["candidate_id"]
@@ -127,36 +125,34 @@ def _parse_response(
     text: str,
     candidates: list[dict],
     model_name: str,
-) -> Optional[dict]:
-    """Parse VLLM JSON response and validate box indices."""
-    # Strip markdown fences if present
+) -> Optional[dict[str, Any]]:
+    """Parse Gemini JSON response and validate box indices."""
     text = text.strip().strip("```json").strip("```").strip()
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("VLLM returned non-JSON: %r", text)
+        logger.warning("Gemini returned non-JSON: %r", text[:500])
         return None
 
     if data.get("uncertain"):
-        logger.info("VLLM indicated uncertainty — no suggestion provided")
+        logger.info("Gemini indicated uncertainty — no suggestion provided")
         return None
 
     id_a = data.get("athlete_a")
     id_b = data.get("athlete_b")
 
     if id_a is None or id_b is None or id_a == id_b:
-        logger.warning("VLLM response missing or duplicate IDs: %r", data)
+        logger.warning("Gemini response missing or duplicate IDs: %r", data)
         return None
 
     cid_map = {c["candidate_id"]: c["box"] for c in candidates}
     if id_a not in cid_map or id_b not in cid_map:
-        logger.warning("VLLM returned unknown candidate IDs %s/%s", id_a, id_b)
+        logger.warning("Gemini returned unknown candidate IDs %s/%s", id_a, id_b)
         return None
 
     box_a = cid_map[id_a]
     box_b = cid_map[id_b]
 
-    # Basic sanity: boxes must have positive area
     if (box_a[2] - box_a[0]) <= 0 or (box_a[3] - box_a[1]) <= 0:
         return None
     if (box_b[2] - box_b[0]) <= 0 or (box_b[3] - box_b[1]) <= 0:
@@ -165,5 +161,7 @@ def _parse_response(
     return {
         "athlete_a": box_a,
         "athlete_b": box_b,
+        "suggestion_model": model_name,
+        # Back-compat for stored checkpoints / older clients
         "vllm_model": model_name,
     }

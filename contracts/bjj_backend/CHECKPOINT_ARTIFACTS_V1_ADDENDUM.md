@@ -1,6 +1,6 @@
 # Checkpoint artifacts addendum (full per-stage reference)
 
-**Date:** 2026-05-02 (revised 2026-05-03)
+**Date:** 2026-05-02 (revised 2026-05-03, 2026-05-10)
 **Status:** draft contract — vision engine + `video_analysis_and_annotation_service`
 **Companion to:** `CHECKPOINT_DATA_SCHEMA_V1.md`
 **Storage:** Amazon Keyspaces `video_analysis.job_stage_checkpoints.checkpoint_data` (JSON text).
@@ -131,7 +131,7 @@ Written when no boxes are provided and the worker captures a candidate frame for
 | `pending_detection.frame_s3_key` | string | yes | Key within `frame_bucket`. |
 | `pending_detection.frame_bucket` | string | no | Default: deployment bucket (`VIDEO_STORAGE_BUCKET`). |
 | `pending_detection.candidates` | array | yes | Engine-defined detection candidates. Domain fields are engine-owned. |
-| `pending_detection.suggested_boxes` | array | no | Optional VLLM hints — list of `[x1, y1, x2, y2]`. |
+| `pending_detection.suggested_boxes` | object \| array \| null | no | Optional model hint for the verifier: either two boxes `[[x1,y1,x2,y2],[…]]` or an object `{ "athlete_a": [...], "athlete_b": [...] }` (plus optional `suggestion_model` / `vllm_model`). Never applied automatically. |
 
 ### Verified-boxes after manual resume
 
@@ -194,6 +194,8 @@ Written periodically as tracking advances. The worker uploads the current `track
 ### Mid-track detection loss
 
 Written when SAM2/RTMPose/YOLO loses identity mid-video. Includes `pending_detection` so the lifecycle moves to `AWAITING_CORRECTION`, plus partial-tracking artifacts so resume can skip already-tracked frames.
+
+**Engine behavior (normative):** After this checkpoint and `AWAITING_CORRECTION` are durable, the vision engine **must end the current `run_tracking` invocation** (no further frames in the same pass). That guarantees the superseded job releases worker capacity so the **replacement** `job_id` from manual resume can start immediately. See `JOB_ROTATION_HANDOFF_AND_RESUME.md` §4.1.
 
 ```json
 {
