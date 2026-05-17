@@ -619,6 +619,112 @@ async def test_skip_upscale_writes_post_upload_track_artifact_and_upload_termina
     assert lc["job_state"] == JobState.COMPLETED.value
 
 
+def _leaf_run_tracking_job_with_overlap(*args, **kwargs):
+    """Leaf segment: frame 0 overlaps parent (last-writer), frame 1 is new."""
+    import json
+
+    output_dir = kwargs.get("tracking_output_dir") or args[3]
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, "tracking.json")
+    with open(path, "w") as f:
+        json.dump(
+            {
+                "start_frame": 1,
+                "frames": [
+                    {"frame_idx": 0, "athlete": "leaf_wins"},
+                    {"frame_idx": 1, "athlete": "B"},
+                ],
+            },
+            f,
+        )
+    return path
+
+
+@pytest.mark.asyncio
+async def test_run_job_merges_ancestor_tracking_chain(
+    mock_jobs_store, tmp_path,
+):
+    """Replacement leaf run merges ancestor tracking JSON before S3 upload."""
+    from service import worker
+
+    parent_id = "parent-job-id"
+    parent_tracking_key = "ancestors/p_tracked.json"
+    parent_doc = {
+        "start_frame": 0,
+        "frames": [{"frame_idx": 0, "athlete": "A"}],
+    }
+
+    config = ServiceConfig(
+        temp_dir=str(tmp_path), s3_endpoint_url="http://x", gemini_api_key="",
+    )
+    job_store = InMemoryJobStore()
+    request = _track_request(
+        bucket="b",
+        key="folder/v.mp4",
+        box_a=[1, 2, 3, 4],
+        box_b=[5, 6, 7, 8],
+        skip_upscale=True,
+        output_bucket="out",
+    )
+    leaf_job = await job_store.create_job(request)
+
+    await mock_jobs_store.create_lifecycle(parent_id, "vid", "u")
+    await mock_jobs_store.write_checkpoint(
+        parent_id,
+        PipelineStage.TRACK,
+        False,
+        {
+            "schema_version": 1,
+            "pending_detection": None,
+            "reason": "track_completed",
+            "artifacts": {"tracking_s3_key": parent_tracking_key},
+            "worker_state": {
+                "progress_percent": 55.0,
+                "current_frame": 1,
+                "total_frames": 100,
+                "stage_progress_fraction": 0.5,
+            },
+        },
+    )
+    await mock_jobs_store.create_lifecycle(
+        leaf_job.job_id, "vid", "u", parent_job_id=parent_id,
+    )
+
+    s3 = _stub_s3()
+
+    def _download_json(bucket, key):
+        if bucket == "out" and key == parent_tracking_key:
+            return dict(parent_doc)
+        raise AssertionError(f"unexpected download_json: {bucket}/{key}")
+
+    s3.download_json = MagicMock(side_effect=_download_json)
+
+    with patch.object(worker, "_make_s3", return_value=s3), \
+         patch.object(worker, "_parse_time_range", return_value=(0, None)), \
+         patch(
+             "service.tracking_runner.run_tracking_job",
+             side_effect=_leaf_run_tracking_job_with_overlap,
+         ):
+        await worker.run_job(
+            leaf_job.job_id, request, config, job_store, mock_jobs_store,
+        )
+
+    tracked_uploads = [
+        call.args[0]
+        for call in s3.upload_json.call_args_list
+        if len(call.args) >= 3 and str(call.args[2]).endswith("_tracked.json")
+    ]
+    assert len(tracked_uploads) == 1
+    uploaded = tracked_uploads[0]
+    by_idx = {f["frame_idx"]: f for f in uploaded["frames"]}
+    assert set(by_idx) == {0, 1}
+    assert by_idx[0]["athlete"] == "leaf_wins"
+    assert by_idx[1]["athlete"] == "B"
+
+    lc = await mock_jobs_store.get_lifecycle(leaf_job.job_id)
+    assert lc["job_state"] == JobState.COMPLETED.value
+
+
 # ---------------------------------------------------------------------------
 # Full-path integration: annotate + upload incremental + publish (Task 7)
 # ---------------------------------------------------------------------------
