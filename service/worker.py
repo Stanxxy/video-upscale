@@ -296,8 +296,6 @@ async def run_job(
             os.path.join(work_dir, "video.mp4"), # TODO: video path should be saved in the checkpoint.  
         )
 
-        # TODO: to have the right percentage, a method should be called to 
-        # get the progress percent based on the lifecycle of the original job.
         dl_pct = _pct_at_least(10.0, progress_floor)
         await job_store.update_job(job_id, progress_percent=dl_pct)
         await jobs_store.update_progress(job_id, PipelineStage.DOWNLOAD, dl_pct)
@@ -650,7 +648,6 @@ async def run_job(
             with open(tracking_json_path) as f:
                 new_tracking = json.load(f)
             merged_frames = partial_tracking_data.get("frames", []) + new_tracking.get("frames", [])
-            # TODO: start frame should be the global start frame as this is the merged tracking json.
             merged = {
                 **new_tracking,
                 "frames": merged_frames,
@@ -689,10 +686,6 @@ async def run_job(
                 ),
             ),
         )
-
-        # TODO: when waiting for detection correciotn, jump to the finally block.
-        # A logic should be setup to check if the tracking is trully completed.
-
 
         # ==============================================================
         # TRACKING-ONLY SHORT-CIRCUIT (skip_upscale=True)
@@ -871,7 +864,6 @@ async def run_job(
         # STAGE 4.5: ANNOTATE VIDEO (80-85%)
         # TODO: annotate the video in a coroutine and dont block the upload.
         # ============================================================
-        # TODO: need to design a plan to recover from the annotated video if the service is crashed during the annotate.
         logger.info("Job %s: stage annotate (80-85%%)", job_id)
         annotated_video_path = None
         tracked_video_path = os.path.join(tracking_output_dir, "tracked_output.mp4")
@@ -905,7 +897,6 @@ async def run_job(
         # ============================================================
         # STAGE 5: UPLOAD (85-90%)
         # ============================================================
-        # TODO: need to find a way to recover from the annotated video if the service is crashed during the annotate.
         logger.info(
             "Job %s: stage upload (85-90%%) bucket=%s",
             job_id,
@@ -1107,10 +1098,8 @@ async def run_job(
         # ready for next job.
         _ensure_models_released()
 
-        # Save partial tracking.json to S3 if job failed/cancelled (not suspended —
-        # the detection_cb already saved partial tracking during suspend).
-        # TODO: may need to spread the logic to different steps. No job should be suspended as that wastes the computation resources.
-        # 
+        # Save partial tracking on FAILED/CANCELLED only — AWAITING_CORRECTION
+        # suspend already persisted partial tracking via detection_cb.
         try:
             ks_lc = await jobs_store.get_lifecycle(job_id)
             ks_state = ks_lc.get("job_state") if ks_lc else None

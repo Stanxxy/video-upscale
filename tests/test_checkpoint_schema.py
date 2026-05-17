@@ -35,6 +35,7 @@ from service.checkpoints import (
     build_cancellation_checkpoint,
     build_resume_overrides,
     build_resume_plan,
+    resume_plan_to_request_fields,
     latest_checkpoint_data_by_stage,
     worker_state_from,
     END_OF_TRACKING_SENTINEL,
@@ -612,6 +613,36 @@ def test_build_resume_plan_pipeline_already_complete_publish():
         ),
     ])
     assert plan.pipeline_already_complete is True
+
+
+def test_build_resume_plan_upload_artifacts_in_request_fields():
+    """Upload-row artifacts map to TrackRequest skip-reupload hints."""
+    plan = build_resume_plan([
+        _cp_record(
+            "upload",
+            {
+                "schema_version": 1,
+                "pending_detection": None,
+                "reason": "annotated_video_uploaded",
+                "artifacts": {
+                    "tracking_s3_key": "folder/v_tracked.json",
+                    "analysis_s3_key": "folder/v_analysis.json",
+                    "annotated_video_s3_key": "folder/v_annotated.mp4",
+                },
+                "worker_state": _ws(90.0).to_dict(),
+            },
+        ),
+    ])
+    assert plan.existing_upload_artifacts == {
+        "tracking_s3_key": "folder/v_tracked.json",
+        "analysis_s3_key": "folder/v_analysis.json",
+        "annotated_video_s3_key": "folder/v_annotated.mp4",
+    }
+    fields = resume_plan_to_request_fields(plan)
+    assert fields["resume_existing_upload_tracking_key"] == "folder/v_tracked.json"
+    assert fields["resume_existing_upload_analysis_key"] == "folder/v_analysis.json"
+    assert fields["resume_existing_upload_annotated_key"] == "folder/v_annotated.mp4"
+    assert fields["resume_terminal_publish_done"] is False
 
 
 def test_latest_checkpoint_data_by_stage_prefers_newer_updated_at():
