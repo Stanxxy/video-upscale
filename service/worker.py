@@ -684,23 +684,26 @@ async def run_job(
                     else config.tracking_max_missing_frames
                 )
                 # M4: apply fast mode presets for tracking parameters.
+                # M5: prop_stride is now configurable via BJJ_FAST_PROP_STRIDE /
+                #     BJJ_STANDARD_PROP_STRIDE (default 24 / 5).
                 _is_fast_mode = request.processing_mode == ProcessingMode.FAST
                 if _is_fast_mode:
-                    # Fast mode: SAM2-tiny + propagation stride 12 + no pose
+                    # Fast mode: SAM2-tiny + configurable propagation stride + no pose
                     _eff_sam2_model = "facebook/sam2.1-hiera-tiny"
-                    _eff_prop_stride = 12
+                    _eff_prop_stride = config.fast_prop_stride
                     _eff_enable_pose = False
                 else:
-                    # Standard mode: SAM2 base-plus + no propagation stride + pose enabled
+                    # Standard mode: SAM2 base-plus + configurable propagation stride + pose enabled
                     _eff_sam2_model = request.sam2_model
-                    _eff_prop_stride = 1
+                    _eff_prop_stride = config.standard_prop_stride
                     _eff_enable_pose = True
 
                 # S11: stride-N frame sampling. Auto-compute from source fps when 0.
                 # 60fps → stride=6 → ~300 frames from 1800; 30fps → stride=3.
-                # Fast mode: frame_stride=1 because prop_stride already reduces the frame count
-                # by 12x. Applying frame_stride=12 on top would double-filter (150 → ~12 frames).
-                # The JSON output should write all SAM2-propagated frames (one per prop step).
+                # Fast mode: frame_stride=1 because prop_stride already reduces the frame count.
+                # M5: prop_stride=24 gives 332 SAM2 frames from 7956; applying frame_stride on
+                # top would double-filter. The JSON output should write all SAM2-propagated
+                # frames (one per prop step).
                 if _is_fast_mode:
                     eff_frame_stride = 1  # write all prop-strided frames to JSON
                 elif request.frame_stride > 0:

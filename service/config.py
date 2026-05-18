@@ -64,6 +64,21 @@ class ServiceConfig(BaseSettings):
         ge=1,
         description="Max concurrent Gemini window tasks. 1=sequential chain (safe default).",
     )
+    # M5: per-mode propagation stride knobs.
+    # Fast mode: prop_stride=24 → 7956/24=332 SAM2 frames (~1.8 min tracking on GB10).
+    # Standard mode: prop_stride=5 → 7956/5=1591 SAM2 frames (~15 min tracking on GB10).
+    # Override via env: BJJ_FAST_PROP_STRIDE=24  BJJ_STANDARD_PROP_STRIDE=5
+    fast_prop_stride: int = Field(
+        default=24,
+        ge=1,
+        description="SAM2 propagation stride for fast mode. 24 → ~2.5 fps effective from 60 fps source.",
+    )
+    standard_prop_stride: int = Field(
+        default=5,
+        ge=1,
+        description="SAM2 propagation stride for standard mode. 5 → 12 fps effective from 60 fps source.",
+    )
+
     # M2 S5: upscale target size and pre-scale cap.
     upscale_target_size: int = Field(
         default=768,
