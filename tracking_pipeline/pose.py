@@ -2,9 +2,12 @@
 RTMPose keypoint estimation from bounding boxes.
 Used alongside YOLO26 (detection only) and SAM2 (mask propagation).
 
-Uses rtmlib for top-down pose estimation on CPU.
+Uses rtmlib for top-down pose estimation.
+S8: Auto-selects GPU (onnxruntime CUDA EP) when available, falls back to CPU.
+On Mac M4 Max (MPS) force_cpu remains True — onnxruntime MPS EP is not stable.
 """
 import numpy as np
+import torch
 
 from .device import get_device
 
@@ -15,19 +18,35 @@ class PoseEstimator:
     def __init__(self, device=None):
         from rtmlib import Body
 
+        # S8: Use CUDA EP on Blackwell/CUDA GPUs; stay on CPU for MPS/CPU-only.
+        # onnxruntime-gpu falls back to CPU EP gracefully when CUDA EP is absent.
+        _cuda_available = torch.cuda.is_available()
+        _force_cpu = not _cuda_available  # True on M4 Max (MPS), False on Spark CUDA
+
         if device is None:
-            device = get_device(force_cpu=True)  # CPU to save GPU memory
+            device = get_device(force_cpu=_force_cpu)
 
         backend = "onnxruntime"
-        device_str = "cpu"  # rtmlib uses string device
+        device_str = "cuda" if _cuda_available else "cpu"
 
-        print(f"[pose] Loading RTMPose on {device_str}...")
-        self.body = Body(
-            mode="lightweight",  # RTMPose-m, good balance of speed/accuracy
-            backend=backend,
-            device=device_str,
-        )
-        print("[pose] RTMPose loaded.")
+        print(f"[pose] Loading RTMPose on {device_str} (force_cpu={_force_cpu})...")
+        try:
+            self.body = Body(
+                mode="lightweight",  # RTMPose-m, good balance of speed/accuracy
+                backend=backend,
+                device=device_str,
+            )
+        except Exception as e:
+            if device_str != "cpu":
+                print(f"[pose] RTMPose on {device_str} failed ({e}), falling back to CPU...")
+                self.body = Body(
+                    mode="lightweight",
+                    backend=backend,
+                    device="cpu",
+                )
+            else:
+                raise
+        print(f"[pose] RTMPose loaded on {device_str}.")
 
     def estimate(self, frame, box=None):
         """
