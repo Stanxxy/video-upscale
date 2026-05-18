@@ -8,6 +8,7 @@ MPS/CPU device support, empty_cache() for MPS.
 Memory-bounded: only one batch of frames (~120) is loaded at a time,
 regardless of total video length.
 """
+import math
 import os
 import shutil
 import subprocess
@@ -122,6 +123,7 @@ class SAM2Manager:
         self.global_start_frame = 0
         self.total_local_frames = 0
         self.batch_offset = 0  # local_idx offset of the current batch
+        self.prop_stride = 1   # M4: propagation stride (frames skipped between SAM2 steps)
 
     # ------------------------------------------------------------------
     # Video metadata (no frame extraction)
@@ -159,13 +161,15 @@ class SAM2Manager:
     # Batch frame extraction + SAM2 init
     # ------------------------------------------------------------------
 
-    def load_batch(self, batch_start_local, batch_size):
+    def load_batch(self, batch_start_local, batch_size, prop_stride=1):
         """Extract a batch of frames and initialize SAM2 state.
 
         Args:
             batch_start_local: Start index relative to the tracking range
-                               (0-based from global_start_frame).
-            batch_size: Number of frames to extract.
+                               (0-based from global_start_frame). In real frame units.
+            batch_size: Number of real frames to cover (before stride reduction).
+            prop_stride: M4 propagation stride. When >1, only every Nth real frame is
+                         extracted and fed to SAM2. SAM2 sees them as consecutive frames.
         """
         # Clean previous batch
         if self.temp_dir and os.path.exists(self.temp_dir):
@@ -173,38 +177,64 @@ class SAM2Manager:
         os.makedirs(self.temp_dir, exist_ok=True)
 
         self.batch_offset = batch_start_local
+        self.prop_stride = prop_stride
         global_start = self.global_start_frame + batch_start_local
 
         t0 = time.time()
-        actual_count = self._extract_frames_ffmpeg(global_start, batch_size)
+        actual_count = self._extract_frames_ffmpeg(global_start, batch_size, prop_stride)
         if actual_count == 0:
             # Fallback to cv2 if ffmpeg fails
-            actual_count = self._extract_frames_cv2(global_start, batch_size)
+            actual_count = self._extract_frames_cv2(global_start, batch_size, prop_stride)
         elapsed = time.time() - t0
-        print(f"[sam2] Batch: extracted {actual_count} frames "
-              f"(local {batch_start_local}-{batch_start_local + actual_count - 1}) "
+        # actual_count is the number of SAM2-visible frames (real frames / prop_stride)
+        real_frames_covered = actual_count * prop_stride
+        print(f"[sam2] Batch: extracted {actual_count} frames (stride={prop_stride}, "
+              f"covering {real_frames_covered} real frames, "
+              f"local {batch_start_local}-{batch_start_local + real_frames_covered - 1}) "
               f"in {elapsed:.1f}s")
 
         # Initialize SAM2 state for this batch
         self._init_state()
 
-    def _extract_frames_ffmpeg(self, global_start, count):
-        """Extract frames using ffmpeg (fast, hardware-accelerated)."""
+    def _extract_frames_ffmpeg(self, global_start, count, prop_stride=1):
+        """Extract frames using ffmpeg (fast, hardware-accelerated).
+
+        Args:
+            global_start: First real frame index in the video.
+            count: Number of real frames to cover.
+            prop_stride: M4 propagation stride. When >1, uses ffmpeg select filter
+                         to extract only every Nth frame, reducing SAM2 propagation
+                         steps by N. Output files are 00000.jpg, 00001.jpg, ...
+                         corresponding to real frames 0, N, 2N, ... within the batch.
+        """
         start_sec = global_start / self.video_fps
+        if prop_stride > 1:
+            # select=not(mod(n,N)) selects frames where n%N==0 (i.e., 0, N, 2N, ...)
+            # -vsync vfr avoids duplicate frames from the select filter
+            n_to_extract = int(math.ceil(count / prop_stride))
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", f"{start_sec:.4f}",
+                "-i", self.video_path,
+                "-vf", f"select=not(mod(n\\,{prop_stride}))",
+                "-frames:v", str(n_to_extract),
+                "-q:v", "5",
+                "-loglevel", "error",
+                "-vsync", "vfr",
+                os.path.join(self.temp_dir, "%05d.jpg"),
+            ]
+        else:
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", f"{start_sec:.4f}",
+                "-i", self.video_path,
+                "-frames:v", str(count),
+                "-q:v", "5",
+                "-loglevel", "error",
+                os.path.join(self.temp_dir, "%05d.jpg"),
+            ]
         try:
-            subprocess.run(
-                [
-                    "ffmpeg", "-y",
-                    "-ss", f"{start_sec:.4f}",
-                    "-i", self.video_path,
-                    "-frames:v", str(count),
-                    "-q:v", "5",
-                    "-loglevel", "error",
-                    os.path.join(self.temp_dir, "%05d.jpg"),
-                ],
-                check=True,
-                capture_output=True,
-            )
+            subprocess.run(cmd, check=True, capture_output=True)
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"[sam2] ffmpeg extraction failed: {e}")
             return 0
@@ -220,25 +250,41 @@ class SAM2Manager:
                 )
         return len(files)
 
-    def _extract_frames_cv2(self, global_start, count):
-        """Fallback: extract frames using cv2 (slower but always works)."""
+    def _extract_frames_cv2(self, global_start, count, prop_stride=1):
+        """Fallback: extract frames using cv2 (slower but always works).
+
+        Args:
+            global_start: First real frame index in the video.
+            count: Number of real frames to cover.
+            prop_stride: M4 propagation stride. When >1, only saves every Nth frame,
+                         using cap.grab() (cheap, no decode) to skip intermediate frames.
+        """
         cap = cv2.VideoCapture(self.video_path)
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open {self.video_path}")
         if global_start > 0:
             cap.set(cv2.CAP_PROP_POS_FRAMES, global_start)
-        idx = 0
-        while idx < count:
+        saved_idx = 0  # output file index (0, 1, 2, ...)
+        real_idx = 0   # current position within the count window
+        while real_idx < count:
+            if prop_stride > 1 and real_idx % prop_stride != 0:
+                # Skip without decoding
+                ok = cap.grab()
+                if not ok:
+                    break
+                real_idx += 1
+                continue
             ret, frame = cap.read()
             if not ret:
                 break
             cv2.imwrite(
-                os.path.join(self.temp_dir, f"{idx:05d}.jpg"), frame,
+                os.path.join(self.temp_dir, f"{saved_idx:05d}.jpg"), frame,
                 [int(cv2.IMWRITE_JPEG_QUALITY), 85],
             )
-            idx += 1
+            saved_idx += 1
+            real_idx += 1
         cap.release()
-        return idx
+        return saved_idx
 
     def _init_state(self):
         """Initialize SAM2 inference state from the current temp dir.

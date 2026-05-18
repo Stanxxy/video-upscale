@@ -93,6 +93,8 @@ def run_tracking_job(
     max_missing_frames: int = 15,
     force_cpu: bool = False,
     frame_stride: int = 1,
+    prop_stride: int = 1,
+    enable_pose: bool = True,
     progress_cb: Optional[Callable[[int, int], None]] = None,
     detection_cb: Optional[Callable[..., Optional[tuple]]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
@@ -143,6 +145,8 @@ def run_tracking_job(
         progress_callback=progress_cb,
         should_stop=should_stop,
         frame_stride=frame_stride,
+        prop_stride=prop_stride,
+        enable_pose=enable_pose,
     )
 
     if json_path is None:

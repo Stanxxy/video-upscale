@@ -11,6 +11,7 @@ Usage:
 
 import gc
 import json
+import math
 import os
 import subprocess
 import time
@@ -100,6 +101,8 @@ def run_tracking(
     frame_callback=None,
     should_stop=None,
     frame_stride=1,
+    prop_stride=1,
+    enable_pose=True,
 ):
     """
     Main tracking loop: SAM2 propagation with user intervention on track loss.
@@ -135,6 +138,12 @@ def run_tracking(
         frame_stride: Only write every Nth frame to the tracking JSON output.
             SAM2 propagates ALL frames for mask continuity; only the JSON output
             is filtered. Real frame_idx values are preserved. Default 1 = no stride.
+        prop_stride: M4 propagation stride. SAM2 only propagates every Nth real frame.
+            ffmpeg's select filter extracts only those frames; SAM2 sees them as
+            consecutive. Output global_idx values are multiplied by prop_stride so
+            they map back to real frame positions. Default 1 = no stride (all frames).
+        enable_pose: If True (default), RTMPose estimates keypoints each frame.
+            Set False for fast mode to skip pose estimation entirely (~120ms/frame saved).
         detection_callback: Optional callable(reason, frame_jpeg, **kwargs) -> (box_a, box_b) | None.
             Called when human input is needed mid-tracking (BLACKOUT / tracking_lost).
             Receives yolo_detections=[{box, confidence}, ...] as a keyword arg.
@@ -165,7 +174,8 @@ def run_tracking(
     print("=" * 60)
 
     sam2_mgr = SAM2Manager(model_id=sam2_model_id, device=device)
-    pose_est = PoseEstimator()
+    # M4: conditionally load PoseEstimator. Fast mode skips pose to save ~120ms/frame.
+    pose_est = PoseEstimator() if enable_pose else None
 
     # Shared DINOv2 on CPU (used by identity_mgr for post-scramble verification)
     dino_device = torch.device("cpu")
@@ -196,7 +206,10 @@ def run_tracking(
     total_local = end_frame - start_frame
 
     # ===== 2. Init SAM2 (batch-based, memory-bounded) =====
-    BATCH_SIZE = 60  # frames per batch (one propagation step, ~1.4GB bound)
+    # M4: BATCH_SIZE is in REAL frame units. With prop_stride=12, a batch of 60
+    # real frames yields only 5 SAM2-visible frames (60/12). Keep batch in real
+    # frames so batch_end_local arithmetic (real frame units) stays consistent.
+    BATCH_SIZE = 60  # real frames per batch
 
     print()
     print("=" * 60)
@@ -204,7 +217,7 @@ def run_tracking(
     print("=" * 60)
     sam2_mgr.init_video_meta(video_path, start_frame, end_frame)
     first_batch = min(BATCH_SIZE, total_local)
-    sam2_mgr.load_batch(0, first_batch)
+    sam2_mgr.load_batch(0, first_batch, prop_stride=prop_stride)
 
     # Read initial frame
     video_io.cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
@@ -224,7 +237,10 @@ def run_tracking(
     # Add initial boxes to SAM2 + build identity gallery
     for track_id, box in init_boxes.items():
         mask = sam2_mgr.add_initial_box(0, track_id, box)
-        kpts, scores = pose_est.estimate(frame0, box)
+        if pose_est is not None:
+            kpts, scores = pose_est.estimate(frame0, box)
+        else:
+            kpts, scores = np.zeros((17, 2)), np.zeros(17)
         identity_mgr.update_gallery(
             track_id, frame0_rgb,
             mask=mask, box=box,
@@ -267,7 +283,8 @@ def run_tracking(
     print(f"Tracking: frames {start_frame} -> {end_frame} "
           f"({total_local} frames)")
     print(f"  step_size={step_size}, max_history={max_history}, "
-          f"max_missing_frames={max_missing_frames}")
+          f"max_missing_frames={max_missing_frames}, prop_stride={prop_stride}, "
+          f"enable_pose={enable_pose}")
     print("=" * 60)
 
     current_local = 0
@@ -291,13 +308,16 @@ def run_tracking(
         # --- Load next batch if needed ---
         if current_local >= batch_end_local:
             next_size = min(BATCH_SIZE, total_local - current_local)
-            sam2_mgr.load_batch(current_local, next_size)
+            sam2_mgr.load_batch(current_local, next_size, prop_stride=prop_stride)
             if last_known_boxes:
                 sam2_mgr.reprompt_boxes(last_known_boxes)
             batch_end_local = current_local + next_size
 
-        steps = min(step_size, batch_end_local - current_local)
-        if steps <= 0:
+        # M4: convert real-frame step budget to SAM2-visible frame count.
+        # batch_end_local and current_local are in real frame units.
+        real_steps = min(step_size, batch_end_local - current_local)
+        steps = max(1, int(math.ceil(real_steps / prop_stride)))
+        if real_steps <= 0:
             break
 
         generator = sam2_mgr.propagate_step(current_local, steps=steps)
@@ -310,7 +330,10 @@ def run_tracking(
                 sam2_mgr.is_reset = False
                 break
 
-            local_idx = sam2_mgr.batch_offset + batch_rel_idx
+            # M4: batch_rel_idx is SAM2's frame counter (0, 1, 2, ...).
+            # With prop_stride>1, each SAM2 step covers prop_stride real frames.
+            # local_idx must be in real-frame units so current_local tracks correctly.
+            local_idx = (sam2_mgr.batch_offset + batch_rel_idx) * prop_stride
             global_idx = start_frame + local_idx
 
             # Load frame from temp dir (batch-relative path)
@@ -388,7 +411,7 @@ def run_tracking(
                     missing_frames = {1: 0, 2: 0}
                     initial_mask_areas.clear()
                     state_machine.set_tracking()
-                    current_local = local_idx + 1
+                    current_local = local_idx + prop_stride
                     break  # Restart propagation after user intervention
 
                 # User cancelled — write empty frame and stay in RE_ID
@@ -414,7 +437,7 @@ def run_tracking(
                         print(f"[tracking] progress_callback error (non-fatal): {e}")
                 del frame_bgr, frame_rgb, masks_sam2
                 del frame_boxes, frame_kpts, frame_scores, frame_masks, frame_sources
-                current_local = local_idx + 1
+                current_local = local_idx + prop_stride
                 sam2_mgr.prune_memory(max_history, flush_cache=False)
                 continue  # Stay in RE_ID mode
 
@@ -442,7 +465,7 @@ def run_tracking(
                             sam2_mgr.add_initial_box(batch_rel_idx, 1, new_box_a)
                             sam2_mgr.add_initial_box(batch_rel_idx, 2, new_box_b)
                             state_machine.set_tracking()
-                            current_local = local_idx + 1
+                            current_local = local_idx + prop_stride
                             break
                     except HumanVerificationSuspend:
                         human_suspend = True
@@ -482,14 +505,16 @@ def run_tracking(
                         frame_masks[track_id] = mask
                         frame_sources[track_id] = "SAM2"
 
-                        # Pose on smoothed box → more stable crop
-                        kpts, sc = pose_est.estimate(frame_bgr, box)
-                        # Smooth keypoints with confidence filtering
-                        kpts_s, sc_adj = kpt_smoother.smooth(
-                            track_id, kpts, sc, timestamp,
-                        )
-                        frame_kpts[track_id] = kpts_s
-                        frame_scores[track_id] = sc_adj
+                        # M4: skip pose estimation in fast mode (enable_pose=False)
+                        if pose_est is not None:
+                            # Pose on smoothed box → more stable crop
+                            kpts, sc = pose_est.estimate(frame_bgr, box)
+                            # Smooth keypoints with confidence filtering
+                            kpts_s, sc_adj = kpt_smoother.smooth(
+                                track_id, kpts, sc, timestamp,
+                            )
+                            frame_kpts[track_id] = kpts_s
+                            frame_scores[track_id] = sc_adj
                 else:
                     missing_frames[track_id] += 1
 
@@ -537,7 +562,7 @@ def run_tracking(
                     missing_frames = {1: 0, 2: 0}
                     initial_mask_areas.clear()
                     state_machine.set_tracking()
-                    current_local = local_idx + 1
+                    current_local = local_idx + prop_stride
                     break  # Restart propagation after user intervention
 
             # ==============================
@@ -594,7 +619,10 @@ def run_tracking(
             del frame_bgr, frame_rgb, masks_sam2
             del frame_boxes, frame_kpts, frame_scores, frame_masks, frame_sources
 
-            current_local = local_idx + 1
+            # M4: advance current_local by prop_stride real frames.
+            # local_idx = (batch_offset + batch_rel_idx) * prop_stride
+            # So the next real frame position is local_idx + prop_stride.
+            current_local = local_idx + prop_stride
 
             # Prune SAM2 memory every frame (one entry removed at a time,
             # constant cost). flush_cache=False defers MPS heap compaction to
