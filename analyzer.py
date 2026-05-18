@@ -37,10 +37,8 @@ class BJJTechniqueAnalyzer:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
 
-    def analyze_sequence(self, frames, frame_indices, previous_context=None, player_references=None):
-        if not frames:
-            return "No frames."
-
+    def _build_contents_and_prompt(self, frames, frame_indices, previous_context, player_references):
+        """Build the prompt text, system instruction, and contents list (shared by sync/async)."""
         try:
             with open(self.taxonomy_path, "r") as f:
                 taxonomy_text = f.read()
@@ -53,7 +51,6 @@ class BJJTechniqueAnalyzer:
         You are analyzing a chunk of video frames.
         """
 
-        # Build player reference instruction if available
         ref_instruction = ""
         if player_references:
             ref_names = ", ".join(ref["player_name"] for ref in player_references)
@@ -90,17 +87,70 @@ class BJJTechniqueAnalyzer:
         }}{ref_instruction}
         """
 
+        contents = [prompt]
+        if player_references:
+            for ref in player_references:
+                contents.append(f"Reference image of {ref['player_name']}:")
+                contents.append(ref["image"])
+        contents.extend(frames)
+
+        return system_instruction, contents
+
+    @staticmethod
+    def _parse_response_text(text: str) -> str:
+        """Strip markdown fences from Gemini response."""
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0]
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0]
+        return text.strip()
+
+    async def analyze_sequence_async(self, frames, frame_indices, previous_context=None, player_references=None):
+        """Async version of analyze_sequence — uses client.aio for non-blocking Gemini calls.
+
+        Same return signature as analyze_sequence (returns a JSON string).
+        The context chain is preserved by the caller; this method is stateless.
+        """
+        if not frames:
+            return "No frames."
+
+        system_instruction, contents = self._build_contents_and_prompt(
+            frames, frame_indices, previous_context, player_references,
+        )
+
         try:
-            contents = [prompt]
+            logger.info(
+                "Gemini single-agent async: sending %d frames to model %s (http_timeout_ms=%d)",
+                len(frames), self.model_id, self._request_timeout_ms,
+            )
+            response = await self.client.aio.models.generate_content(
+                model=self.model_id,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    temperature=0.2,
+                ),
+            )
+            text = response.text
+            logger.info(
+                "Gemini single-agent async: received response (%d chars)",
+                len(text) if text else 0,
+            )
+            logger.debug("Gemini async raw response: %.500s", text)
+            return self._parse_response_text(text)
+        except Exception as e:
+            logger.error("Gemini single-agent async call failed: %s", e, exc_info=True)
+            return json.dumps({"error": str(e)})
 
-            # Add player reference images before the crop frames
-            if player_references:
-                for ref in player_references:
-                    contents.append(f"Reference image of {ref['player_name']}:")
-                    contents.append(ref["image"])
+    def analyze_sequence(self, frames, frame_indices, previous_context=None, player_references=None):
+        if not frames:
+            return "No frames."
 
-            contents.extend(frames)
+        system_instruction, contents = self._build_contents_and_prompt(
+            frames, frame_indices, previous_context, player_references,
+        )
 
+        try:
             logger.info(
                 "Gemini single-agent: sending %d frames to model %s (http_timeout_ms=%d)",
                 len(frames), self.model_id, self._request_timeout_ms,
@@ -120,13 +170,7 @@ class BJJTechniqueAnalyzer:
                 len(text) if text else 0,
             )
             logger.debug("Gemini raw response: %.500s", text)
-
-            if "```json" in text:
-                text = text.split("```json")[1].split("```")[0]
-            elif "```" in text:
-                text = text.split("```")[1].split("```")[0]
-
-            return text.strip()
+            return self._parse_response_text(text)
         except Exception as e:
             logger.error("Gemini single-agent call failed: %s", e, exc_info=True)
             return json.dumps({"error": str(e)})

@@ -47,6 +47,22 @@ class ServiceConfig(BaseSettings):
         le=168,
         description="How many trailing UTC hour buckets to scan for stale RUNNING/INTERRUPTED recovery.",
     )
+    # M2 S4: async Gemini fanout.
+    # gemini_max_inflight=1 preserves the context chain (sequential) while still
+    # overlapping upscale compute with the in-flight Gemini call.
+    # Raise to 4-8 after regression harness validates accuracy >= 0.95.
+    gemini_max_inflight: int = Field(
+        default=1,
+        ge=1,
+        description="Max concurrent Gemini window tasks. 1=sequential chain (safe default).",
+    )
+    # M2 S5: upscale target size and pre-scale cap.
+    upscale_target_size: int = Field(
+        default=768,
+        ge=64,
+        description="Long-edge target (px) for ESRGAN output. Was 1024; 768 saves ~3.5x FLOPs.",
+    )
+
     # Upscale / second-pass loop: log at most once per interval while iterating frames.
     upscale_heartbeat_interval_sec: float = Field(
         default=30.0,
