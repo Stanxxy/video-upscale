@@ -1706,6 +1706,86 @@ def _run_upscale_analysis(
             )
             analysis_results.append({"window": chunk_idx, "raw_error": str(e)})
 
+    # -- S3: analyzer queue + consumer thread --------------------------------
+    # Move _analyze_window invocation off the upscale-loop thread. The
+    # consumer runs analysis sequentially (one window at a time -- pipelined
+    # one window ahead of the producer at most). This hides Gemini round-trip
+    # latency (~50 s/window) under upscale compute. The producer (upscale
+    # loop) reads `current_context` synchronously; while the consumer is
+    # processing window N, the producer enqueues window N+1 with stale
+    # context. M2's S4 will properly pipeline the chain.
+    import queue as _stdlib_queue
+    analysis_queue: _stdlib_queue.Queue = _stdlib_queue.Queue(maxsize=2)
+    _analysis_consumer_stop = object()  # sentinel
+    _analysis_consumer_error: list[BaseException] = []
+
+    def _trigger_periodic_flush():
+        if not should_flush_analysis(len(analysis_results)):
+            return
+        last_frame = (
+            (analysis_results[-1].get("frames") or [resume_start_frame])[-1]
+        )
+        progress_pct = 55.0 + (processed / max(total, 1)) * 25.0
+        try:
+            asyncio.run_coroutine_threadsafe(
+                _flush_analysis_checkpoint(
+                    job_id=job_id,
+                    jobs_store=jobs_store,
+                    s3=s3_for_writes,
+                    output_bucket=output_bucket,
+                    output_dir=output_dir,
+                    tracking_s3_key=tracking_s3_key,
+                    analysis_results=analysis_results,
+                    current_context=current_context,
+                    next_frame_idx=last_frame + 1,
+                    progress_percent=progress_pct,
+                    total_tracking_frames=total_tracking_frames,
+                    stage_progress_fraction=(processed / max(total, 1)),
+                ),
+                loop,
+            ).result(timeout=30)
+        except Exception as e:
+            logger.warning("Periodic analysis flush failed: %s", e)
+
+    def _analysis_consumer_loop():
+        try:
+            while True:
+                item = analysis_queue.get()
+                if item is _analysis_consumer_stop:
+                    analysis_queue.task_done()
+                    return
+                window_payload = item
+                try:
+                    _analyze_window(window_payload)
+                    try:
+                        with open(
+                            os.path.join(output_dir, "analysis_raw.json"), "w"
+                        ) as f:
+                            json.dump(analysis_results, f, indent=2)
+                    except Exception as e:
+                        logger.warning("analysis_raw.json write failed: %s", e)
+                    _trigger_periodic_flush()
+                finally:
+                    analysis_queue.task_done()
+        except BaseException as e:
+            logger.error("Analysis consumer crashed: %s", e, exc_info=True)
+            _analysis_consumer_error.append(e)
+
+    _analysis_consumer_thread = None
+    if analyze_fn is not None:
+        _analysis_consumer_thread = threading.Thread(
+            target=_analysis_consumer_loop,
+            name="upscale-analyzer-consumer",
+            daemon=True,
+        )
+        _analysis_consumer_thread.start()
+
+    def _dispatch_window(window):
+        """Hand a window off to the consumer thread. Blocks if queue is full."""
+        # Snapshot the window (it's a list slice; safe to pass by reference
+        # since the producer no longer mutates this slice after dispatch).
+        analysis_queue.put(window)
+
     # -- Main upscale loop ---------------------------------------------------
     frames = tracking_data.get("frames", [])
     total = len(frames)
@@ -1796,9 +1876,24 @@ def _run_upscale_analysis(
             else:
                 batch_indices = [fi for fi, _ in pending_crops]
                 batch_crops = [c for _, c in pending_crops]
-                enhanced_list = restorer.enhance_batch(
-                    batch_crops, target_size=1024
+                enhance_batch_fn = getattr(restorer, "enhance_batch", None)
+                use_batched = (
+                    callable(enhance_batch_fn)
+                    # Restorer classes implement enhance_batch as a method on
+                    # the class. MagicMock auto-creates attributes, so guard
+                    # by checking the attribute is defined on the class (not
+                    # an auto-mocked instance attribute).
+                    and hasattr(type(restorer), "enhance_batch")
                 )
+                if use_batched:
+                    enhanced_list = enhance_batch_fn(
+                        batch_crops, target_size=1024
+                    )
+                else:
+                    enhanced_list = [
+                        restorer.enhance(c, target_size=1024)
+                        for c in batch_crops
+                    ]
             logger.debug(
                 "Job %s upscale: batch of %d done in %.2fs (%.2f ms/frame)",
                 job_id, len(pending_crops),
@@ -1826,43 +1921,11 @@ def _run_upscale_analysis(
                 sliding_buffer.append((fidx, pil_img))
 
                 if len(sliding_buffer) >= WINDOW_SIZE:
-                    _analyze_window(sliding_buffer[:WINDOW_SIZE])
+                    # S3: dispatch to the analyzer consumer thread instead of
+                    # blocking the upscale loop. Pass a copy so the producer
+                    # can mutate sliding_buffer freely after handing it off.
+                    _dispatch_window(list(sliding_buffer[:WINDOW_SIZE]))
                     del sliding_buffer[:STRIDE]
-
-                    with open(
-                        os.path.join(output_dir, "analysis_raw.json"), "w",
-                    ) as f:
-                        json.dump(analysis_results, f, indent=2)
-
-                    if should_flush_analysis(len(analysis_results)):
-                        last_frame = (
-                            (analysis_results[-1].get("frames") or [resume_start_frame])[-1]
-                        )
-                        progress_pct = 55.0 + (processed / max(total, 1)) * 25.0
-                        try:
-                            asyncio.run_coroutine_threadsafe(
-                                _flush_analysis_checkpoint(
-                                    job_id=job_id,
-                                    jobs_store=jobs_store,
-                                    s3=s3_for_writes,
-                                    output_bucket=output_bucket,
-                                    output_dir=output_dir,
-                                    tracking_s3_key=tracking_s3_key,
-                                    analysis_results=analysis_results,
-                                    current_context=current_context,
-                                    next_frame_idx=last_frame + 1,
-                                    progress_percent=progress_pct,
-                                    total_tracking_frames=total_tracking_frames,
-                                    stage_progress_fraction=(
-                                        processed / max(total, 1)
-                                    ),
-                                ),
-                                loop,
-                            ).result(timeout=30)
-                        except Exception as e:
-                            logger.warning(
-                                "Periodic analysis flush failed: %s", e,
-                            )
 
         # S1: amortized empty_cache. Reclaim cached blocks once per batch
         # instead of once per crop.
@@ -1940,12 +2003,29 @@ def _run_upscale_analysis(
         logger.info("Upscale pass complete (no Gemini key -- skipping analysis)")
         return None, fps
 
-    logger.info(
-        "Finalize: %d windows analysed, %d frames in remaining buffer",
-        len(analysis_results), len(sliding_buffer),
-    )
+    # S3: flush the remaining buffer through the consumer queue so the
+    # final window is processed in-order with everything else, then
+    # signal the consumer to stop and wait for it to drain.
     if sliding_buffer:
-        _analyze_window(sliding_buffer)
+        _dispatch_window(list(sliding_buffer))
+        sliding_buffer.clear()
+    if _analysis_consumer_thread is not None:
+        analysis_queue.put(_analysis_consumer_stop)
+        _analysis_consumer_thread.join(timeout=300.0)
+        if _analysis_consumer_thread.is_alive():
+            logger.warning(
+                "Analysis consumer thread did not exit within 300s drain"
+            )
+        if _analysis_consumer_error:
+            logger.error(
+                "Analysis consumer reported error during run: %s",
+                _analysis_consumer_error[0],
+            )
+
+    logger.info(
+        "Finalize: %d windows analysed (consumer drained)",
+        len(analysis_results),
+    )
 
     # Final durable flush — always write a checkpoint at the end of the stage,
     # whether or not we hit the every-5 boundary on the last window.
