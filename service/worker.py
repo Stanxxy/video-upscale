@@ -1886,9 +1886,13 @@ def _run_upscale_analysis(
     _is_fast_upscale = request.processing_mode == ProcessingMode.FAST
     _eff_gemini_max_inflight = 24 if _is_fast_upscale else config.gemini_max_inflight
     _use_context_chain = not _is_fast_upscale  # fast mode: no context chain
+    # Fast mode anchor: first window runs sequentially to capture athlete role labels,
+    # then remaining windows fanout in parallel sharing this context.
+    # Prevents athlete A/B role swapping across windows without full chain overhead.
+    _fast_anchor_context: str | None = None
     if _is_fast_upscale:
         logger.info(
-            "Job %s: fast mode Gemini fanout=%d (no context chain)",
+            "Job %s: fast mode Gemini fanout=%d (anchor-context: first window sequential, rest parallel)",
             job_id, _eff_gemini_max_inflight,
         )
 
@@ -1944,12 +1948,13 @@ def _run_upscale_analysis(
 
     async def _async_analyze_window(window_payload):
         """Async version of _analyze_window using analyze_sequence_async."""
-        nonlocal current_context
+        nonlocal current_context, _fast_anchor_context
         batch_frames = [x[1] for x in window_payload]
         batch_indices = [x[0] for x in window_payload]
         chunk_idx = len(analysis_results) + 1
-        # M4 F5: fast mode drops context chain for full Gemini parallelism
-        ctx = current_context if _use_context_chain else None
+        # Fast mode: use anchor context from first window to preserve role labels.
+        # First window gets ctx=None (establishes anchor); subsequent windows get anchor.
+        ctx = current_context if _use_context_chain else _fast_anchor_context
         logger.info(
             "Analyzing window %d async (frames %d-%d, %d images, ctx_chain=%s)",
             chunk_idx, batch_indices[0], batch_indices[-1], len(batch_frames),
@@ -1979,6 +1984,8 @@ def _run_upscale_analysis(
 
             if _use_context_chain and "current_context_summary" in result_data:
                 current_context = result_data["current_context_summary"]
+            elif not _use_context_chain and _fast_anchor_context is None and "current_context_summary" in result_data:
+                _fast_anchor_context = result_data["current_context_summary"]
             analysis_results.append({
                 "window": chunk_idx,
                 "frames": batch_indices,
@@ -2018,9 +2025,16 @@ def _run_upscale_analysis(
                         if items:
                             try:
                                 if _use_async and len(items) > 1:
-                                    _consumer_loop.run_until_complete(
-                                        asyncio.gather(*[_async_analyze_window(w) for w in items])
-                                    )
+                                    if _is_fast_upscale and _fast_anchor_context is None:
+                                        _consumer_loop.run_until_complete(_async_analyze_window(items[0]))
+                                        if len(items) > 1:
+                                            _consumer_loop.run_until_complete(
+                                                asyncio.gather(*[_async_analyze_window(w) for w in items[1:]])
+                                            )
+                                    else:
+                                        _consumer_loop.run_until_complete(
+                                            asyncio.gather(*[_async_analyze_window(w) for w in items])
+                                        )
                                 elif _use_async:
                                     _consumer_loop.run_until_complete(_async_analyze_window(items[0]))
                                 else:
@@ -2038,10 +2052,18 @@ def _run_upscale_analysis(
                     continue
                 try:
                     if _use_async and len(items) > 1:
-                        # M4 F5: concurrent dispatch via asyncio.gather
-                        _consumer_loop.run_until_complete(
-                            asyncio.gather(*[_async_analyze_window(w) for w in items])
-                        )
+                        if _is_fast_upscale and _fast_anchor_context is None:
+                            # Fast mode phase 1: first window alone establishes role anchor
+                            _consumer_loop.run_until_complete(_async_analyze_window(items[0]))
+                            if len(items) > 1:
+                                _consumer_loop.run_until_complete(
+                                    asyncio.gather(*[_async_analyze_window(w) for w in items[1:]])
+                                )
+                        else:
+                            # Standard mode or anchor already set: full concurrent dispatch
+                            _consumer_loop.run_until_complete(
+                                asyncio.gather(*[_async_analyze_window(w) for w in items])
+                            )
                     elif _use_async:
                         _consumer_loop.run_until_complete(_async_analyze_window(items[0]))
                     else:
