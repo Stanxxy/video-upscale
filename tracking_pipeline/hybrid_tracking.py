@@ -626,6 +626,12 @@ def run_tracking(
         )
         return None
 
+    # Close streaming JSON FIRST before any cleanup that might crash.
+    if _json_file is not None:
+        _json_file.write("\n]}\n")
+        _json_file.close()
+        print(f"Tracking JSON: {json_path}")
+
     # Re-encode with H.264 for compatibility
     output_video = os.path.join(output_dir, "tracked_output.mp4")
     print(f"\nRe-encoding: {output_video}")
@@ -643,12 +649,6 @@ def run_tracking(
     except Exception as e:
         print(f"FFmpeg failed ({e}). Raw video at: {raw_output}")
         output_video = raw_output
-
-    # Close streaming JSON
-    if _json_file is not None:
-        _json_file.write("\n]}\n")
-        _json_file.close()
-        print(f"Tracking JSON: {json_path}")
 
     sam2_mgr.cleanup()
 
