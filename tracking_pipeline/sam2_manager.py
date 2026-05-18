@@ -237,13 +237,28 @@ class SAM2Manager:
         return idx
 
     def _init_state(self):
-        """Initialize SAM2 inference state from the current temp dir."""
+        """Initialize SAM2 inference state from the current temp dir.
+
+        S7: On CUDA (GB10 / Blackwell), disable CPU offload — 128 GB unified
+        memory means there is no need to page tensors to system RAM.
+        On CPU/MPS, keep offload_*=True (memory-bounded operation).
+        """
         self.is_reset = False
+        # S7: CUDA has ample memory; disable offloads for throughput.
+        on_cuda = (
+            hasattr(self.device, "type") and self.device.type == "cuda"
+        ) or (
+            isinstance(self.device, str) and self.device.startswith("cuda")
+        )
+        offload_video = not on_cuda
+        offload_state = not on_cuda
+        if on_cuda:
+            print("[sam2] CUDA detected: offload_video_to_cpu=False, offload_state_to_cpu=False (S7)")
         try:
             self.inference_state = self.predictor.init_state(
                 video_path=self.temp_dir,
-                offload_video_to_cpu=True,
-                offload_state_to_cpu=True,
+                offload_video_to_cpu=offload_video,
+                offload_state_to_cpu=offload_state,
                 async_loading_frames=False,  # sync: batch is small enough
             )
         except (TypeError, RuntimeError) as e:
