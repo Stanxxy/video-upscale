@@ -11,6 +11,7 @@ regardless of total video length.
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 
 import cv2
@@ -146,7 +147,10 @@ class SAM2Manager:
         end_frame = min(end_frame, total)
         self.total_local_frames = end_frame - start_frame
 
-        self.temp_dir = "temp_sam2_frames"
+        # Use a unique per-instance temp directory so concurrent SAM2 instances
+        # (e.g. K-segment parallel tracking) don't overwrite each other's frames.
+        # Stored inside the system temp dir, unique to this manager lifetime.
+        self.temp_dir = tempfile.mkdtemp(prefix="sam2_frames_")
         print(f"[sam2] Video meta: fps={self.video_fps:.1f}, "
               f"frames {start_frame}-{end_frame} "
               f"({self.total_local_frames} total)")
