@@ -7,11 +7,13 @@ Verifies:
 3. Overlap regions are correct.
 4. K=1 returns a single segment spanning the full range.
 5. merge_tracking_results de-duplicates overlap frames correctly.
+6. merge_analysis_results correctly passes clips through deduplicate_clips.
 """
 import pytest
 from service.segment_runner import (
     split_segments,
     merge_tracking_results,
+    merge_analysis_results,
     OVERLAP_FRAMES,
     SegmentBounds,
 )
@@ -146,3 +148,80 @@ class TestMergeTrackingResults:
         result = merge_tracking_results(segments, segment_frames, overlap=10)
         indices = [f["frame_idx"] for f in result["frames"]]
         assert indices == sorted(indices)
+
+
+class TestMergeAnalysisResults:
+    """Tests for merge_analysis_results: K-segment clip merge correctness.
+
+    Regression guard for the bug where merge_analysis_results passed a flat
+    list of clip dicts to deduplicate_clips(), which expects window-level
+    dicts, causing all clips to be silently dropped.
+    """
+
+    def _make_clip(self, start: int, end: int, role: str = "athlete_a", action: str = "takedown") -> dict:
+        return {
+            "start_frame": start,
+            "end_frame": end,
+            "role": role,
+            "action": action,
+            "technique": "double_leg",
+            "specific_technique": "Double Leg Takedown",
+            "confidence": 0.9,
+        }
+
+    def test_single_segment_clips_preserved(self):
+        """Single segment with clips: clips must pass through to final output."""
+        seg_analysis = {
+            "match_summary": "test",
+            "clips": [self._make_clip(0, 100), self._make_clip(200, 300)],
+            "fps": 60.0,
+        }
+        result = merge_analysis_results([seg_analysis])
+        assert result is not None
+        assert len(result["clips"]) == 2, (
+            f"Expected 2 clips, got {len(result['clips'])}. "
+            "merge_analysis_results may be passing clips in wrong format to deduplicate_clips."
+        )
+
+    def test_two_segments_clips_merged(self):
+        """Two segments with distinct clips: all clips present in merged output."""
+        seg0 = {
+            "clips": [self._make_clip(0, 100, role="athlete_a")],
+            "fps": 60.0,
+        }
+        seg1 = {
+            "clips": [self._make_clip(2000, 2100, role="athlete_b")],
+            "fps": 60.0,
+        }
+        result = merge_analysis_results([seg0, seg1])
+        assert result is not None
+        assert len(result["clips"]) >= 2, (
+            f"Expected >=2 clips from 2 segments, got {len(result['clips'])}."
+        )
+
+    def test_none_segments_ignored(self):
+        """None entries in segment_analyses are gracefully ignored."""
+        seg = {
+            "clips": [self._make_clip(0, 100)],
+            "fps": 60.0,
+        }
+        result = merge_analysis_results([None, seg, None])
+        assert result is not None
+        assert len(result["clips"]) >= 1
+
+    def test_all_none_returns_none(self):
+        """All-None segments returns None."""
+        result = merge_analysis_results([None, None])
+        assert result is None
+
+    def test_empty_input_returns_none(self):
+        """Empty segment list returns None."""
+        result = merge_analysis_results([])
+        assert result is None
+
+    def test_fps_propagated(self):
+        """fps from segment analyses is preserved in merged result."""
+        seg = {"clips": [self._make_clip(0, 100)], "fps": 59.94}
+        result = merge_analysis_results([seg])
+        assert result is not None
+        assert abs(result["fps"] - 59.94) < 0.01
