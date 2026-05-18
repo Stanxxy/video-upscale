@@ -493,7 +493,16 @@ async def run_job(
                 if request.max_missing_frames is not None
                 else config.tracking_max_missing_frames
             )
-            if request.frame_stride > 0:
+            # M6: wire prop_stride through parallel path (same logic as sequential path).
+            _is_fast_mode_ps = request.processing_mode == ProcessingMode.FAST
+            if _is_fast_mode_ps:
+                _eff_prop_stride_ps = config.fast_prop_stride
+            else:
+                _eff_prop_stride_ps = config.standard_prop_stride
+            # M5/M6: when prop_stride > 1, force frame_stride=1 to avoid double-filtering.
+            if _is_fast_mode_ps or _eff_prop_stride_ps > 1:
+                _eff_frame_stride_ps = 1
+            elif request.frame_stride > 0:
                 _eff_frame_stride_ps = request.frame_stride
             else:
                 import cv2 as _cv2_ps
@@ -503,10 +512,10 @@ async def run_job(
                 _eff_frame_stride_ps = max(1, round(_src_fps_ps / 10))
             logger.info(
                 "Job %s: parallel-segment mode k=%d "
-                "step_size=%s max_history=%s max_missing=%s frame_stride=%s",
+                "step_size=%s max_history=%s max_missing=%s frame_stride=%s prop_stride=%s",
                 job_id, config.standard_segments,
                 _eff_step_ps, _eff_max_history_ps,
-                _eff_max_missing_ps, _eff_frame_stride_ps,
+                _eff_max_missing_ps, _eff_frame_stride_ps, _eff_prop_stride_ps,
             )
             _par_track_pct = _pct_at_least(15.0, progress_floor)
             _par_started_cf = min(
@@ -542,6 +551,7 @@ async def run_job(
                 eff_max_history=_eff_max_history_ps,
                 eff_max_missing_frames=_eff_max_missing_ps,
                 eff_frame_stride=_eff_frame_stride_ps,
+                eff_prop_stride=_eff_prop_stride_ps,
                 progress_floor=progress_floor,
             )
             logger.info(
@@ -2440,6 +2450,7 @@ async def _run_parallel_segments(
     eff_max_history: int,
     eff_max_missing_frames: int,
     eff_frame_stride: int,
+    eff_prop_stride: int,
     progress_floor: float,
 ) -> tuple[str, dict | None, float]:
     """
@@ -2507,6 +2518,7 @@ async def _run_parallel_segments(
                 max_history=eff_max_history,
                 max_missing_frames=eff_max_missing_frames,
                 frame_stride=eff_frame_stride,
+                prop_stride=eff_prop_stride,
                 # Per-segment segments don't do mid-tracking suspends (no detection_cb).
                 # Detection/YOLO is not re-run within a segment if tracking stays healthy.
                 detection_cb=None,
