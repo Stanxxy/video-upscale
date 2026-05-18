@@ -99,6 +99,7 @@ def run_tracking(
     progress_callback=None,
     frame_callback=None,
     should_stop=None,
+    frame_stride=1,
 ):
     """
     Main tracking loop: SAM2 propagation with user intervention on track loss.
@@ -131,6 +132,9 @@ def run_tracking(
             and triggering YOLO + user intervention (default 15, ~0.5s at 30fps).
         force_cpu: Force CPU device.
         save_json: Whether to save tracking JSON.
+        frame_stride: Only write every Nth frame to the tracking JSON output.
+            SAM2 propagates ALL frames for mask continuity; only the JSON output
+            is filtered. Real frame_idx values are preserved. Default 1 = no stride.
         detection_callback: Optional callable(reason, frame_jpeg, **kwargs) -> (box_a, box_b) | None.
             Called when human input is needed mid-tracking (BLACKOUT / tracking_lost).
             Receives yolo_detections=[{box, confidence}, ...] as a keyword arg.
@@ -393,7 +397,7 @@ def run_tracking(
                     frame_kpts, frame_scores, frame_sources, display_map,
                     curr_state, iou, global_idx, debug_dir, local_idx,
                 )
-                if _json_file is not None:
+                if _json_file is not None and global_idx % frame_stride == 0:
                     _json_first_frame = _append_frame_to_json(
                         _json_file, _json_first_frame,
                         global_idx, local_idx, fps, curr_state, iou,
@@ -545,7 +549,7 @@ def run_tracking(
                 curr_state, iou, global_idx, debug_dir, local_idx,
             )
 
-            if _json_file is not None:
+            if _json_file is not None and global_idx % frame_stride == 0:
                 _json_first_frame = _append_frame_to_json(
                     _json_file, _json_first_frame,
                     global_idx, local_idx, fps, curr_state, iou,

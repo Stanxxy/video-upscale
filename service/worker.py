@@ -579,20 +579,36 @@ async def run_job(
                 clip_total_frames=clip_total_frames,
                 progress_floor=progress_floor,
             )
-            eff_step_size = request.step_size or config.tracking_step_size
+            # S7: on CUDA (GB10) default step_size to 120 (vs 60 on CPU/MPS).
+            # Larger steps reduce batch-boundary overhead; 128 GB memory is fine.
+            import torch as _torch_s7
+            _is_cuda_s7 = _torch_s7.cuda.is_available()
+            _default_step = 120 if _is_cuda_s7 else config.tracking_step_size
+            eff_step_size = request.step_size or _default_step
             eff_max_history = request.max_history or config.tracking_max_history
             eff_max_missing_frames = (
                 request.max_missing_frames
                 if request.max_missing_frames is not None
                 else config.tracking_max_missing_frames
             )
+            # S11: stride-N frame sampling. Auto-compute from source fps when 0.
+            # 60fps → stride=6 → ~300 frames from 1800; 30fps → stride=3.
+            if request.frame_stride > 0:
+                eff_frame_stride = request.frame_stride
+            else:
+                import cv2 as _cv2
+                _cap_fps = _cv2.VideoCapture(video_path)
+                _src_fps = _cap_fps.get(_cv2.CAP_PROP_FPS) or 30.0
+                _cap_fps.release()
+                eff_frame_stride = max(1, round(_src_fps / 10))
             logger.info(
                 "Job %s tracking config: step_size=%s max_history=%s "
-                "max_missing_frames=%s",
+                "max_missing_frames=%s frame_stride=%s",
                 job_id,
                 eff_step_size,
                 eff_max_history,
                 eff_max_missing_frames,
+                eff_frame_stride,
             )
 
             await jobs_store.write_checkpoint(
@@ -626,6 +642,7 @@ async def run_job(
                     step_size=eff_step_size,
                     max_history=eff_max_history,
                     max_missing_frames=eff_max_missing_frames,
+                    frame_stride=eff_frame_stride,
                     progress_cb=tracking_progress_cb,
                     detection_cb=detection_cb,
                     should_stop=lambda: job_store.is_cancelled(job_id),
@@ -1706,18 +1723,37 @@ def _run_upscale_analysis(
             )
             analysis_results.append({"window": chunk_idx, "raw_error": str(e)})
 
-    # -- S3: analyzer queue + consumer thread --------------------------------
-    # Move _analyze_window invocation off the upscale-loop thread. The
-    # consumer runs analysis sequentially (one window at a time -- pipelined
-    # one window ahead of the producer at most). This hides Gemini round-trip
-    # latency (~50 s/window) under upscale compute. The producer (upscale
-    # loop) reads `current_context` synchronously; while the consumer is
-    # processing window N, the producer enqueues window N+1 with stale
-    # context. M2's S4 will properly pipeline the chain.
+    # -- S4: async analyzer consumer thread (M2) ---------------------------------
+    # Replaces M1's sync consumer thread with an async-capable consumer that owns
+    # its own event loop. This allows using analyze_sequence_async (non-blocking
+    # Gemini I/O) while keeping the upscale loop (producer) running concurrently
+    # on a separate thread.
+    #
+    # gemini_max_inflight=1 (default): sequential context chain is preserved.
+    # Upscale doesn't block waiting for Gemini — the producer dispatches windows
+    # and continues; the async consumer processes them with the async Gemini SDK.
+    # This achieves upscale/Gemini overlap even with inflight=1.
     import queue as _stdlib_queue
-    analysis_queue: _stdlib_queue.Queue = _stdlib_queue.Queue(maxsize=2)
+    analysis_queue: _stdlib_queue.Queue = _stdlib_queue.Queue(
+        maxsize=config.gemini_max_inflight + 1
+    )
     _analysis_consumer_stop = object()  # sentinel
     _analysis_consumer_error: list[BaseException] = []
+
+    # Determine whether we can use async Gemini for single-agent mode.
+    # BJJTechniqueAnalyzer has analyze_sequence_async; BJJMultiAgentAnalyzer
+    # already has it too. We store a reference to the analyzer for async dispatch.
+    # Guard: only enable async if the method is a real coroutine function (not a
+    # MagicMock auto-attribute or other non-async callable).
+    import inspect as _inspect
+    _async_analyzer = locals().get("_analyzer") if config.gemini_api_key else None
+    _async_method = getattr(_async_analyzer, "analyze_sequence_async", None) if _async_analyzer else None
+    _use_async = (
+        _async_analyzer is not None
+        and _async_method is not None
+        and _inspect.iscoroutinefunction(_async_method)
+        and request.analyzer_mode != "multi"  # multi uses its own async internally
+    )
 
     def _trigger_periodic_flush():
         if not should_flush_analysis(len(analysis_results)):
@@ -1747,7 +1783,54 @@ def _run_upscale_analysis(
         except Exception as e:
             logger.warning("Periodic analysis flush failed: %s", e)
 
+    async def _async_analyze_window(window_payload):
+        """Async version of _analyze_window using analyze_sequence_async."""
+        nonlocal current_context
+        batch_frames = [x[1] for x in window_payload]
+        batch_indices = [x[0] for x in window_payload]
+        chunk_idx = len(analysis_results) + 1
+        logger.info(
+            "Analyzing window %d async (frames %d-%d, %d images)",
+            chunk_idx, batch_indices[0], batch_indices[-1], len(batch_frames),
+        )
+        try:
+            result_str = await _async_analyzer.analyze_sequence_async(
+                batch_frames, batch_indices, current_context,
+                player_references=player_ref_images,
+            )
+            logger.info(
+                "Window %d async raw response length: %d chars",
+                chunk_idx, len(result_str) if result_str else 0,
+            )
+            logger.debug("Window %d async raw response: %.500s", chunk_idx, result_str)
+            result_data = json.loads(result_str)
+
+            if "error" in result_data:
+                logger.error("Window %d: Gemini returned error: %s", chunk_idx, result_data["error"])
+            elif "clips" not in result_data:
+                logger.warning(
+                    "Window %d: Gemini response missing 'clips' key. Keys: %s",
+                    chunk_idx, list(result_data.keys()),
+                )
+            else:
+                logger.info("Window %d: Gemini returned %d clips", chunk_idx, len(result_data["clips"]))
+
+            if "current_context_summary" in result_data:
+                current_context = result_data["current_context_summary"]
+            analysis_results.append({
+                "window": chunk_idx,
+                "frames": batch_indices,
+                "analysis": result_data,
+            })
+        except Exception as e:
+            logger.error("Async analysis window %d failed: %s", chunk_idx, e, exc_info=True)
+            analysis_results.append({"window": chunk_idx, "raw_error": str(e)})
+
     def _analysis_consumer_loop():
+        """Consumer thread: owns its own asyncio event loop for async Gemini calls."""
+        # Create a dedicated event loop for this thread so async Gemini SDK calls work.
+        _consumer_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_consumer_loop)
         try:
             while True:
                 item = analysis_queue.get()
@@ -1756,7 +1839,12 @@ def _run_upscale_analysis(
                     return
                 window_payload = item
                 try:
-                    _analyze_window(window_payload)
+                    if _use_async:
+                        _consumer_loop.run_until_complete(
+                            _async_analyze_window(window_payload)
+                        )
+                    else:
+                        _analyze_window(window_payload)
                     try:
                         with open(
                             os.path.join(output_dir, "analysis_raw.json"), "w"
@@ -1770,6 +1858,8 @@ def _run_upscale_analysis(
         except BaseException as e:
             logger.error("Analysis consumer crashed: %s", e, exc_info=True)
             _analysis_consumer_error.append(e)
+        finally:
+            _consumer_loop.close()
 
     _analysis_consumer_thread = None
     if analyze_fn is not None:
@@ -1781,9 +1871,7 @@ def _run_upscale_analysis(
         _analysis_consumer_thread.start()
 
     def _dispatch_window(window):
-        """Hand a window off to the consumer thread. Blocks if queue is full."""
-        # Snapshot the window (it's a list slice; safe to pass by reference
-        # since the producer no longer mutates this slice after dispatch).
+        """Hand a window off to the consumer thread. Blocks if queue is full (backpressure)."""
         analysis_queue.put(window)
 
     # -- Main upscale loop ---------------------------------------------------
@@ -1875,7 +1963,24 @@ def _run_upscale_analysis(
                 batch_indices = [fidx]
             else:
                 batch_indices = [fi for fi, _ in pending_crops]
-                batch_crops = [c for _, c in pending_crops]
+                # S5: pre-scale crops to cap long edge at 288px before ESRGAN.
+                # x4 produces ~1152px, then target_size caps to 768px.
+                # ~3.5x fewer FLOPs vs sending full-size crops to ESRGAN.
+                _S5_MAX_INPUT_EDGE = 288
+                prescaled_crops = []
+                for c in (c for _, c in pending_crops):
+                    h_c, w_c = c.shape[:2]
+                    long_edge = max(h_c, w_c)
+                    if long_edge > _S5_MAX_INPUT_EDGE:
+                        _scale = _S5_MAX_INPUT_EDGE / long_edge
+                        c = cv2.resize(
+                            c,
+                            (max(1, int(w_c * _scale)), max(1, int(h_c * _scale))),
+                            interpolation=cv2.INTER_AREA,
+                        )
+                    prescaled_crops.append(c)
+                batch_crops = prescaled_crops
+                _target_sz = config.upscale_target_size
                 enhance_batch_fn = getattr(restorer, "enhance_batch", None)
                 use_batched = (
                     callable(enhance_batch_fn)
@@ -1887,11 +1992,11 @@ def _run_upscale_analysis(
                 )
                 if use_batched:
                     enhanced_list = enhance_batch_fn(
-                        batch_crops, target_size=1024
+                        batch_crops, target_size=_target_sz
                     )
                 else:
                     enhanced_list = [
-                        restorer.enhance(c, target_size=1024)
+                        restorer.enhance(c, target_size=_target_sz)
                         for c in batch_crops
                     ]
             logger.debug(

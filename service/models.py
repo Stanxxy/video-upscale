@@ -68,6 +68,12 @@ class TrackRequest(BaseModel):
     # Player reference images for athlete identification
     player_references: Optional[List[Dict[str, str]]] = None
 
+    # M2: stride-N frame sampling (S11)
+    # 0 = auto: max(1, round(fps / 10)) computed from detected source fps.
+    # e.g. 60fps → stride=6 (keeps every 6th frame, ~300 frames from 1800)
+    # e.g. 30fps → stride=3
+    frame_stride: int = Field(default=0, ge=0, description="Track/upscale every Nth frame. 0=auto from fps.")
+
     # Resume from checkpoint (Keyspaces-backed suspend/resume)
     resume_from_job_id: Optional[str] = None  # job_id to load checkpoints from Keyspaces
     resume_tracking_s3_key: Optional[str] = None  # S3 key for partial tracking JSON
