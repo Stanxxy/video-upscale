@@ -1,0 +1,104 @@
+{
+  "milestone": "M5",
+  "branch": "feature/m5-prop-stride-tuning",
+  "date": "2026-05-18",
+  "fixture": {
+    "video": "aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==.mp4",
+    "smoke_clip": "0:00-0:30",
+    "smoke_frames": 1798,
+    "full_fixture_frames": 7956,
+    "fps": 60,
+    "scale_factor": 4.425
+  },
+  "m4_baseline": {
+    "fast_mode_smoke_sec": 103,
+    "fast_mode_full_fixture_min": 7.6,
+    "standard_mode_smoke_sec": 1120,
+    "standard_mode_full_fixture_min": 82.5,
+    "note": "M4 fast prop_stride=12 / standard prop_stride=1"
+  },
+  "standard_mode_smoke_v1_wrong_config": {
+    "note": "INVALIDATED — frame_stride=6 applied on top of prop_stride=5 gave only 60 tracking entries (LCM(5,6)=30 per real frame), not intended 360 entries",
+    "smoke_total_sec": 273,
+    "tracking_config": {
+      "sam2": "facebook/sam2.1-hiera-base-plus",
+      "frame_stride": 6,
+      "prop_stride": 5,
+      "tracking_entries": 60,
+      "enable_pose": true
+    },
+    "bug": "Double-filtering: frame_stride=6 on top of prop_stride=5 filtered to LCM(5,6)=30 stride → 60 entries instead of 360"
+  },
+  "standard_mode_smoke_v2_corrected": {
+    "job_id": "9616ad7e-a2fd-4e7b-99ec-07daa9e14727",
+    "smoke_total_sec": 495,
+    "smoke_total_min": 8.25,
+    "tracking_sec": 203,
+    "tracking_frames": 360,
+    "gemini_windows": 24,
+    "tracking_config": {
+      "sam2": "facebook/sam2.1-hiera-base-plus",
+      "frame_stride": 1,
+      "prop_stride": 5,
+      "tracking_entries": 360,
+      "enable_pose": true,
+      "note": "frame_stride=1 forced by M5 fix (prop_stride>1 prevents double-filter)"
+    },
+    "upscale_frames": 360,
+    "upscale_rate_fps": 3.08,
+    "upscale_sec": 117,
+    "gemini_windows": 24,
+    "gemini_avg_sec_per_window": 11.3,
+    "gemini_total_sec": 271,
+    "annotate_upload_sec": 21,
+    "full_fixture_projection_sec": 2190,
+    "full_fixture_projection_min": 36.5,
+    "target_le_22_min": "NOT MET",
+    "bottleneck": "Gemini sequential chain (24 windows × 11.3s = 271s) dominates; prop_stride=5 creates MORE windows than M2 frame_stride=6 (24 vs 20) while tracking is 8× faster (3.4 min vs 17 min — a win that doesn't close the gap)",
+    "note": "prop_stride=5 with WINDOW_SIZE=30 STRIDE=15: (360-30)/15+1=23 windows actual; 24 measured. Full fixture: (1591-30)/15+1=105 windows × 11.3s = 1187s = 19.8 min Gemini + 15 min tracking = 34.8 min projected"
+  },
+  "fast_mode_smoke": {
+    "job_id": "6f8bf58e-4e49-4afe-872c-783783046aa2",
+    "smoke_total_sec": 61,
+    "smoke_total_min": 1.02,
+    "tracking_sec": 26,
+    "tracking_frames": 75,
+    "gemini_windows": 4,
+    "tracking_config": {
+      "sam2": "facebook/sam2.1-hiera-tiny",
+      "frame_stride": 1,
+      "prop_stride": 24,
+      "tracking_entries": 75,
+      "enable_pose": false
+    },
+    "upscale_method": "BicubicRestorer (LANCZOS4)",
+    "upscale_frames": 75,
+    "upscale_sec_approx": 22,
+    "gemini_windows": 4,
+    "gemini_fanout": 24,
+    "gemini_parallel_sec": 12,
+    "annotate_upload_sec": 3,
+    "full_fixture_projection_sec": 270,
+    "full_fixture_projection_min": 4.5,
+    "target_le_2p2_min": "NOT MET",
+    "note": "1798/24=75 SAM2 frames; 75/20=3.75→4 Gemini windows run in parallel (fanout=24). Full fixture: 7956/24=332 SAM2 frames × 0.326ms = 108s tracking + 17 Gemini windows parallel = total ~4.5 min projected"
+  },
+  "comparison": {
+    "fast_m4_vs_m5": "7.6 min → 4.5 min = 1.69× speedup from prop_stride 12→24",
+    "standard_m4_vs_m5": "82.5 min → 36.5 min = 2.26× speedup from prop_stride 1→5",
+    "fast_vs_target_2p2min": "4.5 min vs 2.2 min target — gap is 2.3 min, needs K=4 parallelism to close",
+    "standard_vs_target_22min": "36.5 min vs 22 min target — not achievable by prop_stride alone; needs Gemini fanout increase or K=4 upscale parallelism"
+  },
+  "root_cause_analysis": {
+    "standard_mode_bottleneck": "Gemini sequential chain. With standard_prop_stride=5 → 360 frames → 24 windows × 11.3s = 271s. The tracking speedup (17 min → 3.4 min) is wasted because Gemini is now the sole bottleneck. M2 with frame_stride=6 had 300 frames → 20 windows → 230s Gemini (faster despite same rate because fewer windows). prop_stride=5 creates MORE windows than frame_stride=6 alone.",
+    "fast_mode_path_to_22_min": "4.5 min full-fixture projection. To hit ≤2.2 min: need K=4 parallel tracking segments. But K=4 tracking on single GPU serializes kernels (M3 lesson) → no gain. Alternative: increase prop_stride to 32+ (≤22 SAM2 frames → ≤2 Gemini windows → ~1 min tracking + 0.5 min analyze = 1.5 min). Risk: very sparse temporal resolution.",
+    "correct_standard_mode_target": "prop_stride=1 (no change from M2) is already optimal for standard mode. The 22 min full-fixture target is only achievable with K=4 upscale+analyze parallelism (segment_runner S9) since tracking cannot be parallelized on single GPU."
+  },
+  "code_fixes_discovered": [
+    {
+      "fix": "frame_stride double-filtering when prop_stride > 1",
+      "commit": "8b347f3",
+      "description": "When prop_stride > 1, frame_stride must be forced to 1. Otherwise LCM(prop_stride, frame_stride) determines actual sampling rate. Example: prop_stride=5 + frame_stride=6 = LCM(30) = every 30th real frame = 2 fps instead of 12 fps."
+    }
+  ]
+}
