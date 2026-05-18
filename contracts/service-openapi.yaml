@@ -310,6 +310,16 @@ components:
         sam2_model:
           type: string
           default: facebook/sam2.1-hiera-base-plus
+        processing_mode:
+          type: string
+          enum:
+            - standard
+            - fast
+          default: standard
+          description: >
+            Controls pipeline quality/speed tradeoff.
+            "standard" (default): SAM2 base-plus, Real-ESRGAN upscale, full Gemini context chain.
+            "fast": SAM2-tiny, bicubic upscale, high-fanout Gemini (no context chain). Accuracy ≥ 80% of standard.
         detection_threshold:
           type: number
           format: float
@@ -534,7 +544,7 @@ components:
 
     ErrorResponse:
       type: object
-      description: FastAPI HTTPException body — typically `{ "detail": string | array }`
+      description: "FastAPI HTTPException body — typically `{ \"detail\": string | array }`"
       properties:
         detail:
           oneOf:
