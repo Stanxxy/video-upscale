@@ -701,10 +701,12 @@ async def run_job(
                 # S11: stride-N frame sampling. Auto-compute from source fps when 0.
                 # 60fps → stride=6 → ~300 frames from 1800; 30fps → stride=3.
                 # Fast mode: frame_stride=1 because prop_stride already reduces the frame count.
-                # M5: prop_stride=24 gives 332 SAM2 frames from 7956; applying frame_stride on
-                # top would double-filter. The JSON output should write all SAM2-propagated
-                # frames (one per prop step).
-                if _is_fast_mode:
+                # M5: When prop_stride > 1 (either mode), frame_stride is set to 1 to avoid
+                # double-filtering. prop_stride alone provides the desired temporal reduction.
+                # Example: standard mode prop_stride=5 → 360 SAM2 frames from 1800 = 12 fps.
+                #   Applying frame_stride=6 on top → LCM(5,6)=30 → only 60 entries = 2 fps (too sparse).
+                #   Correct: frame_stride=1 → 360 entries → 12 fps effective. Matches plan intent.
+                if _is_fast_mode or _eff_prop_stride > 1:
                     eff_frame_stride = 1  # write all prop-strided frames to JSON
                 elif request.frame_stride > 0:
                     eff_frame_stride = request.frame_stride
