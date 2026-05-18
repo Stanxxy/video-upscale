@@ -320,19 +320,24 @@ def merge_analysis_results(
     if not segment_analyses:
         return None
 
-    all_windows: list[dict] = []
+    all_clips: list[dict] = []
     fps = 30.0
     for analysis in segment_analyses:
         if analysis is None:
             continue
         fps = analysis.get("fps", fps)
-        all_windows.extend(analysis.get("clips", []) or [])
+        all_clips.extend(analysis.get("clips", []) or [])
 
-    if not all_windows:
+    if not all_clips:
         # All segments returned no analysis (no Gemini key or no clips)
         return None
 
-    final_clips = deduplicate_clips(all_windows)
+    # deduplicate_clips expects the window-level list format:
+    # [{"analysis": {"clips": [...]}}]. Wrap each clip individually so the
+    # per-segment clips go through the same dedup/merge logic as the
+    # single-segment path.
+    wrapped = [{"analysis": {"clips": [c]}} for c in all_clips]
+    final_clips = deduplicate_clips(wrapped)
     return {
         "match_summary": "Analysis generated via K-segment parallel pipeline",
         "clips": final_clips,
