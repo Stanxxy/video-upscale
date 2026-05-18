@@ -330,10 +330,11 @@ def run_tracking(
                 sam2_mgr.is_reset = False
                 break
 
-            # M4: batch_rel_idx is SAM2's frame counter (0, 1, 2, ...).
-            # With prop_stride>1, each SAM2 step covers prop_stride real frames.
-            # local_idx must be in real-frame units so current_local tracks correctly.
-            local_idx = (sam2_mgr.batch_offset + batch_rel_idx) * prop_stride
+            # M4: batch_offset is in real-frame units; batch_rel_idx is in SAM2-frame units.
+            # Real frame position = batch_offset (real) + batch_rel_idx (SAM2) * prop_stride.
+            # Example: batch_offset=60, batch_rel_idx=3, prop_stride=12
+            #   → local_idx = 60 + 3*12 = 96 (real frame 96 from segment start)
+            local_idx = sam2_mgr.batch_offset + batch_rel_idx * prop_stride
             global_idx = start_frame + local_idx
 
             # Load frame from temp dir (batch-relative path)

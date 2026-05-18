@@ -698,9 +698,11 @@ async def run_job(
 
                 # S11: stride-N frame sampling. Auto-compute from source fps when 0.
                 # 60fps → stride=6 → ~300 frames from 1800; 30fps → stride=3.
-                # Fast mode: frame_stride = prop_stride (no benefit computing more frames than propagated)
+                # Fast mode: frame_stride=1 because prop_stride already reduces the frame count
+                # by 12x. Applying frame_stride=12 on top would double-filter (150 → ~12 frames).
+                # The JSON output should write all SAM2-propagated frames (one per prop step).
                 if _is_fast_mode:
-                    eff_frame_stride = _eff_prop_stride
+                    eff_frame_stride = 1  # write all prop-strided frames to JSON
                 elif request.frame_stride > 0:
                     eff_frame_stride = request.frame_stride
                 else:
