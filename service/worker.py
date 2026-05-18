@@ -1767,14 +1767,118 @@ def _run_upscale_analysis(
             "read optimization will fall back to seeks on every out-of-order entry"
         )
 
+    # S1: batch upscale crops. ESRGAN forward passes are GPU-bound and small;
+    # batching N crops into a single forward pass amortizes Python/launch
+    # overhead 8x. Diffusion path retains per-call semantics (it takes
+    # 'strength', not a list).
+    BATCH_SIZE = 8 if request.method != "diffusion" else 1
+    pending_crops: list[tuple[int, "np.ndarray"]] = []  # (frame_idx, crop_bgr)
+
+    def _flush_batch():
+        nonlocal processed
+        if not pending_crops:
+            return
+        try:
+            _t_enh = time.perf_counter()
+            if request.method == "diffusion":
+                # 1-element list in diffusion path; preserve old semantics.
+                fidx, crop = pending_crops[0]
+                h_crop, w_crop = crop.shape[:2]
+                if max(h_crop, w_crop) > 768:
+                    scale = 768 / max(h_crop, w_crop)
+                    crop = cv2.resize(
+                        crop,
+                        (int(w_crop * scale), int(h_crop * scale)),
+                        interpolation=cv2.INTER_LANCZOS4,
+                    )
+                enhanced_list = [restorer.enhance(crop, strength=0.5)]
+                batch_indices = [fidx]
+            else:
+                batch_indices = [fi for fi, _ in pending_crops]
+                batch_crops = [c for _, c in pending_crops]
+                enhanced_list = restorer.enhance_batch(
+                    batch_crops, target_size=1024
+                )
+            logger.debug(
+                "Job %s upscale: batch of %d done in %.2fs (%.2f ms/frame)",
+                job_id, len(pending_crops),
+                time.perf_counter() - _t_enh,
+                (time.perf_counter() - _t_enh) * 1000.0 / max(len(pending_crops), 1),
+            )
+        except Exception as e:
+            logger.warning(
+                "Batch upscale failed for frames %s: %s",
+                [fi for fi, _ in pending_crops], e,
+            )
+            pending_crops.clear()
+            return
+
+        # Emit results in order.
+        for fidx, enhanced in zip(batch_indices, enhanced_list):
+            out_path = os.path.join(
+                output_dir, f"{method_prefix}frame_{fidx:06d}.jpg",
+            )
+            _submit_jpeg_write(out_path, enhanced)
+
+            if analyze_fn is not None:
+                img_rgb = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
+                pil_img = Image.fromarray(img_rgb)
+                sliding_buffer.append((fidx, pil_img))
+
+                if len(sliding_buffer) >= WINDOW_SIZE:
+                    _analyze_window(sliding_buffer[:WINDOW_SIZE])
+                    del sliding_buffer[:STRIDE]
+
+                    with open(
+                        os.path.join(output_dir, "analysis_raw.json"), "w",
+                    ) as f:
+                        json.dump(analysis_results, f, indent=2)
+
+                    if should_flush_analysis(len(analysis_results)):
+                        last_frame = (
+                            (analysis_results[-1].get("frames") or [resume_start_frame])[-1]
+                        )
+                        progress_pct = 55.0 + (processed / max(total, 1)) * 25.0
+                        try:
+                            asyncio.run_coroutine_threadsafe(
+                                _flush_analysis_checkpoint(
+                                    job_id=job_id,
+                                    jobs_store=jobs_store,
+                                    s3=s3_for_writes,
+                                    output_bucket=output_bucket,
+                                    output_dir=output_dir,
+                                    tracking_s3_key=tracking_s3_key,
+                                    analysis_results=analysis_results,
+                                    current_context=current_context,
+                                    next_frame_idx=last_frame + 1,
+                                    progress_percent=progress_pct,
+                                    total_tracking_frames=total_tracking_frames,
+                                    stage_progress_fraction=(
+                                        processed / max(total, 1)
+                                    ),
+                                ),
+                                loop,
+                            ).result(timeout=30)
+                        except Exception as e:
+                            logger.warning(
+                                "Periodic analysis flush failed: %s", e,
+                            )
+
+        # S1: amortized empty_cache. Reclaim cached blocks once per batch
+        # instead of once per crop.
+        if hasattr(restorer, "flush_cache"):
+            restorer.flush_cache()
+        pending_crops.clear()
+
     try:
         for entry in frames:
             frame_idx = entry["frame_idx"]
             _now = time.monotonic()
             if _now - _last_upscale_hb >= _hb_interval:
                 logger.info(
-                    "Job %s upscale heartbeat: frame_idx=%s processed=%d/%d buffer=%d",
-                    job_id, frame_idx, processed, total, len(sliding_buffer),
+                    "Job %s upscale heartbeat: frame_idx=%s processed=%d/%d buffer=%d batch=%d",
+                    job_id, frame_idx, processed, total,
+                    len(sliding_buffer), len(pending_crops),
                 )
                 _last_upscale_hb = _now
 
@@ -1810,89 +1914,17 @@ def _run_upscale_analysis(
                 processed += 1
                 continue
 
-            try:
-                _t_enh = time.perf_counter()
-                logger.debug(
-                    "Job %s upscale: enhance start frame_idx=%d crop_hw=%dx%d",
-                    job_id, frame_idx, crop.shape[0], crop.shape[1],
-                )
-                if request.method == "diffusion":
-                    h_crop, w_crop = crop.shape[:2]
-                    if max(h_crop, w_crop) > 768:
-                        scale = 768 / max(h_crop, w_crop)
-                        crop = cv2.resize(
-                            crop,
-                            (int(w_crop * scale), int(h_crop * scale)),
-                            interpolation=cv2.INTER_LANCZOS4,
-                        )
-                    enhanced = restorer.enhance(crop, strength=0.5)
-                else:
-                    enhanced = restorer.enhance(crop, target_size=1024)
-                logger.debug(
-                    "Job %s upscale: enhance done frame_idx=%d in %.2fs",
-                    job_id, frame_idx, time.perf_counter() - _t_enh,
-                )
-            except Exception as e:
-                logger.warning("Upscale failed at frame %d: %s", frame_idx, e)
-                processed += 1
-                continue
-
-            out_path = os.path.join(
-                output_dir, f"{method_prefix}frame_{frame_idx:06d}.jpg",
-            )
-            # S2: hand off encode + disk-write to background pool. Blocks if
-            # >16 writes are already in flight (backpressure).
-            _submit_jpeg_write(out_path, enhanced)
-
-            # Analysis buffer
-            if analyze_fn is not None:
-                img_rgb = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
-                pil_img = Image.fromarray(img_rgb)
-                sliding_buffer.append((frame_idx, pil_img))
-
-                if len(sliding_buffer) >= WINDOW_SIZE:
-                    _analyze_window(sliding_buffer[:WINDOW_SIZE])
-                    del sliding_buffer[:STRIDE]
-
-                    with open(
-                        os.path.join(output_dir, "analysis_raw.json"), "w",
-                    ) as f:
-                        json.dump(analysis_results, f, indent=2)
-
-                    # Periodic durable flush every 5 windows.
-                    if should_flush_analysis(len(analysis_results)):
-                        last_frame = (
-                            (analysis_results[-1].get("frames") or [resume_start_frame])[-1]
-                        )
-                        progress_pct = 55.0 + (processed / max(total, 1)) * 25.0
-                        try:
-                            asyncio.run_coroutine_threadsafe(
-                                _flush_analysis_checkpoint(
-                                    job_id=job_id,
-                                    jobs_store=jobs_store,
-                                    s3=s3_for_writes,
-                                    output_bucket=output_bucket,
-                                    output_dir=output_dir,
-                                    tracking_s3_key=tracking_s3_key,
-                                    analysis_results=analysis_results,
-                                    current_context=current_context,
-                                    next_frame_idx=last_frame + 1,
-                                    progress_percent=progress_pct,
-                                    total_tracking_frames=total_tracking_frames,
-                                    stage_progress_fraction=(
-                                        processed / max(total, 1)
-                                    ),
-                                ),
-                                loop,
-                            ).result(timeout=30)
-                        except Exception as e:
-                            logger.warning(
-                                "Periodic analysis flush failed: %s", e,
-                            )
-
+            pending_crops.append((frame_idx, crop))
             processed += 1
+
+            if len(pending_crops) >= BATCH_SIZE:
+                _flush_batch()
+
             if progress_cb and total > 0:
                 progress_cb(processed / total)
+
+        # Drain any straggler crops at end of stream.
+        _flush_batch()
     finally:
         cap.release()
         # S2: drain pending JPEG writes before stage exit so resume sees a
