@@ -1473,6 +1473,59 @@ def _run_upscale_analysis(
     cap = cv2.VideoCapture(video_path)
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
+    # -- Off-thread JPEG writer (S2) -----------------------------------------
+    # The per-frame upscale write blocks the main loop on disk. Push encode +
+    # write to a small thread pool. Bound the queue with a semaphore so a
+    # stalled disk applies backpressure instead of growing memory unbounded.
+    import concurrent.futures
+    import threading
+    _jpeg_executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=2, thread_name_prefix="upscale-jpeg"
+    )
+    _jpeg_pending: list[concurrent.futures.Future] = []
+    _jpeg_pending_lock = threading.Lock()
+    _jpeg_inflight_sem = threading.BoundedSemaphore(value=16)
+
+    def _jpeg_write_task(out_path: str, img):
+        try:
+            ok, buf = cv2.imencode(
+                ".jpg", img, [int(cv2.IMWRITE_JPEG_QUALITY), 95]
+            )
+            if not ok:
+                logger.warning("JPEG encode failed for %s", out_path)
+                return
+            with open(out_path, "wb") as f:
+                f.write(buf.tobytes())
+        except Exception as e:
+            logger.warning("JPEG write failed for %s: %s", out_path, e)
+        finally:
+            _jpeg_inflight_sem.release()
+
+    def _submit_jpeg_write(out_path: str, img):
+        # Block here when 16 writes are in flight -- backpressure.
+        _jpeg_inflight_sem.acquire()
+        fut = _jpeg_executor.submit(_jpeg_write_task, out_path, img)
+        with _jpeg_pending_lock:
+            # Periodic prune of completed futures so the list doesn't grow.
+            if len(_jpeg_pending) > 32:
+                _jpeg_pending[:] = [f for f in _jpeg_pending if not f.done()]
+            _jpeg_pending.append(fut)
+
+    def _drain_jpeg_writes(timeout: float | None = None):
+        """Block until all submitted writes complete."""
+        with _jpeg_pending_lock:
+            pending = list(_jpeg_pending)
+            _jpeg_pending.clear()
+        if not pending:
+            return
+        logger.info("Draining %d pending JPEG writes", len(pending))
+        for f in concurrent.futures.as_completed(pending, timeout=timeout):
+            # Surface exceptions if any; _jpeg_write_task already logs them.
+            try:
+                f.result()
+            except Exception:
+                pass
+
     # -- Initialize restorer -------------------------------------------------
     if request.method == "diffusion":
         from diffusion_restorer import DiffusionRestorer
@@ -1787,7 +1840,9 @@ def _run_upscale_analysis(
             out_path = os.path.join(
                 output_dir, f"{method_prefix}frame_{frame_idx:06d}.jpg",
             )
-            cv2.imwrite(out_path, enhanced, [int(cv2.IMWRITE_JPEG_QUALITY), 95])
+            # S2: hand off encode + disk-write to background pool. Blocks if
+            # >16 writes are already in flight (backpressure).
+            _submit_jpeg_write(out_path, enhanced)
 
             # Analysis buffer
             if analyze_fn is not None:
@@ -1840,6 +1895,13 @@ def _run_upscale_analysis(
                 progress_cb(processed / total)
     finally:
         cap.release()
+        # S2: drain pending JPEG writes before stage exit so resume sees a
+        # consistent on-disk artifact set.
+        try:
+            _drain_jpeg_writes(timeout=120.0)
+        except Exception as e:
+            logger.warning("JPEG drain failed: %s", e)
+        _jpeg_executor.shutdown(wait=True)
 
     # -- Finalize analysis ---------------------------------------------------
     if analyze_fn is None:
