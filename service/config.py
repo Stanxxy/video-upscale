@@ -35,7 +35,15 @@ class ServiceConfig(BaseSettings):
     tracking_max_missing_frames: int = 15
 
     # Service
-    max_concurrent_jobs: int = 1
+    # M3 S10: raised default from 1 → 2. M1 memory data confirms 4 single-segment
+    # jobs fit at ~104 GB peak on 128 GB unified memory (Spark).
+    # Override: BJJ_MAX_CONCURRENT_JOBS=1 (safe) or =4 (Spark max).
+    max_concurrent_jobs: int = 2
+    # M3 S9: intra-job K-segment parallelism.
+    # K=1 = sequential pipeline (safe default; no memory overhead change).
+    # K=4 = target for Spark (128 GB unified); each segment gets its own SAM2 instance.
+    # Override: BJJ_STANDARD_SEGMENTS=4 in the Spark deployment environment.
+    standard_segments: int = 1
     service_port: int = 8000
     temp_dir: str = "/tmp/bjj-pipeline"
     # Stale-job recovery scans ``job_recovery_index`` partitions by calendar hour
