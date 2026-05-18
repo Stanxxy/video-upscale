@@ -1660,6 +1660,60 @@ def _run_upscale_analysis(
     _last_upscale_hb = time.monotonic()
     _hb_interval = float(config.upscale_heartbeat_interval_sec)
 
+    # Sequential VideoCapture cursor. tracking_data['frames'] is in ascending
+    # frame_idx order (asserted below). Calling cap.set(POS_FRAMES) per frame
+    # forces an O(GOP) random seek on long-GOP codecs (VP9, H.264). Instead we
+    # advance cap.read() sequentially and only fall back to cap.set() when the
+    # requested frame is not the next contiguous frame (e.g., sampling_rate>1
+    # gaps, resume from a checkpoint past frame 0, or out-of-order entries).
+    _cap_cursor = -1  # idx of last frame consumed by cap.read(); -1 means nothing read yet
+
+    def _read_frame_at(target_idx: int):
+        """Return (ret, frame_bgr) for target_idx using sequential reads when possible."""
+        nonlocal _cap_cursor
+        next_expected = _cap_cursor + 1
+        if target_idx == next_expected:
+            ret, frame_bgr = cap.read()
+            if ret:
+                _cap_cursor = target_idx
+            return ret, frame_bgr
+        if target_idx > next_expected:
+            # Skip the gap with cheap sequential reads (decoding-cheaper than a
+            # set() seek for small gaps; for large gaps cap.set is faster, so
+            # we threshold).
+            gap = target_idx - next_expected
+            if gap <= 8:
+                # Burn through the gap with cap.read() (no decoding savings
+                # available without a seek anyway, but stays warm).
+                for _ in range(gap):
+                    ok, _ = cap.read()
+                    if not ok:
+                        _cap_cursor = target_idx  # advance cursor anyway to avoid infinite loop
+                        return False, None
+                    _cap_cursor += 1
+                ret, frame_bgr = cap.read()
+                if ret:
+                    _cap_cursor = target_idx
+                return ret, frame_bgr
+        # Fall back to a true seek (backwards jump or large forward gap).
+        cap.set(cv2.CAP_PROP_POS_FRAMES, target_idx)
+        ret, frame_bgr = cap.read()
+        if ret:
+            _cap_cursor = target_idx
+        return ret, frame_bgr
+
+    # Sanity assert: frames are ascending. Log and fall back if not, so the
+    # sequential path is safe.
+    _ascending = all(
+        frames[i]["frame_idx"] <= frames[i + 1]["frame_idx"]
+        for i in range(len(frames) - 1)
+    )
+    if not _ascending:
+        logger.warning(
+            "tracking_data frames are not in ascending frame_idx order; sequential "
+            "read optimization will fall back to seeks on every out-of-order entry"
+        )
+
     try:
         for entry in frames:
             frame_idx = entry["frame_idx"]
@@ -1685,8 +1739,7 @@ def _run_upscale_analysis(
                 processed += 1
                 continue
 
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-            ret, frame_bgr = cap.read()
+            ret, frame_bgr = _read_frame_at(frame_idx)
             if not ret:
                 logger.warning("Could not read frame %d", frame_idx)
                 processed += 1
