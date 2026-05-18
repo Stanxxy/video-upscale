@@ -193,3 +193,40 @@ class RealESRGANRestorer:
                 )
             results.append(bgr)
         return results
+
+
+class BicubicRestorer:
+    """Fast upscaler using LANCZOS4 interpolation.
+
+    For M4 fast mode — no neural network, negligible latency.
+    Implements the same public contract as RealESRGANRestorer so worker.py
+    can swap restorers without any other changes.
+    """
+
+    def __init__(self):
+        pass  # no model loading
+
+    def enhance(self, img: np.ndarray, target_size: int = 768) -> np.ndarray:
+        """Upscale a single BGR image to target_size on the long edge."""
+        h, w = img.shape[:2]
+        long_edge = max(h, w)
+        if long_edge >= target_size:
+            # Resize to target_size exactly on the long edge
+            scale = target_size / long_edge
+            new_w = max(1, int(w * scale))
+            new_h = max(1, int(h * scale))
+        else:
+            scale = target_size / long_edge
+            new_w = max(1, int(w * scale))
+            new_h = max(1, int(h * scale))
+        return cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+
+    def enhance_batch(self, crops: list, target_size: int = 768) -> list:
+        """Upscale a list of BGR images. Returns list in same order."""
+        if not crops:
+            return []
+        return [self.enhance(c, target_size) for c in crops]
+
+    def flush_cache(self):
+        """No-op: BicubicRestorer has no GPU cache to flush."""
+        pass
