@@ -1,0 +1,386 @@
+{
+  "match_summary": "Analysis generated via K-segment parallel pipeline",
+  "clips": [
+    {
+      "start_frame": 0,
+      "end_frame": 295,
+      "action": "standing",
+      "technique": "other",
+      "specific_technique": "Pre-match handshake",
+      "role": "both athletes",
+      "reasoning": "The athletes are standing in the center of the mat and performing the customary pre-match handshake to signal the start of the engagement.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 296,
+      "end_frame": 595,
+      "action": "clinch",
+      "technique": "other",
+      "specific_technique": "Standing Clinch / Head and Arm Control",
+      "role": "both athletes",
+      "reasoning": "The athletes are locked in a static standing clinch throughout the entire sequence. The athlete in the blue gi is maintaining a head-and-arm control, while the athlete in the white gi is maintaining a defensive, hunched posture to prevent a takedown. No significant transition or technique execution occurs during these frames.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 375,
+      "end_frame": 520,
+      "action": "clinch",
+      "technique": "other",
+      "specific_technique": "Standing Clinch / Head Control",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi maintains a tight head-and-arm clinch, controlling the posture of the athlete in the white gi throughout the entire sequence. No significant transition or score occurs, representing a sustained period of positional control.",
+      "confidence": 0.9
+    },
+    {
+      "start_frame": 525,
+      "end_frame": 745,
+      "action": "takedown",
+      "technique": "single_leg",
+      "specific_technique": "Single Leg Takedown",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi maintains a deep grip on the opponent's leg, driving forward to break their balance and force them to the mat, successfully completing the takedown transition.",
+      "confidence": 0.98
+    },
+    {
+      "start_frame": 725,
+      "end_frame": 970,
+      "action": "guard_bottom",
+      "technique": "open_guard",
+      "specific_technique": "Open Guard retention",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is on their back, using their legs to create distance and frames against the top athlete, effectively maintaining an open guard position while the top athlete attempts to apply pressure.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 900,
+      "end_frame": 1045,
+      "action": "guard_top",
+      "technique": "open_guard",
+      "specific_technique": "Top pressure in open guard",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi is maintaining a dominant top position, applying pressure while the athlete in the blue gi is on the bottom attempting to retain guard and manage the distance.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 1046,
+      "end_frame": 1345,
+      "action": "half_guard_top",
+      "technique": "half_guard",
+      "specific_technique": "Half Guard Control",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi is established in the top position, pinning the blue gi athlete's legs in a half-guard configuration, maintaining heavy pressure to prevent a sweep or guard recovery.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 1346,
+      "end_frame": 1570,
+      "action": "guard_top",
+      "technique": "half_guard",
+      "specific_technique": "Top Half Guard Pressure",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi maintains a dominant top position, using their weight to pin the bottom athlete and prevent any effective guard recovery or sweep attempts.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 1571,
+      "end_frame": 1650,
+      "action": "takedown",
+      "technique": "other",
+      "specific_technique": "High-amplitude throw",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi completes the lift and rotation of the opponent, bringing them to the mat in a dominant top position.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 1650,
+      "end_frame": 1795,
+      "action": "guard_bottom",
+      "technique": "inversion_escape",
+      "specific_technique": "Inversion to guard retention",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi, finding themselves on the bottom after the previous takedown, initiates a granby-style inversion to protect their back and re-establish a guard position against the top athlete.",
+      "confidence": 0.92
+    },
+    {
+      "start_frame": 1796,
+      "end_frame": 1799,
+      "action": "guard_retention",
+      "technique": "other",
+      "specific_technique": "Inversion for guard retention",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi performs a full inversion, using their legs to create distance and maintain a defensive guard structure against the top athlete's pressure.",
+      "confidence": 0.92
+    },
+    {
+      "start_frame": 1800,
+      "end_frame": 1945,
+      "action": "guard_bottom",
+      "technique": "open_guard",
+      "specific_technique": "Inverted Guard Retention",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is performing a full inversion to maintain guard retention, effectively preventing the top athlete from establishing a stable passing position.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 1800,
+      "end_frame": 2629,
+      "action": "guard_top",
+      "technique": "closed_guard",
+      "specific_technique": "Closed Guard Engagement",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi is positioned inside the closed guard of the athlete in the blue gi. The sequence shows the top athlete maintaining a base while the bottom athlete grips the sleeves and collar to manage the top athlete's posture.",
+      "confidence": 0.98
+    },
+    {
+      "start_frame": 2109,
+      "end_frame": 2254,
+      "action": "guard_bottom",
+      "technique": "closed_guard",
+      "specific_technique": "Closed Guard Posture Control",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is maintaining a closed guard, using their arms to control the posture of the athlete in the white gi, who is attempting to apply top pressure.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 2334,
+      "end_frame": 2479,
+      "action": "guard_bottom",
+      "technique": "closed_guard",
+      "specific_technique": "Closed Guard Retention",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is maintaining a closed guard, using their arms to frame against the opponent's chest and neck to prevent the top athlete from establishing a dominant passing position.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 2559,
+      "end_frame": 2854,
+      "action": "guard_bottom",
+      "technique": "closed_guard",
+      "specific_technique": "Closed Guard Maintenance",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is maintaining a closed guard, keeping the opponent in the white gi trapped between their legs to neutralize the top athlete's passing attempts.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 2784,
+      "end_frame": 3379,
+      "action": "guard_top",
+      "technique": "closed_guard",
+      "specific_technique": "Closed Guard Pressure",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi is maintaining a heavy, forward-leaning posture inside the closed guard of the athlete in the blue gi, attempting to break the guard or initiate a pass while the bottom athlete maintains defensive frames.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 2859,
+      "end_frame": 3004,
+      "action": "guard_retention",
+      "technique": "other",
+      "specific_technique": "Guard retention against pressure pass",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is maintaining a defensive frame and using their legs to prevent the white gi athlete from advancing past their guard, effectively retaining their position despite the pressure.",
+      "confidence": 0.9
+    },
+    {
+      "start_frame": 3159,
+      "end_frame": 3304,
+      "action": "guard_retention",
+      "technique": "open_guard",
+      "specific_technique": "Guard retention against pressure",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is using their legs to frame and maintain distance against the top athlete's pressure, effectively preventing the guard pass throughout the sequence.",
+      "confidence": 0.9
+    },
+    {
+      "start_frame": 3309,
+      "end_frame": 4693,
+      "action": "guard_bottom",
+      "technique": "spider_guard",
+      "specific_technique": "Spider Guard maintenance",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is actively using spider guard, with feet placed on the biceps of the athlete in the white gi, effectively controlling their posture and preventing any forward pressure or guard passing attempts.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 4694,
+      "end_frame": 4847,
+      "action": "guard_retention",
+      "technique": "de_la_riva_guard",
+      "specific_technique": "De La Riva Guard Retention",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi maintains a De La Riva hook on the white gi athlete's leg and a collar grip to control posture, successfully preventing the top athlete from clearing the legs to initiate a pass.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 4848,
+      "end_frame": 5743,
+      "action": "submission_attempt",
+      "technique": "triangle_choke",
+      "specific_technique": "Triangle Choke",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi has a fully locked triangle choke, with one arm trapped inside and the other outside, applying significant pressure on the opponent's carotid artery. The athlete in the white gi is unable to escape the locked position throughout the sequence.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 4923,
+      "end_frame": 5068,
+      "action": "submission_defense",
+      "technique": "posture_break",
+      "specific_technique": "Stacking Defense against Triangle",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi is driving their weight forward into the opponent to stack them, which is a primary defensive response to alleviate pressure from the triangle choke.",
+      "confidence": 0.92
+    },
+    {
+      "start_frame": 5744,
+      "end_frame": 5818,
+      "action": "guard_bottom",
+      "technique": "triangle_choke",
+      "specific_technique": "Triangle Choke",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi has a fully locked triangle choke from the bottom position, maintaining control over the opponent's posture and neck throughout the entire sequence.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 5819,
+      "end_frame": 5993,
+      "action": "submission_attempt",
+      "technique": "triangle_choke",
+      "specific_technique": "Triangle Choke",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi has a fully locked triangle choke, with one leg over the neck and the other hooked under the knee, controlling the posture of the athlete in the white gi.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 5994,
+      "end_frame": 6157,
+      "action": "guard_bottom",
+      "technique": "spider_guard",
+      "specific_technique": "Spider Guard",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi has established a spider guard grip on the sleeves of the athlete in the white gi, using their feet on the biceps to control distance and posture.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 6158,
+      "end_frame": 6162,
+      "action": "guard_retention",
+      "technique": "closed_guard",
+      "specific_technique": "Closed Guard Maintenance",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi maintains a high closed guard, controlling the posture of the athlete in the white gi to prevent a pass.",
+      "confidence": 0.9
+    },
+    {
+      "start_frame": 6162,
+      "end_frame": 6307,
+      "action": "scramble",
+      "technique": "other",
+      "specific_technique": "Transition from guard to standing",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi is actively moving from a seated/guard position to a standing position, while the athlete in the white gi is kneeling, indicating a reset or transition phase in the match.",
+      "confidence": 0.9
+    },
+    {
+      "start_frame": 6167,
+      "end_frame": 6232,
+      "action": "escape",
+      "technique": "other",
+      "specific_technique": "Guard Break/Escape",
+      "role": "athlete in white gi",
+      "reasoning": "The athlete in the white gi successfully breaks the closed guard and creates space, transitioning to a kneeling position to reset the engagement.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 6237,
+      "end_frame": 6382,
+      "action": "reset",
+      "technique": "other",
+      "specific_technique": "Neutral Reset",
+      "role": "both athletes",
+      "reasoning": "Both athletes have returned to a neutral, kneeling engagement posture, indicating a reset or a pause in the active grappling sequence.",
+      "confidence": 0.95
+    },
+    {
+      "start_frame": 6312,
+      "end_frame": 6457,
+      "action": "clinch",
+      "technique": "other",
+      "specific_technique": "Grip engagement from kneeling",
+      "role": "athlete in blue gi",
+      "reasoning": "The athlete in the blue gi reaches out to establish a hand grip on the athlete in the white gi, initiating the engagement phase from a kneeling position.",
+      "confidence": 0.9
+    },
+    {
+      "start_frame": 6387,
+      "end_frame": 6532,
+      "action": "other",
+      "technique": "other",
+      "specific_technique": "Initial grip engagement",
+      "role": "both athletes",
+      "reasoning": "The athletes are in a neutral, kneeling position establishing initial grips to initiate the match exchange. No specific offensive technique or transition occurs in this sequence.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 6533,
+      "end_frame": 6536,
+      "action": "reset",
+      "technique": "other",
+      "specific_technique": "Grip break and reset",
+      "role": "both athletes",
+      "reasoning": "The athletes are seen breaking their initial engagement grips and returning to a neutral, kneeling posture, effectively resetting the match flow.",
+      "confidence": 0.9
+    },
+    {
+      "start_frame": 6537,
+      "end_frame": 7432,
+      "action": "standing",
+      "technique": "other",
+      "specific_technique": "Neutral reset/standing observation",
+      "role": "both athletes",
+      "reasoning": "The athletes are in a static, non-engaged state following a reset. There is no technical exchange, guard engagement, or positional advancement occurring during this sequence.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 7587,
+      "end_frame": 7732,
+      "action": "other",
+      "technique": "other",
+      "specific_technique": "Match conclusion and winner declaration",
+      "role": "referee and athlete in blue gi",
+      "reasoning": "The sequence shows the final moments of the match where the referee raises the hand of the athlete in the blue gi, indicating the end of the contest and the official result.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 7662,
+      "end_frame": 7807,
+      "action": "other",
+      "technique": "other",
+      "specific_technique": "Referee declaring winner",
+      "role": "athlete in blue gi",
+      "reasoning": "The sequence shows the post-match ceremony where the referee raises the arm of the athlete in the blue gi, confirming the match conclusion.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 7737,
+      "end_frame": 7897,
+      "action": "other",
+      "technique": "other",
+      "specific_technique": "Post-match celebration and referee decision",
+      "role": "Adam Piotr Wardzinski",
+      "reasoning": "The match has ended, and the sequence shows the athletes standing on the mat while the referee confirms the winner. No active grappling techniques are being performed.",
+      "confidence": 1.0
+    },
+    {
+      "start_frame": 7897,
+      "end_frame": 7952,
+      "action": "other",
+      "technique": "other",
+      "specific_technique": "Referee declaring winner",
+      "role": "referee",
+      "reasoning": "The referee is in the process of raising the hand of the winner, Adam Piotr Wardzinski, to signify the end of the match.",
+      "confidence": 1.0
+    }
+  ],
+  "fps": 59.94033089232438
+}
