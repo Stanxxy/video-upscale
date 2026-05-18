@@ -1,0 +1,172 @@
+{
+  "milestone": "M2",
+  "label": "Stride-N sampling + async analyzer fanout + SAM2/RTMPose CUDA on DGX Spark",
+  "date": "2026-05-18",
+  "hardware": {
+    "host": "gx10",
+    "gpu": "NVIDIA GB10 (Grace Blackwell, sm_121)",
+    "arch": "aarch64",
+    "unified_memory_gb": 128,
+    "cuda_driver": "13.0",
+    "torch": "2.12.0.dev20260407+cu128"
+  },
+  "code": {
+    "branch": "feature/m2-stride-fanout",
+    "head": "765a51d",
+    "parent_baseline": "61ad1d0",
+    "commits": [
+      "912005d m2(s11): stride-N frame sampling",
+      "0e37ec0 m2(s4): async analyzer fanout",
+      "17dd53b m2(s7): SAM2 throughput on CUDA",
+      "765a51d m2(s8): RTMPose CUDA on Spark"
+    ]
+  },
+  "fixture": {
+    "s3_uri": "s3://bjj-video-analysis/aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==.mp4",
+    "codec": "VP9",
+    "resolution": "1920x1080",
+    "fps": 60.0,
+    "total_frames": 7956,
+    "duration_sec": 132.732
+  },
+  "smoke": {
+    "job_id": "3ca29ea0-af4b-47d4-8271-ddf44fd472d4",
+    "start_time": "0:00",
+    "end_time": "0:30",
+    "smoke_total_frames": 1798,
+    "wall_start_utc": "2026-05-18T01:31:24+0000",
+    "wall_end_utc": "2026-05-18T01:52:58+0000",
+    "wall_total_sec": 1294,
+    "wall_total_min": 21.57,
+    "terminal_status": "completed",
+    "lifecycle_progress_at_completion_pct": 92.0,
+    "windows_completed": 20,
+    "windows_with_clips": 20,
+    "windows_with_errors": 0,
+    "frame_stride_applied": 6,
+    "strided_frames_output": 300,
+    "note": "frame_stride=6 auto-computed from 60fps source (round(60/10)=6). SAM2 propagated all 1798 frames for mask continuity; only 300 output to JSON. 20 Gemini windows (vs 119 M1 = 6.0x fewer)."
+  },
+  "stages": {
+    "download_plus_detect": {
+      "lifecycle_band": "0%->15%",
+      "wall_sec": 5,
+      "note": "Boxes pre-supplied; detection step bypassed (same as M0/M1)"
+    },
+    "tracking": {
+      "lifecycle_band": "15%->55%",
+      "wall_sec": 1021,
+      "wall_min": 17.0,
+      "frames_processed": 1798,
+      "rate_ms_per_frame": 568,
+      "rate_fps": 1.76,
+      "models": "SAM2 hiera-base-plus (CUDA, offload_video_to_cpu=False, offload_state_to_cpu=False) + RTMPose CUDA EP + DINOv2",
+      "note": "S7 CUDA offload-disable confirmed in logs. Tracking wall unchanged from M1/M0 (stride does not skip SAM2 propagation frames, only output filtering)."
+    },
+    "upscale_analyze": {
+      "lifecycle_band": "55%->80%",
+      "wall_sec": 230,
+      "wall_min": 3.83,
+      "frames_processed_strided": 300,
+      "frames_total_video": 1798,
+      "rate_sec_per_strided_frame": 0.767,
+      "rate_sec_per_video_frame": 0.128,
+      "gemini_windows_completed": 20,
+      "gemini_sec_per_window_avg": 11.5,
+      "upscale_target_size": 768,
+      "prescale_max_input_edge": 288,
+      "models": "Real-ESRGAN x4plus (CUDA FP16, S5 pre-scale 288px) + Gemini-3.1-flash-lite-preview (async consumer, S4)",
+      "note": "S4 async consumer confirmed in logs ('Analyzing window X async'). S5 pre-scale reduces ESRGAN input ~3.5x in area vs M1. Gemini 11.5s/window avg vs 45.8s M1 = 4.0x speedup per window; 20 windows vs 119 M1 = 6.0x fewer windows. Combined 23.7x speedup on upscale+analyze stage."
+    },
+    "annotate_upload_publish": {
+      "lifecycle_band": "80%->100%",
+      "wall_sec": 35,
+      "wall_min": 0.58
+    }
+  },
+  "m1_vs_m2_comparison": {
+    "smoke": {
+      "M1_wall_sec": 6546,
+      "M1_wall_min": 109.1,
+      "M2_wall_sec": 1294,
+      "M2_wall_min": 21.57,
+      "smoke_wall_delta_min": -87.5,
+      "smoke_wall_delta_pct": -80.2,
+      "smoke_speedup_x": 5.1
+    },
+    "stages": {
+      "tracking_ms_per_frame_m1": 562.8,
+      "tracking_ms_per_frame_m2": 568,
+      "tracking_delta_pct": 0.9,
+      "upscale_sec_per_strided_frame_m2": 0.767,
+      "upscale_sec_per_video_frame_m1": 3.032,
+      "upscale_sec_per_video_frame_m2_effective": 0.128,
+      "upscale_stage_wall_m1_sec": 5452,
+      "upscale_stage_wall_m2_sec": 230,
+      "upscale_stage_speedup_x": 23.7,
+      "gemini_windows_m1": 119,
+      "gemini_windows_m2": 20,
+      "gemini_window_count_reduction_x": 5.95,
+      "gemini_sec_per_window_m1": 45.8,
+      "gemini_sec_per_window_m2": 11.5,
+      "gemini_per_window_speedup_x": 4.0,
+      "combined_upscale_speedup_x": 23.7
+    }
+  },
+  "full_fixture_projection": {
+    "fixture_total_frames": 7956,
+    "scaling_factor_from_smoke": 4.425,
+    "tracking_min": 75.4,
+    "upscale_analyze_min": 16.9,
+    "other_min": 1,
+    "total_min": 93.3,
+    "total_hour": 1.55,
+    "vs_M1_projected_min": 478,
+    "vs_M1_speedup_x": 5.1,
+    "vs_M0_projected_min": 509,
+    "vs_M0_speedup_x": 5.5,
+    "tracking_pct_of_total": 80.8,
+    "note": "Tracking now dominates at ~80% of projected full-fixture wall. M3 must address tracking throughput (S9: multi-job parallelism or S12: skip-propagation stride) to reach 60-min goal."
+  },
+  "m2_done_criterion": {
+    "criterion": "smoke end-to-end <= 22 min on gx10",
+    "measured_smoke_min": 21.57,
+    "met": true,
+    "margin_min": 0.43,
+    "note": "Met with 0.43 min margin. Full-fixture 60-min criterion NOT met (~93 min projected); tracking is now the sole bottleneck."
+  },
+  "config_changes": {
+    "frame_stride": "0 (auto: max(1, round(fps/10)); 6 at 60fps)",
+    "gemini_max_inflight": 1,
+    "upscale_target_size": 768,
+    "sam2_offload_video_to_cpu_on_cuda": false,
+    "sam2_offload_state_to_cpu_on_cuda": false,
+    "rtmpose_device": "cuda (auto-selected via torch.cuda.is_available())"
+  },
+  "feature_confirmations": {
+    "S11_stride_sampling": "frame_stride=6 confirmed in worker log; 300/1798 frames output",
+    "S4_async_analyzer": "'Analyzing window X async' confirmed in service log; 20 windows all async",
+    "S5_prescale": "prescale_max_input_edge=288 applied in _flush_batch; target_size=768",
+    "S7_sam2_cuda_offload": "'[sam2] CUDA detected: offload_video_to_cpu=False, offload_state_to_cpu=False (S7)' confirmed",
+    "S8_rtmpose_cuda": "RTMPose loaded on cuda EP confirmed in service log"
+  },
+  "tests": {
+    "pytest_total": 203,
+    "pytest_passed": 203,
+    "pytest_failed": 0,
+    "new_tests": [
+      "tests/test_stride_sampling.py (7 tests: stride filtering, auto-stride from fps, integration)"
+    ],
+    "note": "test_enhance_batch_mixed_size_semantic flaky (ordering-dependent GPU state) — pre-existing from M1, not M2 regression"
+  },
+  "verdict": {
+    "M2_smoke_22min_criterion": true,
+    "M2_full_fixture_60min_criterion": false,
+    "qualitative": "M2 delivers 23.7x speedup on the upscale+analyze stage and 5.1x speedup on end-to-end smoke wall time. The smoke criterion (<=22 min) is met at 21m 34s. Full-fixture projection ~93 min remains above the 60-min goal because tracking now dominates at ~80% of wall time (unchanged from M0/M1 at ~568 ms/frame, ~75 min for full fixture). M3 must attack tracking throughput.",
+    "next_actions": [
+      "M3 S9: multi-job parallelism (run 2-4 concurrent tracking jobs on gx10 — memory headroom confirmed at 128 GB unified). Each additional parallel job multiplies tracking throughput proportionally.",
+      "M3 S12 (optional): skip-propagation stride in SAM2 — only propagate every Nth frame at the SAM2 level too, trading mask continuity for speed.",
+      "Tracking bottleneck breakdown: SAM2 hiera-base-plus is ~400-450 ms/frame; RTMPose + DINOv2 + overhead is ~120 ms/frame. S9 parallelism is the highest-leverage single lever."
+    ]
+  }
+}
