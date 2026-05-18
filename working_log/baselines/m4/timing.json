@@ -3,48 +3,68 @@
   "branch": "feature/m4-fast-mode",
   "date": "2026-05-18",
   "fixture": {
-    "video": "aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==.mp4",
-    "clip": "0:00-0:30",
-    "frames": 1800,
+    "video": "aHR0cHM6Ly93d3coeW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==.mp4",
+    "smoke_clip": "0:00-0:30",
+    "smoke_frames": 1800,
+    "full_fixture_frames": 7956,
     "fps": 60
   },
   "m3_baseline": {
     "tracking_min": 63.6,
     "total_min": 70.3,
+    "k_segments": 4,
     "note": "7956 frames at full fixture; 90% tracking bottleneck"
   },
-  "standard_mode_smoke": {
-    "status": "PENDING_GX10_RUN",
-    "expected_no_regression_from_m3": true,
-    "note": "Must match M3 timing (15-16 min smoke)"
-  },
-  "fast_mode_smoke": {
-    "status": "PENDING_GX10_RUN",
-    "expected_tracking_min": 1.7,
-    "expected_upscale_min": 0.5,
-    "expected_analyze_min": 0.3,
-    "expected_total_min": 3.0,
-    "done_criterion_smoke_le_5_min": null,
-    "done_criterion_full_fixture_le_25_min": null
-  },
-  "implementation": {
-    "f1_bicubic_restorer": "BicubicRestorer with LANCZOS4 — no neural network",
-    "f2_window_stride": "fast: WINDOW_SIZE=20 STRIDE=20; standard: 30/15",
-    "f3_prop_stride": {
-      "prop_stride_fast": 12,
-      "sam2_model_fast": "facebook/sam2.1-hiera-tiny",
-      "enable_pose_fast": false,
-      "prop_stride_standard": 1,
-      "sam2_model_standard": "facebook/sam2.1-hiera-base-plus",
-      "enable_pose_standard": true,
-      "expected_tracking_frames_fast": 150,
-      "note": "1800 real frames / prop_stride=12 = 150 SAM2 propagation steps"
+  "standard_mode_smoke_m4_service_k1": {
+    "smoke_total_sec": 1120,
+    "smoke_total_min": 18.67,
+    "k_segments": 1,
+    "tracking_config": {
+      "sam2": "facebook/sam2.1-hiera-base-plus",
+      "frame_stride": 6,
+      "prop_stride": 1,
+      "enable_pose": true
     },
-    "f5_gemini_fanout": {
-      "max_inflight_fast": 24,
-      "context_chain_fast": false,
-      "max_inflight_standard": 1,
-      "context_chain_standard": true
+    "full_fixture_projection_min": 82.5,
+    "no_regression_from_m3_k1": true,
+    "note": "M4 standard mode K=1 matches M3 K=1 timing (no regression)"
+  },
+  "fast_mode_smoke_v3": {
+    "smoke_total_sec": 103,
+    "smoke_total_min": 1.72,
+    "tracking_sec": 48.9,
+    "tracking_frames": 150,
+    "tracking_fps": 3.1,
+    "gemini_windows": 8,
+    "k_segments": 1,
+    "tracking_config": {
+      "sam2": "facebook/sam2.1-hiera-tiny",
+      "frame_stride": 1,
+      "prop_stride": 12,
+      "enable_pose": false
+    },
+    "full_fixture_projection_sec": 455,
+    "full_fixture_projection_min": 7.6,
+    "done_criterion_smoke_le_5_min": true,
+    "done_criterion_full_fixture_le_25_min": true,
+    "note": "1800/12=150 SAM2 frames, 8 Gemini windows (150/20=7.5→8)"
+  },
+  "comparison": {
+    "standard_vs_fast_smoke_speedup_x": 10.9,
+    "fast_full_fixture_min": 7.6,
+    "fast_vs_m3_tracking_speedup": "63.6 min → ~3.5 min (18x) for tracking alone",
+    "bottleneck_after_m4": "tracking still ~47% of fast mode (48.9s / 103s); further speedup via K-segment parallelism in M5"
+  },
+  "bugs_found_during_smoke": [
+    {
+      "bug": "batch_offset * prop_stride formula: (batch_offset + batch_rel_idx) * prop_stride should be batch_offset + batch_rel_idx * prop_stride",
+      "fix_commit": "31fd912",
+      "symptom": "loop jumped by prop_stride^2 causing early termination with only 15 frames"
+    },
+    {
+      "bug": "frame_stride=prop_stride caused double-filtering: 150 prop-strided frames → 12 JSON frames",
+      "fix_commit": "31fd912",
+      "symptom": "tracking.json had only 15 entries instead of 150"
     }
-  }
+  ]
 }

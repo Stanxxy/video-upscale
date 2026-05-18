@@ -59,17 +59,48 @@ Fast mode:
 # POST body: { ..., "processing_mode": "fast" }
 ```
 
-## Smoke Test Results
+## Smoke Test Results (gx10 DGX Spark)
 
-### Standard Mode
-- Status: PENDING
+### Standard Mode (M4 service, K=1)
+- Total: **18m 40s (1120s)**
+- M3 K=1 was ~17 min → **no regression**
+- Config: SAM2 base-plus, frame_stride=6, prop_stride=1, enable_pose=True
+- Full-fixture projection: ~82 min (K=1); with K=4 (M3): ~70 min
 
-### Fast Mode
-- Status: PENDING
-- Done criterion: smoke ≤ 5 min AND full-fixture projection ≤ 25 min
+### Fast Mode (v3, corrected)
+- Total: **1m 43s (103s)**
+- Tracking: 48.9s / 150 SAM2 frames at 3.1 fps
+- Upscale+analyze: ~40s (8 Gemini windows)
+- Annotate/upload/SNS: ~14s
+- Config: SAM2-tiny, frame_stride=1, prop_stride=12, enable_pose=False
+- Full-fixture projection: **7.6 min** (103s × 4.42)
+
+### Done Criterion
+- Smoke ≤ 5 min: MET (1.7 min)
+- Full-fixture ≤ 25 min: MET (7.6 min)
+
+### Bugs Fixed During Smoke Testing
+1. `batch_offset` indexing: `(batch_offset + batch_rel_idx) * prop_stride` → `batch_offset + batch_rel_idx * prop_stride`
+2. `frame_stride` double-filtering: fast mode was `frame_stride=12` causing 150→12 JSON frames; fixed to `frame_stride=1`
 
 ## Test Results
 
 - New tests: 23 (test_bicubic_restorer.py: 11, test_processing_mode.py: 12)
 - Pre-existing suite: 222 passing
 - Total: 245 pass / 1 pre-existing failure (restorer_batch MPS FP16 drift — not M4)
+
+## Comparison Table
+
+| Metric | M3 (K=4 standard) | M4 Standard (K=1) | M4 Fast (K=1) |
+|---|---|---|---|
+| Smoke time | 15m 53s | 18m 40s | 1m 43s |
+| Full-fixture proj. | 70.3 min | ~82 min | **7.6 min** |
+| SAM2 model | base-plus | base-plus | tiny |
+| Prop stride | 1 | 1 | 12 |
+| Enable pose | yes | yes | no |
+| Upscale method | RealESRGAN | RealESRGAN | Bicubic/LANCZOS4 |
+| Gemini fanout | 1 | 1 | 24 |
+
+## Bottleneck After M4
+
+Fast mode: tracking is 48.9s / 103s total = 47% of wall. Next lever is M5 K=4 parallel segments for fast mode.
