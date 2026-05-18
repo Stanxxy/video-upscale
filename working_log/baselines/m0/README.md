@@ -75,37 +75,38 @@ separate concern from the speedup plan).
 
 - **Path A — full service** is used. uvicorn launched directly (`python -m uvicorn service.app:app --host 0.0.0.0 --port 8000`). Keyspaces confirmed reachable from gx10 via the libev reactor (default on Python 3.12). Job submitted with `POST /track`; lifecycle polled every 5 s via `GET /job/{id}`.
 
-## Smoke test (30 s segment, 1798 frames)
+## Smoke test (30 s segment, 1798 frames) — cancelled at 69.75% lifecycle
 
-Job `09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b`. WALL_START 2026-05-17T23:41:22Z.
+Job `09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b`. WALL_START 2026-05-17T23:41:22Z, cancelled 00:56:16Z (75 min wall). Cancellation was an explicit `DELETE /job/{id}` triggered when the driver script's 4494 s wall budget elapsed — **the pipeline was healthy and progressing at the time of cancel** (frame 1063/1798 of upscale, just finishing window 70 of ~119 expected).
 
-Final per-stage table is in `smoke/timing_table.md` once the smoke completes. Live numbers as of mid-upscale (frame 243/1798, ~14% through upscale stage, ~12 min into the upscale stage):
+Measured numbers (final, not projected):
 
-| stage | wall time | notes |
-|---|---:|---|
-| DOWNLOAD | ~1 s | 46 MB from S3 to local SSD |
-| DETECT | 0 s | skipped (boxes supplied in request) |
-| TRACK (SAM2 + pose + reID) | **1023 s ≈ 17.0 min** | 1798 frames → 1.76 fps tracking throughput; SAM2.1-hiera-base-plus on CUDA, step_size=60, base_plus model |
-| UPSCALE+ANALYZE | in progress, projected **~85 min** (5100 s) | 119 analyzer windows, single-agent Gemini, ESRGAN ×4 then resize to 1024; ~43 s per window observed |
-| ANNOTATE / UPLOAD / PUBLISH | not yet reached | ~30-60 s expected |
-| **smoke total (projected)** | **~104 min (1.7 h)** for a 30-second clip | |
+| stage | wall time | rate | notes |
+|---|---:|---:|---|
+| DOWNLOAD + DETECT (combined into 0%→15% band) | **5 s** | — | Boxes pre-supplied; detection step bypassed via correction-resume path |
+| TRACK (SAM2.1-hiera-base-plus + RTMPose CPU + DINOv2 CPU) | **1022 s ≈ 17.0 min** | **568 ms/frame (1.76 fps)** | 1798 frames; step_size=60, max_history=8, `max_missing_frames=999999` (re-id disabled) |
+| UPSCALE+ANALYZE (partial: 1063/1798 = 59% of stage) | **3467 s ≈ 57.8 min** | **3.26 s/frame (0.31 fps)** | 70 of ~119 windows completed; single-agent Gemini ~49.5 s/window average |
+| UPSCALE+ANALYZE (extrapolated to 100% of stage) | ~5860 s ≈ 97.7 min | — | Linear extrapolation |
+| ANNOTATE / UPLOAD / PUBLISH | not reached | — | `tracking.json` was uploaded as a background `tracking_uploaded` checkpoint at 23:58:27 (~2 s before upscale stage start); estimated < 1 min for the rest |
+| **smoke total (extrapolated to full 1798 frames)** | **~117 min ≈ 1.95 h** | — | For 30 sec of source video |
 
-GPU utilization observed at 95-96% during SAM2 tracking and Real-ESRGAN upscale. System RSS ~12 GB peak.
+GPU utilization observed at 95-96 % during SAM2 tracking and Real-ESRGAN upscale; system RSS ~12 GB peak.
 
-## Full M0 (full clip, 132.7 s, 7956 frames)
+## Full M0 (full clip, 132.7 s, 7956 frames) — projection only
 
-**Not executed.** Estimated wall time from smoke linear extrapolation (4.42× scale factor):
+**Not executed.** The 75-min smoke wall budget elapsed before completion; rather than re-run the smoke (~45 more min) and then a full ~7 h M0, we use the measured per-frame rates above to project. Linear scaling factor smoke→full = 7956/1798 = 4.425×.
 
-| stage | smoke (1798 fr) | full clip (7956 fr) projection |
+| stage | smoke measured (1798 fr) | full clip projection (7956 fr) |
 |---|---:|---:|
-| DOWNLOAD | 1 s | 1 s |
-| DETECT | 0 s | 0 s |
-| TRACK | 1023 s (17.0 min) | ~4520 s (**~75 min**) |
-| UPSCALE+ANALYZE | ~5100 s (85 min) | ~22,500 s (**~6.3 h**) |
-| ANNOTATE/UPLOAD/PUBLISH | ~60 s | ~60 s |
-| **TOTAL** | **~104 min (1.7 h)** | **~7.4 h** |
+| DOWNLOAD + DETECT | 5 s | 5 s |
+| TRACK | 1022 s (17.0 min) | **~4525 s ≈ 75.4 min** |
+| UPSCALE+ANALYZE (extrapolated stage total) | ~5860 s (97.7 min) | **~25,950 s ≈ 432.5 min ≈ 7.2 h** |
+| ANNOTATE / UPLOAD / PUBLISH | < 60 s | < 60 s |
+| **TOTAL** | **~117 min ≈ 1.95 h** | **~510 min ≈ 8.5 h** |
 
-Per the M0 task ("Cap total wallclock budget at 8 hours") and per the M0 branch decision rules in the plan ("> 2 h → full M1/M2"), running the full clip would consume the entire remaining task budget without changing the M0 branch decision. The smoke results alone are decisive — the unmodified pipeline on Spark is **~14.8× over the 30 min standard-mode budget** for this fixture. Running the full clip would only refine the upscale-stage scaling, which can be done after speedups are in.
+vs. 30-min standard target ⇒ **~17× over budget** on this 132 s fixture. (A canonical 3-min source at ~10,800 frames would extrapolate to ~11.5 h.)
+
+Per the M0 task ("Cap total wallclock budget at 8 hours") and per the M0 branch decision rules in the plan ("> 2 h → full M1/M2"), running the full clip would consume the entire remaining task budget without changing the M0 branch decision. The cancelled-smoke results alone are decisive.
 
 ## Peak resource usage
 

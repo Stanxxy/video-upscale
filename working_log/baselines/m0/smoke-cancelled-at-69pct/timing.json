@@ -1,0 +1,80 @@
+{
+  "job_id": "09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b",
+  "wall_start_epoch": 1779061282.0,
+  "wall_end_epoch": 1779065776.0,
+  "total_wall_sec": 4494.0,
+  "stages": [
+    {
+      "stage": "download",
+      "checkpoint_count": 1,
+      "first_updated_at": "2026-05-17 23:41:24.618000+00:00",
+      "last_updated_at": "2026-05-17 23:41:24.618000+00:00",
+      "first_reason": "download_completed",
+      "last_reason": "download_completed",
+      "stage_wall_sec": 0.0,
+      "first_epoch": 1779061284.618,
+      "last_epoch": 1779061284.618,
+      "stage_wall_from_prev_sec": 2.618000030517578
+    },
+    {
+      "stage": "detect",
+      "checkpoint_count": 1,
+      "first_updated_at": "2026-05-17 23:41:24.753000+00:00",
+      "last_updated_at": "2026-05-17 23:41:24.753000+00:00",
+      "first_reason": "detection_correction_resume",
+      "last_reason": "detection_correction_resume",
+      "stage_wall_sec": 0.0,
+      "first_epoch": 1779061284.753,
+      "last_epoch": 1779061284.753,
+      "stage_wall_from_prev_sec": 0.13499999046325684
+    },
+    {
+      "stage": "track",
+      "checkpoint_count": 1,
+      "first_updated_at": "2026-05-18 00:56:16.643000+00:00",
+      "last_updated_at": "2026-05-18 00:56:16.643000+00:00",
+      "first_reason": "tracking_progress",
+      "last_reason": "tracking_progress",
+      "stage_wall_sec": 0.0,
+      "first_epoch": 1779065776.643,
+      "last_epoch": 1779065776.643,
+      "stage_wall_from_prev_sec": 4491.889999866486
+    },
+    {
+      "stage": "upscale_analyze",
+      "checkpoint_count": 1,
+      "first_updated_at": "2026-05-18 00:49:50.231000+00:00",
+      "last_updated_at": "2026-05-18 00:49:50.231000+00:00",
+      "first_reason": "analysis_window_completed",
+      "last_reason": "analysis_window_completed",
+      "stage_wall_sec": 0.0,
+      "first_epoch": 1779065390.231,
+      "last_epoch": 1779065390.231,
+      "stage_wall_from_prev_sec": -386.4119999408722
+    },
+    {
+      "stage": "annotate",
+      "checkpoint_count": 0,
+      "stage_wall_from_prev_sec": null
+    },
+    {
+      "stage": "upload",
+      "checkpoint_count": 1,
+      "first_updated_at": "2026-05-17 23:58:27.870000+00:00",
+      "last_updated_at": "2026-05-17 23:58:27.870000+00:00",
+      "first_reason": "tracking_uploaded",
+      "last_reason": "tracking_uploaded",
+      "stage_wall_sec": 0.0,
+      "first_epoch": 1779062307.87,
+      "last_epoch": 1779062307.87,
+      "stage_wall_from_prev_sec": -3082.361000061035
+    },
+    {
+      "stage": "publish",
+      "checkpoint_count": 0,
+      "stage_wall_from_prev_sec": null
+    }
+  ],
+  "lifecycle_final_state": "CANCELLED",
+  "lifecycle_error": ""
+}

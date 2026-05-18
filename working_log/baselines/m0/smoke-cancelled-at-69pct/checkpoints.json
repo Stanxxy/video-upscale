@@ -1,0 +1,121 @@
+[
+  {
+    "job_id": "09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b",
+    "stage_name": "detect",
+    "completed": false,
+    "checkpoint_data": {
+      "schema_version": 1,
+      "pending_detection": null,
+      "artifacts": {},
+      "worker_state": {
+        "progress_percent": 15.0,
+        "current_frame": 1,
+        "total_frames": 1798,
+        "stage_progress_fraction": 1.0
+      },
+      "reason": "detection_correction_resume",
+      "source_stage": "detect",
+      "verified_box_a": [
+        679.6317749023438,
+        394.7711181640625,
+        1038.38818359375,
+        823.6023559570312
+      ],
+      "verified_box_b": [
+        992.4882202148438,
+        430.9056701660156,
+        1290.8033447265625,
+        873.8981323242188
+      ]
+    },
+    "updated_at": "2026-05-17 23:41:24.753000+00:00"
+  },
+  {
+    "job_id": "09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b",
+    "stage_name": "download",
+    "completed": false,
+    "checkpoint_data": {
+      "schema_version": 1,
+      "pending_detection": null,
+      "artifacts": {},
+      "worker_state": {
+        "progress_percent": 10.0,
+        "current_frame": 0,
+        "total_frames": 0,
+        "stage_progress_fraction": 1.0
+      },
+      "reason": "download_completed"
+    },
+    "updated_at": "2026-05-17 23:41:24.618000+00:00"
+  },
+  {
+    "job_id": "09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b",
+    "stage_name": "track",
+    "completed": false,
+    "checkpoint_data": {
+      "schema_version": 1,
+      "pending_detection": null,
+      "artifacts": {
+        "resume_from_frame": 1798,
+        "partial_tracking_s3_key": "checkpoints/09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b/partial_tracking.json"
+      },
+      "worker_state": {
+        "progress_percent": 69.73859844271412,
+        "current_frame": 1798,
+        "total_frames": 1798,
+        "stage_progress_fraction": 1.0
+      },
+      "reason": "tracking_progress",
+      "resume_cursor": {
+        "frame_idx": 1798
+      }
+    },
+    "updated_at": "2026-05-18 00:56:16.643000+00:00"
+  },
+  {
+    "job_id": "09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b",
+    "stage_name": "upload",
+    "completed": false,
+    "checkpoint_data": {
+      "schema_version": 1,
+      "pending_detection": null,
+      "artifacts": {
+        "tracking_s3_key": "aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==_tracked.json"
+      },
+      "worker_state": {
+        "progress_percent": 55.0,
+        "current_frame": 0,
+        "total_frames": 0,
+        "stage_progress_fraction": 0.33
+      },
+      "reason": "tracking_uploaded"
+    },
+    "updated_at": "2026-05-17 23:58:27.870000+00:00"
+  },
+  {
+    "job_id": "09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b",
+    "stage_name": "upscale_analyze",
+    "completed": false,
+    "checkpoint_data": {
+      "schema_version": 1,
+      "pending_detection": null,
+      "artifacts": {
+        "tracking_s3_key": "aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==_tracked.json",
+        "analysis_raw_s3_key": "checkpoints/09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b/analysis_raw.json"
+      },
+      "worker_state": {
+        "progress_percent": 68.75139043381535,
+        "current_frame": 990,
+        "total_frames": 1798,
+        "stage_progress_fraction": 0.550055617352614
+      },
+      "reason": "analysis_window_completed",
+      "resume_cursor": {
+        "frame_idx": 990,
+        "analysis_window_count": 65
+      },
+      "analysis_current_context": "The athlete in the white gi continues to apply heavy pressure from half-guard, while the athlete in the blue gi maintains defensive frames to prevent the pass."
+    },
+    "updated_at": "2026-05-18 00:49:50.231000+00:00"
+  }
+]

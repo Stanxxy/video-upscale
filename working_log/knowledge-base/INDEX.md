@@ -27,6 +27,7 @@ See `bjj-team-meta` skill for how to add entries.
 - [2026-05-10 - Recovery index bucket scan window (overnight stale jobs)](insights/2026-05-10-recovery-index-bucket-scan-window.md) — tags: service, recovery, reconciler, keyspaces, job_recovery_index, ops
 - [2026-05-10 - MPS upscale memory: PyTorch cache vs Gemini buffer](insights/2026-05-10-mps-upscale-memory-empty-cache.md) — tags: service, upscale, pytorch, mps, memory, restorer, ops
 - [2026-05-10 - Job handoff chain debugging playbook (Keyspaces + S3)](insights/2026-05-10-job-handoff-chain-debug-playbook.md) — tags: service, lifecycle, resume, keyspaces, checkpoints, s3, debugging, ops
+- [2026-05-17 - DGX Spark production target host (`ssh gx10`)](insights/2026-05-17-dgx-spark-production-target.md) — tags: infra, ops, dgx-spark, cuda, blackwell, production
 
 ## Requirements
 

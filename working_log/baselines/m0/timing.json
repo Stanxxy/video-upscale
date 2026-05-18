@@ -1,0 +1,105 @@
+{
+  "milestone": "M0",
+  "label": "Spark CUDA baseline (proxy from cancelled smoke)",
+  "date": "2026-05-17",
+  "hardware": {
+    "host": "gx10",
+    "gpu": "NVIDIA GB10 (Grace Blackwell, sm_121)",
+    "arch": "aarch64",
+    "unified_memory_gb": 128,
+    "cuda_driver": "13.0",
+    "torch": "2.12.0.dev20260407+cu128"
+  },
+  "code": {
+    "branch": "develop",
+    "head": "f88f56a",
+    "note": "7 commits ahead of origin/develop; rsync'd from local Mac"
+  },
+  "fixture": {
+    "s3_uri": "s3://bjj-video-analysis/aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==.mp4",
+    "size_bytes": 46414040,
+    "codec": "VP9",
+    "resolution": "1920x1080",
+    "fps": 60.0,
+    "fps_ratio": "60000/1001",
+    "total_frames": 7956,
+    "duration_sec": 132.732,
+    "note": "ffprobe-verified; fixture is ~2 min 13 s, NOT the rounded 3 min referenced in plan budgets"
+  },
+  "smoke": {
+    "job_id": "09cf1fc1-05c8-4316-bf6e-21a9d2a1f42b",
+    "start_time": "0:00",
+    "end_time": "0:30",
+    "smoke_total_frames": 1798,
+    "wall_start_utc": "2026-05-17T23:41:22+00:00",
+    "wall_end_utc": "2026-05-18T00:56:16+00:00",
+    "wall_total_sec": 4494,
+    "terminal_status": "cancelled",
+    "cancel_reason": "subagent 75-min wall budget hit; cancelled via DELETE /job",
+    "lifecycle_progress_at_cancel_pct": 69.75,
+    "upscale_frames_processed_at_cancel": 1063
+  },
+  "stages": {
+    "download_plus_detect": {
+      "lifecycle_band": "0%->15%",
+      "wall_sec": 5,
+      "note": "Boxes pre-supplied; detection step bypassed"
+    },
+    "tracking": {
+      "lifecycle_band": "15%->55%",
+      "wall_sec": 1022,
+      "wall_min": 17.0,
+      "frames_processed": 1798,
+      "rate_ms_per_frame": 568.4,
+      "rate_fps": 1.76,
+      "models": "SAM2 hiera-base-plus + RTMPose CPU + DINOv2 CPU (re-id disabled via max_missing_frames=999999)"
+    },
+    "upscale_analyze_partial": {
+      "lifecycle_band": "55%->80% (target); reached 69.75%",
+      "wall_sec": 3467,
+      "wall_min": 57.8,
+      "frames_processed": 1063,
+      "frames_total_in_stage": 1798,
+      "rate_sec_per_frame": 3.262,
+      "rate_fps": 0.307,
+      "gemini_windows_completed": 70,
+      "gemini_sec_per_window_avg": 49.5,
+      "models": "Real-ESRGAN x4plus + Gemini-3.1-flash-lite-preview single-agent, sliding window 30/stride 15"
+    }
+  },
+  "smoke_full_extrapolation": {
+    "wall_min_total": 117,
+    "wall_hour_total": 1.95
+  },
+  "full_fixture_projection": {
+    "fixture_total_frames": 7956,
+    "fixture_duration_sec": 132.732,
+    "scaling_factor_from_smoke": 4.425,
+    "tracking_min": 75.4,
+    "upscale_analyze_min": 432.5,
+    "other_min": 1,
+    "total_min": 509,
+    "total_hour": 8.5,
+    "stage_cost_share_pct": {
+      "tracking": 14.8,
+      "upscale_analyze": 85.0,
+      "other": 0.2
+    },
+    "vs_30min_target_multiplier": 17.0
+  },
+  "canonical_3min_60fps_projection": {
+    "note": "What a 3-min 60fps source would look like (10,800 frames). Reference for plan budgets.",
+    "assumed_total_frames": 10800,
+    "tracking_min": 102.3,
+    "upscale_analyze_min": 587.2,
+    "other_min": 1,
+    "total_min": 690,
+    "total_hour": 11.5,
+    "vs_30min_target_multiplier": 23.0
+  },
+  "branch_decision": {
+    "rule": "Plan §M0: if >2h or any stage pathologically slow ⇒ do M1+M2 in full",
+    "evidence": "8.5h projection on actual fixture (>2h); upscale per-frame at 3.26s on Blackwell vs ~30-50ms raw kernel cost = ~100x Python/IO overhead",
+    "decision": "do M1+M2 in full"
+  }
+}
