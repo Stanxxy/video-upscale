@@ -10,6 +10,16 @@ class AnalyzerMode(str, Enum):
     MULTI = "multi"
 
 
+class ProcessingMode(str, Enum):
+    """Processing mode controlling speed/quality tradeoff.
+
+    STANDARD: full-quality SAM2 base-plus + RealESRGAN + RTMPose + sequential Gemini.
+    FAST: SAM2-tiny + propagation stride + bicubic upscale + no pose + parallel Gemini.
+    """
+    STANDARD = "standard"
+    FAST = "fast"
+
+
 class JobCancelledError(Exception):
     """Raised when tracking is stopped early via should_stop (e.g. DELETE /job/{id})."""
 
@@ -73,6 +83,9 @@ class TrackRequest(BaseModel):
     # e.g. 60fps → stride=6 (keeps every 6th frame, ~300 frames from 1800)
     # e.g. 30fps → stride=3
     frame_stride: int = Field(default=0, ge=0, description="Track/upscale every Nth frame. 0=auto from fps.")
+
+    # M4: processing mode (fast vs standard)
+    processing_mode: ProcessingMode = ProcessingMode.STANDARD
 
     # Resume from checkpoint (Keyspaces-backed suspend/resume)
     resume_from_job_id: Optional[str] = None  # job_id to load checkpoints from Keyspaces
