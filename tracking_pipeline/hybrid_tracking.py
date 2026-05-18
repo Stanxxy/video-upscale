@@ -725,11 +725,10 @@ def _detect_and_request_boxes(frame_bgr, global_idx, detection_callback,
             print(f"  [detection_callback] failed: {e}")
         return None
     else:
-        # CLI mode: use select_boxes web UI
-        from select_boxes import select_boxes_from_detections
-        result = select_boxes_from_detections(frame_bgr, yolo_detections)
-        if result is not None and len(result) >= 2:
-            return (result[0]["box"], result[1]["box"], detector)
+        # No callback: parallel-segment mode or headless run.
+        # Return None to signal track loss; caller handles via max_missing_frames.
+        # Do NOT try CLI select_boxes — not available in server context.
+        print(f"  Frame {global_idx}: Track lost, no detection_callback — continuing")
         return None
 
 
