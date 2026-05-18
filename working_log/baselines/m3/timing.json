@@ -1,0 +1,46 @@
+{
+  "milestone": "M3",
+  "branch": "feature/m3-segment-runner",
+  "base_branch": "feature/m2-stride-fanout",
+  "base_commit": "d4de80a",
+  "hardware": {
+    "host": "gx10",
+    "gpu": "NVIDIA GB10 (Grace Blackwell, Spark)",
+    "memory_gb": 128,
+    "architecture": "ARM64"
+  },
+  "config": {
+    "standard_segments": 4,
+    "max_concurrent_jobs": 1,
+    "overlap_frames": 30
+  },
+  "smoke_measured": {
+    "note": "Not yet measured — rsync + run pending",
+    "total_wall_sec": null,
+    "tracking_sec": null,
+    "upscale_analyze_sec": null,
+    "other_sec": null,
+    "frame_count": 1798,
+    "job_id": null
+  },
+  "full_fixture_projected": {
+    "method": "linear_scale_from_smoke",
+    "scale_factor": 4.425,
+    "tracking_min": null,
+    "upscale_analyze_min": null,
+    "total_min": null,
+    "criterion_met": null
+  },
+  "m2_baseline": {
+    "smoke_wall_sec": 1294,
+    "tracking_sec": 1021,
+    "upscale_analyze_sec": 230,
+    "full_fixture_projected_min": 93
+  },
+  "test_results": {
+    "total_passing": 239,
+    "total_failing_preexisting": 2,
+    "new_tests_added": 20,
+    "new_tests_passing": 20
+  }
+}
