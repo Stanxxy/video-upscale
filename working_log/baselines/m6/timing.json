@@ -1,0 +1,125 @@
+{
+  "milestone": "M6",
+  "branch": "feature/m6-parallel-prop-stride",
+  "date": "2026-05-18",
+  "fixture": {
+    "video": "aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==.mp4",
+    "smoke_clip": "0:00-0:30",
+    "smoke_frames": 1798,
+    "full_fixture_frames": 7956,
+    "fps": 60,
+    "scale_factor": 4.425
+  },
+  "m5_baseline": {
+    "standard_mode_smoke_sec": 495,
+    "standard_mode_full_fixture_min": 36.5,
+    "fast_mode_smoke_sec": 61,
+    "fast_mode_full_fixture_min": 4.5,
+    "note": "M5 sequential path, K=1, prop_stride=5 (std) / prop_stride=24 (fast)"
+  },
+  "fix_description": {
+    "bug": "_run_parallel_segments called run_tracking_job without prop_stride, defaulting to 1",
+    "fix": "Added eff_prop_stride parameter to _run_parallel_segments, computed from config at call site, passed to run_tracking_job in _track_segment closure",
+    "bonus_fix": "Applied M5 frame_stride=1 override to parallel path (was missing: frame_stride was auto-computed from fps even when prop_stride > 1)",
+    "commit": "m6: wire prop_stride through _run_parallel_segments"
+  },
+  "standard_mode_smoke": {
+    "job_id": "d8f41d1e-24e0-4aa1-9209-460c64565559",
+    "config": "BJJ_STANDARD_SEGMENTS=4 BJJ_STANDARD_PROP_STRIDE=5",
+    "smoke_total_sec": 305,
+    "smoke_total_min": 5.1,
+    "log_verification": "parallel-segment mode k=4 step_size=120 max_history=8 max_missing=999999 frame_stride=1 prop_stride=5",
+    "tracking_config": {
+      "k_segments": 4,
+      "sam2": "facebook/sam2.1-hiera-base-plus",
+      "frame_stride": 1,
+      "prop_stride": 5,
+      "enable_pose": true
+    },
+    "tracking": {
+      "seg0_wall_sec": 169.4,
+      "seg0_frames": 96,
+      "seg1_wall_sec": 174.9,
+      "seg1_frames": 102,
+      "seg2_wall_sec": 166.1,
+      "seg2_frames": 102,
+      "seg3_wall_sec": 155.5,
+      "seg3_frames": 97,
+      "total_merged_frames": 361,
+      "wall_time_sec": 174.9,
+      "note": "GPU serializes 4 threads; wall = max(seg_times)"
+    },
+    "upscale_analyze": {
+      "wall_sec": 100,
+      "esrgan_instances": 4,
+      "gemini_windows": 24,
+      "gemini_fanout_per_segment": "6 windows per segment, parallel per segment",
+      "note": "4 parallel ESRGAN + 4 parallel Gemini context chains"
+    },
+    "annotate_upload_publish_sec": 16,
+    "full_fixture_projection_sec": 1350,
+    "full_fixture_projection_min": 22.5,
+    "fixed_overhead_adjusted_min": 20.9,
+    "fixed_overhead_sec": 28,
+    "target_le_22_min": "MET (adjusted projection: 20.9 min)",
+    "note": "Linear projection = 305 * 4.425 = 1350s = 22.5 min. Adjusted (remove fixed overhead): (305-28)*4.425+28=1254s=20.9 min"
+  },
+  "sequential_standard_mode_reference": {
+    "job_id": "a9e736e9-0c0c-45f9-abeb-84ef8c151363",
+    "config": "sequential K=1 BJJ_STANDARD_PROP_STRIDE=5 (old M5 server still running)",
+    "smoke_total_sec": 459,
+    "full_fixture_projection_min": 33.9,
+    "note": "M6 K=4 parallel is 1.51x faster in smoke (459 -> 305s)"
+  },
+  "fast_mode_smoke": {
+    "job_id": "92e96716-2c13-45a4-a849-4787aa089f01",
+    "config": "BJJ_FAST_PROP_STRIDE=30 BJJ_MAX_CONCURRENT_JOBS=1",
+    "smoke_total_sec": 64,
+    "smoke_total_min": 1.07,
+    "log_verification": "processing_mode=ProcessingMode.FAST sam2=facebook/sam2.1-hiera-tiny ... prop_stride=30 enable_pose=False",
+    "tracking_config": {
+      "sam2": "facebook/sam2.1-hiera-tiny",
+      "frame_stride": 1,
+      "prop_stride": 30,
+      "enable_pose": false,
+      "sam2_frames": 60
+    },
+    "tracking": {
+      "wall_sec": 26,
+      "frames": 60,
+      "rate_fps": 2.3,
+      "ms_per_frame": 433
+    },
+    "upscale_analyze": {
+      "wall_sec": 22,
+      "gemini_windows": 3,
+      "method": "BicubicRestorer (LANCZOS4)"
+    },
+    "annotate_upload_publish_sec": 9,
+    "full_fixture_projection_sec": 283,
+    "full_fixture_projection_min": 4.7,
+    "fixed_overhead_adjusted_min": 3.8,
+    "per_rate_estimate_min": 2.6,
+    "target_le_2p2_min": "NOT MET (linear 4.7 min, adjusted 3.8 min, per-rate 2.6 min)",
+    "note": "Smoke dominated by fixed overhead (16s). 1798/30=60 SAM2 frames; 3 Gemini windows. Full-fixture: 7956/30=265 SAM2 frames * 433ms = 115s tracking + 13 windows parallel = 11s + 30s upload = 156s = 2.6 min per-rate estimate"
+  },
+  "comparison": {
+    "standard_m5_vs_m6": "36.5 min -> 22.5 min (linear), 20.9 min adjusted. 1.62x speedup from K=4 parallel upscale+analyze",
+    "fast_m5_vs_m6_prop30": "4.5 min (prop24) -> 4.7 min (prop30) linear. Similar or slightly worse due to smoke fixed overhead artifacts",
+    "k4_upscale_speedup": "Sequential 388s upscale+analyze -> K=4 parallel ~100s = 3.9x speedup",
+    "tracking_speedup": "Sequential 203s tracking -> K=4 GPU-serialized 175s = 1.16x speedup (minor; GPU serializes)"
+  },
+  "milestone_journey": {
+    "M0": {"standard_min": 183, "fast_min": null, "change": "Baseline CPU fallback"},
+    "M1": {"standard_min": 117, "fast_min": null, "change": "S2 ESRGAN + faster upscale"},
+    "M2": {"standard_min": 82.5, "fast_min": null, "change": "frame_stride=6 (300 frames)"},
+    "M3": {"standard_min": 82.5, "fast_min": null, "change": "K-segment infra (no speed: GPU serializes)"},
+    "M4": {"standard_min": 82.5, "fast_min": 7.6, "change": "Fast mode: SAM2-tiny + BicubicRestorer"},
+    "M5": {"standard_min": 36.5, "fast_min": 4.5, "change": "prop_stride=5/24 + frame_stride=1 fix"},
+    "M6": {"standard_min": 22.5, "fast_min": 4.7, "adjusted_standard_min": 20.9, "change": "K=4 parallel upscale+analyze wired with prop_stride"}
+  },
+  "targets": {
+    "standard_le_22_min": "MET (adjusted: 20.9 min) / borderline (linear: 22.5 min)",
+    "fast_le_2p2_min": "NOT MET (linear: 4.7 min, adjusted: 3.8 min, per-rate: 2.6 min)"
+  }
+}
