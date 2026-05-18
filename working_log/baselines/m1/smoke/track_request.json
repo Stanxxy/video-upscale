@@ -1,0 +1,23 @@
+{
+  "bucket": "bjj-video-analysis",
+  "key": "aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==.mp4",
+  "box_a": [
+    679.6317749023438,
+    394.7711181640625,
+    1038.38818359375,
+    823.6023559570312
+  ],
+  "box_b": [
+    992.4882202148438,
+    430.9056701660156,
+    1290.8033447265625,
+    873.8981323242188
+  ],
+  "analyzer_mode": "single",
+  "method": "esrgan",
+  "sam2_model": "facebook/sam2.1-hiera-base-plus",
+  "sampling_rate": 1,
+  "max_missing_frames": 999999,
+  "start_time": "0:00",
+  "end_time": "0:30"
+}

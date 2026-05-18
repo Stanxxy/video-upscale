@@ -1,0 +1,11 @@
+[m1] artifact_dir=/home/sliu1143/bjj/m1-artifacts/smoke
+[m1] box_a=[679.6317749023438, 394.7711181640625, 1038.38818359375, 823.6023559570312]
+[m1] box_b=[992.4882202148438, 430.9056701660156, 1290.8033447265625, 873.8981323242188]
+[m1] starting uvicorn on port 8000, log=/home/sliu1143/bjj/m1-artifacts/smoke/service.log
+[m1] uvicorn pid=471751
+[m1] service healthy after 5s
+[m1] gpu poller pid=471821
+[m1] track request written to /home/sliu1143/bjj/m1-artifacts/smoke/track_request.json
+[m1] WALL_START_EPOCH=1779074379
+[m1] job_id=f6952b5c-bd84-49ee-a413-d57fb0f67185
+[m1] state -> running @ 2026-05-18T03:19:39+0000 (job=f6952b5c-bd84-49ee-a413-d57fb0f67185)

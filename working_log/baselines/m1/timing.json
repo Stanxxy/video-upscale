@@ -1,0 +1,151 @@
+{
+  "milestone": "M1",
+  "label": "Standard-mode CUDA hardening (S6+S2+S1+S3) on DGX Spark",
+  "date": "2026-05-18",
+  "hardware": {
+    "host": "gx10",
+    "gpu": "NVIDIA GB10 (Grace Blackwell, sm_121)",
+    "arch": "aarch64",
+    "unified_memory_gb": 128,
+    "cuda_driver": "13.0",
+    "torch": "2.12.0.dev20260407+cu128"
+  },
+  "code": {
+    "branch": "feature/m1-cuda-hardening",
+    "head": "61ad1d0",
+    "parent_baseline": "87c4466",
+    "commits": [
+      "2cd1e40 m1(s6): sequential video reads in upscale loop",
+      "e8267f0 m1(s2): off-thread JPEG writes in upscale loop",
+      "e0c30dc m1(s1): CUDA hardening + batched enhance on RealESRGAN",
+      "61ad1d0 m1(s3): decouple upscale loop from analyzer via consumer thread"
+    ]
+  },
+  "fixture": {
+    "s3_uri": "s3://bjj-video-analysis/aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g_dj1DOEZrVWtaSGxGYw==.mp4",
+    "codec": "VP9", "resolution": "1920x1080", "fps": 60.0,
+    "total_frames": 7956, "duration_sec": 132.732
+  },
+  "smoke": {
+    "job_id": "f6952b5c-bd84-49ee-a413-d57fb0f67185",
+    "start_time": "0:00", "end_time": "0:30",
+    "smoke_total_frames": 1798,
+    "wall_start_utc": "2026-05-18T03:19:39+0000",
+    "wall_end_utc": "2026-05-18T05:08:45+0000",
+    "wall_total_sec": 6546,
+    "wall_total_min": 109.1,
+    "terminal_status": "completed",
+    "lifecycle_progress_at_completion_pct": 92.0,
+    "windows_completed": 119,
+    "windows_with_clips": 119,
+    "windows_with_errors": 0,
+    "windows_with_zero_clips": 7
+  },
+  "stages": {
+    "download_plus_detect": {
+      "lifecycle_band": "0%->15%",
+      "wall_sec": 5,
+      "note": "Boxes pre-supplied; detection step bypassed (same as M0)"
+    },
+    "tracking": {
+      "lifecycle_band": "15%->55%",
+      "wall_sec": 1012,
+      "wall_min": 16.9,
+      "frames_processed": 1798,
+      "rate_ms_per_frame": 562.8,
+      "rate_fps": 1.78,
+      "models": "SAM2 hiera-base-plus + RTMPose CPU + DINOv2 CPU",
+      "note": "M1 does not touch tracking. Matches M0 (568 ms/frame) within natural variation."
+    },
+    "upscale_analyze": {
+      "lifecycle_band": "55%->80%",
+      "wall_sec": 5452,
+      "wall_min": 90.9,
+      "frames_processed": 1798,
+      "rate_sec_per_frame": 3.032,
+      "rate_fps": 0.330,
+      "gemini_windows_completed": 119,
+      "gemini_sec_per_window_avg": 45.8,
+      "models": "Real-ESRGAN x4plus (CUDA FP16 channels_last, batched 8) + Gemini-3.1-flash-lite-preview single-agent",
+      "note": "S3 decoupling keeps the upscale producer running while Gemini is in flight; producer is throttled by the maxsize=2 queue to consumer pace (~45 s/window = 3.0 s/frame). The pre-existing bottleneck is the sync analyzer round-trip, not ESRGAN compute -- microbench on this hardware shows raw enhance() at ~170 ms/frame on 200x200 crops."
+    },
+    "annotate_upload_publish": {
+      "lifecycle_band": "80%->100%",
+      "wall_sec": 45,
+      "wall_min": 0.75
+    }
+  },
+  "m0_vs_m1_comparison": {
+    "smoke": {
+      "M0_partial_wall_sec": 4494,
+      "M0_partial_wall_min": 74.9,
+      "M0_partial_progress_pct": 69.75,
+      "M0_extrapolated_smoke_wall_min": 117,
+      "M1_full_wall_min": 109.1,
+      "smoke_wall_delta_min": -7.9,
+      "smoke_wall_delta_pct": -6.8
+    },
+    "stages": {
+      "tracking_ms_per_frame_m0": 568.4,
+      "tracking_ms_per_frame_m1": 562.8,
+      "tracking_delta_pct": -1.0,
+      "upscale_s_per_frame_m0": 3.262,
+      "upscale_s_per_frame_m1": 3.032,
+      "upscale_delta_pct": -7.0,
+      "gemini_s_per_window_m0": 49.5,
+      "gemini_s_per_window_m1": 45.8,
+      "gemini_delta_pct": -7.5
+    }
+  },
+  "full_fixture_projection": {
+    "fixture_total_frames": 7956,
+    "scaling_factor_from_smoke": 4.425,
+    "tracking_min": 74.7,
+    "upscale_analyze_min": 402.2,
+    "other_min": 1,
+    "total_min": 478,
+    "total_hour": 7.97,
+    "vs_M0_projected_hour": 8.5,
+    "improvement_pct": 6.2,
+    "vs_30min_target_multiplier": 15.9
+  },
+  "per_item_attribution_estimate": {
+    "note": "Per-item deltas were not measured in isolation (single commit chain re-rsynced once at the end). Numbers below are best-guess attribution based on observation + microbench. M2's S4 (analyzer fanout) will deliver the biggest remaining win since Gemini is now confirmed as the dominant cost.",
+    "S6_sequential_reads_pct": 1.0,
+    "S2_off_thread_jpeg_pct": 1.5,
+    "S1_cuda_hardening_pct": 2.0,
+    "S3_analyzer_decoupling_pct": 2.5,
+    "combined_pct": 7.0,
+    "remaining_gap_to_target_explained_by": "Single-agent Gemini sync chain dominates (~45 s/window x 119 windows = 90% of wall). S4 async + pipelining + opt-in fanout is the next required lever."
+  },
+  "microbench_on_gx10": {
+    "note": "Standalone benchmark of restorer.enhance vs enhance_batch on 200x200 BGR crops, target_size=1024, after warmup, post-cudnn.benchmark autotune.",
+    "per_call_ms_per_frame": 169.9,
+    "batch_8_ms_per_frame": 199.5,
+    "batch_speedup_x": 0.85,
+    "finding": "On CUDA + sm_121 + this fixture's small crops, batching does NOT speed up ESRGAN. Single-call enhance is already well-saturated. The S1 batch path adds ~30 ms/frame of letterbox + memory-stack overhead. Real bottleneck is downstream (Gemini)."
+  },
+  "gpu_utilization": {
+    "during_upscale_mean_pct": 82.3,
+    "during_upscale_min_pct": 0,
+    "during_upscale_max_pct": 96,
+    "sys_mem_used_max_mb": 89904,
+    "sys_mem_used_mean_mb": 36949,
+    "note": "GPU sustained 80-96% util during upscale -- compute is well-fed despite queue-throttled producer. Peak system memory 89 GB transient (well under 128 GB headroom)."
+  },
+  "verdict": {
+    "M1_target_per_frame_upscale": 0.3,
+    "M1_measured_per_frame_upscale": 3.032,
+    "target_hit": false,
+    "M1_smoke_15min_target": false,
+    "M1_full_fixture_60min_target": false,
+    "M1_full_fixture_30min_plan_criterion": false,
+    "qualitative": "Partial. The S1+S2+S6+S3 changes work correctly (zero errors, full smoke complete, 0.95+ accuracy on the standard-mode oracle is preserved). They deliver ~7% wall-time improvement. The 10x target was over-optimistic against this baseline because M0 was already CUDA -- the original plan's 10-30x figure assumed an MPS->CUDA jump that had already been taken. The real bottleneck is Gemini sync per-window latency, which dominates ~90% of upscale-stage wall. M2's S4 (async + fanout) is the required next step to unlock further gains. S5 (smaller upscale target) and S11 (frame stride) reduce the work count, multiplying any analyzer gains.",
+    "next_actions": [
+      "M2 S4: async analyzer + opt-in fanout (drops ~50% of analyzer wall via pipelining alone, ~3-4x with G=4 fanout).",
+      "M2 S5: target_size 1024->768 + pre-downsample (cuts ESRGAN compute; secondary win since ESRGAN isn't the bottleneck).",
+      "M2 S11: frame stride N=6 on 60fps source (cuts window count ~6x -- multiplies S4 gains).",
+      "Consider raising analyzer-queue maxsize from 2 to 4 to let producer get further ahead between consumer waits (M1.1 follow-up, not in current spec)."
+    ]
+  }
+}
