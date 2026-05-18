@@ -44,7 +44,7 @@ from service.checkpoints import (
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.jobs_store import JobsStore
-from service.models import JobCancelledError, JobSuspendedError, JobStatus, TrackRequest
+from service.models import JobCancelledError, JobSuspendedError, JobStatus, ProcessingMode, TrackRequest
 from tracking_pipeline.human_verification_suspend import HumanVerificationSuspend
 from service.s3 import S3Client
 from service.sns import SNSPublisher
@@ -683,9 +683,25 @@ async def run_job(
                     if request.max_missing_frames is not None
                     else config.tracking_max_missing_frames
                 )
+                # M4: apply fast mode presets for tracking parameters.
+                _is_fast_mode = request.processing_mode == ProcessingMode.FAST
+                if _is_fast_mode:
+                    # Fast mode: SAM2-tiny + propagation stride 12 + no pose
+                    _eff_sam2_model = "facebook/sam2.1-hiera-tiny"
+                    _eff_prop_stride = 12
+                    _eff_enable_pose = False
+                else:
+                    # Standard mode: SAM2 base-plus + no propagation stride + pose enabled
+                    _eff_sam2_model = request.sam2_model
+                    _eff_prop_stride = 1
+                    _eff_enable_pose = True
+
                 # S11: stride-N frame sampling. Auto-compute from source fps when 0.
                 # 60fps → stride=6 → ~300 frames from 1800; 30fps → stride=3.
-                if request.frame_stride > 0:
+                # Fast mode: frame_stride = prop_stride (no benefit computing more frames than propagated)
+                if _is_fast_mode:
+                    eff_frame_stride = _eff_prop_stride
+                elif request.frame_stride > 0:
                     eff_frame_stride = request.frame_stride
                 else:
                     import cv2 as _cv2
@@ -694,13 +710,18 @@ async def run_job(
                     _cap_fps.release()
                     eff_frame_stride = max(1, round(_src_fps / 10))
                 logger.info(
-                    "Job %s tracking config: step_size=%s max_history=%s "
-                    "max_missing_frames=%s frame_stride=%s",
+                    "Job %s tracking config: processing_mode=%s sam2=%s "
+                    "step_size=%s max_history=%s max_missing_frames=%s "
+                    "frame_stride=%s prop_stride=%s enable_pose=%s",
                     job_id,
+                    request.processing_mode,
+                    _eff_sam2_model,
                     eff_step_size,
                     eff_max_history,
                     eff_max_missing_frames,
                     eff_frame_stride,
+                    _eff_prop_stride,
+                    _eff_enable_pose,
                 )
 
                 await jobs_store.write_checkpoint(
@@ -726,7 +747,7 @@ async def run_job(
                         box_a,
                         box_b,
                         tracking_output_dir,
-                        sam2_model_id=request.sam2_model,
+                        sam2_model_id=_eff_sam2_model,
                         yolo_model=request.yolo_model,
                         detection_threshold=request.detection_threshold,
                         start_frame=tracking_start_frame,
@@ -735,6 +756,8 @@ async def run_job(
                         max_history=eff_max_history,
                         max_missing_frames=eff_max_missing_frames,
                         frame_stride=eff_frame_stride,
+                        prop_stride=_eff_prop_stride,
+                        enable_pose=_eff_enable_pose,
                         progress_cb=tracking_progress_cb,
                         detection_cb=detection_cb,
                         should_stop=lambda: job_store.is_cancelled(job_id),
@@ -1636,7 +1659,12 @@ def _run_upscale_analysis(
                 pass
 
     # -- Initialize restorer -------------------------------------------------
-    if request.method == "diffusion":
+    # M4: fast mode uses BicubicRestorer (no neural network; negligible latency).
+    if request.processing_mode == ProcessingMode.FAST:
+        from restorer import BicubicRestorer
+        restorer = BicubicRestorer()
+        logger.info("Job %s upscale: fast mode — using BicubicRestorer (LANCZOS4)", job_id)
+    elif request.method == "diffusion":
         from diffusion_restorer import DiffusionRestorer
         restorer = DiffusionRestorer()
     else:
@@ -1707,8 +1735,14 @@ def _run_upscale_analysis(
     sliding_buffer = []
     analysis_results = []
     current_context = "Start of match."
-    WINDOW_SIZE = 30
-    STRIDE = 15
+    # M4 F2: fast mode uses non-overlapping windows (WINDOW_SIZE=STRIDE=20)
+    # to halve the window count vs standard overlapping windows (30/15).
+    if request.processing_mode == ProcessingMode.FAST:
+        WINDOW_SIZE = 20
+        STRIDE = 20
+    else:
+        WINDOW_SIZE = 30
+        STRIDE = 15
 
     # -- Resume from analysis checkpoint if available ------------------------
     resume_start_frame = 0
@@ -1771,13 +1805,16 @@ def _run_upscale_analysis(
         batch_frames = [x[1] for x in window]
         batch_indices = [x[0] for x in window]
         chunk_idx = len(analysis_results) + 1
+        # M4 F5: fast mode drops context chain to allow full Gemini parallelism
+        ctx = current_context if _use_context_chain else None
         logger.info(
-            "Analyzing window %d (frames %d-%d, %d images)",
+            "Analyzing window %d (frames %d-%d, %d images, ctx_chain=%s)",
             chunk_idx, batch_indices[0], batch_indices[-1], len(batch_frames),
+            _use_context_chain,
         )
         try:
             result_str = analyze_fn(
-                batch_frames, batch_indices, current_context,
+                batch_frames, batch_indices, ctx,
             )
             logger.info(
                 "Window %d raw response length: %d chars",
@@ -1802,7 +1839,7 @@ def _run_upscale_analysis(
                     chunk_idx, len(result_data["clips"]),
                 )
 
-            if "current_context_summary" in result_data:
+            if _use_context_chain and "current_context_summary" in result_data:
                 current_context = result_data["current_context_summary"]
             analysis_results.append({
                 "window": chunk_idx,
@@ -1825,9 +1862,22 @@ def _run_upscale_analysis(
     # Upscale doesn't block waiting for Gemini — the producer dispatches windows
     # and continues; the async consumer processes them with the async Gemini SDK.
     # This achieves upscale/Gemini overlap even with inflight=1.
+    #
+    # M4 F5: fast mode raises gemini_max_inflight to 24 and drops the context chain
+    # (each window gets previous_context=None). This parallelizes Gemini calls
+    # dramatically at the cost of window-to-window context continuity.
+    _is_fast_upscale = request.processing_mode == ProcessingMode.FAST
+    _eff_gemini_max_inflight = 24 if _is_fast_upscale else config.gemini_max_inflight
+    _use_context_chain = not _is_fast_upscale  # fast mode: no context chain
+    if _is_fast_upscale:
+        logger.info(
+            "Job %s: fast mode Gemini fanout=%d (no context chain)",
+            job_id, _eff_gemini_max_inflight,
+        )
+
     import queue as _stdlib_queue
     analysis_queue: _stdlib_queue.Queue = _stdlib_queue.Queue(
-        maxsize=config.gemini_max_inflight + 1
+        maxsize=_eff_gemini_max_inflight + 1
     )
     _analysis_consumer_stop = object()  # sentinel
     _analysis_consumer_error: list[BaseException] = []
@@ -1881,13 +1931,16 @@ def _run_upscale_analysis(
         batch_frames = [x[1] for x in window_payload]
         batch_indices = [x[0] for x in window_payload]
         chunk_idx = len(analysis_results) + 1
+        # M4 F5: fast mode drops context chain for full Gemini parallelism
+        ctx = current_context if _use_context_chain else None
         logger.info(
-            "Analyzing window %d async (frames %d-%d, %d images)",
+            "Analyzing window %d async (frames %d-%d, %d images, ctx_chain=%s)",
             chunk_idx, batch_indices[0], batch_indices[-1], len(batch_frames),
+            _use_context_chain,
         )
         try:
             result_str = await _async_analyzer.analyze_sequence_async(
-                batch_frames, batch_indices, current_context,
+                batch_frames, batch_indices, ctx,
                 player_references=player_ref_images,
             )
             logger.info(
@@ -1907,7 +1960,7 @@ def _run_upscale_analysis(
             else:
                 logger.info("Window %d: Gemini returned %d clips", chunk_idx, len(result_data["clips"]))
 
-            if "current_context_summary" in result_data:
+            if _use_context_chain and "current_context_summary" in result_data:
                 current_context = result_data["current_context_summary"]
             analysis_results.append({
                 "window": chunk_idx,
@@ -1919,24 +1972,64 @@ def _run_upscale_analysis(
             analysis_results.append({"window": chunk_idx, "raw_error": str(e)})
 
     def _analysis_consumer_loop():
-        """Consumer thread: owns its own asyncio event loop for async Gemini calls."""
-        # Create a dedicated event loop for this thread so async Gemini SDK calls work.
+        """Consumer thread: owns its own asyncio event loop for async Gemini calls.
+
+        M4 F5 (fast mode): when _eff_gemini_max_inflight > 1 and _use_async is True,
+        drains up to _eff_gemini_max_inflight windows from the queue and runs them
+        concurrently via asyncio.gather. This multiplies Gemini throughput by fanout
+        at the cost of no context chain (already disabled in fast mode).
+        """
         _consumer_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(_consumer_loop)
         try:
             while True:
-                item = analysis_queue.get()
-                if item is _analysis_consumer_stop:
-                    analysis_queue.task_done()
-                    return
-                window_payload = item
-                try:
-                    if _use_async:
-                        _consumer_loop.run_until_complete(
-                            _async_analyze_window(window_payload)
-                        )
+                # Drain up to _eff_gemini_max_inflight items for batch dispatch
+                items = []
+                while len(items) < _eff_gemini_max_inflight:
+                    if items:
+                        # Non-blocking get for additional items beyond the first
+                        try:
+                            item = analysis_queue.get_nowait()
+                        except Exception:
+                            break
                     else:
-                        _analyze_window(window_payload)
+                        # Blocking get for the first item
+                        item = analysis_queue.get()
+                    if item is _analysis_consumer_stop:
+                        analysis_queue.task_done()
+                        # Drain and process any already collected items before stopping
+                        if items:
+                            try:
+                                if _use_async and len(items) > 1:
+                                    _consumer_loop.run_until_complete(
+                                        asyncio.gather(*[_async_analyze_window(w) for w in items])
+                                    )
+                                elif _use_async:
+                                    _consumer_loop.run_until_complete(_async_analyze_window(items[0]))
+                                else:
+                                    for w in items:
+                                        _analyze_window(w)
+                            except Exception as e:
+                                logger.error("Consumer stop-drain error: %s", e, exc_info=True)
+                            finally:
+                                for _ in items:
+                                    analysis_queue.task_done()
+                        return
+                    items.append(item)
+
+                if not items:
+                    continue
+                try:
+                    if _use_async and len(items) > 1:
+                        # M4 F5: concurrent dispatch via asyncio.gather
+                        _consumer_loop.run_until_complete(
+                            asyncio.gather(*[_async_analyze_window(w) for w in items])
+                        )
+                    elif _use_async:
+                        _consumer_loop.run_until_complete(_async_analyze_window(items[0]))
+                    else:
+                        for w in items:
+                            _analyze_window(w)
                     try:
                         with open(
                             os.path.join(output_dir, "analysis_raw.json"), "w"
@@ -1946,7 +2039,8 @@ def _run_upscale_analysis(
                         logger.warning("analysis_raw.json write failed: %s", e)
                     _trigger_periodic_flush()
                 finally:
-                    analysis_queue.task_done()
+                    for _ in items:
+                        analysis_queue.task_done()
         except BaseException as e:
             logger.error("Analysis consumer crashed: %s", e, exc_info=True)
             _analysis_consumer_error.append(e)
@@ -1972,6 +2066,13 @@ def _run_upscale_analysis(
     processed = 0
     _last_upscale_hb = time.monotonic()
     _hb_interval = float(config.upscale_heartbeat_interval_sec)
+    # M4 F2: fast mode applies effective_sampling_rate=max(request.sampling_rate, 2)
+    # so we skip every other upscale frame, halving the upscale workload.
+    _eff_sampling_rate = (
+        max(request.sampling_rate, 2)
+        if request.processing_mode == ProcessingMode.FAST
+        else request.sampling_rate
+    )
 
     # Sequential VideoCapture cursor. tracking_data['frames'] is in ascending
     # frame_idx order (asserted below). Calling cap.set(POS_FRAMES) per frame
@@ -2149,7 +2250,7 @@ def _run_upscale_analysis(
                 processed += 1
                 continue
 
-            if frame_idx % request.sampling_rate != 0:
+            if frame_idx % _eff_sampling_rate != 0:
                 processed += 1
                 continue
             if not athletes:
