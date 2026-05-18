@@ -15,21 +15,24 @@
     "overlap_frames": 30
   },
   "smoke_measured": {
-    "note": "Not yet measured — rsync + run pending",
-    "total_wall_sec": null,
-    "tracking_sec": null,
-    "upscale_analyze_sec": null,
-    "other_sec": null,
+    "job_id": "bd3b8fbb-fe57-4b57-8246-3a4082938a54",
+    "wall_start_epoch": 1779089244.773,
+    "wall_end_epoch": 1779090198.117,
+    "total_wall_sec": 953,
+    "tracking_sec": 862,
+    "upscale_analyze_sec": 84,
+    "other_sec": 7,
     "frame_count": 1798,
-    "job_id": null
+    "segments": 4,
+    "note": "seg2 had 313 track-loss frames; each triggered YOLO reload (~2.5s each = ~780s overhead). Bottleneck was seg2 at ~862s wall. Without track-loss YOLO overhead, tracking would have been ~786s (K=4 GPU-serialized at ~1.75s/frame). M2 tracking was 1021s sequential at 0.568s/frame. K=4 parallel-but-serialized on single GPU = no throughput gain from parallelism; YOLO overhead made it worse."
   },
   "full_fixture_projected": {
     "method": "linear_scale_from_smoke",
     "scale_factor": 4.425,
-    "tracking_min": null,
-    "upscale_analyze_min": null,
-    "total_min": null,
-    "criterion_met": null
+    "tracking_min": 63.6,
+    "upscale_analyze_min": 6.2,
+    "total_min": 70.3,
+    "criterion_met": false
   },
   "m2_baseline": {
     "smoke_wall_sec": 1294,
@@ -37,6 +40,7 @@
     "upscale_analyze_sec": 230,
     "full_fixture_projected_min": 93
   },
+  "smoke_speedup_vs_m2": 1.36,
   "test_results": {
     "total_passing": 239,
     "total_failing_preexisting": 2,

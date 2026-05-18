@@ -63,17 +63,55 @@ BJJ_UPSCALE_HEARTBEAT_INTERVAL_SEC=5 \
 python -m uvicorn service.app:app --host 0.0.0.0 --port 8000
 ```
 
-## Measurement (to be filled after smoke run on gx10)
+## Measurement (gx10 smoke run 2026-05-18)
 
 | field | value |
 |---|---|
-| Smoke job ID | TBD |
-| Smoke wall | TBD |
+| Smoke job ID | bd3b8fbb-fe57-4b57-8246-3a4082938a54 |
+| Smoke wall | **953 s = 15 min 53 s** |
 | K | 4 |
-| Tracking (K=4, parallel) | TBD |
-| Upscale+analyze (K=4, parallel) | TBD |
-| Full-fixture projection | TBD |
-| M3 criterion (full fixture ≤ 22 min) | TBD |
+| Tracking (K=4, parallel) | **862 s = 14 min 22 s** |
+| Upscale+analyze (K=4, parallel) | **84 s = 1 min 24 s** |
+| Upscale speedup vs M2 sequential | **2.74× (84 s vs 230 s)** |
+| Tracking speedup vs M2 sequential | **0.85× (862 s vs 1021 s) — worse due to GPU serialization + YOLO overhead** |
+| Smoke speedup vs M2 | **1.36× (953 s vs 1294 s)** |
+| Full-fixture projection | **70.3 min** (scale factor 4.425) |
+| M3 criterion (full fixture ≤ 25 min) | **NOT MET** |
+
+### Why K=4 tracking did not speed up
+
+K=4 parallel SAM2 tracking on a single GB10 GPU serializes CUDA kernels from 4 streams. The
+observed per-frame rate was ~1.75 s/frame vs. M2's 0.568 s/frame sequential. The GPU fully
+saturates handling one segment; adding 3 more segments introduces context-switching overhead
+without adding throughput.
+
+Additionally, seg2 experienced track loss for ~313 frames (frames 975–1376) in which the
+`_detect_and_request_boxes` code path reloaded the YOLO detector from disk on each frame
+(~2.5 s each = ~780 s of extra overhead). This code path is correct and non-crashing, but the
+YOLO persistence logic does not cache across the detection-callback-less path. Total seg2
+bottleneck time was ~862 s vs. ~680–764 s for the other three segments.
+
+### Upscale+analyze did benefit
+
+84 s upscale+analyze wall time vs. M2's 230 s sequential = **2.74× speedup**. All 4 segments
+ran their upscale (ESRGAN) and Gemini analysis pipelines concurrently:
+- Each segment: ~75–85 strided frames, 5–6 Gemini windows
+- All 4 segments' Gemini calls fired in parallel (unconstrained by the
+  `previous_context` chain within each segment; cross-segment overlap is extra fanout)
+
+### Conclusion
+
+M3 delivers:
+- **Upscale+analyze: 2.74× speedup** (genuine parallelism benefit)  
+- **Tracking: no speedup** (GPU serialization; K=4 adds overhead not throughput)
+- **Net smoke: 1.36×** vs. M2; **full-fixture projection: 70.3 min** vs. M2's 93 min
+
+M3 criterion (≤ 25 min full-fixture) is **NOT MET**. To meet it, tracking must be accelerated
+further. Options for M4+:
+- SAM2 skip-propagation (S12): run SAM2 every N frames, interpolate between; reduces per-segment
+  frames by N×
+- Lighter tracker (S11 fast-mode): ByteTrack/sort instead of SAM2
+- Larger K on multi-GPU (not applicable for single-GPU Spark)
 
 ## Architecture decision: sequential vs. parallel path
 
