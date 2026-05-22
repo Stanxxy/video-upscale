@@ -108,6 +108,52 @@ def score(oracle_events: list[Event], test_events: list[Event], iou_threshold: f
     }
 
 
+def score_major_events(
+    oracle_events: list[Event],
+    test_events: list[Event],
+    iou_threshold: float = 0.5,
+    min_span_frames: int = 180,
+) -> dict:
+    """
+    Bidirectional accuracy metric for fast vs standard mode comparison.
+
+    Filters oracle to major events (span > min_span_frames; 180 frames = 3s at 60fps).
+    Forward: fraction of major oracle events detected in fast output (recall_major).
+    Backward: fraction of fast events corroborated by oracle (precision).
+    score = 0.5 * recall_major + 0.3 * precision + 0.2 * label_acc
+    """
+    major_oracle = [o for o in oracle_events if (o.end_frame - o.start_frame) > min_span_frames]
+
+    if not major_oracle and not test_events:
+        return {
+            "recall_major": 1.0, "precision": 1.0, "label_acc": 1.0, "score": 1.0,
+            "major_oracle_events": 0, "test_events": 0,
+            "hits_forward": 0, "hits_backward": 0,
+            "threshold": iou_threshold, "min_span_frames": min_span_frames,
+        }
+
+    forward = score(major_oracle, test_events, iou_threshold)
+    backward = score(test_events, oracle_events, iou_threshold)
+
+    recall_major = forward["recall"]
+    precision = backward["recall"]
+    label_acc = forward["label_acc"]
+    combined = 0.5 * recall_major + 0.3 * precision + 0.2 * label_acc
+
+    return {
+        "recall_major": recall_major,
+        "precision": precision,
+        "label_acc": label_acc,
+        "score": combined,
+        "major_oracle_events": len(major_oracle),
+        "test_events": len(test_events),
+        "hits_forward": forward["hits"],
+        "hits_backward": backward["hits"],
+        "threshold": iou_threshold,
+        "min_span_frames": min_span_frames,
+    }
+
+
 def score_from_files(oracle_path: str, test_path: str) -> dict:
     """Load two analysis_final.json files and compute score."""
     with open(oracle_path) as f:

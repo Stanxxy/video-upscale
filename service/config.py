@@ -69,9 +69,9 @@ class ServiceConfig(BaseSettings):
     # Standard mode: prop_stride=5 → 7956/5=1591 SAM2 frames (~15 min tracking on GB10).
     # Override via env: BJJ_FAST_PROP_STRIDE=24  BJJ_STANDARD_PROP_STRIDE=5
     fast_prop_stride: int = Field(
-        default=24,
+        default=12,
         ge=1,
-        description="SAM2 propagation stride for fast mode. 24 → ~2.5 fps effective from 60 fps source.",
+        description="SAM2 propagation stride for fast mode. 12 → ~5 fps effective from 60 fps source.",
     )
     standard_prop_stride: int = Field(
         default=5,
