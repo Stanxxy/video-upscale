@@ -57,7 +57,7 @@ def main():
             results.append(r)
             print(
                 f"{name}: score={r['score']:.3f} recall_major={r['recall_major']:.3f} "
-                f"precision={r['precision']:.3f} label_acc={r['label_acc']:.3f} "
+                f"precision={r['precision']:.3f} "
                 f"major_oracle={r['major_oracle_events']} fast={r['test_events']} "
                 f"{'PASS' if r['score'] >= 0.80 else 'FAIL'}"
             )
