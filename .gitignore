@@ -36,6 +36,7 @@ enhanced_*/
 
 # ── Credentials / secrets ─────────────────────────────────────────────────────
 .env*
+!.env*.example
 *.pem
 *.key
 *.p12

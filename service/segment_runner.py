@@ -42,6 +42,34 @@ class SegmentBounds:
         return self.end_frame - self.start_frame
 
 
+def compute_segment_ranges(
+    total_frames: int,
+    segment_max_frames: int,
+    overlap_frames: int = OVERLAP_FRAMES,
+) -> list[tuple[int, int]]:
+    """
+    Compute (start, end) frame ranges for memory-bounded segments.
+
+    Each segment spans at most segment_max_frames video frames. Adjacent segments
+    share overlap_frames for DINOv2 identity stitching. Ranges are relative to 0;
+    callers add clip_start_frame when converting to absolute indices.
+
+    Returns a single range [(0, total_frames)] when total_frames <= segment_max_frames.
+    Compatible with merge_tracking_results when ranges are converted to SegmentBounds.
+    """
+    if total_frames <= segment_max_frames:
+        return [(0, total_frames)]
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    while start < total_frames:
+        end = min(start + segment_max_frames, total_frames)
+        ranges.append((start, end))
+        if end >= total_frames:
+            break
+        start = end - overlap_frames
+    return ranges
+
+
 def split_segments(
     clip_start: int,
     clip_end: int,

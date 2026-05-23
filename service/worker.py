@@ -469,11 +469,15 @@ async def run_job(
             return
 
         # ============================================================
-        # M3 S9: K-segment parallel path (fresh jobs, standard_segments > 1)
-        # Sequential path runs when standard_segments == 1 or a resume job.
+        # K-segment parallel path (fresh jobs).
+        # Activated when standard_segments > 1 OR when segment_max_frames
+        # requires splitting the clip into multiple memory-bounded segments.
+        # Sequential path is used for resumes and QA-only skip_upscale runs.
         # ============================================================
+        from service.segment_runner import compute_segment_ranges as _csr
+        _k_needed = len(_csr(clip_total_frames, config.segment_max_frames))
         _use_parallel_segments = (
-            config.standard_segments > 1
+            (_k_needed > 1 or config.standard_segments > 1)
             and not request.resume_tracking_s3_key
             and not request.skip_upscale  # skip_upscale=True is QA-only; use sequential
         )
@@ -511,9 +515,9 @@ async def run_job(
                 _cap_fps_ps.release()
                 _eff_frame_stride_ps = max(1, round(_src_fps_ps / 10))
             logger.info(
-                "Job %s: parallel-segment mode k=%d "
+                "Job %s: parallel-segment mode k_needed=%d standard_segments=%d "
                 "step_size=%s max_history=%s max_missing=%s frame_stride=%s prop_stride=%s",
-                job_id, config.standard_segments,
+                job_id, _k_needed, config.standard_segments,
                 _eff_step_ps, _eff_max_history_ps,
                 _eff_max_missing_ps, _eff_frame_stride_ps, _eff_prop_stride_ps,
             )
@@ -2488,7 +2492,8 @@ async def _run_parallel_segments(
     before starting the upscale stage.
     """
     from service.segment_runner import (
-        split_segments,
+        SegmentBounds,
+        compute_segment_ranges,
         stitch_segment_identity,
         merge_tracking_results,
         merge_analysis_results,
@@ -2496,16 +2501,23 @@ async def _run_parallel_segments(
     )
     from service.tracking_runner import run_tracking_job
 
-    k = config.standard_segments
-    if k <= 1:
-        raise ValueError("_run_parallel_segments called with k<=1; use sequential path")
+    # Dynamic segment count: bounded by segment_max_frames, parallelism by standard_segments.
+    all_ranges = compute_segment_ranges(clip_total_frames, config.segment_max_frames)
+    n_total = len(all_ranges)
+    k_parallel = min(n_total, config.standard_segments)
+    segments = [
+        SegmentBounds(
+            segment_id=i,
+            start_frame=clip_start_frame + s,
+            end_frame=clip_start_frame + e,
+        )
+        for i, (s, e) in enumerate(all_ranges)
+    ]
 
     logger.info(
-        "Job %s: K-segment parallel mode k=%d clip=[%d, %d) total_frames=%d",
-        job_id, k, clip_start_frame, clip_end_resolved, clip_total_frames,
+        "Job %s: K-segment mode n_segments=%d k_parallel=%d clip=[%d, %d) total_frames=%d",
+        job_id, n_total, k_parallel, clip_start_frame, clip_end_resolved, clip_total_frames,
     )
-
-    segments = split_segments(clip_start_frame, clip_end_resolved, k, OVERLAP_FRAMES)
 
     # Per-segment output directories
     seg_output_dirs = [
@@ -2555,11 +2567,17 @@ async def _run_parallel_segments(
             )
             raise
 
-    # Gather K tracking tasks concurrently
-    tracking_futures = [
-        loop.run_in_executor(None, _track_segment, i) for i in range(k)
-    ]
-    tracking_paths: list[str | None] = list(await asyncio.gather(*tracking_futures))
+    # Track all segments in sequential batches of k_parallel to bound peak GPU memory.
+    tracking_paths: list[str | None] = [None] * n_total
+    for _batch_start in range(0, n_total, k_parallel):
+        _batch_end = min(_batch_start + k_parallel, n_total)
+        _batch_futures = [
+            loop.run_in_executor(None, _track_segment, i)
+            for i in range(_batch_start, _batch_end)
+        ]
+        _batch_paths = list(await asyncio.gather(*_batch_futures))
+        for _bi, _path in zip(range(_batch_start, _batch_end), _batch_paths):
+            tracking_paths[_bi] = _path
 
     # Check for cancellation
     if any(p is None for p in tracking_paths):
@@ -2583,10 +2601,10 @@ async def _run_parallel_segments(
         )
 
     # ------------------------------------------------------------------
-    # Identity stitching at each segment boundary
+    # Identity stitching at each segment boundary (sequential, all N segments)
     # ------------------------------------------------------------------
     stitched_frames: list[list[dict]] = [seg_tracking_frames[0]]
-    for i in range(1, k):
+    for i in range(1, n_total):
         remapped = stitch_segment_identity(
             stitched_frames[i - 1],
             seg_tracking_frames[i],
@@ -2620,8 +2638,8 @@ async def _run_parallel_segments(
 
     _frame_count = len(merged_tracking_full["frames"])
     logger.info(
-        "Job %s: merged tracking: %d total frames from %d segments",
-        job_id, _frame_count, k,
+        "Job %s: merged tracking: %d total frames from %d segments (k_parallel=%d)",
+        job_id, _frame_count, n_total, k_parallel,
     )
 
     # ------------------------------------------------------------------
@@ -2725,12 +2743,17 @@ async def _run_parallel_segments(
             )
             raise
 
-    upscale_futures = [
-        loop.run_in_executor(None, _upscale_segment, i) for i in range(k)
-    ]
-    upscale_results: list[tuple[dict | None, float]] = list(
-        await asyncio.gather(*upscale_futures)
-    )
+    # Upscale+analyze all segments in sequential batches of k_parallel.
+    upscale_results: list[tuple[dict | None, float]] = [(None, 0.0)] * n_total
+    for _batch_start in range(0, n_total, k_parallel):
+        _batch_end = min(_batch_start + k_parallel, n_total)
+        _batch_futures = [
+            loop.run_in_executor(None, _upscale_segment, i)
+            for i in range(_batch_start, _batch_end)
+        ]
+        _batch_res = list(await asyncio.gather(*_batch_futures))
+        for _bi, _res in zip(range(_batch_start, _batch_end), _batch_res):
+            upscale_results[_bi] = _res
 
     # ------------------------------------------------------------------
     # Merge analysis results
@@ -2744,8 +2767,8 @@ async def _run_parallel_segments(
         merged_analysis["fps"] = final_fps
 
     logger.info(
-        "Job %s: K-segment complete fps=%.2f has_analysis=%s merged_frames=%d",
-        job_id, final_fps, merged_analysis is not None, _frame_count,
+        "Job %s: K-segment complete n_segments=%d k_parallel=%d fps=%.2f has_analysis=%s merged_frames=%d",
+        job_id, n_total, k_parallel, final_fps, merged_analysis is not None, _frame_count,
     )
 
     return merged_tracking_path, merged_analysis, final_fps

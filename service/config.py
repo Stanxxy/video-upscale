@@ -79,6 +79,31 @@ class ServiceConfig(BaseSettings):
         description="SAM2 propagation stride for standard mode. 5 → 12 fps effective from 60 fps source.",
     )
 
+    # Memory-bounded segment splitting (added alongside Mac dev support).
+    # SAM2 on CUDA keeps all segment frames in GPU memory simultaneously.
+    # Capping frames per segment bounds peak GPU memory regardless of video length.
+    # 2000 frames ≈ 33s at 60fps → ~6 GB per segment (standard mode, prop_stride=5).
+    # Override: BJJ_SEGMENT_MAX_FRAMES=1500 on 16GB targets to stay within budget.
+    segment_max_frames: int = Field(
+        default=2000,
+        ge=60,
+        description=(
+            "Maximum video frames per SAM2 segment. K is computed dynamically as "
+            "ceil(total_frames / segment_max_frames). Bounds peak memory regardless of "
+            "video length. 2000 frames ≈ 33s at 60fps. Tune down on memory-constrained "
+            "targets (e.g., BJJ_SEGMENT_MAX_FRAMES=1500 for 16GB)."
+        ),
+    )
+    # Skip SAM2 pre-warm on Mac dev to speed up service restarts (~60s saved).
+    # Leave false (default) on gx10 production where the first-job latency matters.
+    disable_prewarm: bool = Field(
+        default=False,
+        description=(
+            "Skip SAM2 model pre-warm at startup. Set BJJ_DISABLE_PREWARM=true on dev "
+            "machines to speed up iteration. Leave false (default) on gx10 production."
+        ),
+    )
+
     # M2 S5: upscale target size and pre-scale cap.
     upscale_target_size: int = Field(
         default=768,

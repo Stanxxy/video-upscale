@@ -91,7 +91,8 @@ async def lifespan(app: FastAPI):
 
         await asyncio.get_event_loop().run_in_executor(None, _load_models)
 
-    asyncio.ensure_future(_prewarm_sam2())
+    if not config.disable_prewarm:
+        asyncio.ensure_future(_prewarm_sam2())
 
     try:
         yield

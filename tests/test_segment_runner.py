@@ -12,6 +12,7 @@ Verifies:
 import pytest
 from service.segment_runner import (
     split_segments,
+    compute_segment_ranges,
     merge_tracking_results,
     merge_analysis_results,
     OVERLAP_FRAMES,
@@ -225,3 +226,93 @@ class TestMergeAnalysisResults:
         result = merge_analysis_results([seg])
         assert result is not None
         assert abs(result["fps"] - 59.94) < 0.01
+
+
+class TestComputeSegmentRanges:
+    """Tests for compute_segment_ranges: memory-bounded dynamic segment splitting."""
+
+    def test_short_clip_single_segment(self):
+        """total_frames <= segment_max_frames → single segment covering full range."""
+        result = compute_segment_ranges(total_frames=100, segment_max_frames=200)
+        assert result == [(0, 100)]
+
+    def test_exact_fit_single_segment(self):
+        """total_frames == segment_max_frames → single segment."""
+        result = compute_segment_ranges(total_frames=2000, segment_max_frames=2000)
+        assert result == [(0, 2000)]
+
+    def test_fixture1_7956_frames(self):
+        """Standard fixture: 7956 frames, segment_max=2000, overlap=30 → 5 segments."""
+        result = compute_segment_ranges(
+            total_frames=7956, segment_max_frames=2000, overlap_frames=30
+        )
+        assert len(result) == 5
+        assert result[0] == (0, 2000)
+        assert result[1] == (1970, 3970)
+        assert result[2] == (3940, 5940)
+        assert result[3] == (5910, 7910)
+        assert result[4] == (7880, 7956)
+
+    def test_full_coverage_no_gaps(self):
+        """All frames in [0, total_frames) are covered by at least one segment."""
+        result = compute_segment_ranges(
+            total_frames=7956, segment_max_frames=2000, overlap_frames=30
+        )
+        covered = set()
+        for start, end in result:
+            covered.update(range(start, end))
+        assert covered.issuperset(set(range(7956)))
+
+    def test_adjacent_overlap_correct(self):
+        """Adjacent segments share exactly overlap_frames frames."""
+        result = compute_segment_ranges(
+            total_frames=5000, segment_max_frames=2000, overlap_frames=30
+        )
+        for i in range(len(result) - 1):
+            _, end_i = result[i]
+            start_next, _ = result[i + 1]
+            overlap = end_i - start_next
+            assert overlap == 30, f"Expected overlap=30 at boundary {i}, got {overlap}"
+
+    def test_no_infinite_loop_near_boundary(self):
+        """total_frames just over segment_max_frames does not loop infinitely."""
+        result = compute_segment_ranges(
+            total_frames=2050, segment_max_frames=2000, overlap_frames=30
+        )
+        assert len(result) == 2
+        assert result[0] == (0, 2000)
+        assert result[1] == (1970, 2050)
+
+    def test_first_segment_starts_at_zero(self):
+        """First segment always starts at 0."""
+        result = compute_segment_ranges(total_frames=5000, segment_max_frames=1500)
+        assert result[0][0] == 0
+
+    def test_last_segment_ends_at_total_frames(self):
+        """Last segment always ends at total_frames."""
+        result = compute_segment_ranges(total_frames=7956, segment_max_frames=2000)
+        assert result[-1][1] == 7956
+
+    def test_compatible_with_merge_tracking_results(self):
+        """
+        Segments from compute_segment_ranges, converted to SegmentBounds, produce
+        non-duplicate frame coverage when passed to merge_tracking_results.
+        """
+        ranges = compute_segment_ranges(
+            total_frames=400, segment_max_frames=150, overlap_frames=10
+        )
+        segments = [
+            SegmentBounds(segment_id=i, start_frame=s, end_frame=e)
+            for i, (s, e) in enumerate(ranges)
+        ]
+        # Build synthetic frames for each segment
+        seg_frame_lists = [
+            [{"frame_idx": f} for f in range(seg.start_frame, seg.end_frame)]
+            for seg in segments
+        ]
+        result = merge_tracking_results(segments, seg_frame_lists, overlap=10)
+        frame_indices = [f["frame_idx"] for f in result["frames"]]
+        # No duplicates
+        assert len(frame_indices) == len(set(frame_indices))
+        # All original frames covered
+        assert set(range(400)).issubset(set(frame_indices))
