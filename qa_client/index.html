@@ -194,6 +194,16 @@
               <option value="yolo26x">yolo26x (xlarge)</option>
             </select>
           </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Processing Mode</label>
+            <select id="processing-mode">
+              <option value="standard">standard (full quality)</option>
+              <option value="fast">fast (5fps, BicubicRestorer)</option>
+            </select>
+          </div>
           <div>
             <label>Threshold</label>
             <input id="threshold" type="number" value="0.5" min="0.1" max="1" step="0.05">
@@ -211,6 +221,12 @@
           </div>
         </div>
 
+        <label>Box A override [x1,y1,x2,y2] (optional — skips detection)</label>
+        <input id="box-a" placeholder="e.g. 100,50,400,700">
+
+        <label>Box B override [x1,y1,x2,y2] (optional — skips detection)</label>
+        <input id="box-b" placeholder="e.g. 500,60,800,710">
+
         <div class="checkbox-row">
           <input id="skip-upscale" type="checkbox" checked>
           <label for="skip-upscale">Skip upscale (tracking only)</label>
@@ -218,6 +234,14 @@
 
         <button id="btn-submit" class="btn btn-primary" onclick="submitJob()">Submit Job</button>
         <button id="btn-cancel" class="btn btn-danger" onclick="cancelJob()" disabled>Cancel Job</button>
+
+        <div style="border-top:1px solid var(--border); margin-top:14px; padding-top:14px;">
+          <label>Connect to existing job ID</label>
+          <div class="row" style="gap:8px; margin-top:4px;">
+            <input id="existing-job-id" placeholder="paste job UUID here" style="flex:1">
+            <button class="btn btn-sm btn-primary" style="flex-shrink:0; margin-top:0;" onclick="connectExistingJob()">Connect</button>
+          </div>
+        </div>
       </div>
 
       <div class="card">
@@ -348,12 +372,25 @@ async function submitJob() {
     yolo_model: document.getElementById('yolo-model').value,
     detection_threshold: parseFloat(document.getElementById('threshold').value),
     skip_upscale: document.getElementById('skip-upscale').checked,
+    processing_mode: document.getElementById('processing-mode').value,
   };
 
   const st = document.getElementById('start-time').value.trim();
   const et = document.getElementById('end-time').value.trim();
   if (st) body.start_time = st;
   if (et) body.end_time = et;
+
+  // Optional box overrides (skips auto-detection step)
+  const parseBox = id => {
+    const v = document.getElementById(id).value.trim();
+    if (!v) return null;
+    const nums = v.split(',').map(s => parseFloat(s.trim()));
+    return nums.length === 4 && nums.every(n => !isNaN(n)) ? nums : null;
+  };
+  const boxA = parseBox('box-a');
+  const boxB = parseBox('box-b');
+  if (boxA) body.box_a = boxA;
+  if (boxB) body.box_b = boxB;
 
   document.getElementById('btn-submit').disabled = true;
   document.getElementById('result-panel').style.display = 'none';
@@ -384,6 +421,21 @@ async function submitJob() {
     setStatus('Submit failed', 'error', 'error');
     document.getElementById('btn-submit').disabled = false;
   }
+}
+
+// ============================================================
+// Connect to existing job (detection correction / resume)
+// ============================================================
+function connectExistingJob() {
+  const id = document.getElementById('existing-job-id').value.trim();
+  if (!id) { alert('Paste a job ID first'); return; }
+  jobId = id;
+  jobHistory = [id];
+  document.getElementById('btn-cancel').disabled = false;
+  document.getElementById('result-panel').style.display = 'none';
+  setStatus('Connecting to existing job...', id.slice(0,8), 'working');
+  log(`Attaching to existing job: ${id}`, 'log-info');
+  connectSSE(id);
 }
 
 // ============================================================
@@ -487,26 +539,42 @@ function handleMessage(msg) {
   else if (t === 'detection_needed') {
     log(`DETECTION REQUIRED  reason=${msg.reason}  candidates=${(msg.candidates||[]).length}  suggested=${!!msg.suggested_boxes}`, 'log-info');
     setStatus('Awaiting correction', msg.reason, 'working');
-    // If frame_b64 is missing, load from S3 presigned URL (frame_s3_key)
-    if (!msg.frame_b64 && msg.frame_s3_key) {
+    // If frame_b64 is missing, fetch it from the service (which fetches from S3)
+    if (!msg.frame_b64 && (msg.frame_s3_key || msg.frame_bucket)) {
       const base = document.getElementById('service-url').value.replace(/\/+$/, '');
-      log(`Loading frame from S3: ${msg.frame_s3_key}`, 'log-info');
-      // For QA direct-to-engine, fetch the job details which should include the frame
-      fetch(base + '/job/' + jobId).then(r => r.json()).then(() => {
-        showDetectionPanel(msg);
-      }).catch(() => showDetectionPanel(msg));
+      log(`Fetching detection frame from service...`, 'log-info');
+      fetch(base + '/jobs/' + jobId + '/detection_frame')
+        .then(r => r.json())
+        .then(data => {
+          msg.frame_b64 = data.frame_b64;
+          showDetectionPanel(msg);
+        })
+        .catch(e => {
+          log(`Could not load detection frame: ${e.message}`, 'log-err');
+          showDetectionPanel(msg);  // show panel with blank canvas; user can drag custom boxes
+        });
     } else {
       showDetectionPanel(msg);
     }
   }
   else if (t === 'completed') {
-    log(`COMPLETED  bucket=${msg.result_bucket}  key=${msg.result_key}  tracking=${msg.tracking_key||'—'}`, 'log-in');
+    log(`COMPLETED  job_id=${msg.job_id || jobId}`, 'log-in');
     setStatus('Completed', 'done', 'connected');
     setProgress(100, 'completed');
-    document.getElementById('result-panel').style.display = 'block';
-    document.getElementById('result-json').textContent = JSON.stringify(msg, null, 2);
     document.getElementById('btn-submit').disabled = false;
     document.getElementById('btn-cancel').disabled = true;
+    // Fetch full job status to show S3 artifact links
+    const base = document.getElementById('service-url').value.replace(/\/+$/, '');
+    fetch(base + '/job/' + (msg.job_id || jobId))
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('result-panel').style.display = 'block';
+        document.getElementById('result-json').textContent = JSON.stringify(data, null, 2);
+      })
+      .catch(() => {
+        document.getElementById('result-panel').style.display = 'block';
+        document.getElementById('result-json').textContent = JSON.stringify(msg, null, 2);
+      });
   }
   else if (t === 'error') {
     log(`ERROR: ${msg.message}`, 'log-err');

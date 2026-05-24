@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import os
@@ -6,7 +7,7 @@ from datetime import datetime, timezone
 
 import torch
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import (
@@ -403,6 +404,47 @@ async def job_events_sse(job_id: str):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ---------------------------------------------------------------------------
+# Detection frame (fetches frame JPEG from S3 and returns as base64)
+# ---------------------------------------------------------------------------
+
+@router.get("/jobs/{job_id}/detection_frame")
+async def get_detection_frame(job_id: str):
+    """Return the detection frame as base64 for the QA client canvas.
+
+    The frame JPEG is stored in S3 at ``pending_detection.frame_s3_key``.
+    This endpoint fetches it and returns ``{frame_b64: <base64>}``.
+    """
+    # Find the pending_detection checkpoint (DETECT or TRACK stage)
+    det: dict | None = None
+    for stage_name in (PipelineStage.DETECT, PipelineStage.TRACK):
+        cp = await _jobs_store.get_checkpoint(job_id, stage_name)
+        if cp:
+            pd = cp.get("checkpoint_data", {}).get("pending_detection")
+            if pd:
+                det = pd
+                break
+
+    if not det:
+        raise HTTPException(404, "No pending detection for this job")
+
+    bucket = det.get("frame_bucket", "")
+    key = det.get("frame_s3_key", "")
+    if not bucket or not key:
+        raise HTTPException(404, "Detection frame S3 location not recorded")
+
+    try:
+        s3 = _s3_client()
+        jpeg_bytes = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: s3.get_object(bucket, key)
+        )
+        frame_b64 = base64.b64encode(jpeg_bytes).decode("utf-8")
+        return JSONResponse({"frame_b64": frame_b64, "frame_idx": det.get("frame_idx", 0)})
+    except Exception as e:
+        logger.warning("get_detection_frame: S3 fetch failed job=%s: %s", job_id, e)
+        raise HTTPException(502, f"Could not fetch frame from S3: {e}")
 
 
 # ---------------------------------------------------------------------------
