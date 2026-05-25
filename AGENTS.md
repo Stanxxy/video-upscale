@@ -53,7 +53,6 @@ whole-video-analysis/
 ├── qa_client/             # Manual QA client scripts
 ├── working_log/           # Planning docs, knowledge base
 │   └── knowledge-base/    # Design decisions, insights, requirements
-├── .claude/skills/        # bjj-team skill suite
 ├── service.sh             # Service start/stop/restart
 ├── AGENTS.md              # This file
 ├── API.md                 # REST API reference
@@ -122,24 +121,24 @@ disposable. See `working_log/knowledge-base/scratch/README.md` for naming conven
 
 ## Team Skills
 
-The full bjj-team skill suite is available in `.claude/skills/`:
+Canonical **bjj-team-*** skill definitions live in the **umbrella** workspace at `../.claude/skills/` (relative to this repo when checked out under `bjj-proj/`). Copy or symlink those folders into your local Claude/Cursor skills path if your environment only loads user-level skills.
 
 | Skill | Trigger |
 |-------|---------|
 | `bjj-team-product-manager` | Unclear requirements, new features, scope clarification |
 | `bjj-team-designer` | UI/UX review (QA client, annotated video output) |
 | `bjj-team-engineer` | Implementation, TDD, backend patterns |
-| `bjj-team-qa-engineer` | Verification, E2E testing, browser automation |
-| `bjj-team-operator` | Service lifecycle, codebase hygiene for both repos |
+| `bjj-team-evaluator` | Architecture, quality, and test-rigor review loop |
+| `bjj-team-operator` | Service lifecycle, codebase hygiene (includes vision-engine artifact scans) |
 | `bjj-team-meta` | Save design decisions, insights, requirements |
 
 ### Workflow Chains
 
-**Feature flow:** PM (requirements) → Engineer (TDD) → QA (verify) → Meta (save decisions)
+**Feature flow:** PM → Engineer/Designer ↔ Evaluator (mandatory loop) → PM verification → Meta
 
-**Bug fix flow:** QA (reproduce) → Engineer (fix) → QA (re-verify) → Meta (save insight)
+**Bug fix flow:** Operator (env, if needed) → PM → Engineer/Designer ↔ Evaluator → PM verification → Meta
 
-**Infrastructure/cleanup:** Operator → (fix) → Meta (save if noteworthy)
+**Infrastructure/cleanup:** Operator → Meta (when noteworthy)
 
 ---
 
