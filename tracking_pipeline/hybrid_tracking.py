@@ -725,9 +725,28 @@ def _detect_and_request_boxes(frame_bgr, global_idx, detection_callback,
                         detector, yolo_model, detection_threshold, device):
     """Lazy-load YOLO, detect persons, and request user-verified boxes.
 
-    Returns (box_a, box_b, detector) on success, or None if user cancelled.
+    Returns (box_a, box_b, detector) on success, or None if user cancelled
+    OR if there is no ``detection_callback`` to consume YOLO results.
     The detector is returned so the caller can keep the reference for future use.
+
+    No-op short-circuit: in parallel-segment mode (and other headless runs)
+    ``detection_callback`` is ``None`` by design — mid-track human-in-the-loop
+    suspend would block sibling segments, so the parallel path intentionally
+    skips re-detection (see commit e5c60cd / `service/worker.py:_run_parallel_segments`).
+    Loading YOLO + running a forward pass per track-loss frame is pure waste
+    in that mode, and previously the locally-loaded detector was thrown away
+    on the no-callback return path so YOLO was reloaded every track-loss
+    (logs flooded with `[detect] Loading yolo26m.pt on mps (persistent)...`
+    every few frames). Short-circuit before touching YOLO.
     """
+    if detection_callback is None:
+        # Parallel-segment mode / headless run: nothing to do with YOLO output.
+        # Return None to signal track loss; caller handles via max_missing_frames.
+        # Do NOT try CLI select_boxes — not available in server context.
+        print(f"  Frame {global_idx}: Track lost, no detection_callback — continuing")
+        return None
+
+    # Service mode with a human-in-the-loop callback.
     # Lazy-load YOLO detector
     if detector is None:
         print(f"  Frame {global_idx}: Loading YOLO detector on demand...")
@@ -737,28 +756,20 @@ def _detect_and_request_boxes(frame_bgr, global_idx, detection_callback,
 
     yolo_detections = detector.detect_persons(frame_bgr)
 
-    if detection_callback is not None:
-        # Service mode: send to human via WebSocket
-        _, frame_jpeg_enc = cv2.imencode(".jpg", frame_bgr)
-        try:
-            cb_result = detection_callback(
-                "tracking_lost", frame_jpeg_enc.tobytes(),
-                yolo_detections=yolo_detections,
-                frame_idx=global_idx,
-            )
-            if cb_result is not None:
-                return (cb_result[0], cb_result[1], detector)
-        except HumanVerificationSuspend:
-            raise
-        except Exception as e:
-            print(f"  [detection_callback] failed: {e}")
-        return None
-    else:
-        # No callback: parallel-segment mode or headless run.
-        # Return None to signal track loss; caller handles via max_missing_frames.
-        # Do NOT try CLI select_boxes — not available in server context.
-        print(f"  Frame {global_idx}: Track lost, no detection_callback — continuing")
-        return None
+    _, frame_jpeg_enc = cv2.imencode(".jpg", frame_bgr)
+    try:
+        cb_result = detection_callback(
+            "tracking_lost", frame_jpeg_enc.tobytes(),
+            yolo_detections=yolo_detections,
+            frame_idx=global_idx,
+        )
+        if cb_result is not None:
+            return (cb_result[0], cb_result[1], detector)
+    except HumanVerificationSuspend:
+        raise
+    except Exception as e:
+        print(f"  [detection_callback] failed: {e}")
+    return None
 
 
 def _correct_identity_swap_after_scramble(frame_boxes, frame_masks, frame_rgb,

@@ -63,6 +63,44 @@ PARTIAL_UPLOAD_INTERVAL = 30.0
 LIFECYCLE_HEARTBEAT_INTERVAL = 1.0
 
 
+def _log_progress_future_failure(future, *, context: str = "progress write"):
+    """``add_done_callback`` for fire-and-forget ``run_coroutine_threadsafe``.
+
+    Best-effort heartbeats (lifecycle update_progress, upscale progress) are
+    scheduled from worker threads via ``run_coroutine_threadsafe`` and we do
+    NOT block on ``future.result()`` for them — but the resulting Future will
+    silently swallow any coroutine exception (Keyspaces timeout, serialization
+    error, network blip) if nobody inspects it. Attach this callback so the
+    exception lands in the engine log without raising.
+    """
+    try:
+        exc = future.exception()
+    except Exception:
+        # Future was cancelled, or .exception() itself failed; nothing to log.
+        return
+    if exc is not None:
+        logger.error(
+            "background %s coroutine failed: %s",
+            context,
+            exc,
+            exc_info=exc,
+        )
+
+
+def _schedule_background_coro(coro, loop, *, context: str):
+    """Schedule a fire-and-forget coroutine and log any failure.
+
+    Wraps the common pattern ``asyncio.run_coroutine_threadsafe(coro, loop)``
+    followed by ``add_done_callback(_log_progress_future_failure)`` so callers
+    can't forget the failure-logging hook.
+    """
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    future.add_done_callback(
+        lambda f, _ctx=context: _log_progress_future_failure(f, context=_ctx),
+    )
+    return future
+
+
 def _tracking_progress_flags(
     now: float,
     last_ks_write: float,
@@ -133,6 +171,23 @@ def _clip_done_inclusive_through_global(
     return min(max(global_idx - clip_start_frame + 1, 0), clip_total_frames)
 
 
+def _tracking_pct_from_clip_done(
+    clip_done: int,
+    clip_total_frames: int,
+    progress_floor: float,
+) -> float:
+    """Tracking-stage percent (15-55% band) from a 1-based clip-relative done count.
+
+    Shared by:
+      * the sequential progress callback (via global frame index, see
+        ``_tracking_progress_pct_clip``),
+      * the parallel-segment aggregator (via summed per-segment counters,
+        see ``_run_parallel_segments``).
+    """
+    frac = clip_done / max(clip_total_frames, 1)
+    return _pct_at_least(15.0 + frac * 40.0, progress_floor)
+
+
 def _tracking_progress_pct_clip(
     global_idx: int,
     clip_start_frame: int,
@@ -143,8 +198,7 @@ def _tracking_progress_pct_clip(
     done = _clip_done_inclusive_through_global(
         global_idx, clip_start_frame, clip_total_frames,
     )
-    frac = done / max(clip_total_frames, 1)
-    pct = _pct_at_least(15.0 + frac * 40.0, progress_floor)
+    pct = _tracking_pct_from_clip_done(done, clip_total_frames, progress_floor)
     return done, pct
 
 
@@ -667,7 +721,7 @@ async def run_job(
                         _last_ks_write = now
                     if upload_partial:
                         _last_partial_upload = now
-                    asyncio.run_coroutine_threadsafe(
+                    _schedule_background_coro(
                         _update_tracking_progress_with_partial(
                             job_id, clip_done, clip_total_frames, pct,
                             job_store, jobs_store,
@@ -677,6 +731,7 @@ async def run_job(
                             upload_partial=upload_partial,
                         ),
                         loop,
+                        context="tracking progress write",
                     )
 
                 detection_cb = _make_detection_cb(
@@ -990,9 +1045,10 @@ async def run_job(
 
             def _upscale_progress(pct_within_stage: float):
                 overall = 55.0 + pct_within_stage * 25.0  # 55%-80%
-                asyncio.run_coroutine_threadsafe(
+                _schedule_background_coro(
                     _update_upscale_progress(overall),
                     loop,
+                    context="upscale progress write",
                 )
 
             analysis_result, fps = await loop.run_in_executor(
@@ -2527,6 +2583,84 @@ async def _run_parallel_segments(
         os.makedirs(d, exist_ok=True)
 
     # ------------------------------------------------------------------
+    # Per-segment progress aggregator
+    # ------------------------------------------------------------------
+    # Each segment runs in its own thread executor with its own internal
+    # tracking loop. We track per-segment ``frames_processed_in_segment``
+    # in a shared dict (each thread owns its own key; int assignment is
+    # atomic under the GIL so no lock is required). A background asyncio
+    # task running on ``loop`` aggregates the sum every
+    # ``LIFECYCLE_HEARTBEAT_INTERVAL`` and writes the lifecycle row so SSE
+    # consumers can advance the progress bar instead of seeing the seed
+    # value of clip_done=1 / 15% for the entire parallel tracking phase.
+    frames_done: dict[int, int] = {i: 0 for i in range(n_total)}
+
+    def _make_seg_progress_cb(seg_idx: int):
+        def _seg_progress_cb(frames_in_seg: int, total_local: int, global_idx: int):
+            # frames_in_seg is the segment-local 1-based count from
+            # tracking_pipeline.hybrid_tracking. We store it as-is; the
+            # aggregator sums across segments.
+            frames_done[seg_idx] = frames_in_seg
+        return _seg_progress_cb
+
+    aggregator_started_at = time.monotonic()
+    aggregator_stop = asyncio.Event()
+
+    async def _aggregate_and_write_lifecycle():
+        """Compute clip-level progress from per-segment frames_done and write
+        the lifecycle row. Never regress below the seed (clip_done>=1).
+
+        Interior segments overlap by ``OVERLAP_FRAMES`` (segment_runner.py)
+        so the naive sum can slightly over-count by up to
+        ``(n_total-1)*OVERLAP_FRAMES`` frames once the later segments
+        catch up — the upper clamp to ``clip_total_frames`` keeps the UI
+        from showing >100% while preserving best-effort accuracy below
+        100%.
+        """
+        total_done = sum(frames_done.values())
+        clip_done = min(max(total_done, 1), clip_total_frames)
+        # 15% -> 55% tracking-stage band — shared with the sequential path.
+        pct = _tracking_pct_from_clip_done(
+            clip_done, clip_total_frames, progress_floor,
+        )
+        try:
+            await job_store.update_job(
+                job_id,
+                progress_percent=pct,
+                current_frame=clip_done,
+                total_frames=clip_total_frames,
+            )
+            await jobs_store.update_progress(
+                job_id, PipelineStage.TRACK, pct,
+                current_frame=clip_done, total_frames=clip_total_frames,
+            )
+        except Exception as e:
+            # Best-effort heartbeat. Match _log_progress_future_failure
+            # semantics: log, never raise.
+            logger.error(
+                "parallel-segment progress aggregator write failed: %s",
+                e,
+                exc_info=e,
+            )
+
+    async def _aggregator_task():
+        try:
+            while not aggregator_stop.is_set():
+                try:
+                    await asyncio.wait_for(
+                        aggregator_stop.wait(),
+                        timeout=LIFECYCLE_HEARTBEAT_INTERVAL,
+                    )
+                    # stop event was set during the wait — exit loop.
+                    break
+                except asyncio.TimeoutError:
+                    pass
+                await _aggregate_and_write_lifecycle()
+        except asyncio.CancelledError:
+            # Caller cancelled us (e.g. segment failure). Do not write again.
+            raise
+
+    # ------------------------------------------------------------------
     # Launch K tracking tasks in parallel via thread executor
     # ------------------------------------------------------------------
     def _track_segment(seg_idx: int) -> str | None:
@@ -2556,7 +2690,7 @@ async def _run_parallel_segments(
                 # Per-segment segments don't do mid-tracking suspends (no detection_cb).
                 # Detection/YOLO is not re-run within a segment if tracking stays healthy.
                 detection_cb=None,
-                progress_cb=None,
+                progress_cb=_make_seg_progress_cb(seg_idx),
                 should_stop=lambda: job_store.is_cancelled(job_id),
             )
             logger.info("Job %s seg%d: tracking done path=%s", job_id, seg_idx, path)
@@ -2568,16 +2702,38 @@ async def _run_parallel_segments(
             raise
 
     # Track all segments in sequential batches of k_parallel to bound peak GPU memory.
+    # The aggregator background task spans the entire parallel-tracking phase
+    # (across batches) and is shut down cleanly in the finally block.
     tracking_paths: list[str | None] = [None] * n_total
-    for _batch_start in range(0, n_total, k_parallel):
-        _batch_end = min(_batch_start + k_parallel, n_total)
-        _batch_futures = [
-            loop.run_in_executor(None, _track_segment, i)
-            for i in range(_batch_start, _batch_end)
-        ]
-        _batch_paths = list(await asyncio.gather(*_batch_futures))
-        for _bi, _path in zip(range(_batch_start, _batch_end), _batch_paths):
-            tracking_paths[_bi] = _path
+    aggregator = asyncio.create_task(_aggregator_task())
+    try:
+        for _batch_start in range(0, n_total, k_parallel):
+            _batch_end = min(_batch_start + k_parallel, n_total)
+            _batch_futures = [
+                loop.run_in_executor(None, _track_segment, i)
+                for i in range(_batch_start, _batch_end)
+            ]
+            _batch_paths = list(await asyncio.gather(*_batch_futures))
+            for _bi, _path in zip(range(_batch_start, _batch_end), _batch_paths):
+                tracking_paths[_bi] = _path
+    finally:
+        aggregator_stop.set()
+        # Cancel the aggregator if it's still sleeping; await regardless so
+        # the task is fully reaped before _run_parallel_segments returns.
+        aggregator.cancel()
+        try:
+            await aggregator
+        except (asyncio.CancelledError, Exception):
+            # Already logged inside the task; nothing more to do.
+            pass
+        # Final aggregated write so any frames produced after the last
+        # heartbeat tick are reflected before the next stage takes over.
+        try:
+            await _aggregate_and_write_lifecycle()
+        except Exception:
+            # _aggregate_and_write_lifecycle already logs on failure.
+            pass
+    _ = aggregator_started_at  # currently informational; keep for log hooks
 
     # Check for cancellation
     if any(p is None for p in tracking_paths):
