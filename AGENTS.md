@@ -4,7 +4,7 @@ This repo is the **vision engine** for the BJJ Vision platform. It handles:
 - Hybrid athlete tracking (RF-DETR detection + SAM2 mask propagation)
 - BJJ technique analysis via Gemini API (single-agent and multi-agent modes)
 - Video annotation and upscaling
-- REST API (FastAPI, port 9001) consumed by `bjj-vision-backend`
+- REST API (FastAPI, default port 8000 via `BJJ_PORT`) consumed by `bjj-vision-backend`
 
 The companion platform monorepo lives at `/Users/stanliu/Documents/bjj-proj/`.
 
@@ -24,7 +24,7 @@ The companion platform monorepo lives at `/Users/stanliu/Documents/bjj-proj/`.
 
 ```
 whole-video-analysis/
-├── service/               # FastAPI service (port 9001)
+├── service/               # FastAPI service (default port 8000)
 │   ├── app.py             # Entry point + lifespan
 │   ├── routes.py          # REST endpoints
 │   ├── worker.py          # Async job orchestrator
@@ -64,7 +64,7 @@ whole-video-analysis/
 ## Service Lifecycle
 
 ```bash
-./service.sh start      # Start the FastAPI service (port 9001)
+./service.sh start      # Start the FastAPI service (default port 8000)
 ./service.sh stop       # Stop the service
 ./service.sh restart    # Restart
 ./service.sh status     # Show running status
@@ -72,7 +72,7 @@ whole-video-analysis/
 
 Health check:
 ```bash
-curl -s http://localhost:9001/health | python -m json.tool
+curl -s http://localhost:8000/health | python -m json.tool
 ```
 
 Infrastructure dependencies:
@@ -84,7 +84,7 @@ Infrastructure dependencies:
 ## Running Tests
 
 ```bash
-cd /Users/stanliu/Documents/whole-video-analysis
+cd /Users/stanliu/Documents/bjj-proj/whole-video-analysis
 source venv/bin/activate
 pytest tests/ -v
 ```

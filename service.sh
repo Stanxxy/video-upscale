@@ -69,6 +69,35 @@ get_pid() {
     fi
 }
 
+is_our_uvicorn_pid() {
+    local pid="$1"
+    local command cwd
+
+    command=$(ps -p "$pid" -o command= 2>/dev/null || true)
+    [[ -n "$command" ]] || return 1
+    [[ "$command" == *"uvicorn"* ]] || return 1
+
+    # Accept --port 8000 and --port=8000; ignore unrelated listeners on BJJ_PORT.
+    if [[ "$command" != *"--port $PORT"* && "$command" != *"--port=$PORT"* ]]; then
+        return 1
+    fi
+
+    # service.sh starts service.app:app; manual/dev runs may use create_app --factory.
+    if [[ "$command" != *"service.app"* && "$command" != *"$APP_MODULE"* ]]; then
+        return 1
+    fi
+
+    cwd=""
+    for candidate in "$(command -v lsof 2>/dev/null || true)" /usr/sbin/lsof /usr/bin/lsof; do
+        if [[ -n "$candidate" && -x "$candidate" ]]; then
+            cwd=$("$candidate" -p "$pid" 2>/dev/null | awk '$4=="cwd" {print $9; exit}')
+            break
+        fi
+    done
+    [[ "$cwd" == "$PROJECT_DIR" ]] || return 1
+    return 0
+}
+
 find_service_pid() {
     local lsof_bin=""
     for candidate in "$(command -v lsof 2>/dev/null || true)" /usr/sbin/lsof /usr/bin/lsof; do
@@ -85,10 +114,7 @@ find_service_pid() {
     local pid
     while IFS= read -r pid; do
         [[ -n "$pid" ]] || continue
-
-        local command
-        command=$(ps -p "$pid" -o command= 2>/dev/null || true)
-        if [[ "$command" == *"uvicorn"* && "$command" == *"$APP_MODULE"* && "$command" == *"--port $PORT"* ]]; then
+        if is_our_uvicorn_pid "$pid"; then
             printf '%s\n' "$pid"
             return 0
         fi
