@@ -72,6 +72,9 @@ venv/
 .venv/
 env/
 
+# Local agent tooling
+.superpowers/
+
 # Agent scratch paper — in-session memory offload only
 working_log/knowledge-base/scratch/*.md
 
