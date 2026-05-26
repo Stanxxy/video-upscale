@@ -31,6 +31,7 @@ See `bjj-team-meta` skill for how to add entries.
 - [2026-05-25 - Parallel-upscale progress aggregator pattern](insights/2026-05-25-parallel-upscale-progress-aggregator.md) — tags: service, parallel-upscale, keyspaces, progress, asyncio, regression-prevention
 - [2026-05-25 - `run_coroutine_threadsafe` must `add_done_callback`](insights/2026-05-25-run-coroutine-threadsafe-must-add-done-callback.md) — tags: service, asyncio, keyspaces, progress, regression-prevention
 - [2026-05-25 - `_detect_and_request_boxes` short-circuit in headless mode](insights/2026-05-25-headless-detect-yolo-short-circuit.md) — tags: service, parallel-tracking, tracking, ml, regression-prevention
+- [2026-05-25 - Bootstrap recovery on startup (auto-resume latency fix)](insights/2026-05-25-bootstrap-recovery-on-startup.md) — tags: service, recovery, reconciler, keyspaces, bootstrap-recovery, observability, regression-prevention
 
 ## Requirements
 

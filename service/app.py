@@ -24,6 +24,7 @@ from service.routes import (
     init_routes,
     recover_interrupted_job,
     drain_orphan_pending_jobs_on_startup,
+    bootstrap_recovery_on_startup,
 )
 
 # Ensure service loggers emit INFO (uvicorn only configures its own loggers)
@@ -54,6 +55,16 @@ async def lifespan(app: FastAPI):
         heartbeat_bucket_hours=config.recovery_heartbeat_bucket_hours,
     )
 
+    # Catch RUNNING/INTERRUPTED jobs orphaned by the previous process before
+    # the periodic reconciler's 90s stale-window would otherwise wait. Runs
+    # BEFORE HeartbeatTask.start() and RecoveryManager.start() so the
+    # periodic loops do not interleave with bootstrap.
+    await bootstrap_recovery_on_startup(
+        INSTANCE_ID,
+        recover_interrupted_job,
+        heartbeat_bucket_hours=config.recovery_heartbeat_bucket_hours,
+    )
+
     # Start heartbeat
     heartbeat = HeartbeatTask(jobs_store, INSTANCE_ID)
     heartbeat.start()
@@ -66,6 +77,7 @@ async def lifespan(app: FastAPI):
         recover_job=recover_interrupted_job,
     )
     recovery.start()
+    service_logger.info("RecoveryManager + HeartbeatTask started")
 
     # Pre-warm SAM2 models to eliminate cold-start latency on first job.
     # SAM2Manager.__init__ calls SAM2VideoPredictor.from_pretrained(), which

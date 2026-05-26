@@ -195,6 +195,56 @@ async def drain_orphan_pending_jobs_on_startup(
         logger.info("Startup pending drain: re-scheduled pending job %s", job_id)
 
 
+async def bootstrap_recovery_on_startup(
+    instance_id: str,
+    recover_job,
+    *,
+    heartbeat_bucket_hours: int = 24,
+) -> None:
+    """Single-shot recovery sweep for orphaned ``RUNNING`` / ``INTERRUPTED`` rows.
+
+    Sibling of ``drain_orphan_pending_jobs_on_startup``. The periodic
+    ``RecoveryManager`` defaults ``stale_after=90s``, so when this process
+    restarts the previous owner's heartbeat (potentially only seconds old) is
+    still considered "fresh" and recovery is delayed by 90-120s. That latency
+    was perceived by users as "auto-resume is broken."
+
+    This bootstrap runs **once** at lifespan startup with
+    ``stale_after_override=0``: every recovery_index ACTIVE row whose lifecycle
+    ``last_heartbeat_at`` is strictly in the past is considered stale. Since
+    this process has not heartbeated anything yet, that set is exactly the
+    orphaned rows from the previous owner. Periodic reconciler defaults
+    (90s / 30s) are unchanged — they govern steady-state peer-instance safety.
+
+    Failures are caught and logged with ``exc_info=True`` so startup never
+    fails because of a transient recovery glitch.
+    """
+    if _jobs_store is None:
+        return
+
+    from service.reconciler import RecoveryManager
+
+    bucket_hours = max(1, int(heartbeat_bucket_hours))
+    logger.info(
+        "Bootstrap recovery: scanning %d buckets, stale_after_override=0",
+        bucket_hours,
+    )
+    manager = RecoveryManager(
+        _jobs_store,
+        instance_id,
+        heartbeat_bucket_hours=bucket_hours,
+        recover_job=recover_job,
+    )
+    try:
+        await manager.reconcile_once(stale_after_override=0.0)
+    except Exception as e:
+        logger.error(
+            "Bootstrap recovery: failed: %s", e, exc_info=True,
+        )
+        return
+    logger.info("Bootstrap recovery: complete")
+
+
 # ---------------------------------------------------------------------------
 # QA client
 # ---------------------------------------------------------------------------
@@ -601,106 +651,117 @@ async def resume_job(job_id: str, body: ResumeRequest):
 
 async def recover_interrupted_job(lifecycle: dict) -> None:
     """Create and schedule a replacement job for an interrupted worker job."""
-    job_id = lifecycle["job_id"]
-    if lifecycle.get("replacement_job_id"):
-        return
+    job_id = lifecycle.get("job_id", "")
+    try:
+        if lifecycle.get("replacement_job_id"):
+            return
 
-    request_json = await _jobs_store.get_request(job_id)
-    if not request_json:
-        raise RuntimeError(f"Original request not found for interrupted job {job_id}")
+        request_json = await _jobs_store.get_request(job_id)
+        if not request_json:
+            raise RuntimeError(
+                f"Original request not found for interrupted job {job_id}",
+            )
 
-    resume_params = json.loads(request_json)
-    checkpoints = await _jobs_store.get_all_checkpoints(job_id)
-    correction_stage, _ = select_correction_checkpoint(checkpoints)
-    resume_plan = build_resume_plan(checkpoints)
-    if resume_plan.pipeline_already_complete:
-        logger.info(
-            "Recovery skip: job %s checkpoints show pipeline already terminal-complete",
-            job_id,
+        resume_params = json.loads(request_json)
+        checkpoints = await _jobs_store.get_all_checkpoints(job_id)
+        correction_stage, _ = select_correction_checkpoint(checkpoints)
+        resume_plan = build_resume_plan(checkpoints)
+        if resume_plan.pipeline_already_complete:
+            logger.info(
+                "Recovery skip: job %s checkpoints show pipeline already terminal-complete",
+                job_id,
+            )
+            _require_write(
+                await _jobs_store.set_state(job_id, JobState.COMPLETED),
+                "mark stale job completed",
+            )
+            return
+
+        overrides = dict(resume_plan.track_request_overrides)
+        _rbucket = (
+            (resume_params.get("output_bucket") or resume_params.get("bucket") or "").strip()
         )
+        if _rbucket and overrides.get("resume_tracking_s3_key") and _config:
+            overrides = preflight_resume_tracking_overrides(
+                overrides, checkpoints, _s3_client(), _rbucket,
+            )
+        overrides.update(resume_plan_to_request_fields(resume_plan))
+        if "resume_tracking_s3_key" in overrides:
+            overrides["resume_from_job_id"] = job_id
+        resume_params.update(overrides)
+
+        new_request = TrackRequest(**resume_params)
+        new_job = await _job_store.create_job(new_request)
+        new_job_id = new_job.job_id
+
+        video_id = resume_params.get("video_id") or lifecycle.get("video_id", "")
+        origin_job_id = lifecycle.get("origin_job_id") or job_id
+        seed_ws = worker_state_from(checkpoints) or {}
         _require_write(
-            await _jobs_store.set_state(job_id, JobState.COMPLETED),
-            "mark stale job completed",
-        )
-        return
-
-    overrides = dict(resume_plan.track_request_overrides)
-    _rbucket = (
-        (resume_params.get("output_bucket") or resume_params.get("bucket") or "").strip()
-    )
-    if _rbucket and overrides.get("resume_tracking_s3_key") and _config:
-        overrides = preflight_resume_tracking_overrides(
-            overrides, checkpoints, _s3_client(), _rbucket,
-        )
-    overrides.update(resume_plan_to_request_fields(resume_plan))
-    if "resume_tracking_s3_key" in overrides:
-        overrides["resume_from_job_id"] = job_id
-    resume_params.update(overrides)
-
-    new_request = TrackRequest(**resume_params)
-    new_job = await _job_store.create_job(new_request)
-    new_job_id = new_job.job_id
-
-    video_id = resume_params.get("video_id") or lifecycle.get("video_id", "")
-    origin_job_id = lifecycle.get("origin_job_id") or job_id
-    seed_ws = worker_state_from(checkpoints) or {}
-    _require_write(
-        await _jobs_store.create_lifecycle(
-            new_job_id,
-            str(video_id),
-            lifecycle.get("user_id", ""),
-            origin_job_id=origin_job_id,
-            parent_job_id=job_id,
-            owner_instance_id=_instance_id,
-            progress_percent=seed_ws.get("progress_percent", 0.0),
-            current_frame=seed_ws.get("current_frame", 0),
-            total_frames=seed_ws.get("total_frames", 0),
-        ),
-        "recovery replacement lifecycle",
-    )
-    _require_write(
-        await _jobs_store.save_request(new_job_id, new_request.model_dump_json()),
-        "recovery replacement request",
-    )
-    claimed = await _jobs_store.claim_replacement(
-        job_id,
-        new_job_id,
-        expected_state=JobState.INTERRUPTED,
-    )
-    if not claimed:
-        await _jobs_store.set_state(new_job_id, JobState.CANCELLED, sync_latest=False)
-        return
-
-    if video_id:
-        _require_write(
-            await _jobs_store.set_latest(str(video_id), new_job_id, JobState.PENDING),
-            "latest recovery replacement",
-        )
-
-    # Terminal write on the OLD interrupted job — pipeline work has been
-    # handed off to the replacement.
-    old_ws_dict = worker_state_from(checkpoints) or {
-        "progress_percent": 0.0,
-        "current_frame": 0,
-        "total_frames": 0,
-        "stage_progress_fraction": 0.0,
-    }
-    old_ws = WorkerStateSnapshot(**old_ws_dict)
-    terminal_stage = correction_stage or PipelineStage.TRACK
-    _require_write(
-        await _jobs_store.write_checkpoint(
-            job_id,
-            terminal_stage,
-            True,
-            build_replaced_by_new_job(
-                replacement_job_id=new_job_id,
-                worker_state=old_ws,
+            await _jobs_store.create_lifecycle(
+                new_job_id,
+                str(video_id),
+                lifecycle.get("user_id", ""),
+                origin_job_id=origin_job_id,
+                parent_job_id=job_id,
+                owner_instance_id=_instance_id,
+                progress_percent=seed_ws.get("progress_percent", 0.0),
+                current_frame=seed_ws.get("current_frame", 0),
+                total_frames=seed_ws.get("total_frames", 0),
             ),
-        ),
-        "interrupted job replacement checkpoint",
-    )
+            "recovery replacement lifecycle",
+        )
+        _require_write(
+            await _jobs_store.save_request(new_job_id, new_request.model_dump_json()),
+            "recovery replacement request",
+        )
+        claimed = await _jobs_store.claim_replacement(
+            job_id,
+            new_job_id,
+            expected_state=JobState.INTERRUPTED,
+        )
+        if not claimed:
+            await _jobs_store.set_state(new_job_id, JobState.CANCELLED, sync_latest=False)
+            return
 
-    _schedule_job(new_job_id, new_request)
+        if video_id:
+            _require_write(
+                await _jobs_store.set_latest(str(video_id), new_job_id, JobState.PENDING),
+                "latest recovery replacement",
+            )
+
+        # Terminal write on the OLD interrupted job — pipeline work has been
+        # handed off to the replacement.
+        old_ws_dict = worker_state_from(checkpoints) or {
+            "progress_percent": 0.0,
+            "current_frame": 0,
+            "total_frames": 0,
+            "stage_progress_fraction": 0.0,
+        }
+        old_ws = WorkerStateSnapshot(**old_ws_dict)
+        terminal_stage = correction_stage or PipelineStage.TRACK
+        _require_write(
+            await _jobs_store.write_checkpoint(
+                job_id,
+                terminal_stage,
+                True,
+                build_replaced_by_new_job(
+                    replacement_job_id=new_job_id,
+                    worker_state=old_ws,
+                ),
+            ),
+            "interrupted job replacement checkpoint",
+        )
+
+        _schedule_job(new_job_id, new_request)
+    except Exception:
+        # Re-raise so callers (RecoveryManager, bootstrap) see the failure,
+        # but ensure the full stack lands in service.log even when their
+        # outer `except Exception` swallows it.
+        logger.error(
+            "recover_interrupted_job FAILED for job_id=%s", job_id, exc_info=True,
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------

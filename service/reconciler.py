@@ -38,38 +38,84 @@ class RecoveryManager:
         self._task = asyncio.create_task(self._run())
 
     async def _run(self) -> None:
+        logger.info(
+            "RecoveryManager started: instance=%s interval=%ss stale_after=%ss bucket_hours=%s",
+            self._instance_id,
+            self._interval,
+            self._stale_after,
+            self._heartbeat_bucket_hours,
+        )
         while True:
             try:
                 await self.reconcile_once()
             except Exception as e:
-                logger.warning("Recovery manager reconcile failed: %s", e)
+                logger.warning(
+                    "Recovery manager reconcile failed: %s", e, exc_info=True,
+                )
             await asyncio.sleep(self._interval)
 
     def stop(self) -> None:
         if self._task:
             self._task.cancel()
 
-    async def reconcile_once(self) -> None:
+    async def reconcile_once(self, *, stale_after_override: float | None = None) -> None:
+        """Run one reconciliation pass.
+
+        ``stale_after_override`` (seconds) replaces ``self._stale_after`` for this
+        single pass when not ``None``. Passing ``0.0`` treats any heartbeat strictly
+        in the past as stale — used by the lifespan bootstrap to claim orphaned
+        ``RUNNING`` / ``INTERRUPTED`` rows from a previous process before the
+        periodic loop's conservative window would otherwise wait 90+s.
+
+        The override only affects the heartbeat-staleness threshold; the recovery
+        index bucket scan window is governed by ``heartbeat_bucket_hours`` and is
+        unchanged here.
+        """
         now = self._now_fn()
-        stale_before = now - timedelta(seconds=self._stale_after)
+        stale_after = (
+            self._stale_after if stale_after_override is None
+            else float(stale_after_override)
+        )
+        stale_before = now - timedelta(seconds=stale_after)
         buckets = self.heartbeat_buckets_for_scan(
             now, hours=self._heartbeat_bucket_hours,
         )
         candidates = await self._store.list_stale_recovery_candidates(
             buckets, stale_before,
         )
+        logger.info(
+            "Recovery tick: candidates=%d stale_after=%ss buckets=%d",
+            len(candidates),
+            stale_after,
+            len(buckets),
+        )
         for candidate in candidates:
             job_id = candidate["job_id"]
             lifecycle = await self._store.get_lifecycle(job_id)
             if not lifecycle:
+                logger.debug("Recovery skip job %s: no lifecycle row", job_id)
                 continue
             job_state = lifecycle.get("job_state")
             if job_state not in (JobState.RUNNING.value, JobState.INTERRUPTED.value):
+                logger.debug(
+                    "Recovery skip job %s: state-not-eligible (%s)", job_id, job_state,
+                )
                 continue
             if lifecycle.get("replacement_job_id"):
+                logger.debug(
+                    "Recovery skip job %s: replacement-set (%s)",
+                    job_id,
+                    lifecycle.get("replacement_job_id"),
+                )
                 continue
             last_heartbeat_at = lifecycle.get("last_heartbeat_at")
             if last_heartbeat_at and last_heartbeat_at >= stale_before:
+                logger.debug(
+                    "Recovery skip job %s: heartbeat-fresh (%s >= %s)",
+                    job_id,
+                    last_heartbeat_at,
+                    stale_before,
+                )
                 continue
 
             owner_instance_id = lifecycle.get("owner_instance_id", "")
@@ -95,6 +141,12 @@ class RecoveryManager:
                     logger.warning("Failed to mark job %s interrupted", job_id)
                     continue
             if self._recover_job:
+                logger.info(
+                    "Recovery: claimed and dispatched job_id=%s from owner=%s heartbeat=%s",
+                    job_id,
+                    owner_instance_id,
+                    last_heartbeat_at,
+                )
                 await self._recover_job(lifecycle)
 
     @staticmethod

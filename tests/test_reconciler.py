@@ -231,6 +231,45 @@ async def test_reconcile_once_narrow_bucket_hours_misses_distant_partition():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_stale_after_override_picks_up_fresh_heartbeats():
+    """``stale_after_override=0`` claims any candidate whose heartbeat is in the past;
+    the default (90s) leaves the same fresh-heartbeat candidate alone."""
+    now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
+    fresh_heartbeat = now - timedelta(seconds=5)  # NOT stale by default 90s
+    recovered: list[str] = []
+    store = FakeJobsStore([
+        {
+            "job_id": "fresh-but-orphaned",
+            "job_state": JobState.RUNNING.value,
+            "owner_instance_id": "previous-process",
+            "last_heartbeat_at": fresh_heartbeat,
+            "heartbeat_bucket": "2026042620",
+        }
+    ])
+
+    async def recover_job(lifecycle):
+        recovered.append(lifecycle["job_id"])
+
+    manager = RecoveryManager(
+        store,
+        "new-worker",
+        recover_job=recover_job,
+        stale_after=90.0,
+        now_fn=lambda: now,
+    )
+
+    # Default pass: heartbeat is fresh -> skipped.
+    await manager.reconcile_once()
+    assert recovered == []
+    assert store.claimed == []
+
+    # Override: any heartbeat strictly in the past is stale -> claimed.
+    await manager.reconcile_once(stale_after_override=0.0)
+    assert recovered == ["fresh-but-orphaned"]
+    assert store.claimed and store.claimed[0][0] == "fresh-but-orphaned"
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_ignores_stale_index_when_lifecycle_is_fresh():
     now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
     old_heartbeat = now - timedelta(minutes=10)

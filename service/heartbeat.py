@@ -19,12 +19,17 @@ class HeartbeatTask:
         self._task = asyncio.create_task(self._run())
 
     async def _run(self) -> None:
+        logger.info(
+            "HeartbeatTask started: instance=%s interval=%ss",
+            self._instance_id,
+            self._interval,
+        )
         while True:
             try:
                 for job_id in list(self._store.owned_jobs):
                     await self._store.heartbeat(job_id, self._instance_id)
             except Exception as e:
-                logger.warning("Heartbeat failed: %s", e)
+                logger.warning("Heartbeat failed: %s", e, exc_info=True)
             await asyncio.sleep(self._interval)
 
     def stop(self) -> None:
