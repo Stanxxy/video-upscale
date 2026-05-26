@@ -32,7 +32,7 @@ class BJJTechniqueAnalyzer:
         to_ms = _effective_timeout_ms(request_timeout_ms)
         self.client = _gemini_client(api_key, to_ms)
         self._request_timeout_ms = to_ms
-        self.model_id = "gemini-3.1-flash-lite-preview"
+        self.model_id = "gemini-3.1-flash-lite"
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
@@ -183,7 +183,7 @@ class BJJMultiAgentAnalyzer:
         to_ms = _effective_timeout_ms(request_timeout_ms)
         self.client = _gemini_client(api_key, to_ms)
         self._request_timeout_s = to_ms / 1000.0
-        self.model_id = "gemini-3.1-flash-lite-preview"
+        self.model_id = "gemini-3.1-flash-lite"
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path

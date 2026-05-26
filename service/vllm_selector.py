@@ -52,7 +52,7 @@ async def suggest_athletes(
         return None
 
     model_id = getattr(
-        config, "gemini_athlete_suggest_model", "gemini-2.0-flash-preview",
+        config, "gemini_athlete_suggest_model", "gemini-3.1-flash-lite",
     )
 
     try:

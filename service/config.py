@@ -20,7 +20,7 @@ class ServiceConfig(BaseSettings):
         description="Gemini HTTP client timeout per generate_content call (milliseconds).",
     )
     # Vision model for optional >2-candidate athlete hints (human never auto-applies).
-    gemini_athlete_suggest_model: str = "gemini-3.1-flash-lite-preview"
+    gemini_athlete_suggest_model: str = "gemini-3.1-flash-lite"
 
     # Model
     model_path: str = "RealESRGAN_x4plus.pth"
