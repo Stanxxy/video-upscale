@@ -729,15 +729,19 @@ def _detect_and_request_boxes(frame_bgr, global_idx, detection_callback,
     OR if there is no ``detection_callback`` to consume YOLO results.
     The detector is returned so the caller can keep the reference for future use.
 
-    No-op short-circuit: in parallel-segment mode (and other headless runs)
-    ``detection_callback`` is ``None`` by design — mid-track human-in-the-loop
-    suspend would block sibling segments, so the parallel path intentionally
-    skips re-detection (see commit e5c60cd / `service/worker.py:_run_parallel_segments`).
-    Loading YOLO + running a forward pass per track-loss frame is pure waste
-    in that mode, and previously the locally-loaded detector was thrown away
-    on the no-callback return path so YOLO was reloaded every track-loss
-    (logs flooded with `[detect] Loading yolo26m.pt on mps (persistent)...`
-    every few frames). Short-circuit before touching YOLO.
+    No-op short-circuit: when ``detection_callback`` is ``None`` (CLI tests
+    and other headless callers) there is no consumer for YOLO output —
+    mid-track suspend cannot be raised without a callback. After the
+    2026-05-25 refactor production tracking always runs sequentially with a
+    non-None ``detection_callback`` (see ``service/worker.py:_make_detection_cb``
+    + the call site in ``run_job``), so this short-circuit is now a
+    defense-in-depth safety net rather than a hot path. Loading YOLO +
+    running a forward pass per track-loss frame is pure waste when the
+    callback is ``None``, and previously the locally-loaded detector was
+    thrown away on the no-callback return path so YOLO was reloaded every
+    track-loss (logs flooded with `[detect] Loading yolo26m.pt on mps
+    (persistent)...` every few frames in the prior parallel-tracking
+    design). Short-circuit before touching YOLO.
     """
     if detection_callback is None:
         # Parallel-segment mode / headless run: nothing to do with YOLO output.

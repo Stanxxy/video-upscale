@@ -178,11 +178,10 @@ def _tracking_pct_from_clip_done(
 ) -> float:
     """Tracking-stage percent (15-55% band) from a 1-based clip-relative done count.
 
-    Shared by:
-      * the sequential progress callback (via global frame index, see
-        ``_tracking_progress_pct_clip``),
-      * the parallel-segment aggregator (via summed per-segment counters,
-        see ``_run_parallel_segments``).
+    Used by the sequential tracking progress callback (via global frame
+    index, see ``_tracking_progress_pct_clip``). Tracking always runs
+    sequentially; the upscale stage has its own band (55%-80%) and uses a
+    different aggregator (``_run_parallel_upscale._aggregate_and_write_lifecycle``).
     """
     frac = clip_done / max(clip_total_frames, 1)
     return _pct_at_least(15.0 + frac * 40.0, progress_floor)
@@ -523,79 +522,461 @@ async def run_job(
             return
 
         # ============================================================
-        # K-segment parallel path (fresh jobs).
-        # Activated when standard_segments > 1 OR when segment_max_frames
-        # requires splitting the clip into multiple memory-bounded segments.
-        # Sequential path is used for resumes and QA-only skip_upscale runs.
+        # Stage selection (post 2026-05-25 refactor):
+        #   * TRACKING is ALWAYS sequential. The sequential path is the only
+        #     one that honors the V1 ``track`` checkpoint contract for
+        #     mid-track loss (writes ``build_track_mid_loss`` with
+        #     ``artifacts.partial_tracking_s3_key`` + ``artifacts.resume_from_frame``,
+        #     transitions to AWAITING_CORRECTION, raises
+        #     ``HumanVerificationSuspend``, releases the worker semaphore so
+        #     the replacement job can start).  See
+        #     ``working_log/contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md``
+        #     §``stage_name == track`` and
+        #     ``JOB_ROTATION_HANDOFF_AND_RESUME.md`` §4.1.
+        #     Trade-off: sequential tracking does not bound peak SAM2 memory
+        #     by ``segment_max_frames`` for very long clips. The future
+        #     pre-scan design re-enables segmented tracking with that
+        #     memory bound (see requirements/2026-05-25-prescan-segmented-parallel-tracking.md
+        #     Phase D).
+        #   * UPSCALE_ANALYZE is parallelized across segments when the clip
+        #     requires multiple memory-bounded segments OR when
+        #     ``standard_segments > 1``.  Resumes (`resume_tracking_s3_key`) and
+        #     ``skip_upscale=True`` (QA-only) stay on the sequential upscale
+        #     path.  See ``_run_parallel_upscale``.
         # ============================================================
         from service.segment_runner import compute_segment_ranges as _csr
         _k_needed = len(_csr(clip_total_frames, config.segment_max_frames))
-        _use_parallel_segments = (
+        _use_parallel_upscale = (
             (_k_needed > 1 or config.standard_segments > 1)
             and not request.resume_tracking_s3_key
-            and not request.skip_upscale  # skip_upscale=True is QA-only; use sequential
+            and not request.skip_upscale  # skip_upscale=True is QA-only; sequential only
         )
 
-        if _use_parallel_segments:
-            # ---- Parallel path: delegate to _run_parallel_segments ----
-            import torch as _torch_ps
-            _is_cuda_ps = _torch_ps.cuda.is_available()
-            _eff_step_ps = request.step_size or (
-                120 if _is_cuda_ps else config.tracking_step_size
+        # ---- Sequential tracking path (always) ------------------
+        # ============================================================
+        # STAGE 3: TRACKING (15-55%)
+        # ============================================================
+        logger.info("Job %s: stage tracking (15-55%%)", job_id)
+        track_stage_pct = _pct_at_least(15.0, progress_floor)
+        track_started_cf = min(
+            max(tracking_start_frame - clip_start_frame + 1, 1),
+            clip_total_frames,
+        )
+        await job_store.update_job(
+            job_id, status=JobStatus.TRACKING,
+            progress_percent=track_stage_pct,
+            current_frame=track_started_cf,
+            total_frames=clip_total_frames,
+        )
+        await jobs_store.update_progress(
+            job_id, PipelineStage.TRACK, track_stage_pct,
+            current_frame=track_started_cf,
+            total_frames=clip_total_frames,
+        )
+
+        from service.tracking_runner import run_tracking_job
+
+        tracking_output_dir = os.path.join(work_dir, "tracking")
+        os.makedirs(tracking_output_dir, exist_ok=True)
+
+        skip_tracking_runner = (
+            request.resume_from_frame == END_OF_TRACKING_SENTINEL
+            and bool(request.resume_tracking_s3_key)
+        )
+
+        partial_tracking_data = None
+        if request.resume_tracking_s3_key and not skip_tracking_runner:
+            logger.info(
+                "Job %s: downloading partial tracking from %s",
+                job_id,
+                request.resume_tracking_s3_key,
             )
-            _eff_max_history_ps = (
-                request.max_history or config.tracking_max_history
+            partial_bucket = request.output_bucket or request.bucket
+            partial_tracking_data = await loop.run_in_executor(
+                None,
+                s3.download_json,
+                partial_bucket,
+                request.resume_tracking_s3_key,
             )
-            _eff_max_missing_ps = (
+            logger.info(
+                "Job %s: partial tracking has %d frames",
+                job_id,
+                len(partial_tracking_data.get("frames", [])),
+            )
+
+        tracking_json_path: str | None = None
+        if skip_tracking_runner:
+            logger.info(
+                "Job %s: skipping run_tracking_job — loading tracking JSON from %s",
+                job_id,
+                request.resume_tracking_s3_key,
+            )
+            load_bucket = request.output_bucket or request.bucket
+            full_tracking = await loop.run_in_executor(
+                None,
+                s3.download_json,
+                load_bucket,
+                request.resume_tracking_s3_key,
+            )
+            tracking_json_path = os.path.join(tracking_output_dir, "tracking.json")
+            with open(tracking_json_path, "w") as f:
+                json.dump(full_tracking, f)
+        else:
+            # Build sync progress callback -> async Keyspaces (two cadences):
+            #   1-second  → lifecycle row update (heartbeat)
+            #   30-second → partial-tracking S3 upload + V1 track_progress checkpoint
+            #   immediate → first partial checkpoint once at least one frame exists
+            _last_ks_write = 0.0
+            _last_partial_upload = 0.0
+            _first_partial_upload = False
+
+            def tracking_progress_cb(frames_done: int, total: int, global_idx: int):
+                nonlocal _last_ks_write, _last_partial_upload, _first_partial_upload
+                clip_done, pct = _tracking_progress_pct_clip(
+                    global_idx, clip_start_frame, clip_total_frames, progress_floor,
+                )
+                resume_next_global = global_idx + 1
+                now = time.monotonic()
+                write_lifecycle, upload_partial = _tracking_progress_flags(
+                    now, _last_ks_write, _last_partial_upload,
+                )
+                if frames_done >= 1 and not _first_partial_upload:
+                    upload_partial = True
+                    _first_partial_upload = True
+                if write_lifecycle:
+                    _last_ks_write = now
+                if upload_partial:
+                    _last_partial_upload = now
+                _schedule_background_coro(
+                    _update_tracking_progress_with_partial(
+                        job_id, clip_done, clip_total_frames, pct,
+                        job_store, jobs_store,
+                        request, work_dir, s3,
+                        resume_next_global=resume_next_global,
+                        write_lifecycle=write_lifecycle,
+                        upload_partial=upload_partial,
+                    ),
+                    loop,
+                    context="tracking progress write",
+                )
+
+            detection_cb = _make_detection_cb(
+                job_id, loop, jobs_store, s3, config, request, work_dir,
+                clip_start_frame=clip_start_frame,
+                clip_total_frames=clip_total_frames,
+                progress_floor=progress_floor,
+            )
+            # S7: on CUDA (GB10) default step_size to 120 (vs 60 on CPU/MPS).
+            # Larger steps reduce batch-boundary overhead; 128 GB memory is fine.
+            import torch as _torch_s7
+            _is_cuda_s7 = _torch_s7.cuda.is_available()
+            _default_step = 120 if _is_cuda_s7 else config.tracking_step_size
+            eff_step_size = request.step_size or _default_step
+            eff_max_history = request.max_history or config.tracking_max_history
+            eff_max_missing_frames = (
                 request.max_missing_frames
                 if request.max_missing_frames is not None
                 else config.tracking_max_missing_frames
             )
-            # M6: wire prop_stride through parallel path (same logic as sequential path).
-            _is_fast_mode_ps = request.processing_mode == ProcessingMode.FAST
-            if _is_fast_mode_ps:
-                _eff_prop_stride_ps = config.fast_prop_stride
+            # M4: apply fast mode presets for tracking parameters.
+            # M5: prop_stride is now configurable via BJJ_FAST_PROP_STRIDE /
+            #     BJJ_STANDARD_PROP_STRIDE (default 24 / 5).
+            _is_fast_mode = request.processing_mode == ProcessingMode.FAST
+            if _is_fast_mode:
+                # Fast mode: SAM2-tiny + configurable propagation stride + no pose
+                _eff_sam2_model = "facebook/sam2.1-hiera-tiny"
+                _eff_prop_stride = config.fast_prop_stride
+                _eff_enable_pose = False
             else:
-                _eff_prop_stride_ps = config.standard_prop_stride
-            # M5/M6: when prop_stride > 1, force frame_stride=1 to avoid double-filtering.
-            if _is_fast_mode_ps or _eff_prop_stride_ps > 1:
-                _eff_frame_stride_ps = 1
+                # Standard mode: SAM2 base-plus + configurable propagation stride + pose enabled
+                _eff_sam2_model = request.sam2_model
+                _eff_prop_stride = config.standard_prop_stride
+                _eff_enable_pose = True
+
+            # S11: stride-N frame sampling. Auto-compute from source fps when 0.
+            # 60fps → stride=6 → ~300 frames from 1800; 30fps → stride=3.
+            # Fast mode: frame_stride=1 because prop_stride already reduces the frame count.
+            # M5: When prop_stride > 1 (either mode), frame_stride is set to 1 to avoid
+            # double-filtering. prop_stride alone provides the desired temporal reduction.
+            # Example: standard mode prop_stride=5 → 360 SAM2 frames from 1800 = 12 fps.
+            #   Applying frame_stride=6 on top → LCM(5,6)=30 → only 60 entries = 2 fps (too sparse).
+            #   Correct: frame_stride=1 → 360 entries → 12 fps effective. Matches plan intent.
+            if _is_fast_mode or _eff_prop_stride > 1:
+                eff_frame_stride = 1  # write all prop-strided frames to JSON
             elif request.frame_stride > 0:
-                _eff_frame_stride_ps = request.frame_stride
+                eff_frame_stride = request.frame_stride
             else:
-                import cv2 as _cv2_ps
-                _cap_fps_ps = _cv2_ps.VideoCapture(video_path)
-                _src_fps_ps = _cap_fps_ps.get(_cv2_ps.CAP_PROP_FPS) or 30.0
-                _cap_fps_ps.release()
-                _eff_frame_stride_ps = max(1, round(_src_fps_ps / 10))
+                import cv2 as _cv2
+                _cap_fps = _cv2.VideoCapture(video_path)
+                _src_fps = _cap_fps.get(_cv2.CAP_PROP_FPS) or 30.0
+                _cap_fps.release()
+                eff_frame_stride = max(1, round(_src_fps / 10))
             logger.info(
-                "Job %s: parallel-segment mode k_needed=%d standard_segments=%d "
-                "step_size=%s max_history=%s max_missing=%s frame_stride=%s prop_stride=%s",
-                job_id, _k_needed, config.standard_segments,
-                _eff_step_ps, _eff_max_history_ps,
-                _eff_max_missing_ps, _eff_frame_stride_ps, _eff_prop_stride_ps,
+                "Job %s tracking config: processing_mode=%s sam2=%s "
+                "step_size=%s max_history=%s max_missing_frames=%s "
+                "frame_stride=%s prop_stride=%s enable_pose=%s",
+                job_id,
+                request.processing_mode,
+                _eff_sam2_model,
+                eff_step_size,
+                eff_max_history,
+                eff_max_missing_frames,
+                eff_frame_stride,
+                _eff_prop_stride,
+                _eff_enable_pose,
             )
-            _par_track_pct = _pct_at_least(15.0, progress_floor)
-            _par_started_cf = min(
-                max(tracking_start_frame - clip_start_frame + 1, 1),
-                clip_total_frames,
+
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.TRACK, False,
+                build_tracking_started(
+                    clip_start_frame=clip_start_frame,
+                    clip_end_frame=clip_end_resolved,
+                    worker_state=_make_worker_state(
+                        progress_percent=track_stage_pct,
+                        current_frame=track_started_cf,
+                        total_frames=clip_total_frames,
+                        stage_progress_fraction=(
+                            track_started_cf / max(clip_total_frames, 1)
+                        ),
+                    ),
+                ),
             )
+
+            tracking_json_path = await loop.run_in_executor(
+                None,
+                lambda: run_tracking_job(
+                    video_path,
+                    box_a,
+                    box_b,
+                    tracking_output_dir,
+                    sam2_model_id=_eff_sam2_model,
+                    yolo_model=request.yolo_model,
+                    detection_threshold=request.detection_threshold,
+                    start_frame=tracking_start_frame,
+                    end_frame=end_frame,
+                    step_size=eff_step_size,
+                    max_history=eff_max_history,
+                    max_missing_frames=eff_max_missing_frames,
+                    frame_stride=eff_frame_stride,
+                    prop_stride=_eff_prop_stride,
+                    enable_pose=_eff_enable_pose,
+                    progress_cb=tracking_progress_cb,
+                    detection_cb=detection_cb,
+                    should_stop=lambda: job_store.is_cancelled(job_id),
+                ),
+            )
+        logger.info(
+            "Job %s: tracking executor returned path=%s",
+            job_id,
+            tracking_json_path,
+        )
+
+        # This is for mid-track persistance. should be saved with checkpoint.
+        # ==============================================================
+        # If tracking_json_path is None, the detection_cb triggered a suspend
+        if tracking_json_path is None:
+            raise JobSuspendedError("Awaiting mid-tracking detection correction")
+
+        # Phase 3: Merge partial tracking with new tracking
+        if partial_tracking_data:
+            with open(tracking_json_path) as f:
+                new_tracking = json.load(f)
+            merged_frames = partial_tracking_data.get("frames", []) + new_tracking.get("frames", [])
+            merged = {
+                **new_tracking,
+                "frames": merged_frames,
+                "start_frame": partial_tracking_data.get(
+                    "start_frame", clip_start_frame,
+                ),
+            }
+            with open(tracking_json_path, "w") as f:
+                json.dump(merged, f)
+            logger.info("Job %s: merged %d partial + %d new = %d total frames",
+                        job_id, len(partial_tracking_data.get("frames", [])),
+                        len(new_tracking.get("frames", [])), len(merged_frames))
+
+        await consolidate_tracking_json_with_job_chain(
+            jobs_store=jobs_store,
+            s3=s3,
+            bucket=request.output_bucket or request.bucket,
+            leaf_job_id=job_id,
+            local_tracking_json_path=tracking_json_path,
+            clip_start_frame=clip_start_frame,
+        )
+
+        # Write completed tracking checkpoint (pre-upload; the post-upload
+        # re-write in the upload stage adds artifacts.tracking_s3_key).
+        with open(tracking_json_path) as _f:
+            _track_data = json.load(_f)
+        _frame_count = len(_track_data.get("frames", []))
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.TRACK, False,
+            build_track_completed(
+                start_frame=clip_start_frame,
+                frame_count=_frame_count,
+                worker_state=_track_completed_clip_worker_state(
+                    _track_data, clip_start_frame, clip_total_frames,
+                    progress_percent=55.0,
+                ),
+            ),
+        )
+
+        # ==============================================================
+        # TRACKING-ONLY SHORT-CIRCUIT (skip_upscale=True)
+        # Upload tracking results to S3 then mark completed.
+        # only used in QA client.
+        # TODO: encapsulate the logic of this short-circuit to a method.
+        # ==============================================================
+        if request.skip_upscale:
             await job_store.update_job(
-                job_id, status=JobStatus.TRACKING,
-                progress_percent=_par_track_pct,
-                current_frame=_par_started_cf,
-                total_frames=clip_total_frames,
+                job_id, status=JobStatus.UPLOADING, progress_percent=80.0,
             )
-            await jobs_store.update_progress(
-                job_id, PipelineStage.TRACK, _par_track_pct,
-                current_frame=_par_started_cf,
-                total_frames=clip_total_frames,
+            await jobs_store.update_progress(job_id, PipelineStage.UPLOAD, 80.0)
+
+            output_bucket = request.output_bucket or request.bucket
+            base_key = os.path.splitext(request.key)[0]
+            tracking_result_key = f"{base_key}_tracked.json"
+            tracked_video_key = f"{base_key}_tracked.mp4"
+
+            s3.ensure_bucket(output_bucket)
+
+            # Upload tracking JSON
+            with open(tracking_json_path) as f:
+                tracking_data = json.load(f)
+            if request.resume_existing_upload_tracking_key != tracking_result_key:
+                await loop.run_in_executor(
+                    None, s3.upload_json, tracking_data,
+                    output_bucket, tracking_result_key,
+                )
+
+            # Re-write the track row now that we know the durable key.
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.TRACK, False,
+                build_track_completed(
+                    start_frame=clip_start_frame,
+                    frame_count=_frame_count,
+                    tracking_s3_key=tracking_result_key,
+                    worker_state=_track_completed_clip_worker_state(
+                        tracking_data, clip_start_frame, clip_total_frames,
+                        progress_percent=55.0,
+                    ),
+                ),
             )
-            tracking_json_path, analysis_result, fps = await _run_parallel_segments(
+
+            # Upload tracked video (if it exists)
+            tracked_video = os.path.join(
+                tracking_output_dir, "tracked_output.mp4",
+            )
+            if os.path.isfile(tracked_video):
+                await loop.run_in_executor(
+                    None, s3.upload_file, tracked_video,
+                    output_bucket, tracked_video_key, "video/mp4",
+                )
+
+            # Terminal write for the skip_upscale path: the upload row carries
+            # completed=True because there is no publish stage in this branch.
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.UPLOAD, True,
+                build_upload_incremental(
+                    tracking_s3_key=tracking_result_key,
+                    worker_state=_make_worker_state(
+                        progress_percent=100.0, stage_progress_fraction=1.0,
+                    ),
+                ),
+            )
+
+            await job_store.update_job(
+                job_id,
+                status=JobStatus.COMPLETED,
+                progress_percent=100.0,
+                result_bucket=output_bucket,
+                result_key=tracking_result_key,
+            )
+            await jobs_store.set_state(job_id, JobState.COMPLETED)
+            logger.info(
+                "Job %s completed (tracking only -> s3://%s/%s)",
+                job_id, output_bucket, tracking_result_key,
+            )
+            return
+
+        # ============================================================
+        # Pre-upscale: upload tracking JSON so the durable input is in S3
+        # before the upscale stage starts. The upscale checkpoint contract
+        # requires artifacts.tracking_s3_key, so this upload must happen
+        # before _run_upscale_analysis writes its first checkpoint.
+        # ============================================================
+        output_bucket = request.output_bucket or request.bucket
+        base_key = os.path.splitext(request.key)[0]
+        tracking_result_key = f"{base_key}_tracked.json"
+        analysis_result_key = f"{base_key}_analysis.json"
+        annotated_video_key = f"{base_key}_annotated.mp4"
+
+        s3.ensure_bucket(output_bucket)
+        with open(tracking_json_path) as f:
+            _full_tracking = json.load(f)
+        if request.resume_existing_upload_tracking_key == tracking_result_key:
+            logger.info(
+                "Job %s: skipping tracking JSON re-upload (key already durable)",
+                job_id,
+            )
+        else:
+            await loop.run_in_executor(
+                None, s3.upload_json, _full_tracking,
+                output_bucket, tracking_result_key,
+            )
+
+        # Re-write the track row with the durable tracking_s3_key.
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.TRACK, False,
+            build_track_completed(
+                start_frame=clip_start_frame,
+                frame_count=_frame_count,
+                tracking_s3_key=tracking_result_key,
+                worker_state=_track_completed_clip_worker_state(
+                    _full_tracking, clip_start_frame, clip_total_frames,
+                    progress_percent=55.0,
+                ),
+            ),
+        )
+
+        # First upload row (additive on artifacts as later artifacts land).
+        await jobs_store.write_checkpoint(
+            job_id, PipelineStage.UPLOAD, False,
+            build_upload_incremental(
+                tracking_s3_key=tracking_result_key,
+                worker_state=_make_worker_state(
+                    progress_percent=55.0, stage_progress_fraction=0.33,
+                ),
+            ),
+        )
+
+        # ============================================================
+        # STAGE 4: UPSCALE + ANALYSIS -- second pass (55-80%)
+        # When the clip needs to be split into multiple memory-bounded
+        # segments AND we're not on the QA-only skip_upscale path AND this
+        # is a fresh job (not a tracking resume), upscale runs in parallel
+        # via ``_run_parallel_upscale``. Tracking has already produced the
+        # merged tracking JSON sequentially above; the parallel-upscale
+        # helper only slices that JSON across segments and runs each one
+        # in a thread executor, with a heartbeat aggregator writing
+        # ``PipelineStage.UPSCALE_ANALYZE`` lifecycle progress in the
+        # 55%-80% band.
+        # ============================================================
+        logger.info("Job %s: stage upscale+analysis (55-80%%)", job_id)
+        await job_store.update_job(
+            job_id, status=JobStatus.UPSCALING, progress_percent=55.0,
+        )
+        await jobs_store.update_progress(job_id, PipelineStage.UPSCALE_ANALYZE, 55.0)
+
+        if _use_parallel_upscale:
+            logger.info(
+                "Job %s: parallel-upscale mode k_needed=%d standard_segments=%d",
+                job_id, _k_needed, config.standard_segments,
+            )
+            analysis_result, fps = await _run_parallel_upscale(
                 job_id=job_id,
                 video_path=video_path,
-                box_a=box_a,
-                box_b=box_b,
+                merged_tracking_json_path=tracking_json_path,
                 clip_start_frame=clip_start_frame,
                 clip_end_resolved=clip_end_resolved,
                 clip_total_frames=clip_total_frames,
@@ -605,434 +986,10 @@ async def run_job(
                 job_store=job_store,
                 jobs_store=jobs_store,
                 loop=loop,
-                eff_step_size=_eff_step_ps,
-                eff_max_history=_eff_max_history_ps,
-                eff_max_missing_frames=_eff_max_missing_ps,
-                eff_frame_stride=_eff_frame_stride_ps,
-                eff_prop_stride=_eff_prop_stride_ps,
+                tracking_s3_key=tracking_result_key,
                 progress_floor=progress_floor,
             )
-            logger.info(
-                "Job %s: parallel-segment done fps=%s has_analysis=%s",
-                job_id, fps, analysis_result is not None,
-            )
-            # Set S3-key variables used by annotate/upload/publish below.
-            output_bucket = request.output_bucket or request.bucket
-            base_key = os.path.splitext(request.key)[0]
-            tracking_result_key = f"{base_key}_tracked.json"
-            analysis_result_key = f"{base_key}_analysis.json"
-            annotated_video_key = f"{base_key}_annotated.mp4"
-            tracking_output_dir = os.path.join(work_dir, "tracking")
-            # _run_parallel_segments already handled the skip_upscale-equivalent path;
-            # skip_upscale is only relevant for the sequential path below.
         else:
-            # ---- Sequential path: original stage 3 + stage 4 --------
-            # ============================================================
-            # STAGE 3: TRACKING (15-55%)
-            # ============================================================
-            logger.info("Job %s: stage tracking (15-55%%)", job_id)
-            track_stage_pct = _pct_at_least(15.0, progress_floor)
-            track_started_cf = min(
-                max(tracking_start_frame - clip_start_frame + 1, 1),
-                clip_total_frames,
-            )
-            await job_store.update_job(
-                job_id, status=JobStatus.TRACKING,
-                progress_percent=track_stage_pct,
-                current_frame=track_started_cf,
-                total_frames=clip_total_frames,
-            )
-            await jobs_store.update_progress(
-                job_id, PipelineStage.TRACK, track_stage_pct,
-                current_frame=track_started_cf,
-                total_frames=clip_total_frames,
-            )
-
-            from service.tracking_runner import run_tracking_job
-
-            tracking_output_dir = os.path.join(work_dir, "tracking")
-            os.makedirs(tracking_output_dir, exist_ok=True)
-
-            skip_tracking_runner = (
-                request.resume_from_frame == END_OF_TRACKING_SENTINEL
-                and bool(request.resume_tracking_s3_key)
-            )
-
-            partial_tracking_data = None
-            if request.resume_tracking_s3_key and not skip_tracking_runner:
-                logger.info(
-                    "Job %s: downloading partial tracking from %s",
-                    job_id,
-                    request.resume_tracking_s3_key,
-                )
-                partial_bucket = request.output_bucket or request.bucket
-                partial_tracking_data = await loop.run_in_executor(
-                    None,
-                    s3.download_json,
-                    partial_bucket,
-                    request.resume_tracking_s3_key,
-                )
-                logger.info(
-                    "Job %s: partial tracking has %d frames",
-                    job_id,
-                    len(partial_tracking_data.get("frames", [])),
-                )
-
-            tracking_json_path: str | None = None
-            if skip_tracking_runner:
-                logger.info(
-                    "Job %s: skipping run_tracking_job — loading tracking JSON from %s",
-                    job_id,
-                    request.resume_tracking_s3_key,
-                )
-                load_bucket = request.output_bucket or request.bucket
-                full_tracking = await loop.run_in_executor(
-                    None,
-                    s3.download_json,
-                    load_bucket,
-                    request.resume_tracking_s3_key,
-                )
-                tracking_json_path = os.path.join(tracking_output_dir, "tracking.json")
-                with open(tracking_json_path, "w") as f:
-                    json.dump(full_tracking, f)
-            else:
-                # Build sync progress callback -> async Keyspaces (two cadences):
-                #   1-second  → lifecycle row update (heartbeat)
-                #   30-second → partial-tracking S3 upload + V1 track_progress checkpoint
-                #   immediate → first partial checkpoint once at least one frame exists
-                _last_ks_write = 0.0
-                _last_partial_upload = 0.0
-                _first_partial_upload = False
-
-                def tracking_progress_cb(frames_done: int, total: int, global_idx: int):
-                    nonlocal _last_ks_write, _last_partial_upload, _first_partial_upload
-                    clip_done, pct = _tracking_progress_pct_clip(
-                        global_idx, clip_start_frame, clip_total_frames, progress_floor,
-                    )
-                    resume_next_global = global_idx + 1
-                    now = time.monotonic()
-                    write_lifecycle, upload_partial = _tracking_progress_flags(
-                        now, _last_ks_write, _last_partial_upload,
-                    )
-                    if frames_done >= 1 and not _first_partial_upload:
-                        upload_partial = True
-                        _first_partial_upload = True
-                    if write_lifecycle:
-                        _last_ks_write = now
-                    if upload_partial:
-                        _last_partial_upload = now
-                    _schedule_background_coro(
-                        _update_tracking_progress_with_partial(
-                            job_id, clip_done, clip_total_frames, pct,
-                            job_store, jobs_store,
-                            request, work_dir, s3,
-                            resume_next_global=resume_next_global,
-                            write_lifecycle=write_lifecycle,
-                            upload_partial=upload_partial,
-                        ),
-                        loop,
-                        context="tracking progress write",
-                    )
-
-                detection_cb = _make_detection_cb(
-                    job_id, loop, jobs_store, s3, config, request, work_dir,
-                    clip_start_frame=clip_start_frame,
-                    clip_total_frames=clip_total_frames,
-                    progress_floor=progress_floor,
-                )
-                # S7: on CUDA (GB10) default step_size to 120 (vs 60 on CPU/MPS).
-                # Larger steps reduce batch-boundary overhead; 128 GB memory is fine.
-                import torch as _torch_s7
-                _is_cuda_s7 = _torch_s7.cuda.is_available()
-                _default_step = 120 if _is_cuda_s7 else config.tracking_step_size
-                eff_step_size = request.step_size or _default_step
-                eff_max_history = request.max_history or config.tracking_max_history
-                eff_max_missing_frames = (
-                    request.max_missing_frames
-                    if request.max_missing_frames is not None
-                    else config.tracking_max_missing_frames
-                )
-                # M4: apply fast mode presets for tracking parameters.
-                # M5: prop_stride is now configurable via BJJ_FAST_PROP_STRIDE /
-                #     BJJ_STANDARD_PROP_STRIDE (default 24 / 5).
-                _is_fast_mode = request.processing_mode == ProcessingMode.FAST
-                if _is_fast_mode:
-                    # Fast mode: SAM2-tiny + configurable propagation stride + no pose
-                    _eff_sam2_model = "facebook/sam2.1-hiera-tiny"
-                    _eff_prop_stride = config.fast_prop_stride
-                    _eff_enable_pose = False
-                else:
-                    # Standard mode: SAM2 base-plus + configurable propagation stride + pose enabled
-                    _eff_sam2_model = request.sam2_model
-                    _eff_prop_stride = config.standard_prop_stride
-                    _eff_enable_pose = True
-
-                # S11: stride-N frame sampling. Auto-compute from source fps when 0.
-                # 60fps → stride=6 → ~300 frames from 1800; 30fps → stride=3.
-                # Fast mode: frame_stride=1 because prop_stride already reduces the frame count.
-                # M5: When prop_stride > 1 (either mode), frame_stride is set to 1 to avoid
-                # double-filtering. prop_stride alone provides the desired temporal reduction.
-                # Example: standard mode prop_stride=5 → 360 SAM2 frames from 1800 = 12 fps.
-                #   Applying frame_stride=6 on top → LCM(5,6)=30 → only 60 entries = 2 fps (too sparse).
-                #   Correct: frame_stride=1 → 360 entries → 12 fps effective. Matches plan intent.
-                if _is_fast_mode or _eff_prop_stride > 1:
-                    eff_frame_stride = 1  # write all prop-strided frames to JSON
-                elif request.frame_stride > 0:
-                    eff_frame_stride = request.frame_stride
-                else:
-                    import cv2 as _cv2
-                    _cap_fps = _cv2.VideoCapture(video_path)
-                    _src_fps = _cap_fps.get(_cv2.CAP_PROP_FPS) or 30.0
-                    _cap_fps.release()
-                    eff_frame_stride = max(1, round(_src_fps / 10))
-                logger.info(
-                    "Job %s tracking config: processing_mode=%s sam2=%s "
-                    "step_size=%s max_history=%s max_missing_frames=%s "
-                    "frame_stride=%s prop_stride=%s enable_pose=%s",
-                    job_id,
-                    request.processing_mode,
-                    _eff_sam2_model,
-                    eff_step_size,
-                    eff_max_history,
-                    eff_max_missing_frames,
-                    eff_frame_stride,
-                    _eff_prop_stride,
-                    _eff_enable_pose,
-                )
-
-                await jobs_store.write_checkpoint(
-                    job_id, PipelineStage.TRACK, False,
-                    build_tracking_started(
-                        clip_start_frame=clip_start_frame,
-                        clip_end_frame=clip_end_resolved,
-                        worker_state=_make_worker_state(
-                            progress_percent=track_stage_pct,
-                            current_frame=track_started_cf,
-                            total_frames=clip_total_frames,
-                            stage_progress_fraction=(
-                                track_started_cf / max(clip_total_frames, 1)
-                            ),
-                        ),
-                    ),
-                )
-
-                tracking_json_path = await loop.run_in_executor(
-                    None,
-                    lambda: run_tracking_job(
-                        video_path,
-                        box_a,
-                        box_b,
-                        tracking_output_dir,
-                        sam2_model_id=_eff_sam2_model,
-                        yolo_model=request.yolo_model,
-                        detection_threshold=request.detection_threshold,
-                        start_frame=tracking_start_frame,
-                        end_frame=end_frame,
-                        step_size=eff_step_size,
-                        max_history=eff_max_history,
-                        max_missing_frames=eff_max_missing_frames,
-                        frame_stride=eff_frame_stride,
-                        prop_stride=_eff_prop_stride,
-                        enable_pose=_eff_enable_pose,
-                        progress_cb=tracking_progress_cb,
-                        detection_cb=detection_cb,
-                        should_stop=lambda: job_store.is_cancelled(job_id),
-                    ),
-                )
-            logger.info(
-                "Job %s: tracking executor returned path=%s",
-                job_id,
-                tracking_json_path,
-            )
-
-            # This is for mid-track persistance. should be saved with checkpoint.
-            # ==============================================================
-            # If tracking_json_path is None, the detection_cb triggered a suspend
-            if tracking_json_path is None:
-                raise JobSuspendedError("Awaiting mid-tracking detection correction")
-
-            # Phase 3: Merge partial tracking with new tracking
-            if partial_tracking_data:
-                with open(tracking_json_path) as f:
-                    new_tracking = json.load(f)
-                merged_frames = partial_tracking_data.get("frames", []) + new_tracking.get("frames", [])
-                merged = {
-                    **new_tracking,
-                    "frames": merged_frames,
-                    "start_frame": partial_tracking_data.get(
-                        "start_frame", clip_start_frame,
-                    ),
-                }
-                with open(tracking_json_path, "w") as f:
-                    json.dump(merged, f)
-                logger.info("Job %s: merged %d partial + %d new = %d total frames",
-                            job_id, len(partial_tracking_data.get("frames", [])),
-                            len(new_tracking.get("frames", [])), len(merged_frames))
-
-            await consolidate_tracking_json_with_job_chain(
-                jobs_store=jobs_store,
-                s3=s3,
-                bucket=request.output_bucket or request.bucket,
-                leaf_job_id=job_id,
-                local_tracking_json_path=tracking_json_path,
-                clip_start_frame=clip_start_frame,
-            )
-
-            # Write completed tracking checkpoint (pre-upload; the post-upload
-            # re-write in the upload stage adds artifacts.tracking_s3_key).
-            with open(tracking_json_path) as _f:
-                _track_data = json.load(_f)
-            _frame_count = len(_track_data.get("frames", []))
-            await jobs_store.write_checkpoint(
-                job_id, PipelineStage.TRACK, False,
-                build_track_completed(
-                    start_frame=clip_start_frame,
-                    frame_count=_frame_count,
-                    worker_state=_track_completed_clip_worker_state(
-                        _track_data, clip_start_frame, clip_total_frames,
-                        progress_percent=55.0,
-                    ),
-                ),
-            )
-
-            # ==============================================================
-            # TRACKING-ONLY SHORT-CIRCUIT (skip_upscale=True)
-            # Upload tracking results to S3 then mark completed.
-            # only used in QA client.
-            # TODO: encapsulate the logic of this short-circuit to a method.
-            # ==============================================================
-            if request.skip_upscale:
-                await job_store.update_job(
-                    job_id, status=JobStatus.UPLOADING, progress_percent=80.0,
-                )
-                await jobs_store.update_progress(job_id, PipelineStage.UPLOAD, 80.0)
-
-                output_bucket = request.output_bucket or request.bucket
-                base_key = os.path.splitext(request.key)[0]
-                tracking_result_key = f"{base_key}_tracked.json"
-                tracked_video_key = f"{base_key}_tracked.mp4"
-
-                s3.ensure_bucket(output_bucket)
-
-                # Upload tracking JSON
-                with open(tracking_json_path) as f:
-                    tracking_data = json.load(f)
-                if request.resume_existing_upload_tracking_key != tracking_result_key:
-                    await loop.run_in_executor(
-                        None, s3.upload_json, tracking_data,
-                        output_bucket, tracking_result_key,
-                    )
-
-                # Re-write the track row now that we know the durable key.
-                await jobs_store.write_checkpoint(
-                    job_id, PipelineStage.TRACK, False,
-                    build_track_completed(
-                        start_frame=clip_start_frame,
-                        frame_count=_frame_count,
-                        tracking_s3_key=tracking_result_key,
-                        worker_state=_track_completed_clip_worker_state(
-                            tracking_data, clip_start_frame, clip_total_frames,
-                            progress_percent=55.0,
-                        ),
-                    ),
-                )
-
-                # Upload tracked video (if it exists)
-                tracked_video = os.path.join(
-                    tracking_output_dir, "tracked_output.mp4",
-                )
-                if os.path.isfile(tracked_video):
-                    await loop.run_in_executor(
-                        None, s3.upload_file, tracked_video,
-                        output_bucket, tracked_video_key, "video/mp4",
-                    )
-
-                # Terminal write for the skip_upscale path: the upload row carries
-                # completed=True because there is no publish stage in this branch.
-                await jobs_store.write_checkpoint(
-                    job_id, PipelineStage.UPLOAD, True,
-                    build_upload_incremental(
-                        tracking_s3_key=tracking_result_key,
-                        worker_state=_make_worker_state(
-                            progress_percent=100.0, stage_progress_fraction=1.0,
-                        ),
-                    ),
-                )
-
-                await job_store.update_job(
-                    job_id,
-                    status=JobStatus.COMPLETED,
-                    progress_percent=100.0,
-                    result_bucket=output_bucket,
-                    result_key=tracking_result_key,
-                )
-                await jobs_store.set_state(job_id, JobState.COMPLETED)
-                logger.info(
-                    "Job %s completed (tracking only -> s3://%s/%s)",
-                    job_id, output_bucket, tracking_result_key,
-                )
-                return
-
-            # ============================================================
-            # Pre-upscale: upload tracking JSON so the durable input is in S3
-            # before the upscale stage starts. The upscale checkpoint contract
-            # requires artifacts.tracking_s3_key, so this upload must happen
-            # before _run_upscale_analysis writes its first checkpoint.
-            # ============================================================
-            output_bucket = request.output_bucket or request.bucket
-            base_key = os.path.splitext(request.key)[0]
-            tracking_result_key = f"{base_key}_tracked.json"
-            analysis_result_key = f"{base_key}_analysis.json"
-            annotated_video_key = f"{base_key}_annotated.mp4"
-
-            s3.ensure_bucket(output_bucket)
-            with open(tracking_json_path) as f:
-                _full_tracking = json.load(f)
-            if request.resume_existing_upload_tracking_key == tracking_result_key:
-                logger.info(
-                    "Job %s: skipping tracking JSON re-upload (key already durable)",
-                    job_id,
-                )
-            else:
-                await loop.run_in_executor(
-                    None, s3.upload_json, _full_tracking,
-                    output_bucket, tracking_result_key,
-                )
-
-            # Re-write the track row with the durable tracking_s3_key.
-            await jobs_store.write_checkpoint(
-                job_id, PipelineStage.TRACK, False,
-                build_track_completed(
-                    start_frame=clip_start_frame,
-                    frame_count=_frame_count,
-                    tracking_s3_key=tracking_result_key,
-                    worker_state=_track_completed_clip_worker_state(
-                        _full_tracking, clip_start_frame, clip_total_frames,
-                        progress_percent=55.0,
-                    ),
-                ),
-            )
-
-            # First upload row (additive on artifacts as later artifacts land).
-            await jobs_store.write_checkpoint(
-                job_id, PipelineStage.UPLOAD, False,
-                build_upload_incremental(
-                    tracking_s3_key=tracking_result_key,
-                    worker_state=_make_worker_state(
-                        progress_percent=55.0, stage_progress_fraction=0.33,
-                    ),
-                ),
-            )
-
-            # ============================================================
-            # STAGE 4: UPSCALE + ANALYSIS -- second pass (55-80%)
-            # ============================================================
-            logger.info("Job %s: stage upscale+analysis (55-80%%)", job_id)
-            await job_store.update_job(
-                job_id, status=JobStatus.UPSCALING, progress_percent=55.0,
-            )
-            await jobs_store.update_progress(job_id, PipelineStage.UPSCALE_ANALYZE, 55.0)
-
             _last_upscale_ks_write = 0.0
 
             async def _update_upscale_progress(pct: float):
@@ -1041,7 +998,9 @@ async def run_job(
                 now = time.monotonic()
                 if (now - _last_upscale_ks_write) >= 1.0:
                     _last_upscale_ks_write = now
-                    await jobs_store.update_progress(job_id, PipelineStage.UPSCALE_ANALYZE, pct)
+                    await jobs_store.update_progress(
+                        job_id, PipelineStage.UPSCALE_ANALYZE, pct,
+                    )
 
             def _upscale_progress(pct_within_stage: float):
                 overall = 55.0 + pct_within_stage * 25.0  # 55%-80%
@@ -1062,12 +1021,12 @@ async def run_job(
                     progress_cb=_upscale_progress,
                 ),
             )
-            logger.info(
-                "Job %s: upscale+analysis finished fps=%s has_analysis=%s",
-                job_id,
-                fps,
-                analysis_result is not None,
-            )
+        logger.info(
+            "Job %s: upscale+analysis finished fps=%s has_analysis=%s",
+            job_id,
+            fps,
+            analysis_result is not None,
+        )
 
         # ============================================================
         # STAGE 4.5: ANNOTATE VIDEO (80-85%)
@@ -2510,15 +2469,26 @@ def _parse_time_range(
 
 
 # ---------------------------------------------------------------------------
-# M3 S9: K-segment parallel helper
+# Parallel upscale helper
 # ---------------------------------------------------------------------------
+# Tracking is always sequential (so the V1 ``track`` checkpoint contract for
+# mid-track loss / AWAITING_CORRECTION / HumanVerificationSuspend is honored
+# end-to-end — see ``working_log/contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md``
+# §``stage_name == track`` and ``JOB_ROTATION_HANDOFF_AND_RESUME.md`` §4.1).
+# Once tracking finishes, the merged tracking JSON can be sliced across
+# segments and the upscale + analyze stage runs each slice in a thread
+# executor with a heartbeat aggregator writing PipelineStage.UPSCALE_ANALYZE
+# progress in the 55%-80% band.
+# Future upgrade (see
+# working_log/knowledge-base/requirements/2026-05-25-prescan-segmented-parallel-tracking.md):
+# a pre-scan stage may segment the video at known-good boundaries so tracking
+# can also run in parallel; that work is intentionally deferred.
 
-async def _run_parallel_segments(
+async def _run_parallel_upscale(
     *,
     job_id: str,
     video_path: str,
-    box_a: list,
-    box_b: list,
+    merged_tracking_json_path: str,
     clip_start_frame: int,
     clip_end_resolved: int,
     clip_total_frames: int,
@@ -2528,34 +2498,34 @@ async def _run_parallel_segments(
     job_store: InMemoryJobStore,
     jobs_store: JobsStore,
     loop: asyncio.AbstractEventLoop,
-    eff_step_size: int,
-    eff_max_history: int,
-    eff_max_missing_frames: int,
-    eff_frame_stride: int,
-    eff_prop_stride: int,
+    tracking_s3_key: str,
     progress_floor: float,
-) -> tuple[str, dict | None, float]:
+) -> tuple[dict | None, float]:
     """
-    Run K segments in parallel (tracking + upscale + analyze each segment).
+    Run the UPSCALE_ANALYZE stage in parallel across N memory-bounded
+    segments. Each segment processes only the tracking frames whose
+    ``frame_idx`` falls inside its absolute frame range.
 
-    Returns (merged_tracking_json_path, merged_analysis_result, fps).
+    Returns ``(merged_analysis_result, fps)`` to match the sequential
+    ``_run_upscale_analysis`` shape so the caller in ``run_job`` can hand
+    the result straight to the annotate/upload/publish stages.
 
-    Each segment runs in a thread executor via asyncio.gather.
-    Identity stitching is applied at each boundary before frames are merged.
-    The merged tracking JSON is written to ``work_dir/tracking/tracking.json``.
-
-    Writes the TRACK completed checkpoint and uploads the merged tracking JSON
-    before starting the upscale stage.
+    Progress: each segment's ``progress_cb`` reports a per-segment
+    ``processed/total`` ratio to a shared aggregator. The aggregator runs
+    on the worker event loop, computes a clip-weighted overall fraction,
+    and writes ``PipelineStage.UPSCALE_ANALYZE`` lifecycle progress in the
+    55%-80% band at the ``LIFECYCLE_HEARTBEAT_INTERVAL`` cadence (1Hz).
+    The aggregator never writes any ``job_state`` transition or checkpoint
+    artifact — those remain the sole responsibility of
+    ``_run_upscale_analysis`` (it writes the V1 ``upscale_analyze``
+    checkpoint rows per the addendum) and the caller (it writes
+    track-complete + upload rows around this helper).
     """
     from service.segment_runner import (
         SegmentBounds,
         compute_segment_ranges,
-        stitch_segment_identity,
-        merge_tracking_results,
         merge_analysis_results,
-        OVERLAP_FRAMES,
     )
-    from service.tracking_runner import run_tracking_job
 
     # Dynamic segment count: bounded by segment_max_frames, parallelism by standard_segments.
     all_ranges = compute_segment_ranges(clip_total_frames, config.segment_max_frames)
@@ -2571,74 +2541,98 @@ async def _run_parallel_segments(
     ]
 
     logger.info(
-        "Job %s: K-segment mode n_segments=%d k_parallel=%d clip=[%d, %d) total_frames=%d",
+        "Job %s: parallel-upscale n_segments=%d k_parallel=%d clip=[%d, %d) total_frames=%d",
         job_id, n_total, k_parallel, clip_start_frame, clip_end_resolved, clip_total_frames,
     )
 
-    # Per-segment output directories
-    seg_output_dirs = [
-        os.path.join(work_dir, f"tracking_seg{s.segment_id}") for s in segments
-    ]
-    for d in seg_output_dirs:
-        os.makedirs(d, exist_ok=True)
+    # Load the merged tracking JSON produced by the sequential tracking stage.
+    with open(merged_tracking_json_path) as f:
+        merged_tracking_full = json.load(f)
+    all_frames = merged_tracking_full.get("frames", [])
+    seg_fps = merged_tracking_full.get("fps", 30.0)
 
     # ------------------------------------------------------------------
-    # Per-segment progress aggregator
+    # Per-segment tracking JSON (slice merged frames by absolute frame_idx)
+    # ------------------------------------------------------------------
+    seg_upscale_work_dirs = [
+        os.path.join(work_dir, f"upscale_seg{s.segment_id}") for s in segments
+    ]
+    seg_tracking_paths: list[str] = []
+    seg_frame_counts: list[int] = []
+    for i, seg in enumerate(segments):
+        os.makedirs(seg_upscale_work_dirs[i], exist_ok=True)
+        seg_frames = [
+            fr for fr in all_frames
+            if seg.start_frame <= int(fr.get("frame_idx", fr.get("frame", -1))) < seg.end_frame
+        ]
+        seg_frame_counts.append(len(seg_frames))
+        seg_track_data = {
+            **merged_tracking_full,
+            "frames": seg_frames,
+            "start_frame": seg.start_frame,
+            "end_frame": seg.end_frame,
+        }
+        seg_track_path = os.path.join(seg_upscale_work_dirs[i], "tracking.json")
+        with open(seg_track_path, "w") as f:
+            json.dump(seg_track_data, f)
+        seg_tracking_paths.append(seg_track_path)
+        logger.info(
+            "Job %s seg%d: upscale slice frames=%d range=[%d, %d)",
+            job_id, i, len(seg_frames), seg.start_frame, seg.end_frame,
+        )
+
+    total_seg_frames = max(sum(seg_frame_counts), 1)
+
+    # ------------------------------------------------------------------
+    # Per-segment progress aggregator (writes PipelineStage.UPSCALE_ANALYZE)
     # ------------------------------------------------------------------
     # Each segment runs in its own thread executor with its own internal
-    # tracking loop. We track per-segment ``frames_processed_in_segment``
+    # upscale loop. ``_run_upscale_analysis`` already accepts a
+    # ``progress_cb(fraction)`` that reports the per-segment processed/total
+    # ratio in [0, 1]. We store ``frames_done[seg_idx] = round(fraction * seg_len)``
     # in a shared dict (each thread owns its own key; int assignment is
-    # atomic under the GIL so no lock is required). A background asyncio
-    # task running on ``loop`` aggregates the sum every
-    # ``LIFECYCLE_HEARTBEAT_INTERVAL`` and writes the lifecycle row so SSE
-    # consumers can advance the progress bar instead of seeing the seed
-    # value of clip_done=1 / 15% for the entire parallel tracking phase.
+    # atomic under the GIL so no lock is required) and a background asyncio
+    # task aggregates the sum every ``LIFECYCLE_HEARTBEAT_INTERVAL``,
+    # computing overall progress weighted by per-segment frame counts.
     frames_done: dict[int, int] = {i: 0 for i in range(n_total)}
 
     def _make_seg_progress_cb(seg_idx: int):
-        def _seg_progress_cb(frames_in_seg: int, total_local: int, global_idx: int):
-            # frames_in_seg is the segment-local 1-based count from
-            # tracking_pipeline.hybrid_tracking. We store it as-is; the
-            # aggregator sums across segments.
-            frames_done[seg_idx] = frames_in_seg
+        seg_len = seg_frame_counts[seg_idx]
+
+        def _seg_progress_cb(fraction: float):
+            # ``fraction`` is the per-segment processed/total reported by
+            # ``_run_upscale_analysis`` (line ~2384). Convert to absolute
+            # frames-done within that segment so the aggregator can sum.
+            done = int(round(max(0.0, min(1.0, fraction)) * seg_len))
+            frames_done[seg_idx] = done
         return _seg_progress_cb
 
-    aggregator_started_at = time.monotonic()
     aggregator_stop = asyncio.Event()
 
     async def _aggregate_and_write_lifecycle():
-        """Compute clip-level progress from per-segment frames_done and write
-        the lifecycle row. Never regress below the seed (clip_done>=1).
+        """Compute clip-weighted upscale progress and write the lifecycle row.
 
-        Interior segments overlap by ``OVERLAP_FRAMES`` (segment_runner.py)
-        so the naive sum can slightly over-count by up to
-        ``(n_total-1)*OVERLAP_FRAMES`` frames once the later segments
-        catch up — the upper clamp to ``clip_total_frames`` keeps the UI
-        from showing >100% while preserving best-effort accuracy below
-        100%.
+        ``_upscale_analyze`` band is 55%-80%. With per-segment frame counts
+        ``seg_frame_counts`` summing to ``total_seg_frames``, the overall
+        progress is ``55.0 + (sum(frames_done.values()) / total_seg_frames) * 25.0``
+        clamped to [55.0, 80.0]. ``progress_floor`` keeps replacement jobs
+        from regressing.
         """
         total_done = sum(frames_done.values())
-        clip_done = min(max(total_done, 1), clip_total_frames)
-        # 15% -> 55% tracking-stage band — shared with the sequential path.
-        pct = _tracking_pct_from_clip_done(
-            clip_done, clip_total_frames, progress_floor,
-        )
+        frac = min(max(total_done / total_seg_frames, 0.0), 1.0)
+        pct = _pct_at_least(55.0 + frac * 25.0, progress_floor)
+        # Clip just below the band ceiling so the stage-complete write owns
+        # the 80.0 boundary cleanly.
+        pct = min(pct, 80.0)
         try:
-            await job_store.update_job(
-                job_id,
-                progress_percent=pct,
-                current_frame=clip_done,
-                total_frames=clip_total_frames,
-            )
+            await job_store.update_job(job_id, progress_percent=pct)
             await jobs_store.update_progress(
-                job_id, PipelineStage.TRACK, pct,
-                current_frame=clip_done, total_frames=clip_total_frames,
+                job_id, PipelineStage.UPSCALE_ANALYZE, pct,
             )
         except Exception as e:
-            # Best-effort heartbeat. Match _log_progress_future_failure
-            # semantics: log, never raise.
+            # Best-effort heartbeat; never raise from the aggregator.
             logger.error(
-                "parallel-segment progress aggregator write failed: %s",
+                "parallel-upscale progress aggregator write failed: %s",
                 e,
                 exc_info=e,
             )
@@ -2651,229 +2645,17 @@ async def _run_parallel_segments(
                         aggregator_stop.wait(),
                         timeout=LIFECYCLE_HEARTBEAT_INTERVAL,
                     )
-                    # stop event was set during the wait — exit loop.
-                    break
+                    break  # stop event set during the wait — exit loop
                 except asyncio.TimeoutError:
                     pass
                 await _aggregate_and_write_lifecycle()
         except asyncio.CancelledError:
-            # Caller cancelled us (e.g. segment failure). Do not write again.
             raise
 
     # ------------------------------------------------------------------
-    # Launch K tracking tasks in parallel via thread executor
+    # Run each segment's upscale+analyze in a thread executor
     # ------------------------------------------------------------------
-    def _track_segment(seg_idx: int) -> str | None:
-        """Thread: run SAM2 tracking for one segment. Returns tracking.json path or None."""
-        seg = segments[seg_idx]
-        out_dir = seg_output_dirs[seg_idx]
-        logger.info(
-            "Job %s seg%d: tracking start_frame=%d end_frame=%d length=%d",
-            job_id, seg_idx, seg.start_frame, seg.end_frame, seg.length,
-        )
-        try:
-            path = run_tracking_job(
-                video_path=video_path,
-                box_a=box_a,
-                box_b=box_b,
-                output_dir=out_dir,
-                sam2_model_id=request.sam2_model,
-                yolo_model=request.yolo_model,
-                detection_threshold=request.detection_threshold,
-                start_frame=seg.start_frame,
-                end_frame=seg.end_frame,
-                step_size=eff_step_size,
-                max_history=eff_max_history,
-                max_missing_frames=eff_max_missing_frames,
-                frame_stride=eff_frame_stride,
-                prop_stride=eff_prop_stride,
-                # Per-segment segments don't do mid-tracking suspends (no detection_cb).
-                # Detection/YOLO is not re-run within a segment if tracking stays healthy.
-                detection_cb=None,
-                progress_cb=_make_seg_progress_cb(seg_idx),
-                should_stop=lambda: job_store.is_cancelled(job_id),
-            )
-            logger.info("Job %s seg%d: tracking done path=%s", job_id, seg_idx, path)
-            return path
-        except Exception as e:
-            logger.error(
-                "Job %s seg%d: tracking failed: %s", job_id, seg_idx, e, exc_info=True,
-            )
-            raise
-
-    # Track all segments in sequential batches of k_parallel to bound peak GPU memory.
-    # The aggregator background task spans the entire parallel-tracking phase
-    # (across batches) and is shut down cleanly in the finally block.
-    tracking_paths: list[str | None] = [None] * n_total
-    aggregator = asyncio.create_task(_aggregator_task())
-    try:
-        for _batch_start in range(0, n_total, k_parallel):
-            _batch_end = min(_batch_start + k_parallel, n_total)
-            _batch_futures = [
-                loop.run_in_executor(None, _track_segment, i)
-                for i in range(_batch_start, _batch_end)
-            ]
-            _batch_paths = list(await asyncio.gather(*_batch_futures))
-            for _bi, _path in zip(range(_batch_start, _batch_end), _batch_paths):
-                tracking_paths[_bi] = _path
-    finally:
-        aggregator_stop.set()
-        # Cancel the aggregator if it's still sleeping; await regardless so
-        # the task is fully reaped before _run_parallel_segments returns.
-        aggregator.cancel()
-        try:
-            await aggregator
-        except (asyncio.CancelledError, Exception):
-            # Already logged inside the task; nothing more to do.
-            pass
-        # Final aggregated write so any frames produced after the last
-        # heartbeat tick are reflected before the next stage takes over.
-        try:
-            await _aggregate_and_write_lifecycle()
-        except Exception:
-            # _aggregate_and_write_lifecycle already logs on failure.
-            pass
-    _ = aggregator_started_at  # currently informational; keep for log hooks
-
-    # Check for cancellation
-    if any(p is None for p in tracking_paths):
-        raise JobCancelledError(
-            "A tracking segment returned None (job was cancelled or suspended)"
-        )
-
-    # ------------------------------------------------------------------
-    # Load per-segment tracking JSON
-    # ------------------------------------------------------------------
-    seg_tracking_frames: list[list[dict]] = []
-    seg_fps = 30.0
-    for i, path in enumerate(tracking_paths):
-        with open(path) as f:
-            data = json.load(f)
-        seg_fps = data.get("fps", seg_fps)
-        frames = data.get("frames", [])
-        seg_tracking_frames.append(frames)
-        logger.info(
-            "Job %s seg%d: loaded %d tracking frames", job_id, i, len(frames),
-        )
-
-    # ------------------------------------------------------------------
-    # Identity stitching at each segment boundary (sequential, all N segments)
-    # ------------------------------------------------------------------
-    stitched_frames: list[list[dict]] = [seg_tracking_frames[0]]
-    for i in range(1, n_total):
-        remapped = stitch_segment_identity(
-            stitched_frames[i - 1],
-            seg_tracking_frames[i],
-            OVERLAP_FRAMES,
-        )
-        stitched_frames.append(remapped)
-        logger.info(
-            "Job %s: stitched seg%d identity (%d frames)", job_id, i, len(remapped),
-        )
-
-    # ------------------------------------------------------------------
-    # Merge tracking frames (de-overlap)
-    # ------------------------------------------------------------------
-    merged_tracking = merge_tracking_results(segments, stitched_frames, OVERLAP_FRAMES)
-    # Augment with metadata from seg0's data
-    with open(tracking_paths[0]) as f:
-        first_seg_data = json.load(f)
-    merged_tracking_full = {
-        "video": first_seg_data.get("video", video_path),
-        "fps": seg_fps,
-        "start_frame": clip_start_frame,
-        "end_frame": clip_end_resolved,
-        "frames": merged_tracking["frames"],
-    }
-
-    merged_tracking_dir = os.path.join(work_dir, "tracking")
-    os.makedirs(merged_tracking_dir, exist_ok=True)
-    merged_tracking_path = os.path.join(merged_tracking_dir, "tracking.json")
-    with open(merged_tracking_path, "w") as f:
-        json.dump(merged_tracking_full, f)
-
-    _frame_count = len(merged_tracking_full["frames"])
-    logger.info(
-        "Job %s: merged tracking: %d total frames from %d segments (k_parallel=%d)",
-        job_id, _frame_count, n_total, k_parallel,
-    )
-
-    # ------------------------------------------------------------------
-    # Write tracking-complete checkpoint and upload merged tracking JSON
-    # ------------------------------------------------------------------
-    await jobs_store.write_checkpoint(
-        job_id, PipelineStage.TRACK, False,
-        build_track_completed(
-            start_frame=clip_start_frame,
-            frame_count=_frame_count,
-            worker_state=_make_worker_state(
-                progress_percent=55.0,
-                current_frame=_frame_count,
-                total_frames=clip_total_frames,
-                stage_progress_fraction=1.0,
-            ),
-        ),
-    )
-
-    output_bucket = request.output_bucket or request.bucket
-    base_key = os.path.splitext(request.key)[0]
-    tracking_result_key = f"{base_key}_tracked.json"
-
-    s3 = _make_s3(config)
-    s3.ensure_bucket(output_bucket)
-    await loop.run_in_executor(
-        None, s3.upload_json, merged_tracking_full, output_bucket, tracking_result_key,
-    )
-    await jobs_store.write_checkpoint(
-        job_id, PipelineStage.TRACK, False,
-        build_track_completed(
-            start_frame=clip_start_frame,
-            frame_count=_frame_count,
-            tracking_s3_key=tracking_result_key,
-            worker_state=_make_worker_state(
-                progress_percent=55.0,
-                current_frame=_frame_count,
-                total_frames=clip_total_frames,
-                stage_progress_fraction=1.0,
-            ),
-        ),
-    )
-    await jobs_store.write_checkpoint(
-        job_id, PipelineStage.UPLOAD, False,
-        build_upload_incremental(
-            tracking_s3_key=tracking_result_key,
-            worker_state=_make_worker_state(
-                progress_percent=55.0, stage_progress_fraction=0.33,
-            ),
-        ),
-    )
-
-    # ------------------------------------------------------------------
-    # Upscale + analyze each segment in parallel
-    # ------------------------------------------------------------------
-    await job_store.update_job(job_id, status=JobStatus.UPSCALING, progress_percent=55.0)
-    await jobs_store.update_progress(job_id, PipelineStage.UPSCALE_ANALYZE, 55.0)
-
-    # Build per-segment tracking JSON (stitched frames, clipped to segment range)
-    seg_upscale_work_dirs = [
-        os.path.join(work_dir, f"upscale_seg{s.segment_id}") for s in segments
-    ]
-    seg_tracking_paths: list[str] = []
-    for i, (seg, frames) in enumerate(zip(segments, stitched_frames)):
-        os.makedirs(seg_upscale_work_dirs[i], exist_ok=True)
-        seg_track_data = {
-            **merged_tracking_full,
-            "frames": frames,
-            "start_frame": seg.start_frame,
-            "end_frame": seg.end_frame,
-        }
-        seg_track_path = os.path.join(seg_upscale_work_dirs[i], "tracking.json")
-        with open(seg_track_path, "w") as f:
-            json.dump(seg_track_data, f)
-        seg_tracking_paths.append(seg_track_path)
-
     def _upscale_segment(seg_idx: int) -> tuple[dict | None, float]:
-        """Thread: run upscale+analyze for one segment."""
         try:
             result, fps_val = _run_upscale_analysis(
                 video_path,
@@ -2884,8 +2666,8 @@ async def _run_parallel_segments(
                 job_id=job_id,
                 jobs_store=jobs_store,
                 loop=loop,
-                tracking_s3_key=tracking_result_key,
-                progress_cb=None,
+                tracking_s3_key=tracking_s3_key,
+                progress_cb=_make_seg_progress_cb(seg_idx),
             )
             logger.info(
                 "Job %s seg%d: upscale+analyze done has_analysis=%s",
@@ -2899,20 +2681,36 @@ async def _run_parallel_segments(
             )
             raise
 
-    # Upscale+analyze all segments in sequential batches of k_parallel.
     upscale_results: list[tuple[dict | None, float]] = [(None, 0.0)] * n_total
-    for _batch_start in range(0, n_total, k_parallel):
-        _batch_end = min(_batch_start + k_parallel, n_total)
-        _batch_futures = [
-            loop.run_in_executor(None, _upscale_segment, i)
-            for i in range(_batch_start, _batch_end)
-        ]
-        _batch_res = list(await asyncio.gather(*_batch_futures))
-        for _bi, _res in zip(range(_batch_start, _batch_end), _batch_res):
-            upscale_results[_bi] = _res
+    aggregator = asyncio.create_task(_aggregator_task())
+    try:
+        # Run all segments in sequential batches of k_parallel to bound
+        # peak GPU memory.
+        for _batch_start in range(0, n_total, k_parallel):
+            _batch_end = min(_batch_start + k_parallel, n_total)
+            _batch_futures = [
+                loop.run_in_executor(None, _upscale_segment, i)
+                for i in range(_batch_start, _batch_end)
+            ]
+            _batch_res = list(await asyncio.gather(*_batch_futures))
+            for _bi, _res in zip(range(_batch_start, _batch_end), _batch_res):
+                upscale_results[_bi] = _res
+    finally:
+        aggregator_stop.set()
+        aggregator.cancel()
+        try:
+            await aggregator
+        except (asyncio.CancelledError, Exception):
+            pass
+        # Final aggregated write so any frames processed after the last
+        # 1Hz tick are reflected before the next stage takes over.
+        try:
+            await _aggregate_and_write_lifecycle()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
-    # Merge analysis results
+    # Merge per-segment analysis results
     # ------------------------------------------------------------------
     seg_analyses = [r[0] for r in upscale_results]
     fps_values = [r[1] for r in upscale_results if r[1] and r[1] > 0]
@@ -2923,8 +2721,8 @@ async def _run_parallel_segments(
         merged_analysis["fps"] = final_fps
 
     logger.info(
-        "Job %s: K-segment complete n_segments=%d k_parallel=%d fps=%.2f has_analysis=%s merged_frames=%d",
-        job_id, n_total, k_parallel, final_fps, merged_analysis is not None, _frame_count,
+        "Job %s: parallel-upscale complete n_segments=%d k_parallel=%d fps=%.2f has_analysis=%s",
+        job_id, n_total, k_parallel, final_fps, merged_analysis is not None,
     )
 
-    return merged_tracking_path, merged_analysis, final_fps
+    return merged_analysis, final_fps

@@ -28,6 +28,9 @@ See `bjj-team-meta` skill for how to add entries.
 - [2026-05-10 - MPS upscale memory: PyTorch cache vs Gemini buffer](insights/2026-05-10-mps-upscale-memory-empty-cache.md) — tags: service, upscale, pytorch, mps, memory, restorer, ops
 - [2026-05-10 - Job handoff chain debugging playbook (Keyspaces + S3)](insights/2026-05-10-job-handoff-chain-debug-playbook.md) — tags: service, lifecycle, resume, keyspaces, checkpoints, s3, debugging, ops
 - [2026-05-17 - DGX Spark production target host (`ssh gx10`)](insights/2026-05-17-dgx-spark-production-target.md) — tags: infra, ops, dgx-spark, cuda, blackwell, production
+- [2026-05-25 - Parallel-upscale progress aggregator pattern](insights/2026-05-25-parallel-upscale-progress-aggregator.md) — tags: service, parallel-upscale, keyspaces, progress, asyncio, regression-prevention
+- [2026-05-25 - `run_coroutine_threadsafe` must `add_done_callback`](insights/2026-05-25-run-coroutine-threadsafe-must-add-done-callback.md) — tags: service, asyncio, keyspaces, progress, regression-prevention
+- [2026-05-25 - `_detect_and_request_boxes` short-circuit in headless mode](insights/2026-05-25-headless-detect-yolo-short-circuit.md) — tags: service, parallel-tracking, tracking, ml, regression-prevention
 
 ## Requirements
 
@@ -36,6 +39,7 @@ See `bjj-team-meta` skill for how to add entries.
 - [2026-05-01 - Keyspaces Schema Migration — Job Lineage and Recovery Index](requirements/2026-05-01-keyspaces-schema-migration-job-recovery.md) — tags: keyspaces, schema, migration, ops
 - [2026-05-02 - Worker Checkpoint Standardization, Shape Tests, Durable Artifact Recovery](requirements/2026-05-02-worker-checkpoint-standardization-plan.md) — tags: service, worker, checkpoints, schema, recovery, tests
 - [2026-05-10 - Chain artifact merge and durable tracking resume (plan)](requirements/2026-05-10-chain-artifact-merge-durable-tracking-resume-plan.md) — tags: service, lifecycle, resume, checkpoints, s3, tracking, handoff, merge
+- [2026-05-25 - Pre-scan Segmented Parallel Tracking (Future Upgrade)](requirements/2026-05-25-prescan-segmented-parallel-tracking.md) — tags: tracking, parallel-tracking, prescan, future-upgrade, governance
 
 ## Contracts (sharable with bjj-vision-backend)
 
