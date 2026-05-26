@@ -200,6 +200,7 @@ async def bootstrap_recovery_on_startup(
     recover_job,
     *,
     heartbeat_bucket_hours: int = 24,
+    max_heartbeat_age_hours: int = 24,
 ) -> None:
     """Single-shot recovery sweep for orphaned ``RUNNING`` / ``INTERRUPTED`` rows.
 
@@ -216,6 +217,10 @@ async def bootstrap_recovery_on_startup(
     orphaned rows from the previous owner. Periodic reconciler defaults
     (90s / 30s) are unchanged — they govern steady-state peer-instance safety.
 
+    ``max_heartbeat_age_hours`` (default 24) bounds the upper edge: rows older
+    than this are treated as garbage from a previous deployment and skipped.
+    Set to 0 to disable the upper bound.
+
     Failures are caught and logged with ``exc_info=True`` so startup never
     fails because of a transient recovery glitch.
     """
@@ -225,14 +230,21 @@ async def bootstrap_recovery_on_startup(
     from service.reconciler import RecoveryManager
 
     bucket_hours = max(1, int(heartbeat_bucket_hours))
+    max_age_seconds = (
+        None if int(max_heartbeat_age_hours) == 0
+        else float(max_heartbeat_age_hours) * 3600.0
+    )
     logger.info(
-        "Bootstrap recovery: scanning %d buckets, stale_after_override=0",
+        "Bootstrap recovery: scanning %d buckets, stale_after_override=0, "
+        "max_heartbeat_age=%s",
         bucket_hours,
+        "unbounded" if max_age_seconds is None else f"{max_age_seconds}s",
     )
     manager = RecoveryManager(
         _jobs_store,
         instance_id,
         heartbeat_bucket_hours=bucket_hours,
+        max_heartbeat_age_seconds=max_age_seconds,
         recover_job=recover_job,
     )
     try:

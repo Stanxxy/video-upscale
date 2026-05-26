@@ -22,6 +22,7 @@ class RecoveryManager:
         interval: float = 30.0,
         stale_after: float = 90.0,
         heartbeat_bucket_hours: int = 24,
+        max_heartbeat_age_seconds: float | None = 86400.0,
         recover_job: RecoverJobCallback | None = None,
         now_fn: Callable[[], datetime] | None = None,
     ):
@@ -30,6 +31,14 @@ class RecoveryManager:
         self._interval = interval
         self._stale_after = stale_after
         self._heartbeat_bucket_hours = max(1, int(heartbeat_bucket_hours))
+        # Upper bound on heartbeat age. Rows older than this are treated as
+        # garbage (e.g. abandoned jobs from a previous deployment) and skipped
+        # to prevent reviving work the operator no longer wants resumed.
+        # ``None`` disables the upper bound (for tests or unbounded recovery).
+        self._max_heartbeat_age_seconds = (
+            None if max_heartbeat_age_seconds is None
+            else float(max_heartbeat_age_seconds)
+        )
         self._recover_job = recover_job
         self._now_fn = now_fn or (lambda: datetime.now(timezone.utc))
         self._task: asyncio.Task | None = None
@@ -39,11 +48,14 @@ class RecoveryManager:
 
     async def _run(self) -> None:
         logger.info(
-            "RecoveryManager started: instance=%s interval=%ss stale_after=%ss bucket_hours=%s",
+            "RecoveryManager started: instance=%s interval=%ss stale_after=%ss "
+            "bucket_hours=%s max_heartbeat_age=%s",
             self._instance_id,
             self._interval,
             self._stale_after,
             self._heartbeat_bucket_hours,
+            "unbounded" if self._max_heartbeat_age_seconds is None
+            else f"{self._max_heartbeat_age_seconds}s",
         )
         while True:
             try:
@@ -77,6 +89,10 @@ class RecoveryManager:
             else float(stale_after_override)
         )
         stale_before = now - timedelta(seconds=stale_after)
+        garbage_before = (
+            None if self._max_heartbeat_age_seconds is None
+            else now - timedelta(seconds=self._max_heartbeat_age_seconds)
+        )
         buckets = self.heartbeat_buckets_for_scan(
             now, hours=self._heartbeat_bucket_hours,
         )
@@ -115,6 +131,19 @@ class RecoveryManager:
                     job_id,
                     last_heartbeat_at,
                     stale_before,
+                )
+                continue
+            if (
+                garbage_before is not None
+                and last_heartbeat_at
+                and last_heartbeat_at < garbage_before
+            ):
+                logger.info(
+                    "Recovery skip job %s: heartbeat-too-old (%s < %s); "
+                    "outside max_heartbeat_age window",
+                    job_id,
+                    last_heartbeat_at,
+                    garbage_before,
                 )
                 continue
 

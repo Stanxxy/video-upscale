@@ -270,6 +270,97 @@ async def test_reconcile_once_stale_after_override_picks_up_fresh_heartbeats():
 
 
 @pytest.mark.asyncio
+async def test_reconcile_once_skips_jobs_older_than_max_heartbeat_age():
+    """Heartbeats older than ``max_heartbeat_age_seconds`` are garbage and skipped,
+    even with ``stale_after_override=0`` (bootstrap path)."""
+    now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
+    ancient_heartbeat = now - timedelta(hours=25)  # >24h ago
+    recent_heartbeat = now - timedelta(minutes=3)
+    recovered: list[str] = []
+    store = FakeJobsStore([
+        {
+            "job_id": "ancient-garbage",
+            "job_state": JobState.RUNNING.value,
+            "owner_instance_id": "previous-deploy",
+            "last_heartbeat_at": ancient_heartbeat,
+            "heartbeat_bucket": ancient_heartbeat.strftime("%Y%m%d%H"),
+        },
+        {
+            "job_id": "recent-orphan",
+            "job_state": JobState.RUNNING.value,
+            "owner_instance_id": "previous-process",
+            "last_heartbeat_at": recent_heartbeat,
+            "heartbeat_bucket": "2026042619",
+        },
+    ])
+
+    async def recover_job(lifecycle):
+        recovered.append(lifecycle["job_id"])
+
+    manager = RecoveryManager(
+        store,
+        "new-worker",
+        recover_job=recover_job,
+        stale_after=90.0,
+        heartbeat_bucket_hours=168,  # widen bucket scan past 24h
+        max_heartbeat_age_seconds=24 * 3600.0,
+        now_fn=lambda: now,
+    )
+
+    # Default pass: recent orphan claimed; ancient garbage skipped.
+    await manager.reconcile_once()
+    assert recovered == ["recent-orphan"]
+
+    # Bootstrap pass (override=0): same behavior — ancient garbage still skipped.
+    recovered.clear()
+    store.claimed.clear()
+    store.states.clear()
+    # Reset the recent orphan back to RUNNING so the bootstrap pass can re-claim
+    # (the default pass above transitioned it to INTERRUPTED).
+    store.lifecycles["recent-orphan"]["job_state"] = JobState.RUNNING.value
+    await manager.reconcile_once(stale_after_override=0.0)
+    assert recovered == ["recent-orphan"]
+    assert "ancient-garbage" not in recovered
+
+
+@pytest.mark.asyncio
+async def test_reconcile_once_max_heartbeat_age_none_disables_bound():
+    """``max_heartbeat_age_seconds=None`` preserves legacy unbounded behavior.
+
+    Uses a 50h-old heartbeat: within the 168h bucket scan window, but a 24h
+    max-age would have blocked it. With the bound disabled, recovery fires.
+    """
+    now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
+    old_heartbeat = now - timedelta(hours=50)
+    recovered: list[str] = []
+    store = FakeJobsStore([
+        {
+            "job_id": "old-but-eligible",
+            "job_state": JobState.RUNNING.value,
+            "owner_instance_id": "old-worker",
+            "last_heartbeat_at": old_heartbeat,
+            "heartbeat_bucket": old_heartbeat.strftime("%Y%m%d%H"),
+        },
+    ])
+
+    async def recover_job(lifecycle):
+        recovered.append(lifecycle["job_id"])
+
+    manager = RecoveryManager(
+        store,
+        "new-worker",
+        recover_job=recover_job,
+        stale_after=90.0,
+        heartbeat_bucket_hours=168,
+        max_heartbeat_age_seconds=None,
+        now_fn=lambda: now,
+    )
+
+    await manager.reconcile_once()
+    assert recovered == ["old-but-eligible"]
+
+
+@pytest.mark.asyncio
 async def test_reconcile_once_ignores_stale_index_when_lifecycle_is_fresh():
     now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
     old_heartbeat = now - timedelta(minutes=10)

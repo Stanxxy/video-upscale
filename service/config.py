@@ -55,6 +55,20 @@ class ServiceConfig(BaseSettings):
         le=168,
         description="How many trailing UTC hour buckets to scan for stale RUNNING/INTERRUPTED recovery.",
     )
+    # Safety bound: any candidate whose ``last_heartbeat_at`` is older than this
+    # many hours is treated as garbage and skipped. Prevents reviving abandoned
+    # jobs from a previous deployment when the bucket-scan window is widened.
+    # Set to 0 to disable the upper bound (NOT recommended in production).
+    recovery_max_heartbeat_age_hours: int = Field(
+        default=24,
+        ge=0,
+        le=168,
+        description=(
+            "Upper-bound age (hours) on candidate heartbeats. Rows older than this "
+            "are treated as garbage and skipped by both periodic and bootstrap "
+            "recovery. 0 disables the bound."
+        ),
+    )
     # M2 S4: async Gemini fanout.
     # gemini_max_inflight=1 preserves the context chain (sequential) while still
     # overlapping upscale compute with the in-flight Gemini call.

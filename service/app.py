@@ -63,6 +63,7 @@ async def lifespan(app: FastAPI):
         INSTANCE_ID,
         recover_interrupted_job,
         heartbeat_bucket_hours=config.recovery_heartbeat_bucket_hours,
+        max_heartbeat_age_hours=config.recovery_max_heartbeat_age_hours,
     )
 
     # Start heartbeat
@@ -74,6 +75,10 @@ async def lifespan(app: FastAPI):
         jobs_store,
         INSTANCE_ID,
         heartbeat_bucket_hours=config.recovery_heartbeat_bucket_hours,
+        max_heartbeat_age_seconds=(
+            None if config.recovery_max_heartbeat_age_hours == 0
+            else config.recovery_max_heartbeat_age_hours * 3600.0
+        ),
         recover_job=recover_interrupted_job,
     )
     recovery.start()
