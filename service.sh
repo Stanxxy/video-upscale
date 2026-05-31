@@ -20,24 +20,22 @@ CURRENT_LOG_POINTER="$PROJECT_DIR/.service-current-log"
 # service.log -> that file for ./service.sh logs and tail -f service.log.
 allocate_log_file() {
     mkdir -p "$LOG_DIR"
-    local stamp state_file last_stamp last_seq seq
+    local stamp seq current_pointer_tmp current_log_tmp
     stamp=$(date +%Y%m%d-%H%M%S)
-    state_file="$LOG_DIR/.service-log-naming"
-    last_stamp=""
-    last_seq=0
-    if [[ -f "$state_file" ]]; then
-        IFS=' ' read -r last_stamp last_seq <"$state_file" || true
-        [[ "$last_seq" =~ ^[0-9]+$ ]] || last_seq=0
-    fi
-    if [[ "$last_stamp" == "$stamp" ]]; then
-        seq=$((last_seq + 1))
-    else
-        seq=1
-    fi
-    printf '%s %s\n' "$stamp" "$seq" >"$state_file"
+    seq=1
+    while [[ -e "$LOG_DIR/service-${stamp}-$(printf '%03d' "$seq").log" ]]; do
+        seq=$((seq + 1))
+    done
     LOG_FILE="$LOG_DIR/service-${stamp}-$(printf '%03d' "$seq").log"
-    printf '%s\n' "$LOG_FILE" >"$CURRENT_LOG_POINTER"
-    ln -sf "$LOG_FILE" "$PROJECT_DIR/service.log"
+
+    # macOS/iCloud can mark old generated pointer files as "dataless", which can
+    # block on direct read/truncate. Replace them atomically instead.
+    current_pointer_tmp="$CURRENT_LOG_POINTER.tmp.$$"
+    current_log_tmp="$PROJECT_DIR/.service.log.tmp.$$"
+    printf '%s\n' "$LOG_FILE" >"$current_pointer_tmp"
+    mv -f "$current_pointer_tmp" "$CURRENT_LOG_POINTER"
+    ln -s "$LOG_FILE" "$current_log_tmp"
+    mv -f "$current_log_tmp" "$PROJECT_DIR/service.log"
 }
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -193,6 +191,8 @@ cmd_start() {
         uvicorn_cmd+=(--reload)
         if [[ -n "${BJJ_RELOAD_DIR:-}" ]]; then
             uvicorn_cmd+=(--reload-dir "$BJJ_RELOAD_DIR")
+        else
+            uvicorn_cmd+=(--reload-dir service --reload-dir tracking_pipeline)
         fi
     fi
     if [[ -n "$BJJ_UVICORN_EXTRA" ]]; then
@@ -301,8 +301,12 @@ cmd_dev() {
         --log-level "$dev_log_level"
         --reload
     )
+    # Without --reload-dir, uvicorn watches the whole repo (including venv/) and
+    # spams WatchFiles warnings whenever site-packages or __pycache__ changes.
     if [[ -n "${BJJ_RELOAD_DIR:-}" ]]; then
         uvicorn_cmd+=(--reload-dir "$BJJ_RELOAD_DIR")
+    else
+        uvicorn_cmd+=(--reload-dir service --reload-dir tracking_pipeline)
     fi
     if [[ -n "$BJJ_UVICORN_EXTRA" ]]; then
         # shellcheck disable=SC2206
@@ -343,7 +347,7 @@ Environment variables:
   BJJ_LOG_LEVEL      Log level       (default: info for start, debug for dev)
   BJJ_FOREGROUND=1   With start: run in foreground (logs to terminal, no nohup)
   BJJ_RELOAD=1       With start: add --reload (prefer ./service.sh dev)
-  BJJ_RELOAD_DIR     Optional directory for uvicorn --reload-dir (repeat via dev/start+reload)
+  BJJ_RELOAD_DIR     Extra uvicorn --reload-dir args (default dev: service + tracking_pipeline)
   BJJ_UVICORN_EXTRA  Extra uvicorn CLI tokens (word-split; dev and start)
 EOF
 }

@@ -1,11 +1,5 @@
-"""Persistent jobs store backed by Keyspaces (Cassandra).
+"""Job lifecycle Keyspaces operations."""
 
-Operates on the same four tables as shared_lib's AnalysisJobsStore.
-Returns plain dicts (string job_state / stage values) for routes.
-"""
-
-import json
-import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -13,32 +7,16 @@ from service.analysis_keyspaces_enums import (
     JobState,
     PipelineStage,
     parse_job_state,
-    parse_pipeline_stage_optional,
-    parse_pipeline_stage_strict,
     states_that_sync_latest_job_row,
     states_with_completed_at,
 )
-from service.keyspaces_client import KeyspacesClient
-
-logger = logging.getLogger(__name__)
+from service.jobs_store._utils import as_utc_aware
 
 
-def _as_utc_aware(dt: datetime | None) -> datetime | None:
-    """cassandra-driver returns naive UTC wall times from Keyspaces; normalize for Python compares."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
-class JobsStore:
-    """Async facade over Keyspaces for the 4 analysis-job tables."""
-
-    def __init__(self, client: KeyspacesClient) -> None:
-        self._client = client
-        self._ks = client.keyspace  # e.g. "video_analysis"
-        self.owned_jobs: set[str] = set()
+class LifecycleMixin:
+    _client: Any
+    _ks: str
+    owned_jobs: set[str]
 
     def register_owned_job(self, job_id: str) -> None:
         self.owned_jobs.add(job_id)
@@ -63,7 +41,6 @@ class JobsStore:
         current_frame: int = 0,
         total_frames: int = 0,
     ) -> bool:
-        # Keyspaces columns are text; cassandra-driver binds uuid.UUID as CQL uuid.
         video_id = "" if video_id is None else str(video_id)
         now = datetime.now(timezone.utc)
         q = (
@@ -98,6 +75,7 @@ class JobsStore:
             return None
         r = rows[0]
         st = parse_job_state(r.job_state)
+        from service.analysis_keyspaces_enums import parse_pipeline_stage_optional
         stg = parse_pipeline_stage_optional(r.stage)
         return {
             "job_id": r.job_id,
@@ -114,10 +92,10 @@ class JobsStore:
             "stage_message": r.stage_message or "",
             "error_message": r.error_message or "",
             "owner_instance_id": r.owner_instance_id or "",
-            "last_heartbeat_at": _as_utc_aware(r.last_heartbeat_at),
-            "started_at": _as_utc_aware(r.started_at),
-            "updated_at": _as_utc_aware(r.updated_at),
-            "completed_at": _as_utc_aware(r.completed_at),
+            "last_heartbeat_at": as_utc_aware(r.last_heartbeat_at),
+            "started_at": as_utc_aware(r.started_at),
+            "updated_at": as_utc_aware(r.updated_at),
+            "completed_at": as_utc_aware(r.completed_at),
         }
 
     async def update_progress(
@@ -150,6 +128,8 @@ class JobsStore:
         error_message: str = "",
         sync_latest: bool = True,
     ) -> bool:
+        import logging
+        logger = logging.getLogger(__name__)
         now = datetime.now(timezone.utc)
         completed_at = now if state in states_with_completed_at() else None
         q = (
@@ -266,90 +246,6 @@ class JobsStore:
             return bool(row_dict.get("[applied]", row_dict.get("applied", False)))
         return bool(getattr(row, "applied", False))
 
-    async def upsert_recovery_index(self, lifecycle: dict[str, Any]) -> bool:
-        last_heartbeat_at = lifecycle.get("last_heartbeat_at") or datetime.now(timezone.utc)
-        heartbeat_bucket = self.heartbeat_bucket_for(last_heartbeat_at)
-        state = parse_job_state(lifecycle.get("job_state"))
-        recovery_state = (
-            "ACTIVE"
-            if state in (JobState.PENDING, JobState.RUNNING, JobState.INTERRUPTED)
-            else "AWAITING_CORRECTION"
-            if state == JobState.AWAITING_CORRECTION
-            else "TERMINAL"
-        )
-        now = datetime.now(timezone.utc)
-        q = (
-            f"INSERT INTO {self._ks}.job_recovery_index "
-            f"(recovery_state, heartbeat_bucket, last_heartbeat_at, job_id, "
-            f"owner_instance_id, video_id, job_state, updated_at) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s)"
-        )
-        return await self._client.execute_write(q, [
-            recovery_state,
-            heartbeat_bucket,
-            last_heartbeat_at,
-            lifecycle["job_id"],
-            lifecycle.get("owner_instance_id", ""),
-            lifecycle.get("video_id", ""),
-            state.value,
-            now,
-        ])
-
-    async def remove_recovery_index(
-        self,
-        job_id: str,
-        recovery_state: str,
-        heartbeat_bucket: str,
-        last_heartbeat_at: datetime,
-    ) -> bool:
-        q = (
-            f"DELETE FROM {self._ks}.job_recovery_index "
-            f"WHERE recovery_state = %s AND heartbeat_bucket = %s "
-            f"AND last_heartbeat_at = %s AND job_id = %s"
-        )
-        return await self._client.execute_write(q, [
-            recovery_state, heartbeat_bucket, last_heartbeat_at, job_id,
-        ])
-
-    async def list_active_recovery_index_rows_newest_first(
-        self,
-        heartbeat_buckets: list[str],
-        *,
-        limit_per_bucket: int = 1000,
-    ) -> list[dict[str, Any]]:
-        """Return recent rows from ACTIVE recovery partitions (newest heartbeats first).
-
-        The recovery index appends a row on each heartbeat upsert without deleting
-        prior entries, so the same ``job_id`` may appear multiple times; callers
-        should dedupe by ``job_id``.
-
-        Used on process startup to discover ``PENDING`` jobs that never reached
-        ``RUNNING`` before the previous process exited (e.g. resume handoff).
-        """
-        results: list[dict[str, Any]] = []
-        q = (
-            f"SELECT job_id, video_id, job_state, owner_instance_id, last_heartbeat_at "
-            f"FROM {self._ks}.job_recovery_index "
-            f"WHERE recovery_state = %s AND heartbeat_bucket = %s "
-            f"ORDER BY last_heartbeat_at DESC LIMIT %s"
-        )
-        for bucket in heartbeat_buckets:
-            rows = await self._client.execute(
-                q, ["ACTIVE", bucket, limit_per_bucket],
-            )
-            for r in rows:
-                results.append({
-                    "job_id": r.job_id,
-                    "video_id": getattr(r, "video_id", None) or "",
-                    "job_state": getattr(r, "job_state", None) or "",
-                    "owner_instance_id": getattr(r, "owner_instance_id", None) or "",
-                    "last_heartbeat_at": _as_utc_aware(
-                        getattr(r, "last_heartbeat_at", None),
-                    ),
-                    "heartbeat_bucket": bucket,
-                })
-        return results
-
     async def claim_pending_job_takeover(
         self,
         job_id: str,
@@ -381,140 +277,6 @@ class JobsStore:
             row_dict = row._asdict()
             return bool(row_dict.get("[applied]", row_dict.get("applied", False)))
         return bool(getattr(row, "applied", False))
-
-    async def list_stale_recovery_candidates(
-        self,
-        heartbeat_buckets: list[str],
-        stale_before: datetime,
-    ) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
-        q = (
-            f"SELECT * FROM {self._ks}.job_recovery_index "
-            f"WHERE recovery_state = %s AND heartbeat_bucket = %s "
-            f"AND last_heartbeat_at < %s"
-        )
-        for bucket in heartbeat_buckets:
-            rows = await self._client.execute(q, ["ACTIVE", bucket, stale_before])
-            for r in rows:
-                results.append({
-                    "job_id": r.job_id,
-                    "video_id": r.video_id or "",
-                    "job_state": r.job_state or "",
-                    "owner_instance_id": r.owner_instance_id or "",
-                    "last_heartbeat_at": _as_utc_aware(r.last_heartbeat_at),
-                    "heartbeat_bucket": r.heartbeat_bucket,
-                    "updated_at": _as_utc_aware(r.updated_at),
-                })
-        return results
-
-    async def save_request(self, job_id: str, request_json: str) -> bool:
-        now = datetime.now(timezone.utc)
-        q = (
-            f"INSERT INTO {self._ks}.job_request_params "
-            f"(job_id, request_json, created_at) VALUES (%s, %s, %s)"
-        )
-        return await self._client.execute_write(q, [job_id, request_json, now])
-
-    async def get_request(self, job_id: str) -> str | None:
-        q = f"SELECT request_json FROM {self._ks}.job_request_params WHERE job_id = %s"
-        rows = await self._client.execute(q, [job_id])
-        if not rows:
-            return None
-        return rows[0].request_json
-
-    async def write_checkpoint(
-        self,
-        job_id: str,
-        stage_name: PipelineStage,
-        completed: bool,
-        data: dict[str, Any],
-    ) -> bool:
-        now = datetime.now(timezone.utc)
-        q = (
-            f"INSERT INTO {self._ks}.job_stage_checkpoints "
-            f"(job_id, stage_name, completed, checkpoint_data, updated_at) "
-            f"VALUES (%s, %s, %s, %s, %s)"
-        )
-        return await self._client.execute_write(q, [
-            job_id, stage_name.value, completed, json.dumps(data), now,
-        ])
-
-    async def get_checkpoint(
-        self, job_id: str, stage_name: PipelineStage
-    ) -> dict[str, Any] | None:
-        q = (
-            f"SELECT * FROM {self._ks}.job_stage_checkpoints "
-            f"WHERE job_id = %s AND stage_name = %s"
-        )
-        rows = await self._client.execute(q, [job_id, stage_name.value])
-        if not rows:
-            return None
-        r = rows[0]
-        data: dict[str, Any] = {}
-        if r.checkpoint_data:
-            try:
-                data = json.loads(r.checkpoint_data)
-            except (json.JSONDecodeError, TypeError):
-                pass
-        sn = parse_pipeline_stage_strict(r.stage_name, label="get_checkpoint")
-        return {
-            "job_id": r.job_id,
-            "stage_name": sn.value,
-            "completed": r.completed or False, # what does this flag mean? Global completed or stage completed????
-            "checkpoint_data": data,
-            "updated_at": _as_utc_aware(r.updated_at),
-        }
-
-    async def get_all_checkpoints(self, job_id: str) -> list[dict[str, Any]]:
-        q = f"SELECT * FROM {self._ks}.job_stage_checkpoints WHERE job_id = %s"
-        rows = await self._client.execute(q, [job_id])
-        if not rows:
-            return []
-        result: list[dict[str, Any]] = []
-        for r in rows:
-            data: dict[str, Any] = {}
-            if r.checkpoint_data:
-                try:
-                    data = json.loads(r.checkpoint_data)
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            sn = parse_pipeline_stage_strict(
-                r.stage_name, label=f"list checkpoints {job_id}",
-            )
-            result.append({
-                "job_id": r.job_id,
-                "stage_name": sn.value,
-                "completed": r.completed or False,
-                "checkpoint_data": data,
-                "updated_at": _as_utc_aware(r.updated_at),
-            })
-        return result
-
-    async def set_latest(
-        self, video_id: str, job_id: str, job_state: JobState
-    ) -> bool:
-        now = datetime.now(timezone.utc)
-        q = (
-            f"INSERT INTO {self._ks}.video_analysis_latest_job "
-            f"(video_id, job_id, job_state, updated_at) "
-            f"VALUES (%s, %s, %s, %s)"
-        )
-        return await self._client.execute_write(q, [video_id, job_id, job_state.value, now])
-
-    async def get_latest(self, video_id: str) -> dict[str, Any] | None:
-        q = (
-            f"SELECT job_id, job_state, updated_at "
-            f"FROM {self._ks}.video_analysis_latest_job WHERE video_id = %s"
-        )
-        rows = await self._client.execute(q, [video_id])
-        if not rows:
-            return None
-        r = rows[0]
-        return {
-            "job_id": r.job_id,
-            "job_state": r.job_state,
-            "updated_at": _as_utc_aware(r.updated_at),
-        }
 
     async def list_running_jobs(self, owner_instance_id: str) -> list[dict[str, Any]]:
         results: list[dict[str, Any]] = []

@@ -9,6 +9,7 @@ os.environ.setdefault("TQDM_DISABLE", "1")
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load .env early so non-prefixed vars (KEYSPACES_*, etc.) are available
 load_dotenv()
@@ -139,6 +140,20 @@ def create_app() -> FastAPI:
                 request.url.path,
             )
             raise
+
+    # QA client (qa_client/index.html) is served on a separate origin during local dev.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://127.0.0.1:8765",
+            "http://localhost:8765",
+            "http://127.0.0.1:5500",
+            "http://localhost:5500",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.include_router(router)
     return app

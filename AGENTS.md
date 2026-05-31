@@ -26,8 +26,10 @@ The companion platform monorepo lives at `/Users/stanliu/Documents/bjj-proj/`.
 whole-video-analysis/
 ├── service/               # FastAPI service (default port 8000)
 │   ├── app.py             # Entry point + lifespan
-│   ├── routes.py          # REST endpoints
-│   ├── worker.py          # Async job orchestrator
+│   ├── routes/            # REST endpoints package
+│   ├── worker/            # Async job orchestrator package
+│   ├── checkpoints/       # V1 checkpoint builders + resume plan
+│   ├── jobs_store/        # Keyspaces persistence facade
 │   ├── models.py          # Pydantic schemas
 │   ├── job_store.py       # In-memory job state
 │   ├── config.py          # Env/config management
@@ -36,18 +38,20 @@ whole-video-analysis/
 │   ├── taxonomy_mapper.py # Pipeline → frontend enum bridging
 │   ├── vllm_selector.py   # Gemini athlete hint (>2 YOLO candidates)
 │   ├── s3.py              # S3 operations
-│   ├── sns.py             # SNS event publishing
-│   └── ws_manager.py      # WebSocket manager
-├── tracking_pipeline/         # Installable package (hybrid tracking implementation)
-│   ├── hybrid_tracking.py # Main hybrid tracking loop
+│   └── sns.py             # SNS event publishing
+├── tracking_pipeline/     # Installable package (hybrid tracking implementation)
+│   ├── hybrid/            # SAM2 loop modules (orchestrator, loop, output, …)
+│   ├── hybrid_tracking.py # Public run_tracking shim
+│   ├── select_boxes/      # Human box-selection UI (web + cv2)
 │   ├── detect.py          # RF-DETR detection
 │   ├── sam2_manager.py    # SAM2 propagation
 │   ├── identity_manager.py# DINOv2 + color re-ID
-│   ├── state_machine.py   # Scramble/cut/fade state
+│   ├── state_machine.py     # Scramble/cut/fade state
 │   ├── pipeline.py        # CLI orchestrator (run: python -m tracking_pipeline)
 │   └── ...                # Pose, video I/O, smoothing, etc.
 ├── tracking/              # Public API re-exports (from tracking_pipeline)
 │   └── __init__.py
+├── contracts/             # OpenAPI + backend checkpoint contracts
 ├── pyproject.toml         # setuptools: packages tracking + tracking_pipeline
 ├── tests/                 # pytest unit tests
 ├── qa_client/             # Manual QA client scripts
@@ -55,7 +59,7 @@ whole-video-analysis/
 │   └── knowledge-base/    # Design decisions, insights, requirements
 ├── service.sh             # Service start/stop/restart
 ├── AGENTS.md              # This file
-├── API.md                 # REST API reference
+├── API.md                 # Legacy REST reference (see contracts/service-openapi.yaml)
 └── bjj_analysis_taxonomy.md # Taxonomy enum source of truth
 ```
 

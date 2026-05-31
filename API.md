@@ -1,5 +1,7 @@
 # BJJ Video Analysis Service - API Documentation
 
+> **Legacy reference.** Canonical HTTP contract: [`contracts/service-openapi.yaml`](contracts/service-openapi.yaml). Prefer OpenAPI for paths, request/response schemas, and status codes.
+
 Base URL: `http://<host>:9001`
 
 ---
