@@ -51,9 +51,31 @@ token.json
 *.pid
 .service.pid
 .service-current-log
-logs/.service-log-naming
+service.log
+# Rotated service logs (service.sh → logs/service-*.log)
+logs/
 # SAM2 frame extraction in process cwd (tracking_pipeline/sam2_manager.py)
-temp_sam2_frames*
+temp_sam2_frames*/
+# YOLO/SAM local debug frame dumps (images already covered by *.jpg)
+**/debug_frames/
+
+# ── Local test / agent scratch ────────────────────────────────────────────────
+test_run_output.txt
+test_run_output*.txt
+.cursor/
+
+# Baseline smoke-run outputs (re-generated each QA run; scripts/README stay tracked)
+working_log/baselines/*/smoke/
+working_log/baselines/*/smoke-*/
+*.jsonl
+
+# macOS Finder duplicate suffix (e.g. "service 2.log", "driver 3.log")
+* 2
+* 2.*
+* 3
+* 3.*
+* 4
+* 4.*
 
 # ── OS noise ──────────────────────────────────────────────────────────────────
 .DS_Store
@@ -71,6 +93,7 @@ build/
 venv/
 .venv/
 env/
+venv.dataless-*/
 
 # Local agent tooling
 .superpowers/
