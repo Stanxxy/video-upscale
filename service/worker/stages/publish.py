@@ -51,9 +51,15 @@ async def run_publish_and_complete_stage(ctx: WorkerRunContext) -> None:
                 secret_access_key=config.aws_secret_access_key or None,
             )
             result_uri = f"s3://{output_bucket}/{analysis_result_key}"
+            # Reuse the SAME output_bucket and tracking_result_key the upload
+            # stage persisted on the context (upload.py set ctx.output_bucket /
+            # ctx.tracking_result_key from one base_key). No recomputation here,
+            # so the published URI is byte-identical to the uploaded artifact.
+            tracking_uri = f"s3://{output_bucket}/{tracking_result_key}"
             event_count = sns.publish_events(
                 analysis_result, video_id, fps,
                 job_id=job_id, result_s3_uri=result_uri,
+                tracking_s3_uri=tracking_uri,
             )
             sns_completion_sent = True
         except Exception as e:

@@ -63,6 +63,7 @@ class SNSPublisher:
     def publish_events(
         self, analysis: dict, video_id: UUID, fps: float,
         job_id: str = "", result_s3_uri: str = "",
+        tracking_s3_uri: str = "",
     ) -> int:
         """Publish each clip as a VideoEventWithCandidates SNS message,
         followed by an analysis_complete boundary event. Returns clip count."""
@@ -99,6 +100,7 @@ class SNSPublisher:
             job_id=job_id,
             total_event_count=total,
             result_s3_uri=result_s3_uri or None,
+            tracking_s3_uri=tracking_s3_uri or None,
         )
         self.client.publish(
             TopicArn=self.topic_arn,

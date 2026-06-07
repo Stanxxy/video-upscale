@@ -138,3 +138,4 @@ class AnalysisCompleteEvent(BaseModel):
     job_id: str
     total_event_count: int
     result_s3_uri: Optional[str] = None
+    tracking_s3_uri: Optional[str] = None
