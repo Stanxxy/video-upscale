@@ -78,6 +78,14 @@ class TrackRequest(BaseModel):
     # Player reference images for athlete identification
     player_references: Optional[List[Dict[str, str]]] = None
 
+    # Stream 0b: human-confirmed obj_id -> player_id binding
+    # { "1": player_id_A, "2": player_id_B }. AUTHORITATIVE track_id<->player_id.
+    # When present on a resume job, init_boxes is seeded from this confirmed
+    # binding (box_a -> obj_id "1", box_b -> obj_id "2") so track_ids never flip
+    # across the job chain. Threaded from ResumeRequest into the replacement
+    # TrackRequest by build_resume_params.
+    player_mapping: Optional[Dict[str, str]] = None
+
     # M2: stride-N frame sampling (S11)
     # 0 = auto: max(1, round(fps / 10)) computed from detected source fps.
     # e.g. 60fps → stride=6 (keeps every 6th frame, ~300 frames from 1800)
@@ -105,9 +113,14 @@ class TrackRequest(BaseModel):
 
 class ResumeRequest(BaseModel):
     """Request body for POST /jobs/{job_id}/resume — delivers corrected bounding boxes."""
+    # LEGACY: box_a/box_b superseded by player_mapping (track_id<->player_id). Remove once all paths consume bindings.
     box_a: List[float]  # [x1, y1, x2, y2] (xyxy) bounding box for athlete A
     box_b: List[float]  # [x1, y1, x2, y2] (xyxy) bounding box for athlete B
-    player_mapping: Optional[Dict[str, str]] = None  # optional name mapping
+    # Stream 0b: human-confirmed obj_id -> player_id binding
+    # { "1": player_id_A, "2": player_id_B }. AUTHORITATIVE track_id<->player_id;
+    # threaded onto the replacement TrackRequest and used to seed init_boxes
+    # (obj_id "1" -> box_a, "2" -> box_b) so track_ids never flip on resume.
+    player_mapping: Optional[Dict[str, str]] = None
 
 
 class TrackResponse(BaseModel):

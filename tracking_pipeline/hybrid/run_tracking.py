@@ -32,6 +32,7 @@ class _TrackingContext:
 def run_tracking(
     video_path,
     output_dir,
+    # LEGACY: box_a/box_b superseded by player_mapping (track_id<->player_id). Remove once all paths consume bindings.
     box_a,
     box_b,
     start_frame=0,
@@ -51,6 +52,7 @@ def run_tracking(
     frame_stride=1,
     prop_stride=1,
     enable_pose=True,
+    player_mapping=None,
 ):
     """
     Main tracking loop: SAM2 propagation with user intervention on track loss.
@@ -180,7 +182,26 @@ def run_tracking(
     print("Initializing tracks & identity gallery...")
     print("=" * 60)
 
-    init_boxes = {1: box_a, 2: box_b}
+    # Stream 0b: seed init_boxes from the CONFIRMED human binding when present.
+    # player_mapping is { "<obj_id>": "<player_id>" } with obj_id "1" == box_a and
+    # "2" == box_b (the correction-modal contract). Building init_boxes keyed by
+    # the confirmed obj_id makes the track_id<->box assignment authoritative, so
+    # track_ids never flip across the resume job chain.
+    obj_id_to_box = {1: box_a, 2: box_b}
+    if player_mapping:
+        init_boxes = {
+            int(obj_id): obj_id_to_box[int(obj_id)]
+            for obj_id in player_mapping
+            if int(obj_id) in obj_id_to_box
+        }
+        if not init_boxes:
+            # LEGACY: fall back to positional box_a/box_b if the mapping carried no
+            # usable obj_ids. Remove once all paths consume the confirmed binding.
+            init_boxes = {1: box_a, 2: box_b}
+    else:
+        # LEGACY: positional seeding (box_a=track 1, box_b=track 2) — used on the
+        # initial submit and any resume that did not carry a confirmed binding.
+        init_boxes = {1: box_a, 2: box_b}
 
     # Add initial boxes to SAM2 + build identity gallery
     for track_id, box in init_boxes.items():

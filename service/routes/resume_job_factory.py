@@ -45,8 +45,12 @@ def build_resume_params(
     if body is not None:
         resume_params = {
             **orig_request,
+            # LEGACY: box_a/box_b superseded by player_mapping (track_id<->player_id). Remove once all paths consume bindings.
             "box_a": body.box_a,
             "box_b": body.box_b,
+            # Stream 0b: carry the confirmed obj_id->player_id binding onto the
+            # replacement job so tracking re-seeds init_boxes from it (no flip).
+            "player_mapping": body.player_mapping,
             **track_overrides,
             **resume_plan_to_request_fields(resume_plan),
         }

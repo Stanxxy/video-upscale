@@ -79,6 +79,7 @@ def capture_frame_jpeg(video_path: str, frame_idx: int) -> Optional[bytes]:
 
 def run_tracking_job(
     video_path: str,
+    # LEGACY: box_a/box_b superseded by player_mapping (track_id<->player_id). Remove once all paths consume bindings.
     box_a: list,
     box_b: list,
     output_dir: str,
@@ -98,6 +99,7 @@ def run_tracking_job(
     progress_cb: Optional[Callable[[int, int], None]] = None,
     detection_cb: Optional[Callable[..., Optional[tuple]]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
+    player_mapping: Optional[dict] = None,
 ) -> str:
     """
     Run the SAM2 tracking loop with on-demand YOLO for track loss.
@@ -147,6 +149,7 @@ def run_tracking_job(
         frame_stride=frame_stride,
         prop_stride=prop_stride,
         enable_pose=enable_pose,
+        player_mapping=player_mapping,
     )
 
     if json_path is None:
