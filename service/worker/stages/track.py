@@ -248,6 +248,7 @@ async def run_track_stage(ctx: WorkerRunContext) -> None:
                 progress_cb=tracking_progress_cb,
                 detection_cb=detection_cb,
                 should_stop=lambda: job_store.is_cancelled(job_id),
+                athlete_bindings=request.athlete_bindings,
             ),
         )
     logger.info(

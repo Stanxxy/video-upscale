@@ -16,8 +16,26 @@ def frame_to_timestamp(frame_idx: int, fps: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def clip_to_event(clip: dict, video_id: UUID, fps: float) -> VideoEventWithCandidates:
-    """Transform a pipeline clip dict into a VideoEventWithCandidates."""
+def _bindings_by_player_id(athlete_bindings) -> dict:
+    """Index athlete_bindings by player_id for O(1) track_id/name resolution."""
+    out = {}
+    for b in (athlete_bindings or []):
+        # Support both AthleteBinding pydantic objects and plain dicts.
+        pid = getattr(b, "player_id", None) if not isinstance(b, dict) else b.get("player_id")
+        if pid:
+            out[pid] = b
+    return out
+
+
+def clip_to_event(
+    clip: dict, video_id: UUID, fps: float, athlete_bindings=None,
+) -> VideoEventWithCandidates:
+    """Transform a pipeline clip dict into a VideoEventWithCandidates.
+
+    Identity is grounded: Gemini emits ``actor_player_id`` (a real player_id from the
+    confirmed bindings). We resolve track_id/player_name from the binding. gi-color /
+    top-bottom live only in ``reasoning`` and become the ``role`` *descriptor*.
+    """
     # Use action/technique fields directly — Gemini outputs valid ActionType/TechniqueType values
     action = clip.get("action", "other")
     technique = clip.get("technique", "other")
@@ -26,13 +44,40 @@ def clip_to_event(clip: dict, video_id: UUID, fps: float) -> VideoEventWithCandi
         action = "other"
     if technique not in VALID_TECHNIQUES:
         technique = "other"
+
+    by_pid = _bindings_by_player_id(athlete_bindings)
+    player_id = clip.get("actor_player_id")
+    binding = by_pid.get(player_id)
+    if binding is not None and isinstance(binding, dict):
+        player_name = binding.get("player_name")
+        track_id = binding.get("track_id")
+    elif binding is not None:
+        player_name = getattr(binding, "player_name", None)
+        track_id = getattr(binding, "track_id", None)
+    else:
+        player_name = None
+        track_id = None
+
+    # role becomes a descriptor only (truncated reasoning), never the identity.
+    role_descriptor = (clip.get("reasoning", "") or "")[:80] or "Unknown"
+
     candidate = VideoEventCandidate(
-        role=clip.get("role", "Unknown"),
+        role=role_descriptor,
+        player_name=player_name,
         action=action,
         technique=technique,
         confidence=clip.get("confidence", 0.0),
         notes=clip.get("specific_technique", ""),
     )
+    # Grounded identity fields. The installed shared VideoEventCandidate may not yet
+    # declare these (Stream 3); stash them so publish_events can inject the keys into
+    # the emitted JSON, matching the backend listener / from_dynamodb_dict contract.
+    candidate._grounded_identity = {  # type: ignore[attr-defined]
+        "player_id": player_id,
+        "track_id": track_id,
+        "identity_uncertain": bool(clip.get("identity_uncertain", False)),
+    }
+
     return VideoEventWithCandidates(
         video_id=video_id,
         start_time=frame_to_timestamp(clip.get("start_frame", 0), fps),
@@ -64,6 +109,7 @@ class SNSPublisher:
         self, analysis: dict, video_id: UUID, fps: float,
         job_id: str = "", result_s3_uri: str = "",
         tracking_s3_uri: str = "",
+        athlete_bindings=None,
     ) -> int:
         """Publish each clip as a VideoEventWithCandidates SNS message,
         followed by an analysis_complete boundary event. Returns clip count."""
@@ -72,8 +118,19 @@ class SNSPublisher:
         count = 0
 
         for idx, clip in enumerate(clips, start=1):
-            event = clip_to_event(clip, video_id, fps)
+            event = clip_to_event(clip, video_id, fps, athlete_bindings=athlete_bindings)
             message = event.model_dump(mode="json")
+            # Inject grounded identity keys onto each candidate so the emitted JSON matches
+            # the (Stream 3) VideoEventCandidate contract: player_id, track_id, identity_uncertain.
+            # The backend listener / from_dynamodb_dict consumes these directly.
+            for cand_model, cand_json in zip(
+                event.event_candidates, message.get("event_candidates", [])
+            ):
+                grounded = getattr(cand_model, "_grounded_identity", None)
+                if grounded:
+                    cand_json["player_id"] = grounded.get("player_id")
+                    cand_json["track_id"] = grounded.get("track_id")
+                    cand_json["identity_uncertain"] = grounded.get("identity_uncertain")
             self.client.publish(
                 TopicArn=self.topic_arn,
                 Message=json.dumps(message, default=str),

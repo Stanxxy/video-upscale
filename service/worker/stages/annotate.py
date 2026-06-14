@@ -38,6 +38,7 @@ async def run_annotate_stage(ctx: WorkerRunContext) -> None:
                 lambda: annotate_video(
                     tracked_video_path, analysis_result,
                     annotated_path, fps, clip_start_frame,
+                    athlete_bindings=ctx.request.athlete_bindings,
                 ),
             )
         except Exception as e:

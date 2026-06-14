@@ -25,6 +25,91 @@ def _gemini_client(api_key: str, timeout_ms: int) -> genai.Client:
     )
 
 
+def _player_ids_from_refs(player_references) -> list:
+    """Extract the ordered list of player_ids from labelled references.
+
+    Returns [] when references carry no player_id (legacy unlabelled refs) so the
+    caller can decide not to constrain actor_player_id.
+    """
+    if not player_references:
+        return []
+    ids = []
+    for ref in player_references:
+        pid = ref.get("player_id")
+        if pid:
+            ids.append(pid)
+    return ids
+
+
+def _build_response_schema(player_ids):
+    """Gemini structured-output schema for the sliding-window analyzer.
+
+    Mirrors backend ``models/functions.py:build_response_schema`` (proven pattern:
+    ``genai.types.Schema`` + ``response_mime_type='application/json'``).
+
+    ``actor_player_id`` is a STRING enum of the video's player_ids — the grounded
+    identity. String enum is the proven, integer-enum-free pattern. When player_ids
+    is empty the field is an unconstrained STRING (legacy/no-reference path).
+    """
+    actor_schema_kwargs = dict(
+        type=types.Type.STRING,
+        description=(
+            "The player_id of the athlete performing the technique. MUST be one "
+            "of the provided players' player_id values."
+        ),
+    )
+    if player_ids:
+        actor_schema_kwargs["enum"] = list(player_ids)
+
+    clip_schema = types.Schema(
+        type=types.Type.OBJECT,
+        required=["start_frame", "end_frame", "action", "technique", "actor_player_id"],
+        properties={
+            "start_frame": types.Schema(type=types.Type.INTEGER),
+            "end_frame": types.Schema(type=types.Type.INTEGER),
+            "action": types.Schema(
+                type=types.Type.STRING,
+                description="Action Type enum value from the taxonomy (snake_case).",
+            ),
+            "technique": types.Schema(
+                type=types.Type.STRING,
+                description="Technique Type enum value from the taxonomy (snake_case); 'other' if none fits.",
+            ),
+            "specific_technique": types.Schema(
+                type=types.Type.STRING,
+                description="Human-readable technique name, e.g. 'Double Leg Takedown'.",
+            ),
+            "actor_player_id": types.Schema(**actor_schema_kwargs),
+            "identity_uncertain": types.Schema(
+                type=types.Type.BOOLEAN,
+                description="True if the athletes are too entangled to tell apart confidently.",
+            ),
+            "reasoning": types.Schema(
+                type=types.Type.STRING,
+                description="Free-text rationale. May mention gi color / top-bottom — descriptor ONLY, never identity.",
+            ),
+            "confidence": types.Schema(
+                type=types.Type.NUMBER,
+                description="Confidence 0.0-1.0.",
+                format="float",
+            ),
+        },
+    )
+
+    return types.Schema(
+        type=types.Type.OBJECT,
+        required=["clips"],
+        properties={
+            "current_context_summary": types.Schema(type=types.Type.STRING),
+            "clips": types.Schema(
+                type=types.Type.ARRAY,
+                description="One entry per detected grappling clip in this window.",
+                items=clip_schema,
+            ),
+        },
+    )
+
+
 class BJJTechniqueAnalyzer:
     def __init__(self, api_key, taxonomy_path=None, request_timeout_ms: Optional[int] = None):
         if not api_key:
@@ -53,9 +138,17 @@ class BJJTechniqueAnalyzer:
 
         ref_instruction = ""
         if player_references:
-            ref_names = ", ".join(ref["player_name"] for ref in player_references)
+            ref_lines = ", ".join(
+                f"{ref['player_name']} (player_id {ref.get('player_id', '?')})"
+                for ref in player_references
+            )
             ref_instruction = f"""
-        7. **Athlete Identification**: Reference images of the athletes are provided below. Use them to identify who is performing each technique. The athletes are: {ref_names}. Use their names in the "role" field instead of generic descriptions."""
+        7. **Athlete Identification (grounded)**: Reference images below are each labelled
+           with a player name and player_id. The players in this video are: {ref_lines}.
+           For each clip, set `actor_player_id` to the player_id of the athlete performing the
+           technique, chosen ONLY from the provided players. If the two athletes are too entangled
+           to tell apart, set `identity_uncertain: true` and give your best guess. Mention gi color
+           or top/bottom ONLY inside `reasoning`, never as the identity."""
 
         prompt = f"""
         Here is a sequence of {len(frames)} frames from a BJJ match.
@@ -67,7 +160,8 @@ class BJJTechniqueAnalyzer:
         1. **Analyze the Flow**: Use frame numbers to define start/end points.
         2. **Resolve Ambiguity**: Use biomechanics.
         3. **Context Awareness**: Use PREVIOUS CONTEXT.
-        4. **Identify the Actor**: For each technique, identify which athlete performs it by their visual appearance (e.g. "athlete in white gi", "athlete in blue gi", "top athlete", "bottom athlete").
+        4. **Identify the Actor**: For each technique, set `actor_player_id` to the player_id of the
+           athlete performing it, chosen from the provided players (see Athlete Identification below).
         5. **Use Enum Values**: The `action` and `technique` fields MUST use exact values from the taxonomy. Do NOT invent new values.
         6. **Generate Output**: Return ONLY valid JSON matching this format:
         {{
@@ -79,8 +173,9 @@ class BJJTechniqueAnalyzer:
                     "action": "one of the Action Type enum values from the taxonomy (e.g. takedown, submission_attempt, pass, sweep, guard_bottom, mount, back_control, etc.)",
                     "technique": "one of the Technique Type enum values from the taxonomy (e.g. double_leg, armbar, guillotine, knee_cut_pass, etc.) — use 'other' if nothing fits",
                     "specific_technique": "string (human-readable name, e.g. 'Double Leg Takedown')",
-                    "role": "string describing which athlete performs the technique",
-                    "reasoning": "string",
+                    "actor_player_id": "the player_id of the athlete performing the technique (must be one of the provided players)",
+                    "identity_uncertain": false,
+                    "reasoning": "string — may mention gi color / top-bottom as a descriptor, never as identity",
                     "confidence": 0.0-1.0
                 }}
             ]
@@ -90,11 +185,37 @@ class BJJTechniqueAnalyzer:
         contents = [prompt]
         if player_references:
             for ref in player_references:
-                contents.append(f"Reference image of {ref['player_name']}:")
+                contents.append(
+                    f"Player {ref['player_name']} (player_id {ref.get('player_id', '?')}):"
+                )
                 contents.append(ref["image"])
         contents.extend(frames)
 
         return system_instruction, contents
+
+    @staticmethod
+    def _validate_actor_player_ids(parsed_text: str, player_ids) -> None:
+        """Strict validation: every clip's actor_player_id must be in the enum.
+
+        Raises ValueError on any out-of-enum value. NO silent gi-color fallback —
+        a wrong/missing identity is a hard error so the pipeline never re-introduces
+        ungrounded free-text identity. No-op when player_ids is empty (legacy path).
+        """
+        if not player_ids:
+            return
+        try:
+            parsed = json.loads(parsed_text)
+        except (ValueError, TypeError):
+            # Parsing handled elsewhere; nothing to validate on unparseable text.
+            return
+        allowed = set(player_ids)
+        for clip in parsed.get("clips", []):
+            actor = clip.get("actor_player_id")
+            if actor is not None and actor not in allowed:
+                raise ValueError(
+                    f"Gemini returned out-of-enum actor_player_id={actor!r}; "
+                    f"allowed player_ids={sorted(allowed)}"
+                )
 
     @staticmethod
     def _parse_response_text(text: str) -> str:
@@ -117,6 +238,7 @@ class BJJTechniqueAnalyzer:
         system_instruction, contents = self._build_contents_and_prompt(
             frames, frame_indices, previous_context, player_references,
         )
+        player_ids = _player_ids_from_refs(player_references)
 
         try:
             logger.info(
@@ -129,6 +251,8 @@ class BJJTechniqueAnalyzer:
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     temperature=0.2,
+                    response_mime_type="application/json",
+                    response_schema=_build_response_schema(player_ids),
                 ),
             )
             text = response.text
@@ -137,10 +261,15 @@ class BJJTechniqueAnalyzer:
                 len(text) if text else 0,
             )
             logger.debug("Gemini async raw response: %.500s", text)
-            return self._parse_response_text(text)
+            parsed = self._parse_response_text(text)
         except Exception as e:
             logger.error("Gemini single-agent async call failed: %s", e, exc_info=True)
             return json.dumps({"error": str(e)})
+
+        # Strict identity validation OUTSIDE the API try/except: an out-of-enum
+        # actor_player_id is a hard error and must propagate (no gi-color fallback).
+        self._validate_actor_player_ids(parsed, player_ids)
+        return parsed
 
     def analyze_sequence(self, frames, frame_indices, previous_context=None, player_references=None):
         if not frames:
@@ -149,6 +278,7 @@ class BJJTechniqueAnalyzer:
         system_instruction, contents = self._build_contents_and_prompt(
             frames, frame_indices, previous_context, player_references,
         )
+        player_ids = _player_ids_from_refs(player_references)
 
         try:
             logger.info(
@@ -161,6 +291,8 @@ class BJJTechniqueAnalyzer:
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     temperature=0.2,
+                    response_mime_type="application/json",
+                    response_schema=_build_response_schema(player_ids),
                 ),
             )
 
@@ -170,10 +302,15 @@ class BJJTechniqueAnalyzer:
                 len(text) if text else 0,
             )
             logger.debug("Gemini raw response: %.500s", text)
-            return self._parse_response_text(text)
+            parsed = self._parse_response_text(text)
         except Exception as e:
             logger.error("Gemini single-agent call failed: %s", e, exc_info=True)
             return json.dumps({"error": str(e)})
+
+        # Strict identity validation OUTSIDE the API try/except: an out-of-enum
+        # actor_player_id is a hard error and must propagate (no gi-color fallback).
+        self._validate_actor_player_ids(parsed, player_ids)
+        return parsed
 
 
 class BJJMultiAgentAnalyzer:
@@ -196,10 +333,14 @@ class BJJMultiAgentAnalyzer:
 
         ref_instruction = ""
         if player_references:
-            ref_names = ", ".join(ref["player_name"] for ref in player_references)
+            ref_lines = ", ".join(
+                f"{ref['player_name']} (player_id {ref.get('player_id', '?')})"
+                for ref in player_references
+            )
             ref_instruction = f"""
-        Reference images of the athletes are provided. Use them to identify who is performing each technique.
-        The athletes are: {ref_names}. Use their names instead of generic descriptions."""
+        Reference images below are each labelled with a player name and player_id.
+        The players in this video are: {ref_lines}. Refer to each athlete by their
+        player name / player_id, never by gi color (gi color is a descriptor only)."""
 
         prompt = f"""
         You are acting as the {role_name}.
@@ -209,18 +350,20 @@ class BJJMultiAgentAnalyzer:
 
         Output your analysis. Be specific and detailed according to your role.
         For each technique or action identified, specify which athlete performs it
-        by their visual appearance (e.g. "athlete in white gi", "athlete in blue gi",
-        "top athlete", "bottom athlete").{ref_instruction}
+        by their player name / player_id (see the labelled references). You MAY mention
+        gi color or top/bottom as a descriptor, but never as the athlete's identity.{ref_instruction}
         Do NOT output JSON. Output a raw analysis paragraph.
         """
 
         try:
             contents = [prompt]
 
-            # Add player reference images before the crop frames
+            # Add player reference images before the crop frames (labelled by identity)
             if player_references:
                 for ref in player_references:
-                    contents.append(f"Reference image of {ref['player_name']}:")
+                    contents.append(
+                        f"Player {ref['player_name']} (player_id {ref.get('player_id', '?')}):"
+                    )
                     contents.append(ref["image"])
 
             contents.extend(frames)
@@ -264,7 +407,7 @@ class BJJMultiAgentAnalyzer:
         tasks.append(
             self.run_agent(
                 "Biomechanist",
-                "Focus ONLY on the physics. Describe limb positions, joint angles, leverage points, and entanglements. Identify which specific joints are under pressure. Always specify which athlete (by appearance) is performing each action.",
+                "Focus ONLY on the physics. Describe limb positions, joint angles, leverage points, and entanglements. Identify which specific joints are under pressure. Always specify which athlete (by player name / player_id) is performing each action.",
                 frames, frame_indices, previous_context, temperature=0.8,
                 player_references=player_references,
             )
@@ -274,7 +417,7 @@ class BJJMultiAgentAnalyzer:
         tasks.append(
             self.run_agent(
                 "Referee",
-                "Focus on IBJJF/ADCC scoring standards. Has a position been held for 3 seconds? Is a submission 'real' or just a setup? Is the pass complete? Always specify which athlete (by appearance) scores or attacks.",
+                "Focus on IBJJF/ADCC scoring standards. Has a position been held for 3 seconds? Is a submission 'real' or just a setup? Is the pass complete? Always specify which athlete (by player name / player_id) scores or attacks.",
                 frames, frame_indices, previous_context, temperature=0.6,
                 player_references=player_references,
             )
@@ -284,7 +427,7 @@ class BJJMultiAgentAnalyzer:
         tasks.append(
             self.run_agent(
                 "Tactician",
-                "Focus on the 'Why'. What is the attacker trying to do? Are they baiting? Describe the strategic flow of the match. Always specify which athlete (by appearance) is driving the action.",
+                "Focus on the 'Why'. What is the attacker trying to do? Are they baiting? Describe the strategic flow of the match. Always specify which athlete (by player name / player_id) is driving the action.",
                 frames, frame_indices, previous_context, temperature=0.9,
                 player_references=player_references,
             )
@@ -298,6 +441,20 @@ class BJJMultiAgentAnalyzer:
         logger.info("Gemini multi-agent: specialists finished; starting Judge")
         full_report_text = "\n".join(agent_reports)
 
+        player_ids = _player_ids_from_refs(player_references)
+        if player_ids:
+            id_hint = (
+                "For each technique, set `actor_player_id` to the player_id of the athlete "
+                f"performing it, chosen ONLY from these player_ids: {player_ids}. If the athletes "
+                "are too entangled to tell apart, set `identity_uncertain: true` and your best guess. "
+                "Mention gi color / top-bottom only in `reasoning`, never as identity."
+            )
+        else:
+            id_hint = (
+                "For each technique, set `actor_player_id` to the player_id of the athlete "
+                "performing it. Mention gi color / top-bottom only in `reasoning`, never as identity."
+            )
+
         # The Judge
         judge_prompt = f"""
         You are the Head Judge.
@@ -308,7 +465,7 @@ class BJJMultiAgentAnalyzer:
         YOUR TASK:
         1. Synthesize these views into a single ground truth.
         2. Resolve conflicts.
-        3. For each technique, identify which athlete performs it by their visual appearance.
+        3. {id_hint}
         4. Use EXACT enum values from the taxonomy for `action` and `technique` fields. Do NOT invent new values.
         5. Output the final analysis in the required JSON format:
         {{
@@ -320,8 +477,9 @@ class BJJMultiAgentAnalyzer:
                     "action": "one of the Action Type enum values from the taxonomy (e.g. takedown, submission_attempt, pass, sweep, guard_bottom, mount, back_control, etc.)",
                     "technique": "one of the Technique Type enum values from the taxonomy (e.g. double_leg, armbar, guillotine, knee_cut_pass, etc.) — use 'other' if nothing fits",
                     "specific_technique": "string (human-readable name, e.g. 'Double Leg Takedown')",
-                    "role": "string describing which athlete performs the technique",
-                    "reasoning": "string",
+                    "actor_player_id": "the player_id of the athlete performing the technique (must be one of the provided players)",
+                    "identity_uncertain": false,
+                    "reasoning": "string — may mention gi color / top-bottom as a descriptor, never as identity",
                     "confidence": 0.0-1.0
                 }}
             ]
@@ -349,6 +507,8 @@ class BJJMultiAgentAnalyzer:
                     config=types.GenerateContentConfig(
                         system_instruction=taxonomy_text + "\n\nYou are the Synthesizer. Output JSON only.",
                         temperature=0.1,
+                        response_mime_type="application/json",
+                        response_schema=_build_response_schema(player_ids),
                     ),
                 ),
                 timeout=self._request_timeout_s,
@@ -364,7 +524,7 @@ class BJJMultiAgentAnalyzer:
             elif "```" in text:
                 text = text.split("```")[1].split("```")[0]
 
-            return text.strip()
+            parsed = text.strip()
 
         except asyncio.TimeoutError:
             logger.error(
@@ -375,6 +535,10 @@ class BJJMultiAgentAnalyzer:
         except Exception as e:
             logger.error("Gemini multi-agent Judge failed: %s", e, exc_info=True)
             return json.dumps({"error": str(e)})
+
+        # Strict identity validation OUTSIDE the API try/except — out-of-enum is a hard error.
+        BJJTechniqueAnalyzer._validate_actor_player_ids(parsed, player_ids)
+        return parsed
 
 
 # Wrapper for synchronous calls

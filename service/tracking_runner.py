@@ -98,6 +98,7 @@ def run_tracking_job(
     progress_cb: Optional[Callable[[int, int], None]] = None,
     detection_cb: Optional[Callable[..., Optional[tuple]]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
+    athlete_bindings=None,
 ) -> str:
     """
     Run the SAM2 tracking loop with on-demand YOLO for track loss.
@@ -147,6 +148,7 @@ def run_tracking_job(
         frame_stride=frame_stride,
         prop_stride=prop_stride,
         enable_pose=enable_pose,
+        athlete_bindings=athlete_bindings,
     )
 
     if json_path is None:

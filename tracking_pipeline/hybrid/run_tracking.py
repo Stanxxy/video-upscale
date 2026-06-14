@@ -51,6 +51,7 @@ def run_tracking(
     frame_stride=1,
     prop_stride=1,
     enable_pose=True,
+    athlete_bindings=None,
 ):
     """
     Main tracking loop: SAM2 propagation with user intervention on track loss.
@@ -180,7 +181,14 @@ def run_tracking(
     print("Initializing tracks & identity gallery...")
     print("=" * 60)
 
-    init_boxes = {1: box_a, 2: box_b}
+    # Seed init_boxes from the human-confirmed binding (N-athlete ready: {track_id: box}).
+    # LEGACY fallback to {1: box_a, 2: box_b} only when no bindings are supplied — remove once
+    # all callers pass athlete_bindings.
+    init_boxes = {
+        b.track_id: b.box
+        for b in (athlete_bindings or [])
+        if getattr(b, "box", None)
+    } or {1: box_a, 2: box_b}
 
     # Add initial boxes to SAM2 + build identity gallery
     for track_id, box in init_boxes.items():
@@ -194,7 +202,7 @@ def run_tracking(
             mask=mask, box=box,
             keypoints=kpts, scores=scores,
         )
-        label = "A" if track_id == 1 else "B"
+        label = chr(ord("A") + track_id - 1) if 1 <= track_id <= 26 else str(track_id)
         print(f"  Athlete {label} (track {track_id}): "
               f"box={[round(c) for c in box]}, mask={mask.sum()} px")
 
