@@ -32,6 +32,7 @@ class _TrackingContext:
 def run_tracking(
     video_path,
     output_dir,
+    # LEGACY: box_a/box_b superseded by player_mapping (track_id<->player_id). Remove once all paths consume bindings.
     box_a,
     box_b,
     start_frame=0,
@@ -52,6 +53,7 @@ def run_tracking(
     prop_stride=1,
     enable_pose=True,
     athlete_bindings=None,
+    player_mapping=None,
 ):
     """
     Main tracking loop: SAM2 propagation with user intervention on track loss.
@@ -181,14 +183,33 @@ def run_tracking(
     print("Initializing tracks & identity gallery...")
     print("=" * 60)
 
-    # Seed init_boxes from the human-confirmed binding (N-athlete ready: {track_id: box}).
-    # LEGACY fallback to {1: box_a, 2: box_b} only when no bindings are supplied — remove once
-    # all callers pass athlete_bindings.
+    # Seed init_boxes from the human-confirmed identity binding so track_ids never
+    # flip across the resume job chain. Three sources, in precedence order:
+    #
+    #   1. athlete_bindings (Stream 2, CANONICAL, N-athlete ready: {track_id: box}).
+    #      Carries track_id↔player_id↔box directly — the single source of truth when
+    #      present; drives both init_boxes seeding and identity grounding.
+    #   2. player_mapping (Stream 0b, resume-path binding one hop upstream).
+    #      { "<obj_id>": "<player_id>" } with obj_id "1" == box_a, "2" == box_b
+    #      (the correction-modal contract). Honored when the canonical
+    #      athlete_bindings is absent — keys init_boxes by the CONFIRMED obj_ids so
+    #      the human correction still drives seeding on resume.
+    #   3. LEGACY positional {1: box_a, 2: box_b} — initial submit, or any resume
+    #      that carried neither binding. Remove once all paths consume bindings.
     init_boxes = {
         b.track_id: b.box
         for b in (athlete_bindings or [])
         if getattr(b, "box", None)
-    } or {1: box_a, 2: box_b}
+    }
+    if not init_boxes and player_mapping:
+        obj_id_to_box = {1: box_a, 2: box_b}
+        init_boxes = {
+            int(obj_id): obj_id_to_box[int(obj_id)]
+            for obj_id in player_mapping
+            if int(obj_id) in obj_id_to_box
+        }
+    if not init_boxes:
+        init_boxes = {1: box_a, 2: box_b}
 
     # Add initial boxes to SAM2 + build identity gallery
     for track_id, box in init_boxes.items():
