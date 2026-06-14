@@ -163,12 +163,72 @@
   .badge-a { background: rgba(74,222,128,0.15); color: var(--green); border: 1px solid rgba(74,222,128,0.3); }
   .badge-b { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
   .badge-hint { background: rgba(251,191,36,0.15); color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 10px 18px; cursor: pointer; font-size: 0.9rem; font-weight: 500;
+    color: var(--text-dim); border: none; background: none;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Identity tab */
+  .ref-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: flex-start; }
+  .ref-row > input { flex: 1; min-width: 0; }
+  .ref-row .ref-del {
+    flex-shrink: 0; width: auto; margin-top: 0; padding: 8px 10px;
+    background: var(--red); color: #fff; border: none; border-radius: 6px; cursor: pointer;
+  }
+  .ref-fields { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+  .gate-banner {
+    padding: 14px 18px; border-radius: 10px; font-size: 1.05rem; font-weight: 700;
+    margin-bottom: 16px; text-align: center; letter-spacing: 0.5px;
+  }
+  .gate-pass { background: rgba(74,222,128,0.15); color: var(--green); border: 1px solid rgba(74,222,128,0.4); }
+  .gate-fail { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.4); }
+  .gate-sub { display: block; font-size: 0.78rem; font-weight: 400; color: var(--text-dim); margin-top: 6px; }
+
+  table.clips { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 16px; }
+  table.clips th, table.clips td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  table.clips th { color: var(--text-dim); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+  .player-name { font-weight: 600; color: var(--accent); }
+  .uncertain-badge {
+    display: inline-block; font-size: 0.7rem; padding: 2px 7px; border-radius: 4px;
+    background: rgba(251,191,36,0.18); color: var(--yellow); border: 1px solid rgba(251,191,36,0.35);
+  }
+  .offender-row { background: rgba(248,113,113,0.08); }
+  .reasoning { color: var(--text-dim); font-size: 0.78rem; }
+
+  .preview-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px; margin-top: 8px;
+  }
+  .preview-grid img { width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .preview-cap { font-size: 0.7rem; color: var(--text-dim); text-align: center; margin-top: 2px; }
+  .eyeball-note {
+    font-size: 0.8rem; color: var(--yellow); background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px;
+  }
 </style>
 </head>
 <body>
 <div class="container">
-  <h1>BJJ Tracking Service — QA Client</h1>
+  <h1>BJJ Vision Engine — QA Client</h1>
 
+  <div class="tabs">
+    <button class="tab active" id="tab-tracking" onclick="switchTab('tracking')">Tracking</button>
+    <button class="tab" id="tab-identity" onclick="switchTab('identity')">Identity (Gemini)</button>
+  </div>
+
+  <!-- ===================== TRACKING TAB ===================== -->
+  <div class="tab-panel active" id="panel-tracking">
   <div class="grid">
     <!-- LEFT PANEL: Config + Log -->
     <div class="left-panel">
@@ -303,6 +363,82 @@
       </div>
     </div>
   </div>
+  </div><!-- /panel-tracking -->
+
+  <!-- ===================== IDENTITY (GEMINI) TAB ===================== -->
+  <div class="tab-panel" id="panel-identity">
+  <div class="grid">
+    <!-- LEFT: inputs -->
+    <div class="left-panel">
+      <div class="card">
+        <h2>Stream 2 Identity Gate</h2>
+        <p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:10px; line-height:1.5;">
+          Runs ONLY the Gemini analyzer (no GPU/tracking) on a short clip + labelled
+          player references and returns the grounded <code>actor_player_id</code>.
+          PASS iff every clip's identity is one of your players. The thumbnails are the
+          real gate — confirm the named player matches the athlete doing the technique.
+        </p>
+
+        <label>Service URL</label>
+        <input id="id-service-url" value="http://localhost:8000">
+
+        <label>Video S3 URI or URL</label>
+        <input id="id-video" value="s3://bjj-video-analysis/users/3f76c2b6-8302-4760-a008-d02dfbd24835/3799b4cc-673e-4798-9d3a-1a74b7257c26/clip_001.mp4">
+
+        <div class="row">
+          <div>
+            <label>Start Frame (optional)</label>
+            <input id="id-start-frame" type="number" placeholder="0">
+          </div>
+          <div>
+            <label>End Frame (optional)</label>
+            <input id="id-end-frame" type="number" placeholder="end">
+          </div>
+        </div>
+
+        <label style="margin-top:14px;">Player References</label>
+        <div id="id-refs"></div>
+        <button class="btn btn-sm btn-primary" style="margin-top:6px;" onclick="addRefRow()">+ Add player reference</button>
+
+        <button id="id-btn-run" class="btn btn-primary" onclick="runIdentityAnalysis()">Run Identity Analysis</button>
+      </div>
+
+      <div class="card">
+        <h2>Message Log</h2>
+        <div id="id-log"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: results -->
+    <div class="right-panel">
+      <div class="status-bar">
+        <div id="id-status-dot" class="status-dot"></div>
+        <span id="id-status-text" class="status-text">Idle</span>
+      </div>
+
+      <div id="id-gate-banner" style="display:none"></div>
+
+      <div class="card" id="id-clips-card" style="display:none">
+        <h2>Attributed Clips</h2>
+        <div id="id-clips"></div>
+      </div>
+
+      <div class="card" id="id-preview-card" style="display:none">
+        <h2>Frame Preview — Human Gate</h2>
+        <div class="eyeball-note">
+          No ground truth exists. YOU are the gate: confirm the player NAME attributed
+          to each clip matches the athlete actually performing the technique in these frames.
+        </div>
+        <div class="preview-grid" id="id-preview"></div>
+      </div>
+
+      <div class="card" id="id-raw-card" style="display:none">
+        <h2>Raw Response</h2>
+        <pre id="id-raw" style="font-size:0.75rem; color:var(--text-dim); white-space:pre-wrap; max-height:240px; overflow:auto;"></pre>
+      </div>
+    </div>
+  </div>
+  </div><!-- /panel-identity -->
 </div>
 
 <script>
@@ -893,6 +1029,197 @@ function updateHistory() {
     `<div>${i === 0 ? '🟢' : '→'} ${id}${i === jobHistory.length - 1 ? ' (current)' : ''}</div>`
   ).join('');
 }
+
+// ============================================================
+// Tab switcher
+// ============================================================
+function switchTab(name) {
+  for (const t of ['tracking', 'identity']) {
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+    document.getElementById('panel-' + t).classList.toggle('active', t === name);
+  }
+}
+
+// ============================================================
+// Identity (Gemini) tab — Stream 2 live gate
+// ============================================================
+// Prefilled demo case so the gate is one-click.
+const ID_DEFAULT_REFS = [
+  { player_id: '1732d982-dec6-45c6-9425-880658820025', player_name: 'sliu1143',
+    image: 's3://bjj-video-analysis/player-references/3799b4cc-673e-4798-9d3a-1a74b7257c26/1732d982-dec6-45c6-9425-880658820025.jpg' },
+  { player_id: 'dcbec0b6-3c71-4c73-9ea9-b44fc8bf92f7', player_name: 'Stan Liu',
+    image: 's3://bjj-video-analysis/player-references/3799b4cc-673e-4798-9d3a-1a74b7257c26/dcbec0b6-3c71-4c73-9ea9-b44fc8bf92f7.jpg' },
+];
+
+function idLog(text, cls = '') {
+  const el = document.getElementById('id-log');
+  const ts = new Date().toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-ts">[${ts}]</span> <span class="${cls}">${escHtml(text)}</span>`;
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+}
+
+function refRowHtml(ref = { player_id: '', player_name: '', image: '' }) {
+  const row = document.createElement('div');
+  row.className = 'ref-row';
+  row.innerHTML = `
+    <div class="ref-fields">
+      <input class="ref-name" placeholder="player name" value="${escHtml(ref.player_name)}">
+      <input class="ref-pid" placeholder="player_id (uuid)" value="${escHtml(ref.player_id)}">
+      <input class="ref-img" placeholder="image s3:// URI or URL" value="${escHtml(ref.image)}">
+    </div>
+    <button class="ref-del" title="remove" onclick="this.closest('.ref-row').remove()">✕</button>`;
+  return row;
+}
+
+function addRefRow(ref) {
+  document.getElementById('id-refs').appendChild(refRowHtml(ref));
+}
+
+function initIdentityRefs() {
+  const host = document.getElementById('id-refs');
+  host.innerHTML = '';
+  ID_DEFAULT_REFS.forEach(r => host.appendChild(refRowHtml(r)));
+}
+
+function collectRefs() {
+  const rows = document.querySelectorAll('#id-refs .ref-row');
+  const refs = [];
+  for (const row of rows) {
+    const player_name = row.querySelector('.ref-name').value.trim();
+    const player_id = row.querySelector('.ref-pid').value.trim();
+    const image = row.querySelector('.ref-img').value.trim();
+    if (!player_id && !player_name && !image) continue;
+    refs.push({ player_id, player_name, image_s3_uri_or_url: image });
+  }
+  return refs;
+}
+
+function setIdStatus(text, cls) {
+  document.getElementById('id-status-text').textContent = text;
+  const dot = document.getElementById('id-status-dot');
+  dot.className = 'status-dot' + (cls ? ' ' + cls : '');
+}
+
+async function runIdentityAnalysis() {
+  const btn = document.getElementById('id-btn-run');
+  const base = document.getElementById('id-service-url').value.replace(/\/$/, '');
+  const video = document.getElementById('id-video').value.trim();
+  const startF = document.getElementById('id-start-frame').value.trim();
+  const endF = document.getElementById('id-end-frame').value.trim();
+  const refs = collectRefs();
+
+  // Reset result surfaces.
+  document.getElementById('id-gate-banner').style.display = 'none';
+  document.getElementById('id-clips-card').style.display = 'none';
+  document.getElementById('id-preview-card').style.display = 'none';
+  document.getElementById('id-raw-card').style.display = 'none';
+
+  if (!video) { idLog('Video S3 URI/URL is required', 'log-err'); return; }
+  if (refs.length === 0) { idLog('At least one player reference is required', 'log-err'); return; }
+
+  const body = { video_s3_uri_or_url: video, player_references: refs };
+  if (startF !== '') body.start_frame = parseInt(startF, 10);
+  if (endF !== '') body.end_frame = parseInt(endF, 10);
+
+  btn.disabled = true;
+  setIdStatus('Running Gemini analyzer…', 'working');
+  idLog('POST /qa/identity-analyze (' + refs.length + ' refs)', 'log-out');
+
+  try {
+    const resp = await fetch(base + '/qa/identity-analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const detail = data.detail || JSON.stringify(data);
+      idLog('HTTP ' + resp.status + ': ' + detail, 'log-err');
+      setIdStatus('Error ' + resp.status, 'error');
+      return;
+    }
+    idLog('Received ' + (data.clips ? data.clips.length : 0) + ' clip(s)', 'log-in');
+    renderIdentityResult(data, refs);
+    setIdStatus('Done', 'connected');
+  } catch (e) {
+    idLog('Request failed: ' + e, 'log-err');
+    setIdStatus('Request failed', 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderIdentityResult(data, refs) {
+  const nameById = {};
+  for (const r of refs) nameById[r.player_id] = r.player_name;
+
+  // PASS/FAIL banner (PASS iff all_in_enum).
+  const val = data.validation || {};
+  const banner = document.getElementById('id-gate-banner');
+  const pass = val.all_in_enum === true;
+  banner.className = 'gate-banner ' + (pass ? 'gate-pass' : 'gate-fail');
+  let sub = '';
+  if (pass) {
+    sub = 'Every clip\'s actor_player_id is one of your players. Now eyeball the frames below.';
+  } else if (val.error) {
+    sub = 'Strict validator rejected the response: ' + val.error;
+  } else {
+    sub = 'Out-of-enum identity in clip(s): [' + (val.offenders || []).join(', ') + '] — Gemini named a non-player.';
+  }
+  banner.innerHTML = (pass ? '✓ PASS' : '✗ FAIL') + '<span class="gate-sub">' + escHtml(sub) + '</span>';
+  banner.style.display = 'block';
+
+  // Clips table.
+  const clips = data.clips || [];
+  const offenders = new Set(val.offenders || []);
+  const clipsHost = document.getElementById('id-clips');
+  if (clips.length === 0) {
+    clipsHost.innerHTML = '<p style="color:var(--text-dim); font-size:0.85rem;">No clips returned.</p>';
+  } else {
+    let rows = '';
+    clips.forEach((c, i) => {
+      const pid = c.actor_player_id;
+      const known = nameById[pid] !== undefined;
+      const nameCell = known
+        ? `<span class="player-name">${escHtml(nameById[pid])}</span>`
+        : `<span style="color:var(--red)">${escHtml(pid || '—')} (not a player!)</span>`;
+      const uncertain = c.identity_uncertain
+        ? ' <span class="uncertain-badge">uncertain</span>' : '';
+      const conf = (c.confidence != null) ? (Math.round(c.confidence * 100) + '%') : '—';
+      const tech = [c.action, c.technique].filter(Boolean).join(' / ') || '—';
+      rows += `<tr class="${offenders.has(i) ? 'offender-row' : ''}">
+        <td>${i}</td>
+        <td>${escHtml(tech)}${c.specific_technique ? '<br><span class="reasoning">' + escHtml(c.specific_technique) + '</span>' : ''}</td>
+        <td>${nameCell}${uncertain}</td>
+        <td class="reasoning">${escHtml(c.reasoning || '')}</td>
+        <td>${conf}</td>
+      </tr>`;
+    });
+    clipsHost.innerHTML = `<table class="clips">
+      <thead><tr><th>#</th><th>Action / Technique</th><th>Attributed Player</th><th>Reasoning (descriptor)</th><th>Conf</th></tr></thead>
+      <tbody>${rows}</tbody></table>`;
+  }
+  document.getElementById('id-clips-card').style.display = 'block';
+
+  // Frame previews — the human gate.
+  const previews = data.frames_preview || [];
+  const idxs = data.frame_indices || [];
+  const prevHost = document.getElementById('id-preview');
+  prevHost.innerHTML = previews.map((src, i) =>
+    `<div><img src="${src}" alt="frame ${i}"><div class="preview-cap">frame ${idxs[i] != null ? idxs[i] : i}</div></div>`
+  ).join('');
+  document.getElementById('id-preview-card').style.display = previews.length ? 'block' : 'none';
+
+  // Raw response.
+  document.getElementById('id-raw').textContent = JSON.stringify(data, null, 2);
+  document.getElementById('id-raw-card').style.display = 'block';
+}
+
+// Seed default references on load.
+initIdentityRefs();
 </script>
 </body>
 </html>
