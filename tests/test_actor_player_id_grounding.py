@@ -134,6 +134,34 @@ def test_sync_sets_response_schema_and_mime_type():
     assert parsed["clips"][0]["actor_player_id"] == PID_A
 
 
+@pytest.mark.asyncio
+async def test_async_single_agent_sets_response_schema():
+    valid = json.dumps({"clips": [{"actor_player_id": PID_A, "action": "mount"}]})
+    analyzer = BJJTechniqueAnalyzer.__new__(BJJTechniqueAnalyzer)
+    analyzer.model_id = "gemini-3.1-flash-lite"
+    analyzer._request_timeout_ms = 600_000
+    analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["config"] = config
+        return SimpleNamespace(text=valid)
+
+    mock_client = MagicMock()
+    mock_client.aio.models.generate_content = _fake_generate
+    analyzer.client = mock_client
+
+    out = await analyzer.analyze_sequence_async(
+        ["<frame>"], [0], previous_context=None, player_references=_refs(),
+    )
+    config = captured["config"]
+    assert config.response_mime_type == "application/json"
+    actor = config.response_schema.properties["clips"].items.properties["actor_player_id"]
+    assert list(actor.enum) == [PID_A, PID_B]
+    assert json.loads(out)["clips"][0]["actor_player_id"] == PID_A
+
+
 def test_out_of_enum_actor_player_id_is_rejected_no_fallback():
     """Strict validator: an out-of-enum actor_player_id RAISES (no gi-color fallback)."""
     bad = json.dumps({
@@ -257,6 +285,67 @@ def test_clip_to_event_resolves_track_id_and_name_from_binding():
     assert grounded["identity_uncertain"] is False
     # gi-color reasoning becomes the role descriptor only — never identity.
     assert cand.role.startswith("blue gi athlete")
+
+
+@pytest.mark.asyncio
+async def test_multi_agent_judge_sets_schema_and_validates():
+    """The multi-agent Judge must also set response_schema + enum and reject out-of-enum."""
+    from analyzer import BJJMultiAgentAnalyzer
+
+    analyzer = BJJMultiAgentAnalyzer.__new__(BJJMultiAgentAnalyzer)
+    analyzer.model_id = "gemini-3.1-flash-lite"
+    analyzer._request_timeout_s = 600.0
+    analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+
+    judge_json = json.dumps({"clips": [{"actor_player_id": PID_A, "action": "mount"}]})
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        # Specialists output free text; the Judge gets the structured config.
+        if config.response_schema is not None:
+            captured["config"] = config
+            return SimpleNamespace(text=judge_json)
+        return SimpleNamespace(text="specialist report")
+
+    mock_client = MagicMock()
+    mock_client.aio.models.generate_content = _fake_generate
+    analyzer.client = mock_client
+
+    out = await analyzer.analyze_sequence_async(
+        ["<frame>"], [0], previous_context=None, player_references=_refs(),
+    )
+
+    config = captured["config"]
+    assert config.response_mime_type == "application/json"
+    actor = config.response_schema.properties["clips"].items.properties["actor_player_id"]
+    assert list(actor.enum) == [PID_A, PID_B]
+    assert json.loads(out)["clips"][0]["actor_player_id"] == PID_A
+
+
+@pytest.mark.asyncio
+async def test_multi_agent_judge_rejects_out_of_enum():
+    from analyzer import BJJMultiAgentAnalyzer
+
+    analyzer = BJJMultiAgentAnalyzer.__new__(BJJMultiAgentAnalyzer)
+    analyzer.model_id = "gemini-3.1-flash-lite"
+    analyzer._request_timeout_s = 600.0
+    analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+
+    bad_json = json.dumps({"clips": [{"actor_player_id": "athlete in white gi"}]})
+
+    async def _fake_generate(*, model, contents, config):
+        if config.response_schema is not None:
+            return SimpleNamespace(text=bad_json)
+        return SimpleNamespace(text="specialist report")
+
+    mock_client = MagicMock()
+    mock_client.aio.models.generate_content = _fake_generate
+    analyzer.client = mock_client
+
+    with pytest.raises(ValueError, match="out-of-enum actor_player_id"):
+        await analyzer.analyze_sequence_async(
+            ["<frame>"], [0], previous_context=None, player_references=_refs(),
+        )
 
 
 class _FakeSNSClient:
