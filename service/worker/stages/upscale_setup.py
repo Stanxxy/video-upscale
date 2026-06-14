@@ -69,8 +69,48 @@ def _upscale_analysis_setup(
         restorer = RealESRGANRestorer(config.model_path)
 
     # -- Download player reference images (optional) -------------------------
+    # Prefer the human-confirmed athlete_bindings (carry track_id + player_id, ordered by
+    # track_id) so Gemini can ground actor_player_id. Fall back to LEGACY player_references
+    # (unlabelled, no player_id) only when no bindings are supplied.
     player_ref_images = None
-    if request.player_references:
+    if request.athlete_bindings:
+        from PIL import Image as _PILImage
+        import io
+
+        player_ref_images = []
+        s3_for_refs = _make_s3(config)
+        ref_bucket = request.bucket  # references stored in same bucket
+        for binding in sorted(request.athlete_bindings, key=lambda b: b.track_id):
+            if not binding.s3_key:
+                logger.warning(
+                    "Athlete binding for player %s (track %s) has no s3_key; skipping ref image",
+                    binding.player_id, binding.track_id,
+                )
+                continue
+            try:
+                ref_resp = s3_for_refs.get_object(ref_bucket, binding.s3_key)
+                ref_data = ref_resp["Body"].read()
+                img = _PILImage.open(io.BytesIO(ref_data))
+                player_ref_images.append({
+                    "track_id": binding.track_id,
+                    "player_id": binding.player_id,
+                    "player_name": binding.player_name or "Unknown",
+                    "image": img,
+                })
+                logger.info(
+                    "Downloaded player reference for %s (player_id %s, track %s): %s",
+                    binding.player_name, binding.player_id, binding.track_id, binding.s3_key,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Failed to download player reference %s: %s",
+                    binding.s3_key, e,
+                )
+        if not player_ref_images:
+            player_ref_images = None
+    elif request.player_references:
+        # LEGACY: superseded by athlete_bindings. Unlabelled refs carry no player_id,
+        # so actor_player_id cannot be enum-constrained on this path.
         from PIL import Image as _PILImage
         import io
 
