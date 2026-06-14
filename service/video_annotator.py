@@ -14,12 +14,41 @@ import cv2
 logger = logging.getLogger(__name__)
 
 
+def _resolve_actor_label(clip: dict, bindings_by_player_id: dict | None) -> str:
+    """Burn-in identity label: prefer grounded player_name / track_id over the
+    free-text `role` descriptor (gi color etc.).
+
+    Order: binding player_name → track_id ("Athlete N") → actor_player_id →
+    `role` descriptor (last resort).
+    """
+    pid = clip.get("actor_player_id")
+    if pid and bindings_by_player_id:
+        binding = bindings_by_player_id.get(pid)
+        if binding is not None:
+            name = (
+                binding.get("player_name") if isinstance(binding, dict)
+                else getattr(binding, "player_name", None)
+            )
+            if name:
+                return name
+            track_id = (
+                binding.get("track_id") if isinstance(binding, dict)
+                else getattr(binding, "track_id", None)
+            )
+            if track_id is not None:
+                return f"Athlete {track_id}"
+    if pid:
+        return str(pid)
+    return clip.get("role", "") or ""
+
+
 def annotate_video(
     tracked_video_path: str,
     analysis_result: dict,
     output_path: str,
     fps: float,
     start_frame: int = 0,
+    athlete_bindings=None,
 ) -> str:
     """
     Overlay analysis clip captions onto the tracked video.
@@ -65,6 +94,13 @@ def annotate_video(
     # The tracked video frame index maps to global_idx = start_frame + local_idx
     clip_lookup = _build_clip_lookup(clips, start_frame, total_frames)
 
+    # Index bindings by player_id so the caption can show grounded player names.
+    bindings_by_player_id = {}
+    for b in (athlete_bindings or []):
+        bpid = b.get("player_id") if isinstance(b, dict) else getattr(b, "player_id", None)
+        if bpid:
+            bindings_by_player_id[bpid] = b
+
     frame_idx = 0
     while True:
         ret, frame = cap.read()
@@ -76,7 +112,10 @@ def annotate_video(
         active_clips = clip_lookup.get(global_idx, [])
 
         if active_clips:
-            frame = _draw_caption_banner(frame, active_clips, width, height)
+            frame = _draw_caption_banner(
+                frame, active_clips, width, height,
+                bindings_by_player_id=bindings_by_player_id,
+            )
 
         out.write(frame)
         frame_idx += 1
@@ -131,6 +170,7 @@ def _build_clip_lookup(
 
 def _draw_caption_banner(
     frame, active_clips: list[dict], width: int, height: int,
+    bindings_by_player_id: dict | None = None,
 ):
     """Draw semi-transparent banner at the bottom with clip metadata."""
     # Calculate banner height based on number of clips
@@ -150,7 +190,8 @@ def _draw_caption_banner(
     for i, clip in enumerate(active_clips[:3]):
         action = clip.get("action", clip.get("category", "other"))
         technique = clip.get("specific_technique", clip.get("technique", ""))
-        role = clip.get("role", "")
+        # Prefer grounded player_name / track_id over the free-text role descriptor.
+        role = _resolve_actor_label(clip, bindings_by_player_id)
         confidence = clip.get("confidence", 0)
 
         # Line 1: action + technique (bold/large)

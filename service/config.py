@@ -1,9 +1,18 @@
-from pydantic import Field
+import os
+
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class ServiceConfig(BaseSettings):
-    """Load from environment variables or .env file. Use BJJ_ prefix (e.g. BJJ_GEMINI_API_KEY)."""
+    """Load from environment variables or .env file. Use BJJ_ prefix (e.g. BJJ_GEMINI_API_KEY).
+
+    The Gemini credential is the single exception: it is also accepted under the
+    un-prefixed ``GEMINI_API_KEY`` env var so a founder ``.env`` that uses the plain
+    name "just works". ``BJJ_GEMINI_API_KEY`` (the prefixed form) takes precedence
+    when both are set; otherwise the un-prefixed value is used. See the post-init
+    validator below.
+    """
 
     # AWS / S3
     aws_region: str = "us-east-1"
@@ -138,3 +147,46 @@ class ServiceConfig(BaseSettings):
         env_prefix="BJJ_",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def _alias_gemini_api_key(self) -> "ServiceConfig":
+        """Populate ``gemini_api_key`` from the un-prefixed ``GEMINI_API_KEY``.
+
+        ``env_prefix='BJJ_'`` means pydantic-settings only reads ``BJJ_GEMINI_API_KEY``.
+        Founder ``.env`` files use the plain ``GEMINI_API_KEY`` name. When the prefixed
+        value is absent, fall back to the un-prefixed one — checking the live process
+        environment first, then the ``.env`` file. The prefixed form always wins when
+        both are present. No fabrication: if neither is set, the field stays empty and
+        the QA endpoint returns a clear 400.
+        """
+        if self.gemini_api_key:
+            return self
+        plain = os.environ.get("GEMINI_API_KEY")
+        if not plain:
+            plain = self._read_env_file_value("GEMINI_API_KEY")
+        if plain:
+            object.__setattr__(self, "gemini_api_key", plain)
+        return self
+
+    @staticmethod
+    def _read_env_file_value(name: str) -> str:
+        """Read a single un-prefixed key from the ``.env`` file (best effort).
+
+        pydantic-settings ignores un-prefixed keys, so for the Gemini alias we parse
+        the ``.env`` directly. Returns "" when the file or key is absent.
+        """
+        env_path = os.path.join(os.getcwd(), ".env")
+        if not os.path.exists(env_path):
+            return ""
+        try:
+            with open(env_path, "r", encoding="utf-8") as fh:
+                for raw in fh:
+                    line = raw.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, value = line.partition("=")
+                    if key.strip() == name:
+                        return value.strip().strip('"').strip("'")
+        except OSError:
+            return ""
+        return ""

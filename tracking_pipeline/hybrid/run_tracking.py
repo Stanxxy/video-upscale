@@ -52,6 +52,7 @@ def run_tracking(
     frame_stride=1,
     prop_stride=1,
     enable_pose=True,
+    athlete_bindings=None,
     player_mapping=None,
 ):
     """
@@ -182,25 +183,32 @@ def run_tracking(
     print("Initializing tracks & identity gallery...")
     print("=" * 60)
 
-    # Stream 0b: seed init_boxes from the CONFIRMED human binding when present.
-    # player_mapping is { "<obj_id>": "<player_id>" } with obj_id "1" == box_a and
-    # "2" == box_b (the correction-modal contract). Building init_boxes keyed by
-    # the confirmed obj_id makes the track_id<->box assignment authoritative, so
-    # track_ids never flip across the resume job chain.
-    obj_id_to_box = {1: box_a, 2: box_b}
-    if player_mapping:
+    # Seed init_boxes from the human-confirmed identity binding so track_ids never
+    # flip across the resume job chain. Three sources, in precedence order:
+    #
+    #   1. athlete_bindings (Stream 2, CANONICAL, N-athlete ready: {track_id: box}).
+    #      Carries track_id↔player_id↔box directly — the single source of truth when
+    #      present; drives both init_boxes seeding and identity grounding.
+    #   2. player_mapping (Stream 0b, resume-path binding one hop upstream).
+    #      { "<obj_id>": "<player_id>" } with obj_id "1" == box_a, "2" == box_b
+    #      (the correction-modal contract). Honored when the canonical
+    #      athlete_bindings is absent — keys init_boxes by the CONFIRMED obj_ids so
+    #      the human correction still drives seeding on resume.
+    #   3. LEGACY positional {1: box_a, 2: box_b} — initial submit, or any resume
+    #      that carried neither binding. Remove once all paths consume bindings.
+    init_boxes = {
+        b.track_id: b.box
+        for b in (athlete_bindings or [])
+        if getattr(b, "box", None)
+    }
+    if not init_boxes and player_mapping:
+        obj_id_to_box = {1: box_a, 2: box_b}
         init_boxes = {
             int(obj_id): obj_id_to_box[int(obj_id)]
             for obj_id in player_mapping
             if int(obj_id) in obj_id_to_box
         }
-        if not init_boxes:
-            # LEGACY: fall back to positional box_a/box_b if the mapping carried no
-            # usable obj_ids. Remove once all paths consume the confirmed binding.
-            init_boxes = {1: box_a, 2: box_b}
-    else:
-        # LEGACY: positional seeding (box_a=track 1, box_b=track 2) — used on the
-        # initial submit and any resume that did not carry a confirmed binding.
+    if not init_boxes:
         init_boxes = {1: box_a, 2: box_b}
 
     # Add initial boxes to SAM2 + build identity gallery
@@ -215,7 +223,7 @@ def run_tracking(
             mask=mask, box=box,
             keypoints=kpts, scores=scores,
         )
-        label = "A" if track_id == 1 else "B"
+        label = chr(ord("A") + track_id - 1) if 1 <= track_id <= 26 else str(track_id)
         print(f"  Athlete {label} (track {track_id}): "
               f"box={[round(c) for c in box]}, mask={mask.sum()} px")
 

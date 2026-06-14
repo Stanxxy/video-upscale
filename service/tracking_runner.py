@@ -99,6 +99,7 @@ def run_tracking_job(
     progress_cb: Optional[Callable[[int, int], None]] = None,
     detection_cb: Optional[Callable[..., Optional[tuple]]] = None,
     should_stop: Optional[Callable[[], bool]] = None,
+    athlete_bindings=None,
     player_mapping: Optional[dict] = None,
 ) -> str:
     """
@@ -149,6 +150,7 @@ def run_tracking_job(
         frame_stride=frame_stride,
         prop_stride=prop_stride,
         enable_pose=enable_pose,
+        athlete_bindings=athlete_bindings,
         player_mapping=player_mapping,
     )
 

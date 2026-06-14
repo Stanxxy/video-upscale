@@ -248,6 +248,7 @@ async def run_track_stage(ctx: WorkerRunContext) -> None:
                 progress_cb=tracking_progress_cb,
                 detection_cb=detection_cb,
                 should_stop=lambda: job_store.is_cancelled(job_id),
+                athlete_bindings=request.athlete_bindings,
                 # Stream 0b: confirmed obj_id->player_id binding from the
                 # correction. Seeds init_boxes so track_ids never flip on resume.
                 player_mapping=request.player_mapping,

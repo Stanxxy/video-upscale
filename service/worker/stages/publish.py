@@ -60,6 +60,7 @@ async def run_publish_and_complete_stage(ctx: WorkerRunContext) -> None:
                 analysis_result, video_id, fps,
                 job_id=job_id, result_s3_uri=result_uri,
                 tracking_s3_uri=tracking_uri,
+                athlete_bindings=request.athlete_bindings,
             )
             sns_completion_sent = True
         except Exception as e:

@@ -32,6 +32,21 @@ class JobSuspendedError(Exception):
     """
 
 
+class AthleteBinding(BaseModel):
+    """Canonical, persisted form of the human-confirmed track_id↔player_id binding.
+
+    Produced by the bounding-box / point-click athlete correction model
+    (``player_mapping`` is the same binding one hop upstream). This is the
+    authoritative identity key carried through tracking → analysis → SNS so
+    track_ids never flip and Gemini grounds ``actor_player_id`` to a real player.
+    """
+    track_id: int
+    player_id: str
+    player_name: str
+    box: Optional[List[float]] = None  # [x1,y1,x2,y2] for SAM2 init_boxes seeding
+    s3_key: Optional[str] = None  # player-references/<vid>/<pid>.jpg
+
+
 class JobStatus(str, Enum):
     PENDING = "pending"
     DOWNLOADING = "downloading"
@@ -61,7 +76,9 @@ class TrackRequest(BaseModel):
     yolo_model: str = "yolo26m"
     start_time: Optional[str] = None  # MM:SS or HH:MM:SS
     end_time: Optional[str] = None
+    # LEGACY: superseded by athlete_bindings (track_id↔player_id). Remove once all paths consume bindings.
     box_a: Optional[List[float]] = None  # [x1,y1,x2,y2] — skip detection if provided
+    # LEGACY: superseded by athlete_bindings (track_id↔player_id). Remove once all paths consume bindings.
     box_b: Optional[List[float]] = None  # [x1,y1,x2,y2] — skip detection if provided
     step_size: Optional[int] = None
     max_history: Optional[int] = None
@@ -75,15 +92,20 @@ class TrackRequest(BaseModel):
     method: str = "esrgan"
     sns_topic_arn: Optional[str] = None
 
-    # Player reference images for athlete identification
+    # LEGACY: superseded by athlete_bindings (track_id↔player_id). Remove once all paths consume bindings.
+    # Unlabelled refs in request order; no track_id/player_id pairing. Use athlete_bindings instead.
     player_references: Optional[List[Dict[str, str]]] = None
 
-    # Stream 0b: human-confirmed obj_id -> player_id binding
-    # { "1": player_id_A, "2": player_id_B }. AUTHORITATIVE track_id<->player_id.
-    # When present on a resume job, init_boxes is seeded from this confirmed
-    # binding (box_a -> obj_id "1", box_b -> obj_id "2") so track_ids never flip
-    # across the job chain. Threaded from ResumeRequest into the replacement
-    # TrackRequest by build_resume_params.
+    # Canonical human-confirmed identity binding (track_id↔player_id↔box). When present this is the
+    # single source of truth: derive init_boxes and labelled refs from it. N-athlete ready.
+    athlete_bindings: Optional[List[AthleteBinding]] = None
+
+    # Stream 0b: human-confirmed obj_id -> player_id binding, one hop upstream of
+    # athlete_bindings. { "1": player_id_A, "2": player_id_B }. AUTHORITATIVE
+    # track_id<->player_id on the resume path. When present (and athlete_bindings
+    # is absent) init_boxes is seeded from this confirmed binding (obj_id "1" ->
+    # box_a, "2" -> box_b) so track_ids never flip across the job chain. Threaded
+    # from ResumeRequest into the replacement TrackRequest by build_resume_params.
     player_mapping: Optional[Dict[str, str]] = None
 
     # M2: stride-N frame sampling (S11)
