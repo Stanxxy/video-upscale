@@ -16,6 +16,7 @@ from service.routes.recovery import (
     drain_orphan_pending_jobs_on_startup,
     recover_interrupted_job,
 )
+from service.routes.qa import identity_analyze
 from service.routes.state import init_routes
 
 router = APIRouter()
@@ -41,6 +42,9 @@ router.post("/jobs/{job_id}/resume")(resume_job)
 # Health & debug
 router.get("/health")(health)
 router.get("/debug/memory")(debug_memory)
+
+# QA harness — Stream 2 Gemini identity-grounding live gate (analyzer only, no GPU)
+router.post("/qa/identity-analyze")(identity_analyze)
 
 
 def __getattr__(name: str):
