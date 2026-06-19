@@ -5,9 +5,22 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from service import guardrails
 from service import routes as routes_mod
+from service.routes import state as route_state
 from service.analysis_keyspaces_enums import JobState
 from service.models import TrackRequest
+
+
+@pytest.fixture(autouse=True)
+def _reset_guardrail_state():
+    """Each test starts with a clean G7 daily counter and empty active-task map
+    (both are module-global and would otherwise leak across tests)."""
+    guardrails.reset_daily_counter()
+    route_state._active_tasks.clear()
+    yield
+    guardrails.reset_daily_counter()
+    route_state._active_tasks.clear()
 
 
 @pytest.fixture()
@@ -17,8 +30,13 @@ def scheduled_jobs(monkeypatch):
     def _schedule(job_id: str, request: TrackRequest) -> None:
         scheduled.append((job_id, request))
 
+    async def _noop_cleanup() -> None:
+        # create_track_job awaits _cleanup_orphaned_tasks(); the stub must be a
+        # coroutine function so the await is valid.
+        return None
+
     monkeypatch.setattr(routes_mod, "_schedule_job", _schedule)
-    monkeypatch.setattr(routes_mod, "_cleanup_orphaned_tasks", lambda: None)
+    monkeypatch.setattr(routes_mod, "_cleanup_orphaned_tasks", _noop_cleanup)
     return scheduled
 
 
@@ -79,15 +97,80 @@ async def test_get_health_returns_ok(service_client):
 
 @pytest.mark.asyncio
 async def test_post_track_returns_429_when_at_capacity(
-    service_client, monkeypatch,
+    service_client, service_components, scheduled_jobs, monkeypatch,
 ):
-    sem = MagicMock()
-    sem.locked.return_value = True
-    monkeypatch.setattr(routes_mod, "_job_semaphore", sem)
+    """G4: with capacity = max_concurrent(1) + max_queued(1) = 2, a 3rd in-flight
+    job (running + queued) is rejected with 429 (engine busy)."""
+    config, _, _ = service_components
+    assert config.max_concurrent_jobs + config.max_queued_jobs == 2
+
+    # Simulate two jobs already scheduled (one on the GPU, one queued).
+    monkeypatch.setitem(route_state._active_tasks, "running-job", MagicMock())
+    monkeypatch.setitem(route_state._active_tasks, "queued-job", MagicMock())
 
     resp = await service_client.post(
         "/track",
         json={"bucket": "b", "key": "v.mp4"},
     )
     assert resp.status_code == 429
-    assert "capacity" in resp.json()["detail"].lower()
+    assert "busy" in resp.json()["detail"].lower()
+    # The rejected request must NOT have been scheduled.
+    assert scheduled_jobs == []
+
+
+@pytest.mark.asyncio
+async def test_post_track_queues_second_job_within_capacity(
+    service_client, service_components, scheduled_jobs, monkeypatch,
+):
+    """G4: with one job already on the GPU, a second NEW job is admitted (queued)
+    rather than rejected — bounded queue depth of 1."""
+    monkeypatch.setitem(route_state._active_tasks, "running-job", MagicMock())
+
+    resp = await service_client.post("/track", json={"bucket": "b", "key": "v.mp4"})
+    assert resp.status_code == 200
+    assert len(scheduled_jobs) == 1
+
+
+@pytest.mark.asyncio
+async def test_post_track_503_when_analysis_disabled(
+    service_client, service_components, scheduled_jobs, monkeypatch,
+):
+    """G7 kill switch: BJJ_ANALYSIS_DISABLED=true → 503, nothing scheduled."""
+    config, _, _ = service_components
+    monkeypatch.setattr(config, "analysis_disabled", True)
+
+    resp = await service_client.post("/track", json={"bucket": "b", "key": "v.mp4"})
+    assert resp.status_code == 503
+    assert "disabled" in resp.json()["detail"].lower()
+    assert scheduled_jobs == []
+
+
+@pytest.mark.asyncio
+async def test_post_track_429_over_daily_cap(
+    service_client, service_components, scheduled_jobs, monkeypatch,
+):
+    """G7 daily cap: the (cap+1)-th NEW analysis of the UTC day → 429."""
+    config, _, _ = service_components
+    monkeypatch.setattr(config, "max_daily_analyses", 2)
+
+    for _ in range(2):
+        ok = await service_client.post("/track", json={"bucket": "b", "key": "v.mp4"})
+        assert ok.status_code == 200
+
+    resp = await service_client.post("/track", json={"bucket": "b", "key": "v.mp4"})
+    assert resp.status_code == 429
+    assert "daily" in resp.json()["detail"].lower()
+    assert len(scheduled_jobs) == 2  # only the two under-cap jobs scheduled
+
+
+@pytest.mark.asyncio
+async def test_daily_cap_zero_blocks_all(
+    service_client, service_components, scheduled_jobs, monkeypatch,
+):
+    """G7: max_daily_analyses=0 blocks every new analysis immediately."""
+    config, _, _ = service_components
+    monkeypatch.setattr(config, "max_daily_analyses", 0)
+
+    resp = await service_client.post("/track", json={"bucket": "b", "key": "v.mp4"})
+    assert resp.status_code == 429
+    assert scheduled_jobs == []

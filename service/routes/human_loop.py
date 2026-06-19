@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import build_resume_plan, select_correction_checkpoint
+from service.guardrails import check_kill_switch
 from service.models import ResumeRequest
 from service.routes import state as route_state
 from service.routes.resume_job_factory import build_resume_params, create_replacement_job
@@ -58,6 +59,12 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
 
     Creates a new resume job with the provided boxes and returns its ID.
     """
+    # G7 kill switch: the panic button stops ALL GPU/Gemini spend, including
+    # in-flight corrections. Resume jobs are NOT counted against the daily cap
+    # (they finish work already started) and bypass the G4 queue admission so a
+    # user mid-correction is never starved out by fresh submissions.
+    check_kill_switch(route_state._config)
+
     lifecycle = await route_state._jobs_store.get_lifecycle(job_id)
     if not lifecycle:
         raise HTTPException(404, "Job not found")

@@ -35,10 +35,57 @@ class ServiceConfig(BaseSettings):
     tracking_max_missing_frames: int = 15
 
     # Service
-    # M3 S10: raised default from 1 → 2. M1 memory data confirms 4 single-segment
-    # jobs fit at ~104 GB peak on 128 GB unified memory (Spark).
-    # Override: BJJ_MAX_CONCURRENT_JOBS=1 (safe) or =4 (Spark max).
-    max_concurrent_jobs: int = 2
+    # G4 (anti-DoS / anti-OOM): the public-launch single-GB10 deployment runs ONE
+    # analysis job on the GPU at a time. Default lowered from 2 → 1 because the
+    # production target is a single GB10 where two concurrent pipelines starve each
+    # other / OOM. The M1 memory data that justified 2/4 assumed a 128 GB Spark with
+    # spare headroom — set BJJ_MAX_CONCURRENT_JOBS=2 (or 4) only on that target.
+    # Override: BJJ_MAX_CONCURRENT_JOBS=1 (prod GB10, default) .. 4 (Spark max).
+    max_concurrent_jobs: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "G4: max analysis jobs allowed to hold the GPU concurrently. Default 1 "
+            "for the single-GB10 public deployment. The Nth+1 request queues "
+            "(up to max_queued_jobs) then 429s."
+        ),
+    )
+    # G4: bounded queue depth. Requests beyond (max_concurrent_jobs) wait on the GPU
+    # semaphore up to this many extra waiters; anything beyond is rejected with 429
+    # immediately so callers fail fast instead of accumulating unbounded backlog.
+    max_queued_jobs: int = Field(
+        default=1,
+        ge=0,
+        description=(
+            "G4: max NEW analysis jobs allowed to wait (queue) for the GPU beyond the "
+            "running one. Total admitted = max_concurrent_jobs + max_queued_jobs; "
+            "beyond that → HTTP 429. 0 = no queue (reject as soon as GPU is busy)."
+        ),
+    )
+    # G7 (kill switch / panic button): when true, all GPU/Gemini analysis entrypoints
+    # return HTTP 503 immediately without scheduling any work. Lets the founder stop
+    # all GPU + Gemini spend without killing the uvicorn process. Toggle via
+    # BJJ_ANALYSIS_DISABLED=true and restart (or it is read fresh per request via
+    # the live ServiceConfig).
+    analysis_disabled: bool = Field(
+        default=False,
+        description=(
+            "G7 kill switch: BJJ_ANALYSIS_DISABLED=true makes new-analysis and resume "
+            "entrypoints return 503 immediately (stops all GPU/Gemini spend)."
+        ),
+    )
+    # G7 (daily cap): max number of NEW analysis jobs started per UTC calendar day.
+    # Resume/correction jobs do NOT count (they finish in-flight work). In-memory
+    # counter — resets on process restart (acceptable for the initial launch; a
+    # durable per-day counter in Keyspaces is the follow-up).
+    max_daily_analyses: int = Field(
+        default=50,
+        ge=0,
+        description=(
+            "G7 daily cap: max NEW analysis jobs started per UTC day. Over-cap → HTTP "
+            "429. In-memory counter (resets on restart). 0 = block all new analyses."
+        ),
+    )
     # M3 S9: intra-job K-segment parallelism.
     # K=1 = sequential pipeline (safe default; no memory overhead change).
     # K=4 = target for Spark (128 GB unified); each segment gets its own SAM2 instance.

@@ -390,6 +390,23 @@ async def test_recover_interrupted_job_writes_replaced_row_and_forwards_artifact
 
 
 @pytest.mark.asyncio
+async def test_resume_blocked_by_kill_switch(
+    service_client, awaiting_job, service_components, monkeypatch,
+):
+    """G7 kill switch must also block the resume/correction path (panic button
+    stops ALL GPU/Gemini spend, including in-flight corrections)."""
+    config, _, _ = service_components
+    monkeypatch.setattr(config, "analysis_disabled", True)
+
+    resp = await service_client.post(
+        f"/jobs/{awaiting_job}/resume",
+        json={"box_a": [10, 20, 100, 200], "box_b": [300, 20, 400, 200]},
+    )
+    assert resp.status_code == 503
+    assert "disabled" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_detection_response_not_found(service_client):
     """404 when job_id does not exist in Keyspaces."""
     resp = await service_client.post(

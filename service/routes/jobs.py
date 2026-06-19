@@ -6,6 +6,7 @@ from fastapi import HTTPException
 
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import WorkerStateSnapshot, build_cancellation_checkpoint
+from service.guardrails import admit_new_analysis, check_kill_switch
 from service.models import TrackRequest, TrackResponse, JobResponse
 from service.routes import state as route_state
 import service.routes as routes_pkg
@@ -14,11 +15,19 @@ logger = logging.getLogger("service.routes")
 
 
 async def create_track_job(request: TrackRequest):
-    # Proactively clean up completed tasks before checking capacity
+    # G7 kill switch: stop all new GPU/Gemini spend without killing the process.
+    check_kill_switch(route_state._config)
+
+    # Proactively clean up completed tasks before checking capacity so the
+    # in-flight count reflects only running + queued jobs.
     await routes_pkg._cleanup_orphaned_tasks()
 
-    if routes_pkg._job_semaphore.locked():
-        raise HTTPException(429, "Server is at capacity. Try again later.")
+    # G4 (bounded queue admission) + G7 (daily cap). _active_tasks holds every
+    # scheduled job — the one holding the GPU semaphore plus any waiting on it.
+    # When in_flight < capacity the new job is admitted and queues on the
+    # semaphore (serialized GPU access); beyond capacity we reject with 429.
+    # admit_new_analysis increments the per-UTC-day counter on success.
+    admit_new_analysis(route_state._config, in_flight=len(route_state._active_tasks))
 
     job = await route_state._job_store.create_job(request)
     job_id = job.job_id
