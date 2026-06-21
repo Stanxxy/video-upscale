@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 
@@ -39,6 +40,36 @@ def init_routes(
     _jobs_store = jobs_store
     _job_semaphore = asyncio.Semaphore(config.max_concurrent_jobs)
     _instance_id = instance_id
+
+
+# G7 cost guardrails (in-memory).
+# Counter lives in process memory and RESETS on restart. Accepted tradeoff;
+# with max_concurrent_jobs=1 and a single engine instance the count is
+# authoritative for the running process.
+_daily_count_date: str = ""
+_daily_count: int = 0
+
+
+def _check_kill_switch() -> None:
+    """Reject all admission when the global kill switch is engaged."""
+    if _config is not None and _config.analysis_disabled:
+        raise HTTPException(503, "Analysis temporarily disabled")
+
+
+def _admit_daily() -> None:
+    """Admit one NEW analysis against today's UTC daily cap, or reject with 429.
+
+    Only NEW analyses call this; resume/correction paths are exempt.
+    """
+    global _daily_count_date, _daily_count
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if today != _daily_count_date:
+        _daily_count_date = today
+        _daily_count = 0
+    limit = _config.max_daily_analyses if _config is not None else 0
+    if _daily_count + 1 > limit:
+        raise HTTPException(429, "Daily analysis limit reached")
+    _daily_count += 1
 
 
 def _require_write(ok: bool, operation: str) -> None:

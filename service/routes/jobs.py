@@ -14,6 +14,10 @@ logger = logging.getLogger("service.routes")
 
 
 async def create_track_job(request: TrackRequest):
+    # G7 cost guardrails: kill switch then daily cap (NEW analyses only).
+    route_state._check_kill_switch()
+    route_state._admit_daily()
+
     # Proactively clean up completed tasks before checking capacity
     await routes_pkg._cleanup_orphaned_tasks()
 

@@ -141,6 +141,21 @@ class ServiceConfig(BaseSettings):
         description="Minimum seconds between upscale-stage heartbeat log lines.",
     )
 
+    # G7 cost guardrails.
+    # Kill switch: when true, all new-analysis and resume entrypoints reject with 503.
+    # Override: BJJ_ANALYSIS_DISABLED=true to halt all analysis (e.g. cost/runaway spend).
+    analysis_disabled: bool = Field(
+        default=False,
+        description="Global kill switch. BJJ_ANALYSIS_DISABLED=true rejects new and resume jobs with 503.",
+    )
+    # Daily cap: max NEW analyses admitted per UTC day (in-memory counter; resumes exempt).
+    # Override: BJJ_MAX_DAILY_ANALYSES=50.
+    max_daily_analyses: int = Field(
+        default=50,
+        ge=0,
+        description="Max NEW analyses admitted per UTC day. In-memory counter; resumes do not count.",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
