@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import uuid
@@ -28,14 +29,43 @@ from service.routes import (
     bootstrap_recovery_on_startup,
 )
 
-# Ensure service loggers emit INFO (uvicorn only configures its own loggers)
+class _JsonFormatter(logging.Formatter):
+    """Emit one JSON object per log record — unified format for Grafana/Loki ingestion."""
+
+    _SERVICE = "bjj-vision-engine"
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S.%f+00:00"),
+            "level": record.levelname.lower(),
+            "service": self._SERVICE,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
+
+
+# Install JSON formatter on root (uvicorn, fastapi) and service logger
+_json_fmt = _JsonFormatter()
+_root = logging.getLogger()
+if not any(getattr(h, "_bjj_json", False) for h in _root.handlers):
+    for h in list(_root.handlers):
+        _root.removeHandler(h)
+    _rh = logging.StreamHandler()
+    _rh.setFormatter(_json_fmt)
+    _rh._bjj_json = True  # type: ignore[attr-defined]
+    _root.setLevel(logging.INFO)
+    _root.addHandler(_rh)
+
 service_logger = logging.getLogger("service")
 service_logger.setLevel(logging.INFO)
 service_logger.propagate = False
-if not service_logger.handlers:
-    _h = logging.StreamHandler()
-    _h.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
-    service_logger.addHandler(_h)
+if not any(getattr(h, "_bjj_json", False) for h in service_logger.handlers):
+    _sh = logging.StreamHandler()
+    _sh.setFormatter(_json_fmt)
+    _sh._bjj_json = True  # type: ignore[attr-defined]
+    service_logger.addHandler(_sh)
 
 INSTANCE_ID = str(uuid.uuid4())[:8]  # unique per process
 
