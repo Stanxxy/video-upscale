@@ -58,6 +58,9 @@ async def submit_detection_response(job_id: str, body: ResumeRequest):
 
     Creates a new resume job with the provided boxes and returns its ID.
     """
+    # G7: resume must honor the kill switch, but does NOT count against the daily cap.
+    route_state._check_kill_switch()
+
     lifecycle = await route_state._jobs_store.get_lifecycle(job_id)
     if not lifecycle:
         raise HTTPException(404, "Job not found")
