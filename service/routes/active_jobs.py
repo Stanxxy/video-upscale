@@ -4,39 +4,42 @@ The release pipeline GPU-guard calls this endpoint before any deploy or
 rollback to confirm no GPU job is in flight.  An empty list means it is
 safe to restart the engine.
 
-Non-terminal states (matches JobState enum + JobStatus.PENDING/RUNNING/
-AWAITING_CORRECTION/INTERRUPTED):
-  PENDING, RUNNING, AWAITING_CORRECTION, INTERRUPTED
+Terminal states (JobStatus values that represent a finished/stopped job):
+  COMPLETED, FAILED, CANCELLED
+
+Every other JobStatus value (all working/in-flight states) is considered
+active.  The set is derived as the COMPLEMENT of the terminal set so that
+any new state added to JobStatus is active-by-default (fail-safe).  We do
+NOT hardcode a working-state list — that approach silently becomes stale
+every time a new state is added.
 
 Read-only.  No state mutation.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Optional
 
 from pydantic import BaseModel
 
-from service.analysis_keyspaces_enums import JobState
+from service.models import JobStatus
 from service.routes import state as route_state
 
-# The JobStatus string enum in models.py uses lowercase values; the Keyspaces
-# JobState enum (analysis_keyspaces_enums) uses UPPERCASE.  The in-memory
-# _job_store stores JobStatus (lowercase) while Keyspaces (via _jobs_store)
-# uses JobState (UPPERCASE).  We normalise to UPPERCASE for the comparison.
-
-_NON_TERMINAL: frozenset[str] = frozenset(
-    {
-        JobState.PENDING.upper(),       # "PENDING"
-        JobState.RUNNING.upper(),       # "RUNNING"
-        JobState.AWAITING_CORRECTION.upper(),  # "AWAITING_CORRECTION"
-        JobState.INTERRUPTED.upper(),   # "INTERRUPTED"
-    }
+# ---------------------------------------------------------------------------
+# Terminal states — the only states where a job is definitively done.
+# Everything outside this set is considered active (fail-safe default).
+# ---------------------------------------------------------------------------
+_TERMINAL_STATES: frozenset[str] = frozenset(
+    s.value for s in (
+        JobStatus.COMPLETED,
+        JobStatus.FAILED,
+        JobStatus.CANCELLED,
+    )
 )
 
-# JobStatus (models.py) also uses lowercase values — add them so we can match
-# either representation.
-_NON_TERMINAL_LOWER: frozenset[str] = frozenset(s.lower() for s in _NON_TERMINAL)
+# The complement — computed once at import time for O(1) membership tests and
+# so tests can assert the active set == all_states - terminal_states.
+_ALL_JOB_STATUS_VALUES: frozenset[str] = frozenset(s.value for s in JobStatus)
+_ACTIVE_STATES: frozenset[str] = _ALL_JOB_STATUS_VALUES - _TERMINAL_STATES
 
 
 class ActiveJobEntry(BaseModel):
@@ -64,7 +67,9 @@ async def get_active_jobs() -> ActiveJobsResponse:
     - Read-only: no writes, no side effects.
     - Fail-closed contract: if _job_store is None (uninitialised process),
       we return an empty list (safe: no jobs possible without a store).
-    - State is sourced from _job_store (in-memory, per-process).
+    - Active = complement of {COMPLETED, FAILED, CANCELLED} over the full
+      JobStatus enum.  Any unknown/new status value is treated as active
+      (fail-safe: unknown state should block a restart, not allow it).
     """
     if route_state._job_store is None:
         return ActiveJobsResponse(active=[])
@@ -75,12 +80,12 @@ async def get_active_jobs() -> ActiveJobsResponse:
 
     active: list[ActiveJobEntry] = []
     for job_id, job in snapshot.items():
-        # Use .value to get the raw string (e.g. "pending"), not the
-        # full enum repr "JobStatus.PENDING".
+        # Use .value to get the raw string (e.g. "tracking"), not the
+        # full enum repr "JobStatus.TRACKING".
         raw = job.status.value if hasattr(job.status, "value") else str(job.status)
-        status_upper = raw.upper()
-        status_lower = raw.lower()
-        if status_upper in _NON_TERMINAL or status_lower in _NON_TERMINAL_LOWER:
+        # A job is active unless its status is in the explicit terminal set.
+        # Unknown/unrecognised status values are treated as active (fail-safe).
+        if raw not in _TERMINAL_STATES:
             active.append(
                 ActiveJobEntry(
                     job_id=job_id,
