@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from service.models import TrackResponse, JobResponse
 from service.routes.health import debug_memory, health, qa_client
 from service.routes.jobs import cancel_job, create_track_job, get_job
+from service.routes.active_jobs import get_active_jobs, ActiveJobsResponse
 from service.routes.events import job_events_sse
 from service.routes.human_loop import (
     get_detection_frame,
@@ -30,6 +31,9 @@ router.get("/", include_in_schema=False)(qa_client)
 router.post("/track", response_model=TrackResponse)(create_track_job)
 router.get("/job/{job_id}", response_model=JobResponse)(get_job)
 router.delete("/job/{job_id}")(cancel_job)
+
+# Active jobs list — read-only, used by the release GPU-guard
+router.get("/jobs/active", response_model=ActiveJobsResponse)(get_active_jobs)
 
 # SSE
 router.get("/jobs/{job_id}/events")(job_events_sse)
