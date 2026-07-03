@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BJJ Vision Engine — VLM Studio (QA)</title>
+<script src="https://www.youtube.com/iframe_api"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #6c8cff;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --obj-0: #6c8cff;
+    --obj-1: #fb923c;
+    --obj-2: #4ade80;
+    --obj-3: #fbbf24;
+    --obj-4: #a78bfa;
+    --obj-5: #22d3ee;
+    --obj-6: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 20px; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; color: var(--text-dim); }
+
+  /* Layout: fluid hero column + fixed chat rail */
+  .studio-grid { display: grid; grid-template-columns: 1fr 460px; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .studio-grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    min-width: 0;
+  }
+
+  label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; margin-top: 10px; }
+  label:first-child { margin-top: 0; }
+  input, textarea, select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 120px; }
+
+  .field-inline { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  .field-inline input { flex: 1; min-width: 0; }
+  .field-inline button { flex-shrink: 0; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 18px;
+    border: none; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s;
+    width: 100%; margin-top: 14px;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-success { background: var(--green); color: #000; }
+  .btn-sm { padding: 6px 12px; font-size: 0.8rem; width: auto; margin-top: 0; }
+
+  /* Status */
+  .status-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--text-dim); flex-shrink: 0;
+  }
+  .status-dot.connected { background: var(--green); }
+  .status-dot.error { background: var(--red); }
+  .status-dot.working { background: var(--yellow); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+  .status-text { font-size: 0.85rem; flex: 1; }
+  .status-phase {
+    font-size: 0.75rem; color: var(--text-dim);
+    background: var(--bg); padding: 3px 8px; border-radius: 4px;
+  }
+
+  /* Log */
+  #log {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 220px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .log-entry { white-space: pre-wrap; word-break: break-all; }
+  .log-ts { color: var(--text-dim); }
+  .log-in { color: var(--green); }
+  .log-out { color: var(--accent); }
+  .log-err { color: var(--red); }
+  .log-info { color: var(--yellow); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .tab {
+    padding: 8px 16px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+    color: var(--text-dim); border: none; background: none;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab.tab-disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Badges / chips */
+  .selection-badges { display: flex; gap: 8px; margin: 10px 0 4px; flex-wrap: wrap; align-items: center; }
+  .badge {
+    font-size: 0.75rem; padding: 4px 10px; border-radius: 4px;
+    font-weight: 500; display: inline-block;
+  }
+  .badge-a { background: rgba(74,222,128,0.15); color: var(--green); border: 1px solid rgba(74,222,128,0.3); }
+  .badge-b { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .badge-hint { background: rgba(251,191,36,0.15); color: var(--yellow); border: 1px solid rgba(251,191,36,0.35); }
+  .badge-neutral { background: var(--bg); color: var(--text-dim); border: 1px solid var(--border); }
+  .badge-dim { opacity: 0.4; }
+
+  .err-line { color: var(--red); font-size: 0.78rem; margin-top: 8px; min-height: 1em; }
+  .warn-line { color: var(--yellow); font-size: 0.78rem; margin-top: 8px; min-height: 1em; }
+
+  /* Player */
+  .yt-wrap { position: relative; padding-top: 56.25%; border-radius: 10px; overflow: hidden; background: #000; }
+  #yt-player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+  .transport { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 0.85rem; color: var(--text-dim); flex-wrap: wrap; }
+  .transport .time { font-family: 'SF Mono', 'Fira Code', monospace; color: var(--text); }
+  .transport button.btn-sm { margin-top: 0; }
+
+  /* Chat rail */
+  .transcript {
+    display: flex; flex-direction: column; gap: 12px;
+    max-height: 70vh; overflow-y: auto; padding-right: 4px;
+  }
+  .msg { border-radius: 10px; padding: 10px 12px; font-size: 0.85rem; line-height: 1.5; max-width: 96%; }
+  .msg-user { background: rgba(108,140,255,0.12); border: 1px solid rgba(108,140,255,0.3); align-self: flex-end; }
+  .msg-model { background: var(--bg); border: 1px solid var(--border); align-self: flex-start; }
+  .msg-err { border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
+  .msg-meta { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .msg-prompt { white-space: pre-wrap; word-break: break-word; }
+  .msg-table-wrap { overflow-x: auto; }
+  .msg pre { font-size: 0.72rem; color: var(--text-dim); white-space: pre-wrap; max-height: 240px; overflow: auto; margin-top: 6px; }
+  .msg summary { cursor: pointer; color: var(--text-dim); font-size: 0.75rem; margin-top: 8px; }
+  .msg img.result-img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .reasoning { color: var(--text-dim); font-size: 0.78rem; margin-top: 6px; }
+
+  .typing-dots { display: flex; gap: 4px; padding: 4px 0; }
+  .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); display: inline-block; animation: pulse 1s infinite; }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+  /* Composer */
+  .composer-chips { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  #composer-input { min-height: 60px; max-height: 240px; resize: none; }
+  .composer-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+  .composer-actions .btn { width: auto; margin-top: 0; }
+
+  /* Seek pill */
+  .seek-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 10px; font-size: 0.78rem; cursor: pointer; color: var(--accent);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .seek-pill:hover { border-color: var(--accent); }
+  .seek-pill.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .seek-pill.disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; background: transparent; border-style: dashed; }
+  .over-badge { color: var(--yellow); font-size: 0.68rem; }
+
+  /* Spatial (Detect/Segment) overlay: frame stage + SVG boxes/masks + chips */
+  .frame-stage { position: relative; width: 100%; line-height: 0; }
+  .frame-stage img.result-img { width: 100%; display: block; border-radius: 8px; border: 1px solid var(--border); }
+  .frame-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .obj-shape-group { cursor: pointer; opacity: 1; transition: opacity 0.15s; }
+  .obj-shape-group.dim { opacity: 0.12; }
+  .obj-shape-group.dim.hover-highlight { opacity: 0.65; }
+  .obj-shape-group.hover-highlight rect, .obj-shape-group.hover-highlight polygon { filter: brightness(1.35); }
+  .obj-shape-label text { font-family: 'SF Mono', 'Fira Code', monospace; }
+  .frame-empty-msg {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; color: var(--text-dim); font-size: 0.8rem; padding: 8px;
+    background: rgba(0,0,0,0.35); border-radius: 8px;
+  }
+  .obj-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .obj-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 10px 4px 6px; font-size: 0.78rem; cursor: pointer; color: var(--text);
+    transition: opacity 0.15s, border-color 0.15s; font-family: inherit;
+  }
+  .obj-chip:hover { border-color: var(--obj-color, var(--accent)); }
+  .obj-chip:focus-visible { outline: 2px solid var(--obj-color, var(--accent)); outline-offset: 1px; }
+  .obj-chip.active { outline: 2px solid var(--obj-color, var(--accent)); outline-offset: 1px; }
+  .obj-chip.dim { opacity: 0.12; }
+  .obj-chip.dim.hover-highlight { opacity: 0.55; }
+  .obj-chip.hover-highlight { border-color: var(--obj-color, var(--accent)); }
+  .obj-chip-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+  .obj-chip-conf { color: var(--text-dim); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; }
+  .frame-caption {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 8px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 10px; font-size: 0.78rem; cursor: pointer; color: var(--text-dim);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .frame-caption:hover { border-color: var(--accent); color: var(--accent); }
+  .segment-note { color: var(--text-dim); font-size: 0.75rem; margin-top: 6px; font-style: italic; }
+
+  table.clips { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 8px; }
+  table.clips th, table.clips td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  table.clips th { color: var(--text-dim); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>BJJ Vision Engine — VLM Studio (QA)</h1>
+
+  <div class="studio-grid">
+    <!-- ===================== LEFT: hero column ===================== -->
+    <div class="left-col">
+
+      <!-- (1) Config -->
+      <div class="card">
+        <h2>Config</h2>
+        <label>Backend URL</label>
+        <input id="backend-url" value="http://localhost:8000" placeholder="http://localhost:8000">
+
+        <label>YouTube URL or ID</label>
+        <div class="field-inline">
+          <input id="yt-input" placeholder="https://www.youtube.com/watch?v=... or bare 11-char ID">
+          <button class="btn btn-sm btn-primary" onclick="loadVideo()">Load</button>
+        </div>
+        <div class="err-line" id="yt-error" style="display:none"></div>
+      </div>
+
+      <!-- (2) Player -->
+      <div class="card">
+        <h2>Player</h2>
+        <div class="yt-wrap"><div id="yt-player"></div></div>
+        <div class="transport">
+          <button class="btn btn-sm" id="btn-playpause" onclick="togglePlayPause()">&#9654;</button>
+          <span class="time"><span id="t-current">0:00</span> / <span id="t-duration">&mdash;:&mdash;</span></span>
+          <span class="status-phase" id="player-state-label">unstarted</span>
+        </div>
+      </div>
+
+      <!-- (3) Scope -->
+      <div class="card">
+        <h2>Scope</h2>
+        <div class="tabs">
+          <button class="tab active" id="tab-scope-timepoint" onclick="setScopeType('timepoint')">Single timepoint</button>
+          <button class="tab" id="tab-scope-range" onclick="setScopeType('range')">Range</button>
+        </div>
+
+        <div class="tab-panel active" id="panel-scope-timepoint">
+          <label>Time (MM:SS)</label>
+          <div class="field-inline">
+            <input id="tp-time" placeholder="1:23" oninput="updateScopeUiAndSendState()">
+            <button class="btn btn-sm" onclick="useCurrentForTimepoint()">Use current frame</button>
+          </div>
+          <div class="selection-badges"><span class="badge badge-a" id="tp-chip">not set</span></div>
+        </div>
+
+        <div class="tab-panel" id="panel-scope-range">
+          <div class="row">
+            <div>
+              <label>Start (MM:SS)</label>
+              <div class="field-inline">
+                <input id="rg-start" placeholder="0:10" oninput="updateScopeUiAndSendState()">
+                <button class="btn btn-sm" onclick="useCurrentForRange('start')">Use current</button>
+              </div>
+            </div>
+            <div>
+              <label>End (MM:SS)</label>
+              <div class="field-inline">
+                <input id="rg-end" placeholder="0:20" oninput="updateScopeUiAndSendState()">
+                <button class="btn btn-sm" onclick="useCurrentForRange('end')">Use current</button>
+              </div>
+            </div>
+          </div>
+          <div class="selection-badges">
+            <span class="badge badge-a" id="rg-chip-start">not set</span>
+            <span class="badge badge-b" id="rg-chip-end">not set</span>
+            <span class="badge badge-neutral" id="rg-chip-delta">&Delta; &mdash;</span>
+          </div>
+        </div>
+
+        <div class="err-line" id="scope-validation"></div>
+      </div>
+
+      <!-- (4) Output mode -->
+      <div class="card">
+        <h2>Output mode</h2>
+        <div class="tabs">
+          <button class="tab active" id="tab-mode-event" onclick="setMode('event')">Event JSON</button>
+          <button class="tab" id="tab-mode-image" onclick="setMode('image')">Image</button>
+        </div>
+        <div class="tabs" id="image-subtoggle" style="display:none; margin-bottom:0; border-bottom:none;">
+          <button class="tab active" id="tab-imgtask-generate" onclick="setImageTask('generate')">Generate</button>
+          <button class="tab" id="tab-imgtask-detect" onclick="setImageTask('detect')">Detect</button>
+          <button class="tab" id="tab-imgtask-segment" onclick="setImageTask('segment')">Segment</button>
+        </div>
+        <div class="segment-note" id="imgtask-segment-note" style="display:none;">Segment is a coarse, experimental highlight — treat mask boundaries as approximate.</div>
+      </div>
+
+    </div>
+
+    <!-- ===================== RIGHT: chat rail ===================== -->
+    <div class="right-col">
+
+      <!-- (5) Transcript -->
+      <div class="card">
+        <h2>Transcript</h2>
+        <div class="transcript" id="transcript"></div>
+      </div>
+
+      <!-- (6) Composer -->
+      <div class="card">
+        <div class="composer-chips">
+          <span class="badge badge-a" id="composer-chip-scope">&mdash;</span>
+          <span class="badge badge-b" id="composer-chip-mode">Event JSON</span>
+        </div>
+        <textarea id="composer-input" placeholder="Ask about this window..." oninput="autoGrow(this); updateScopeUiAndSendState();" onkeydown="composerKeydown(event)"></textarea>
+        <div class="composer-actions">
+          <button class="btn btn-primary" id="btn-send" style="width:auto; margin-top:0;" onclick="sendMessage()">Send</button>
+          <button class="btn btn-danger btn-sm" onclick="newConversation()">New conversation</button>
+          <button class="btn btn-sm" onclick="copyTranscript()">Copy transcript</button>
+        </div>
+      </div>
+
+      <!-- (7) Message Log -->
+      <div class="card">
+        <h2>Message Log</h2>
+        <div id="log"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Global state
+// ============================================================
+let ytApiReady = false;
+let pendingLoadId = null;
+let ytPlayer = null;
+let ytReady = false;
+let pollerStarted = false;
+let duration = 0;      // seconds; 0 = unknown
+let currentTime = 0;
+let currentVideoId = null;
+let currentVideoUrl = '';
+let seekIntent = null;  // { startSec, endSec, armed } while an active pill's playback is pending a snap-pause
+
+let currentScopeType = 'timepoint'; // 'timepoint' | 'range'
+let currentMode = 'event';          // 'event' | 'image'
+let currentImageTask = 'generate';  // 'generate' | 'detect' | 'segment'
+let sending = false;
+
+let conversation = []; // ordered turns: {role, scopeType, startSec, endSec, mode, imageTask, promptText, response, error, rawRequest, rawResponse, latencyMs, typing, uid}
+
+// Detect/Segment spatial overlay: per-model-turn isolate state, keyed by turn.uid.
+let turnUidCounter = 0;
+const isolateState = {}; // uid -> selected object index, or null
+
+// ============================================================
+// Logging
+// ============================================================
+function logMsg(text, cls) {
+  const el = document.getElementById('log');
+  const ts = new Date().toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = '<span class="log-ts">[' + ts + ']</span> <span class="' + (cls || '') + '">' + escHtml(text) + '</span>';
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function isMock() {
+  return new URLSearchParams(location.search).get('mock') === '1';
+}
+
+function backendUrl() {
+  return document.getElementById('backend-url').value.trim().replace(/\/+$/, '');
+}
+
+// ============================================================
+// MM:SS helpers
+// ============================================================
+function mmssToSec(str) {
+  if (typeof str !== 'string') return { error: 'use MM:SS (e.g. 1:32)' };
+  const t = str.trim();
+  const hms = /^(\d+):([0-5]\d):([0-5]\d)$/.exec(t);
+  if (hms) {
+    const h = parseInt(hms[1], 10);
+    const min = parseInt(hms[2], 10);
+    const sec = parseInt(hms[3], 10);
+    return { value: h * 3600 + min * 60 + sec };
+  }
+  const m = /^(\d+):([0-5]\d)$/.exec(t);
+  if (!m) return { error: 'use MM:SS (e.g. 1:32) or H:MM:SS, not a bare number' };
+  const min = parseInt(m[1], 10);
+  const sec = parseInt(m[2], 10);
+  return { value: min * 60 + sec };
+}
+
+function secToMmss(totalSec) {
+  const t = Math.max(0, Math.floor(totalSec || 0));
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+
+// ============================================================
+// YouTube URL/ID parsing
+// ============================================================
+function parseYoutubeInput(raw) {
+  const t = (raw || '').trim();
+  if (!t) return { error: 'Enter a YouTube URL or ID' };
+  if (/^[A-Za-z0-9_-]{11}$/.test(t)) return { id: t };
+  let u;
+  try { u = new URL(t); } catch (e) {
+    return { error: 'Could not parse a valid YouTube ID (expects watch?v=, youtu.be/, shorts/, embed/, or a bare 11-char ID)' };
+  }
+  const host = u.hostname.replace(/^www\./, '');
+  if (host === 'youtu.be') {
+    const id = u.pathname.split('/').filter(Boolean)[0];
+    if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return { id };
+  } else if (host === 'youtube.com' || host === 'm.youtube.com') {
+    const v = u.searchParams.get('v');
+    if (v && /^[A-Za-z0-9_-]{11}$/.test(v)) return { id: v };
+    const parts = u.pathname.split('/').filter(Boolean);
+    const idx = parts.findIndex(p => p === 'shorts' || p === 'embed');
+    if (idx !== -1 && parts[idx + 1] && /^[A-Za-z0-9_-]{11}$/.test(parts[idx + 1])) {
+      return { id: parts[idx + 1] };
+    }
+  }
+  return { error: 'Could not parse a valid YouTube ID (expects watch?v=, youtu.be/, shorts/, embed/, or a bare 11-char ID)' };
+}
+
+function loadVideo() {
+  const raw = document.getElementById('yt-input').value;
+  const res = parseYoutubeInput(raw);
+  const errEl = document.getElementById('yt-error');
+  if (res.error) {
+    errEl.textContent = res.error;
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  currentVideoId = res.id;
+  currentVideoUrl = 'https://www.youtube.com/watch?v=' + res.id;
+  duration = 0;
+  currentTime = 0;
+  seekIntent = null;
+  clearActivePill();
+  logMsg('Loading video ' + res.id, 'log-info');
+  if (!ytApiReady) {
+    pendingLoadId = res.id;
+    return;
+  }
+  createOrCuePlayer(res.id);
+  updateScopeUiAndSendState();
+}
+
+function createOrCuePlayer(id) {
+  if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+    ytPlayer.loadVideoById(id);
+  } else {
+    ytPlayer = new YT.Player('yt-player', {
+      videoId: id,
+      width: '100%',
+      height: '100%',
+      playerVars: { rel: 0, playsinline: 1 },
+      events: { onReady: onPlayerReady, onStateChange: onPlayerStateChange }
+    });
+  }
+}
+
+// Called by the YouTube IFrame API script once loaded.
+function onYouTubeIframeAPIReady() {
+  ytApiReady = true;
+  if (pendingLoadId) {
+    const id = pendingLoadId;
+    pendingLoadId = null;
+    createOrCuePlayer(id);
+  }
+}
+
+function onPlayerReady() {
+  ytReady = true;
+  try { duration = ytPlayer.getDuration() || 0; } catch (e) { duration = 0; }
+  logMsg('Player ready. duration=' + (duration ? secToMmss(duration) : 'unknown'), 'log-in');
+  startPoller();
+  updateScopeUiAndSendState();
+}
+
+const YT_STATE_NAMES = { '-1': 'unstarted', '0': 'ended', '1': 'playing', '2': 'paused', '3': 'buffering', '5': 'cued' };
+
+function onPlayerStateChange(e) {
+  const label = YT_STATE_NAMES[String(e.data)] || String(e.data);
+  document.getElementById('player-state-label').textContent = label;
+  if (e.data === 2 /* PAUSED */ && seekIntent) {
+    // User (or native controls) paused before the intent's end was reached -> cancel it.
+    seekIntent = null;
+    clearActivePill();
+    logMsg('Playback paused before pill end reached — seek intent cancelled', 'log-info');
+  }
+  updateTransportUi();
+}
+
+function togglePlayPause() {
+  if (!ytReady) return;
+  const state = ytPlayer.getPlayerState();
+  if (state === 1) { ytPlayer.pauseVideo(); } else { ytPlayer.playVideo(); }
+}
+
+// ============================================================
+// Shared ~4Hz poller: transport UI + seek-and-pause snap logic
+// ============================================================
+function startPoller() {
+  if (pollerStarted) return;
+  pollerStarted = true;
+  setInterval(pollerTick, 250);
+}
+
+function pollerTick() {
+  if (!ytReady || !ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+  let ct;
+  try { ct = ytPlayer.getCurrentTime(); } catch (e) { return; }
+  currentTime = ct;
+  if (!duration) {
+    try { duration = ytPlayer.getDuration() || 0; } catch (e) { /* ignore */ }
+  }
+  updateTransportUi();
+
+  if (seekIntent) {
+    if (!seekIntent.armed) {
+      // Only start watching for the end boundary once playback has actually
+      // ENTERED the [startSec, endSec) window while PLAYING — i.e. currentTime
+      // is both >= startSec AND still < endSec. The upper bound matters: a
+      // stale pre-seek currentTime (e.g. left over from a position way past
+      // this pill's endSec, before the new seekTo() has taken visible effect)
+      // still satisfies `>= startSec` trivially, so checking only the lower
+      // bound would arm-and-fire in the same tick and reproduce the bug. Only
+      // once the playhead is genuinely inside the window do we start looking
+      // for the end boundary.
+      let state = -1;
+      try { state = ytPlayer.getPlayerState(); } catch (e) { /* ignore */ }
+      if (state === 1 /* PLAYING */ && currentTime >= seekIntent.startSec && currentTime < seekIntent.endSec) {
+        seekIntent.armed = true;
+      }
+    }
+    if (seekIntent.armed && currentTime >= seekIntent.endSec - 0.05) {
+      const endSec = seekIntent.endSec;
+      seekIntent = null;
+      try {
+        ytPlayer.pauseVideo();
+        ytPlayer.seekTo(endSec, true);
+      } catch (e) { /* ignore */ }
+      clearActivePill();
+    }
+  }
+}
+
+function updateTransportUi() {
+  document.getElementById('t-current').textContent = secToMmss(currentTime);
+  document.getElementById('t-duration').textContent = duration ? secToMmss(duration) : '—:—';
+  if (ytReady) {
+    const state = ytPlayer.getPlayerState();
+    document.getElementById('btn-playpause').textContent = state === 1 ? '⏸' : '▶';
+  }
+}
+
+// ============================================================
+// Seek-and-pause pill click handler (invoked via inline onclick
+// from dynamically rendered event pills, and reusable elsewhere)
+// ============================================================
+function handlePillClick(startSec, endSec, btnEl) {
+  if (!ytReady) { logMsg('Player not ready yet', 'log-err'); return; }
+  const dur = duration > 0 ? duration : Infinity;
+  const s = clamp(startSec, 0, dur);
+  const e = clamp(endSec, 0, dur);
+  clearActivePill();
+  if (e <= s) {
+    // Single-frame: seek then pause, never play.
+    seekIntent = null;
+    ytPlayer.seekTo(s, true);
+    ytPlayer.pauseVideo();
+  } else {
+    ytPlayer.seekTo(s, true);
+    ytPlayer.playVideo();
+    seekIntent = { startSec: s, endSec: e, armed: false };
+    if (btnEl) btnEl.classList.add('active');
+  }
+}
+
+function clearActivePill() {
+  document.querySelectorAll('.seek-pill.active').forEach(el => el.classList.remove('active'));
+}
+
+// ============================================================
+// Scope (Single timepoint | Range)
+// ============================================================
+function setScopeType(type) {
+  if (type === 'range' && currentMode === 'image') return; // image mode is timepoint-only
+  currentScopeType = type;
+  document.getElementById('tab-scope-timepoint').classList.toggle('active', type === 'timepoint');
+  document.getElementById('tab-scope-range').classList.toggle('active', type === 'range');
+  document.getElementById('panel-scope-timepoint').classList.toggle('active', type === 'timepoint');
+  document.getElementById('panel-scope-range').classList.toggle('active', type === 'range');
+  updateScopeUiAndSendState();
+}
+
+function useCurrentForTimepoint() {
+  if (!ytReady) return;
+  document.getElementById('tp-time').value = secToMmss(Math.floor(currentTime));
+  updateScopeUiAndSendState();
+}
+
+function useCurrentForRange(which) {
+  if (!ytReady) return;
+  const id = which === 'start' ? 'rg-start' : 'rg-end';
+  document.getElementById(id).value = secToMmss(Math.floor(currentTime));
+  updateScopeUiAndSendState();
+}
+
+function computeScope() {
+  if (currentScopeType === 'timepoint') {
+    const raw = document.getElementById('tp-time').value.trim();
+    if (!raw) return { valid: false, reason: 'Enter a time', type: 'timepoint' };
+    const r = mmssToSec(raw);
+    if (r.error) return { valid: false, reason: r.error, type: 'timepoint' };
+    const beyond = duration > 0 && r.value > duration;
+    return { valid: true, type: 'timepoint', startSec: r.value, endSec: r.value,
+      warn: beyond ? ('Time is beyond known video duration (' + secToMmss(duration) + ')') : null };
+  }
+  const rawS = document.getElementById('rg-start').value.trim();
+  const rawE = document.getElementById('rg-end').value.trim();
+  if (!rawS || !rawE) return { valid: false, reason: 'Enter both start and end', type: 'range' };
+  const rs = mmssToSec(rawS);
+  if (rs.error) return { valid: false, reason: 'Start: ' + rs.error, type: 'range' };
+  const re = mmssToSec(rawE);
+  if (re.error) return { valid: false, reason: 'End: ' + re.error, type: 'range' };
+  if (re.value < rs.value) return { valid: false, reason: 'End must be ≥ start', type: 'range' };
+  const beyond = duration > 0 && (rs.value > duration || re.value > duration);
+  return { valid: true, type: 'range', startSec: rs.value, endSec: re.value,
+    warn: beyond ? ('Range extends beyond known video duration (' + secToMmss(duration) + ')') : null };
+}
+
+function updateScopeUiAndSendState() {
+  const scope = computeScope();
+
+  // Timepoint chip
+  const tpChip = document.getElementById('tp-chip');
+  if (currentScopeType === 'timepoint' && scope.valid) {
+    tpChip.textContent = secToMmss(scope.startSec);
+    tpChip.classList.remove('badge-dim');
+  } else {
+    tpChip.textContent = 'not set';
+    tpChip.classList.add('badge-dim');
+  }
+
+  // Range chips + delta
+  const rs = mmssToSec(document.getElementById('rg-start').value.trim());
+  const re = mmssToSec(document.getElementById('rg-end').value.trim());
+  const startChip = document.getElementById('rg-chip-start');
+  const endChip = document.getElementById('rg-chip-end');
+  const deltaChip = document.getElementById('rg-chip-delta');
+  startChip.textContent = rs.error ? 'not set' : secToMmss(rs.value);
+  startChip.classList.toggle('badge-dim', !!rs.error);
+  endChip.textContent = re.error ? 'not set' : secToMmss(re.value);
+  endChip.classList.toggle('badge-dim', !!re.error);
+  if (!rs.error && !re.error) {
+    const d = re.value - rs.value;
+    deltaChip.textContent = 'Δ ' + (d < 0 ? '-' : '') + secToMmss(Math.abs(d));
+    deltaChip.className = 'badge ' + (d < 0 ? 'badge-hint' : 'badge-neutral');
+  } else {
+    deltaChip.textContent = 'Δ —';
+    deltaChip.className = 'badge badge-neutral';
+  }
+
+  // Validation line
+  const valEl = document.getElementById('scope-validation');
+  if (!scope.valid) {
+    valEl.textContent = scope.reason;
+    valEl.className = 'err-line';
+  } else if (scope.warn) {
+    valEl.textContent = scope.warn;
+    valEl.className = 'warn-line';
+  } else {
+    valEl.textContent = '';
+    valEl.className = 'err-line';
+  }
+
+  // Composer echo chips
+  const composerScopeChip = document.getElementById('composer-chip-scope');
+  composerScopeChip.textContent = scope.valid
+    ? (scope.type === 'timepoint' ? secToMmss(scope.startSec) : (secToMmss(scope.startSec) + ' → ' + secToMmss(scope.endSec)))
+    : '—';
+  const composerModeChip = document.getElementById('composer-chip-mode');
+  composerModeChip.textContent = currentMode === 'image' ? ('Image · ' + currentImageTask) : 'Event JSON';
+
+  updateSendButtonState(scope);
+  return scope;
+}
+
+// ============================================================
+// Output mode (Event JSON | Image [Generate | Segment])
+// ============================================================
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('tab-mode-event').classList.toggle('active', mode === 'event');
+  document.getElementById('tab-mode-image').classList.toggle('active', mode === 'image');
+  document.getElementById('image-subtoggle').style.display = mode === 'image' ? 'flex' : 'none';
+  document.getElementById('tab-scope-range').classList.toggle('tab-disabled', mode === 'image');
+
+  // Frozen contract: /qa/vlm-image always sends scope.type = "timepoint".
+  if (mode === 'image' && currentScopeType !== 'timepoint') {
+    setScopeType('timepoint');
+    logMsg('Image mode requires a single timepoint — switched scope to Single timepoint', 'log-info');
+  }
+  updateComposerPlaceholder();
+  updateScopeUiAndSendState();
+}
+
+function setImageTask(task) {
+  currentImageTask = task;
+  document.getElementById('tab-imgtask-generate').classList.toggle('active', task === 'generate');
+  document.getElementById('tab-imgtask-detect').classList.toggle('active', task === 'detect');
+  document.getElementById('tab-imgtask-segment').classList.toggle('active', task === 'segment');
+  document.getElementById('imgtask-segment-note').style.display = (task === 'segment') ? 'block' : 'none';
+  updateComposerPlaceholder();
+  updateScopeUiAndSendState();
+}
+
+function updateComposerPlaceholder() {
+  const el = document.getElementById('composer-input');
+  if (currentMode === 'event') {
+    el.placeholder = 'Ask about actions/techniques in this window... e.g. "List all submission attempts."';
+  } else if (currentImageTask === 'generate') {
+    el.placeholder = 'Describe the image to generate for this frame...';
+  } else if (currentImageTask === 'detect') {
+    el.placeholder = 'Describe what to detect in this frame... e.g. "both athletes"';
+  } else {
+    el.placeholder = 'Describe what to segment in this frame (coarse/experimental)...';
+  }
+}
+
+// ============================================================
+// Composer
+// ============================================================
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 240) + 'px';
+}
+
+function composerKeydown(e) {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function updateSendButtonState(scope) {
+  scope = scope || computeScope();
+  const btn = document.getElementById('btn-send');
+  const reasons = [];
+  if (!currentVideoId) reasons.push('load a video first');
+  if (!scope.valid) reasons.push(scope.reason);
+  if (!document.getElementById('composer-input').value.trim()) reasons.push('enter a prompt');
+  if (sending) reasons.push('request in flight');
+  btn.disabled = reasons.length > 0;
+  btn.title = reasons.length ? ('Disabled: ' + reasons.join('; ')) : '';
+}
+
+function setSending(v) {
+  sending = v;
+  updateScopeUiAndSendState();
+}
+
+// ============================================================
+// Conversation / transcript rendering
+// ============================================================
+function scopeChipLabel(turn) {
+  if (turn.scopeType === 'timepoint') return secToMmss(turn.startSec);
+  return secToMmss(turn.startSec) + ' → ' + secToMmss(turn.endSec);
+}
+
+function eventPillHtml(startStr, endStr) {
+  const sRes = mmssToSec(startStr);
+  const eRes = mmssToSec(endStr);
+  if (sRes.error || eRes.error) {
+    return '<span class="seek-pill disabled" title="unparseable time value">' + escHtml(String(startStr)) + ' → ' + escHtml(String(endStr)) + '</span>';
+  }
+  const s = sRes.value, e = eRes.value;
+  const overBadge = (duration > 0 && (s > duration || e > duration)) ? ' <span class="over-badge">&gt; length</span>' : '';
+  const label = (s === e) ? secToMmss(s) : (secToMmss(s) + ' → ' + secToMmss(e));
+  return '<button type="button" class="seek-pill" onclick="handlePillClick(' + s + ', ' + e + ', this)">' + label + overBadge + '</button>';
+}
+
+function renderEventsTable(events) {
+  const rows = events.map(ev => {
+    const pill = eventPillHtml(ev.start, ev.end);
+    const label = escHtml(ev.label || ev.technique || ev.action_category || '—');
+    const actor = escHtml(ev.actor || '—');
+    const desc = escHtml(ev.description || '');
+    const conf = (ev.confidence != null) ? Math.round(ev.confidence * 100) + '%' : '—';
+    return '<tr><td>' + pill + '</td><td>' + label + '</td><td>' + actor + '</td><td>' + desc + '</td><td>' + conf + '</td></tr>';
+  }).join('');
+  return '<div class="msg-table-wrap"><table class="clips"><thead><tr><th>Time</th><th>Label</th><th>Actor</th><th>Description</th><th>Conf</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function rawDetails(raw) {
+  return '<details><summary>Raw JSON</summary><pre>' + escHtml(JSON.stringify(raw, null, 2)) + '</pre></details>';
+}
+
+// ============================================================
+// Detect/Segment spatial overlay — SVG boxes/masks + clickable chips
+// ============================================================
+const OBJ_COLORS = ['#6c8cff', '#fb923c', '#4ade80', '#fbbf24', '#a78bfa', '#22d3ee', '#f87171'];
+function objColor(i) { return OBJ_COLORS[i % OBJ_COLORS.length]; }
+
+function boxArea(o) {
+  const b = o && o.box_2d;
+  if (!Array.isArray(b) || b.length !== 4) return 0;
+  const ymin = b[0], xmin = b[1], ymax = b[2], xmax = b[3];
+  return Math.max(0, xmax - xmin) * Math.max(0, ymax - ymin);
+}
+
+function objectShapeSvg(o, i, uid) {
+  const color = objColor(i);
+  const box = (Array.isArray(o.box_2d) && o.box_2d.length === 4) ? o.box_2d : null;
+  const label = escHtml(o.label || ('object ' + (i + 1)));
+  const confPct = (typeof o.confidence === 'number') ? Math.round(o.confidence * 100) : null;
+  const labelText = label + (confPct != null ? (' ' + confPct + '%') : '');
+
+  let shapes = '';
+  if (box) {
+    const ymin = box[0], xmin = box[1], ymax = box[2], xmax = box[3];
+    const x = xmin, y = ymin, w = Math.max(0, xmax - xmin), h = Math.max(0, ymax - ymin);
+    const hasMask = o.mask && o.mask.kind === 'polygon' && Array.isArray(o.mask.points) && o.mask.points.length >= 3;
+    if (hasMask) {
+      const pts = o.mask.points.map(p => p[0] + ',' + p[1]).join(' ');
+      shapes += '<polygon points="' + pts + '" fill="' + color + '" fill-opacity="0.28" stroke="' + color + '" stroke-width="2.5" vector-effect="non-scaling-stroke"></polygon>';
+      shapes += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + color + '" stroke-width="1" stroke-opacity="0.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"></rect>';
+    } else {
+      shapes += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + color + '" stroke-width="3" vector-effect="non-scaling-stroke"></rect>';
+    }
+    const tagW = Math.max(60, labelText.length * 11);
+    const tagY = Math.max(0, y - 22);
+    shapes += '<g class="obj-shape-label">' +
+      '<rect x="' + x + '" y="' + tagY + '" width="' + tagW + '" height="20" fill="' + color + '" fill-opacity="0.85"></rect>' +
+      '<text x="' + (x + 4) + '" y="' + (tagY + 14) + '" font-size="15" fill="#0a0a0a">' + labelText + '</text></g>';
+  }
+  return '<g class="obj-shape-group" data-obj-idx="' + i + '"' +
+    ' onclick="toggleIsolateObject(\'' + uid + '\', ' + i + ')"' +
+    ' onmouseenter="hoverObject(\'' + uid + '\', ' + i + ', true)"' +
+    ' onmouseleave="hoverObject(\'' + uid + '\', ' + i + ', false)">' + shapes + '</g>';
+}
+
+function objectChipHtml(o, i, uid) {
+  const color = objColor(i);
+  const label = escHtml(o.label || ('object ' + (i + 1)));
+  const confPct = (typeof o.confidence === 'number') ? Math.round(o.confidence * 100) : null;
+  const confHtml = confPct != null ? ('<span class="obj-chip-conf">' + confPct + '%</span>') : '';
+  return '<button type="button" class="obj-chip" data-obj-idx="' + i + '" style="--obj-color:' + color + ';"' +
+    ' onclick="toggleIsolateObject(\'' + uid + '\', ' + i + ')"' +
+    ' onmouseenter="hoverObject(\'' + uid + '\', ' + i + ', true)"' +
+    ' onmouseleave="hoverObject(\'' + uid + '\', ' + i + ', false)">' +
+    '<span class="obj-chip-swatch" style="background:' + color + ';"></span>' +
+    '<span class="obj-chip-label">' + label + '</span>' + confHtml +
+    '</button>';
+}
+
+function applyIsolate(uid) {
+  const idx = isolateState[uid];
+  document.querySelectorAll('.frame-stage[data-turn-uid="' + uid + '"] .obj-shape-group').forEach(g => {
+    const gi = parseInt(g.getAttribute('data-obj-idx'), 10);
+    g.classList.toggle('dim', idx != null && gi !== idx);
+  });
+  document.querySelectorAll('.obj-chips[data-turn-uid="' + uid + '"] .obj-chip').forEach(c => {
+    const ci = parseInt(c.getAttribute('data-obj-idx'), 10);
+    c.classList.toggle('dim', idx != null && ci !== idx);
+    c.classList.toggle('active', idx != null && ci === idx);
+  });
+}
+
+function toggleIsolateObject(uid, idx) {
+  isolateState[uid] = (isolateState[uid] === idx) ? null : idx;
+  applyIsolate(uid);
+}
+
+function clearIsolate(uid) {
+  isolateState[uid] = null;
+  applyIsolate(uid);
+}
+
+function hoverObject(uid, idx, on) {
+  const shape = document.querySelector('.frame-stage[data-turn-uid="' + uid + '"] .obj-shape-group[data-obj-idx="' + idx + '"]');
+  const chip = document.querySelector('.obj-chips[data-turn-uid="' + uid + '"] .obj-chip[data-obj-idx="' + idx + '"]');
+  if (shape) shape.classList.toggle('hover-highlight', on);
+  if (chip) chip.classList.toggle('hover-highlight', on);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  Object.keys(isolateState).forEach(uid => { if (isolateState[uid] != null) clearIsolate(uid); });
+});
+
+function imageObjectsTurnHtml(turn) {
+  const r = turn.response;
+  if (!r || !r.frame_b64) {
+    return '<div class="msg msg-model msg-err"><div>Backend response did not include a frame (frame_b64 missing).</div>' +
+      rawDetails(turn.rawResponse) + '</div>';
+  }
+  const uid = turn.uid;
+  const mime = r.frame_mime || 'image/png';
+  const frameTime = (typeof r.frame_time_sec === 'number') ? r.frame_time_sec : null;
+  const objects = Array.isArray(r.objects) ? r.objects : [];
+  const notes = r.notes ? ('<div class="reasoning">' + escHtml(r.notes) + '</div>') : '';
+  const degradedBanner = (r.degraded && r.degraded.masks_missing)
+    ? '<div class="warn-line">Masks unavailable (coarse highlight failed) — showing detection boxes' +
+      (r.degraded.reason ? (': ' + escHtml(r.degraded.reason)) : '') + '</div>'
+    : '';
+
+  let overlaySvg = '';
+  let chipsHtml = '';
+  let emptyOverlay = '';
+
+  if (objects.length === 0) {
+    const label = frameTime != null ? secToMmss(frameTime) : '—';
+    emptyOverlay = '<div class="frame-empty-msg">No objects detected at ' + escHtml(label) + '</div>';
+  } else {
+    const byAreaDesc = objects.map((o, i) => ({ o, i })).sort((a, b) => boxArea(b.o) - boxArea(a.o));
+    overlaySvg = byAreaDesc.map(({ o, i }) => objectShapeSvg(o, i, uid)).join('');
+    chipsHtml = objects.map((o, i) => objectChipHtml(o, i, uid)).join('');
+  }
+
+  const frameCaption = frameTime != null
+    ? '<button type="button" class="frame-caption" onclick="handlePillClick(' + frameTime + ', ' + frameTime + ', this)">Frame @ ' + secToMmss(frameTime) + '</button>'
+    : '';
+
+  return '<div class="msg msg-model">' +
+    '<div class="frame-stage" data-turn-uid="' + uid + '">' +
+    '<img class="result-img" src="data:' + mime + ';base64,' + r.frame_b64 + '">' +
+    '<svg class="frame-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none">' + overlaySvg + '</svg>' +
+    emptyOverlay +
+    '</div>' +
+    degradedBanner +
+    (objects.length ? ('<div class="obj-chips" data-turn-uid="' + uid + '">' + chipsHtml + '</div>') : '') +
+    '<div>' + frameCaption + '</div>' +
+    notes + rawDetails(turn.rawResponse) +
+    '</div>';
+}
+
+function turnHtml(turn) {
+  if (turn.role === 'user') {
+    const modeChip = turn.mode === 'image' ? ('Image · ' + turn.imageTask) : 'Event JSON';
+    return '<div class="msg msg-user">' +
+      '<div class="msg-meta"><span class="badge badge-a">' + escHtml(scopeChipLabel(turn)) + '</span>' +
+      '<span class="badge badge-b">' + escHtml(modeChip) + '</span></div>' +
+      '<div class="msg-prompt">' + escHtml(turn.promptText) + '</div></div>';
+  }
+
+  // model turn
+  if (turn.typing) {
+    return '<div class="msg msg-model"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+  }
+  if (turn.error) {
+    return '<div class="msg msg-model msg-err"><div>' + escHtml(turn.error) + '</div>' +
+      (turn.rawResponse != null ? rawDetails(turn.rawResponse) : '') + '</div>';
+  }
+  if (turn.mode === 'image') {
+    if (turn.imageTask === 'detect' || turn.imageTask === 'segment') {
+      return imageObjectsTurnHtml(turn);
+    }
+    // generate: freeform image + notes, no overlay
+    if (!turn.response || !turn.response.image_b64) {
+      return '<div class="msg msg-model msg-err"><div>Backend response did not include an image (image_b64 missing).</div>' +
+        rawDetails(turn.rawResponse) + '</div>';
+    }
+    const mime = turn.response.mime || 'image/png';
+    const notes = turn.response.notes ? ('<div class="reasoning">' + escHtml(turn.response.notes) + '</div>') : '';
+    return '<div class="msg msg-model"><img class="result-img" src="data:' + mime + ';base64,' + turn.response.image_b64 + '">' + notes + rawDetails(turn.rawResponse) + '</div>';
+  }
+  // event mode
+  const events = turn.response ? turn.response.events : null;
+  if (!Array.isArray(events)) {
+    return '<div class="msg msg-model msg-err"><div>Response did not include a parseable events list.</div>' + rawDetails(turn.rawResponse) + '</div>';
+  }
+  if (turn.response.parse_error) {
+    // Backend could not parse a JSON array out of the model output — never fabricate events.
+    const rawText = turn.response.raw != null ? String(turn.response.raw) : '';
+    return '<div class="msg msg-model msg-err"><div>Could not parse a valid events JSON array from the model response: ' +
+      escHtml(turn.response.parse_error) + '</div>' +
+      (rawText ? ('<pre>' + escHtml(rawText) + '</pre>') : '') +
+      rawDetails(turn.rawResponse) + '</div>';
+  }
+  const table = events.length ? renderEventsTable(events) : '<p style="color:var(--text-dim); font-size:0.8rem;">No events returned.</p>';
+  const notes = turn.response.notes ? ('<div class="reasoning">' + escHtml(turn.response.notes) + '</div>') : '';
+  return '<div class="msg msg-model">' + table + notes + rawDetails(turn.rawResponse) + '</div>';
+}
+
+function renderTranscript() {
+  const host = document.getElementById('transcript');
+  host.innerHTML = conversation.map(turnHtml).join('');
+  host.scrollTop = host.scrollHeight;
+}
+
+function modelTextForHistory(t) {
+  if (t.error) return '[error] ' + t.error;
+  if (!t.response) return '';
+  if (t.mode === 'image') {
+    if (t.imageTask === 'detect' || t.imageTask === 'segment') {
+      const n = Array.isArray(t.response.objects) ? t.response.objects.length : 0;
+      return t.response.notes || ('[' + t.imageTask + ' response: ' + n + ' object(s) detected]');
+    }
+    return t.response.notes || '[image response]';
+  }
+  const events = t.response.events;
+  if (Array.isArray(events)) {
+    return events.map(e => (e.start + '-' + e.end + ' ' + (e.label || ''))).join('; ');
+  }
+  return JSON.stringify(t.response);
+}
+
+function transcriptAsText() {
+  return conversation.filter(t => !t.typing).map(t => {
+    if (t.role === 'user') {
+      const modeLabel = t.mode === 'image' ? ('image/' + t.imageTask) : 'event';
+      return '[USER ' + scopeChipLabel(t) + ' | ' + modeLabel + ']\n' + t.promptText;
+    }
+    if (t.error) return '[MODEL ERROR]\n' + t.error;
+    return '[MODEL]\n' + modelTextForHistory(t);
+  }).join('\n\n');
+}
+
+async function copyTranscript() {
+  const text = transcriptAsText();
+  try {
+    await navigator.clipboard.writeText(text);
+    logMsg('Transcript copied to clipboard', 'log-info');
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      logMsg('Transcript copied (fallback path)', 'log-info');
+    } catch (e2) {
+      logMsg('Copy failed: ' + e2.message, 'log-err');
+    }
+    document.body.removeChild(ta);
+  }
+}
+
+function newConversation() {
+  if (conversation.length && !confirm('Start a new conversation? This clears the current transcript.')) return;
+  conversation = [];
+  renderTranscript();
+  logMsg('Conversation cleared', 'log-info');
+}
+
+// ============================================================
+// Mock responses (?mock=1) — no backend call, deterministic canned data
+// ============================================================
+function mockEventResponse(scope) {
+  const base = scope.startSec || 0;
+  const mk = (offset, label, cat, tech, actor, desc, conf) => ({
+    start: secToMmss(base + offset), end: secToMmss(base + offset + 2),
+    label, action_category: cat, technique: tech, actor, description: desc, confidence: conf
+  });
+  return {
+    events: [
+      mk(0, 'Takedown attempt', 'takedown', 'single leg', 'A', 'Athlete A shoots for a single leg.', 0.82),
+      mk(3, 'Guard pass', 'guard_pass', 'knee slice', 'B', 'Athlete B slices through half guard.', 0.71),
+      mk(6, 'Submission attempt', 'submission', 'armbar', 'A', 'Athlete A attacks with an armbar from mount.', 0.65)
+    ],
+    notes: 'Mock response (?mock=1) — synthesized locally, no backend call made.',
+    model: 'mock-vlm-v0'
+  };
+}
+
+function mockImageResponse() {
+  const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  return {
+    image_b64: b64,
+    mime: 'image/png',
+    notes: 'Mock 1x1 image (?mock=1) — synthesized locally, no backend call made.',
+    model: 'mock-vlm-v0'
+  };
+}
+
+// Small canned frame (inline SVG-as-image) used by the mock Detect/Segment
+// response below — a stand-in mat + two athlete silhouettes, no backend call.
+function mockFrameSvg() {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">' +
+    '<rect width="640" height="360" fill="#173b2b"/>' +
+    '<rect x="40" y="30" width="560" height="300" fill="none" stroke="#0f2419" stroke-width="6"/>' +
+    '<circle cx="230" cy="210" r="46" fill="#3a5a9b"/>' +
+    '<circle cx="390" cy="185" r="40" fill="#9b3a3a"/>' +
+    '</svg>';
+}
+
+function mockFrameDataB64() {
+  return btoa(mockFrameSvg());
+}
+
+function mockDetectSegmentResponse(task, scope) {
+  const frameTime = (scope && typeof scope.startSec === 'number') ? scope.startSec : 0;
+  const withMasks = task === 'segment';
+  const objects = [
+    {
+      label: 'Athlete (blue gi)',
+      confidence: 0.91,
+      box_2d: [420, 270, 690, 420],
+      mask: withMasks ? {
+        kind: 'polygon',
+        points: [[345, 420], [400, 435], [420, 480], [415, 560], [380, 640], [330, 680], [290, 650], [275, 570], [280, 490], [300, 440]]
+      } : undefined
+    },
+    {
+      // Deliberately NO mask even when task === 'segment' — exercises the
+      // per-object degrade path (silent box-only render for this one object).
+      label: 'Athlete (red gi)',
+      confidence: 0.87,
+      box_2d: [389, 531, 611, 656]
+    },
+    {
+      label: 'Tatami mat',
+      box_2d: [40, 40, 960, 960],
+      mask: withMasks ? { kind: 'polygon', points: [[60, 60], [940, 60], [940, 940], [60, 940]] } : undefined
+    }
+  ];
+  return {
+    frame_b64: mockFrameDataB64(),
+    frame_mime: 'image/svg+xml',
+    frame_time_sec: frameTime,
+    objects,
+    degraded: { masks_missing: false },
+    model: 'mock-vlm-v0',
+    notes: 'Mock ' + task + ' response (?mock=1) — synthesized locally, no backend call made.'
+  };
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ============================================================
+// Send
+// ============================================================
+async function sendMessage() {
+  const scope = computeScope();
+  const promptText = document.getElementById('composer-input').value.trim();
+  if (!currentVideoId) { logMsg('Load a YouTube video first', 'log-err'); return; }
+  if (!scope.valid) { logMsg('Invalid scope: ' + scope.reason, 'log-err'); return; }
+  if (!promptText) { logMsg('Prompt is required', 'log-err'); return; }
+  if (sending) return;
+
+  const priorTurns = conversation.slice();
+  const history = priorTurns.filter(t => !t.typing).map(t => ({
+    role: t.role,
+    text: t.role === 'user' ? t.promptText : modelTextForHistory(t)
+  }));
+
+  const mode = currentMode;
+  const imageTask = currentImageTask;
+  const userTurn = {
+    role: 'user', scopeType: scope.type, startSec: scope.startSec, endSec: scope.endSec,
+    mode, imageTask, promptText
+  };
+  const modelTurn = { role: 'model', typing: true, mode, imageTask, uid: 'oturn-' + (++turnUidCounter) };
+  conversation.push(userTurn, modelTurn);
+  renderTranscript();
+
+  document.getElementById('composer-input').value = '';
+  autoGrow(document.getElementById('composer-input'));
+  setSending(true);
+
+  const t0 = performance.now();
+  try {
+    let rawRequest, rawResponse;
+    if (mode === 'event') {
+      rawRequest = {
+        youtube_id: currentVideoId, youtube_url: currentVideoUrl,
+        scope: { type: scope.type, start_sec: scope.startSec, end_sec: scope.endSec },
+        prompt: promptText, history, event_schema_version: 'v1'
+      };
+      logMsg('POST ' + backendUrl() + '/qa/vlm-chat ' + JSON.stringify(rawRequest), 'log-out');
+      if (isMock()) {
+        await sleep(300);
+        rawResponse = mockEventResponse(scope);
+      } else {
+        const resp = await fetch(backendUrl() + '/qa/vlm-chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rawRequest)
+        });
+        rawResponse = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(rawResponse.detail || ('HTTP ' + resp.status));
+      }
+    } else {
+      rawRequest = {
+        youtube_id: currentVideoId, youtube_url: currentVideoUrl,
+        scope: { type: 'timepoint', start_sec: scope.startSec, end_sec: scope.endSec },
+        prompt: promptText, image_task: imageTask, history
+      };
+      logMsg('POST ' + backendUrl() + '/qa/vlm-image ' + JSON.stringify(rawRequest), 'log-out');
+      if (isMock()) {
+        await sleep(300);
+        rawResponse = (imageTask === 'detect' || imageTask === 'segment')
+          ? mockDetectSegmentResponse(imageTask, scope)
+          : mockImageResponse();
+      } else {
+        const resp = await fetch(backendUrl() + '/qa/vlm-image', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rawRequest)
+        });
+        rawResponse = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(rawResponse.detail || ('HTTP ' + resp.status));
+      }
+    }
+    const latencyMs = Math.round(performance.now() - t0);
+    logMsg('response (' + latencyMs + 'ms) ' + JSON.stringify(rawResponse), 'log-in');
+    if (mode === 'event' && rawResponse && rawResponse.parse_error) {
+      logMsg('parse_error: ' + rawResponse.parse_error, 'log-err');
+    }
+    if (mode === 'image' && imageTask === 'generate' && rawResponse && !rawResponse.image_b64) {
+      logMsg('image response missing image_b64', 'log-err');
+    }
+    if (mode === 'image' && (imageTask === 'detect' || imageTask === 'segment') && rawResponse && !rawResponse.frame_b64) {
+      logMsg(imageTask + ' response missing frame_b64', 'log-err');
+    }
+    modelTurn.typing = false;
+    modelTurn.response = rawResponse;
+    modelTurn.rawRequest = rawRequest;
+    modelTurn.rawResponse = rawResponse;
+    modelTurn.latencyMs = latencyMs;
+  } catch (e) {
+    logMsg('ERROR: ' + e.message, 'log-err');
+    modelTurn.typing = false;
+    modelTurn.error = e.message;
+  } finally {
+    renderTranscript();
+    setSending(false);
+  }
+}
+
+// ============================================================
+// Init
+// ============================================================
+setMode('event');
+setScopeType('timepoint');
+updateComposerPlaceholder();
+updateScopeUiAndSendState();
+renderTranscript();
+logMsg('VLM Studio ready.' + (isMock() ? ' Mock mode enabled (?mock=1) — no backend calls will be made.' : ''), 'log-info');
+</script>
+</body>
+</html>
