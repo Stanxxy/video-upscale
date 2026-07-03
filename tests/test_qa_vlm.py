@@ -652,6 +652,266 @@ async def test_vlm_image_empty_key_returns_400():
 
 
 # --------------------------------------------------------------------------- #
+# Model selection, thinking mapping, and timing (model-comparison additions)
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_vlm_chat_requested_allowlisted_model_is_used(monkeypatch, client_with_key):
+    fake_client, _ = _fake_client("[]")
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-chat",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 10},
+            "prompt": "x", "history": [],
+            "model": "gemini-3.1-pro-preview",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["model"] == "gemini-3.1-pro-preview"
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["model"] == "gemini-3.1-pro-preview"
+    # pro-preview cannot disable thinking; default (thinking omitted) == "off" -> forced low.
+    assert call_kwargs["config"].thinking_config.thinking_level == "LOW"
+
+
+@pytest.mark.asyncio
+async def test_vlm_chat_model_not_in_allowlist_returns_400(client_with_key):
+    resp = await client_with_key.post(
+        "/qa/vlm-chat",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 10},
+            "prompt": "x", "history": [],
+            "model": "gpt-4o",
+        },
+    )
+    assert resp.status_code == 400
+    assert "gpt-4o" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_vlm_chat_response_includes_timing(monkeypatch, client_with_key):
+    fake_client, _ = _fake_client("[]")
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-chat",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 10},
+            "prompt": "x", "history": [],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    timing = resp.json()["timing"]
+    assert isinstance(timing["total_ms"], (int, float))
+    assert isinstance(timing["model_ms"], (int, float))
+    assert timing["total_ms"] >= timing["model_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_vlm_chat_and_detect_timing_keys_match_ms_contract_exactly(monkeypatch, client_with_key):
+    """Pins the frozen ``timing`` shape (all keys suffixed ``_ms``, values in
+    milliseconds) so a future regression back to a ``_sec`` shape (the exact
+    bug the QA client's ``timingLine()`` once had) fails a test instead of
+    silently rendering 1000x-wrong durations in the UI.
+
+    - ``/qa/vlm-chat`` (no frame to extract): timing keys == {total_ms, model_ms}.
+    - ``/qa/vlm-image`` detect (extracts a frame first): timing keys include
+      total_ms, model_ms, frame_extract_ms.
+    """
+    fake_client, _ = _fake_client("[]")
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    chat_resp = await client_with_key.post(
+        "/qa/vlm-chat",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 10},
+            "prompt": "x", "history": [],
+        },
+    )
+    assert chat_resp.status_code == 200, chat_resp.text
+    assert set(chat_resp.json()["timing"].keys()) == {"total_ms", "model_ms"}
+
+    frame = Image.new("RGB", (200, 150), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+    detect_entries = [{"box_2d": [100, 100, 900, 900], "label": "athlete"}]
+    fake_detect_client, _ = _fake_client(json.dumps(detect_entries))
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_detect_client)
+
+    detect_resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Detect athletes.", "image_task": "detect",
+        },
+    )
+    assert detect_resp.status_code == 200, detect_resp.text
+    detect_timing_keys = set(detect_resp.json()["timing"].keys())
+    assert {"total_ms", "model_ms", "frame_extract_ms"} <= detect_timing_keys
+    assert all(k.endswith("_ms") for k in detect_timing_keys)
+
+
+def test_thinking_config_for_off_on_flash_is_explicit_budget_zero():
+    cfg = qa_vlm_route.thinking_config_for("gemini-3.5-flash", "off")
+    assert cfg.thinking_budget == 0
+    assert cfg.thinking_level is None
+
+
+def test_thinking_config_for_off_or_omitted_on_pro_preview_forces_level_low():
+    # pro CANNOT disable thinking; both "off" and omitted (None) map to its
+    # lowest available level rather than a budget Gemini would 400 on.
+    for ui_level in ("off", None):
+        cfg = qa_vlm_route.thinking_config_for("gemini-3.1-pro-preview", ui_level)
+        assert cfg.thinking_level == "LOW"
+        assert cfg.thinking_budget is None
+
+
+def test_thinking_config_for_high_sets_thinking_level_high():
+    cfg = qa_vlm_route.thinking_config_for("gemini-3.5-flash", "high")
+    assert cfg.thinking_level == "HIGH"
+    assert cfg.thinking_budget is None
+
+
+def test_thinking_config_for_image_task_is_always_none_regardless_of_level():
+    for model in qa_vlm_route.IMAGE_MODELS:
+        for ui_level in ("off", "low", "medium", "high", None):
+            assert qa_vlm_route.thinking_config_for(model, ui_level) is None
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_detect_model_not_in_allowlist_returns_400(monkeypatch, client_with_key):
+    frame = Image.new("RGB", (200, 150), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "x", "image_task": "detect", "model": "not-a-real-model",
+        },
+    )
+    assert resp.status_code == 400
+    assert "not-a-real-model" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_detect_requested_model_and_thinking_high_bumps_max_tokens(monkeypatch, client_with_key):
+    frame = Image.new("RGB", (200, 150), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    detect_entries = [{"box_2d": [100, 100, 900, 900], "label": "athlete"}]
+    fake_client, _ = _fake_client(json.dumps(detect_entries))
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Detect athletes.", "image_task": "detect",
+            "model": "gemini-3.1-flash-lite", "thinking": "high",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["model"] == "gemini-3.1-flash-lite"
+    assert body["timing"]["frame_extract_ms"] >= 0
+    assert body["timing"]["model_ms"] >= 0
+
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["model"] == "gemini-3.1-flash-lite"
+    assert call_kwargs["config"].thinking_config.thinking_level == "HIGH"
+    assert call_kwargs["config"].max_output_tokens == 8192  # bumped so thoughts don't eat the JSON budget
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_generate_thinking_field_is_ignored(monkeypatch, client_with_key):
+    """``image_task="generate"`` never gets a thinking config, even if the
+    caller sends a ``thinking`` value — image models reject thinking outright."""
+    frame = Image.new("RGB", (16, 12), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    gen_png = io.BytesIO()
+    Image.new("RGB", (8, 8), (200, 0, 0)).save(gen_png, format="PNG")
+    part = MagicMock()
+    part.inline_data.data = gen_png.getvalue()
+    part.text = None
+    candidate = MagicMock()
+    candidate.content.parts = [part]
+    fake_response = MagicMock()
+    fake_response.candidates = [candidate]
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = AsyncMock(return_value=fake_response)
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Nano-banana this", "image_task": "generate", "thinking": "high",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].thinking_config is None
+    timing = resp.json()["timing"]
+    assert timing["frame_extract_ms"] >= 0
+    assert timing["model_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_segment_model_selects_tint_model_but_not_internal_detect(monkeypatch, client_with_key):
+    """``model`` on a segment request selects the TINT image model only — the
+    internal detect-for-subjects call must still use the fixed default detect
+    model (never the request's image model, which detect wouldn't accept
+    anyway)."""
+    frame = Image.new("RGB", (100, 100), (5, 5, 5))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    detect_entries = [{"box_2d": [100, 100, 900, 900], "label": "blue gi athlete"}]
+    detect_response = MagicMock()
+    detect_response.text = json.dumps(detect_entries)
+
+    tint_img = Image.new("RGB", (100, 100), (5, 5, 5))
+    draw = ImageDraw.Draw(tint_img)
+    draw.rectangle([20, 20, 60, 60], fill=(255, 0, 255))
+    tint_buf = io.BytesIO()
+    tint_img.save(tint_buf, format="PNG")
+    tint_response = _fake_image_response(tint_buf.getvalue())
+
+    fake_client = _fake_client_sequence([detect_response, tint_response])
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "segment", "image_task": "segment",
+            "model": "gemini-3-pro-image",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert "gemini-3-pro-image" in body["model"]
+    assert qa_vlm_route.DETECT_MODEL in body["model"]
+    assert body["timing"]["detect_model_ms"] >= 0
+    assert body["timing"]["tint_model_ms"] >= 0
+
+    detect_call, tint_call = fake_client.aio.models.generate_content.call_args_list
+    assert detect_call.kwargs["model"] == qa_vlm_route.DETECT_MODEL  # internal step, unaffected by request model
+    assert tint_call.kwargs["model"] == "gemini-3-pro-image"
+
+
+# --------------------------------------------------------------------------- #
 # MM:SS parsing unit
 # --------------------------------------------------------------------------- #
 def test_parse_mmss():

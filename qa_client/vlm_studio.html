@@ -128,7 +128,7 @@
   .log-info { color: var(--yellow); }
 
   /* Tabs */
-  .tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .tab {
     padding: 8px 16px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
     color: var(--text-dim); border: none; background: none;
@@ -336,6 +336,20 @@
           <button class="tab" id="tab-imgtask-detect" onclick="setImageTask('detect')">Detect</button>
           <button class="tab" id="tab-imgtask-segment" onclick="setImageTask('segment')">Segment</button>
         </div>
+
+        <label>Model</label>
+        <select id="task-model" onchange="updateComposerEchoChips()"></select>
+
+        <div id="thinking-row" style="display:none;">
+          <label>Thinking</label>
+          <div class="tabs" id="thinking-toggle" style="margin-bottom:0; border-bottom:none;">
+            <button type="button" class="tab" data-level="off" onclick="setThinkingLevel('off')">Off</button>
+            <button type="button" class="tab" data-level="low" onclick="setThinkingLevel('low')">Low</button>
+            <button type="button" class="tab" data-level="medium" onclick="setThinkingLevel('medium')">Medium</button>
+            <button type="button" class="tab" data-level="high" onclick="setThinkingLevel('high')">High</button>
+          </div>
+        </div>
+
         <div class="segment-note" id="imgtask-segment-note" style="display:none;">Segment is a coarse, experimental highlight — treat mask boundaries as approximate.</div>
       </div>
 
@@ -355,6 +369,8 @@
         <div class="composer-chips">
           <span class="badge badge-a" id="composer-chip-scope">&mdash;</span>
           <span class="badge badge-b" id="composer-chip-mode">Event JSON</span>
+          <span class="badge badge-neutral" id="composer-chip-model">&mdash;</span>
+          <span class="badge badge-neutral" id="composer-chip-thinking" style="display:none;">&mdash;</span>
         </div>
         <textarea id="composer-input" placeholder="Ask about this window..." oninput="autoGrow(this); updateScopeUiAndSendState();" onkeydown="composerKeydown(event)"></textarea>
         <div class="composer-actions">
@@ -392,9 +408,19 @@ let seekIntent = null;  // { startSec, endSec, armed } while an active pill's pl
 let currentScopeType = 'timepoint'; // 'timepoint' | 'range'
 let currentMode = 'event';          // 'event' | 'image'
 let currentImageTask = 'generate';  // 'generate' | 'detect' | 'segment'
+let currentThinkingLevel = null;    // 'off' | 'low' | 'medium' | 'high' | null (task has no thinking control)
 let sending = false;
 
-let conversation = []; // ordered turns: {role, scopeType, startSec, endSec, mode, imageTask, promptText, response, error, rawRequest, rawResponse, latencyMs, typing, uid}
+// Frozen, live-verified model ids per task. Task key = 'event' when
+// currentMode === 'event', else currentImageTask ('generate' | 'detect' | 'segment').
+const TASK_CONFIG = {
+  event:    { models: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'low' },
+  detect:   { models: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'off' },
+  segment:  { models: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'], defaultModel: 'gemini-3.1-flash-image', thinking: false, defaultThinking: null },
+  generate: { models: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'], defaultModel: 'gemini-3.1-flash-image', thinking: false, defaultThinking: null },
+};
+
+let conversation = []; // ordered turns: {role, scopeType, startSec, endSec, mode, imageTask, promptText, response, error, rawRequest, rawResponse, model, thinking, latencyMs, typing, uid}
 
 // Detect/Segment spatial overlay: per-model-turn isolate state, keyed by turn.uid.
 let turnUidCounter = 0;
@@ -764,6 +790,7 @@ function setMode(mode) {
     logMsg('Image mode requires a single timepoint — switched scope to Single timepoint', 'log-info');
   }
   updateComposerPlaceholder();
+  populateTaskModels();
   updateScopeUiAndSendState();
 }
 
@@ -774,7 +801,63 @@ function setImageTask(task) {
   document.getElementById('tab-imgtask-segment').classList.toggle('active', task === 'segment');
   document.getElementById('imgtask-segment-note').style.display = (task === 'segment') ? 'block' : 'none';
   updateComposerPlaceholder();
+  populateTaskModels();
   updateScopeUiAndSendState();
+}
+
+// ============================================================
+// Model selector + thinking-intensity control (per task)
+// ============================================================
+function currentTaskKey() {
+  return currentMode === 'event' ? 'event' : currentImageTask;
+}
+
+function populateTaskModels() {
+  const task = currentTaskKey();
+  const cfg = TASK_CONFIG[task];
+  const sel = document.getElementById('task-model');
+  sel.innerHTML = cfg.models.map(m =>
+    '<option value="' + m + '"' + (m === cfg.defaultModel ? ' selected' : '') + '>' + m + '</option>'
+  ).join('');
+  sel.value = cfg.defaultModel;
+  updateThinkingControl();
+}
+
+function updateThinkingControl() {
+  const task = currentTaskKey();
+  const cfg = TASK_CONFIG[task];
+  const row = document.getElementById('thinking-row');
+  if (!cfg.thinking) {
+    row.style.display = 'none';
+    currentThinkingLevel = null;
+    updateComposerEchoChips();
+    return;
+  }
+  row.style.display = 'block';
+  setThinkingLevel(cfg.defaultThinking);
+}
+
+function setThinkingLevel(level) {
+  currentThinkingLevel = level;
+  document.querySelectorAll('#thinking-toggle .tab').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-level') === level);
+  });
+  updateComposerEchoChips();
+}
+
+function updateComposerEchoChips() {
+  const modelSel = document.getElementById('task-model');
+  const modelChip = document.getElementById('composer-chip-model');
+  modelChip.textContent = modelSel && modelSel.value ? modelSel.value : '—';
+
+  const thinkChip = document.getElementById('composer-chip-thinking');
+  const task = currentTaskKey();
+  if (TASK_CONFIG[task].thinking) {
+    thinkChip.style.display = 'inline-block';
+    thinkChip.textContent = 'think: ' + (currentThinkingLevel || 'off');
+  } else {
+    thinkChip.style.display = 'none';
+  }
 }
 
 function updateComposerPlaceholder() {
@@ -856,6 +939,55 @@ function renderEventsTable(events) {
 
 function rawDetails(raw) {
   return '<details><summary>Raw JSON</summary><pre>' + escHtml(JSON.stringify(raw, null, 2)) + '</pre></details>';
+}
+
+// ============================================================
+// Model comparison: latency formatting + per-turn provenance meta row
+// ============================================================
+function fmtLatency(ms) {
+  if (ms == null || isNaN(ms)) return '';
+  if (ms < 1000) return Math.round(ms) + 'ms';
+  return (ms / 1000).toFixed(1) + 's';
+}
+
+function timingLine(timing) {
+  if (!timing || typeof timing !== 'object') return '';
+  const parts = Object.keys(timing).map(k => {
+    const label = k.replace(/_ms$/, '').replace(/_/g, '-');
+    const v = Number(timing[k]);
+    return label + ' ' + (isNaN(v) ? timing[k] : fmtLatency(v));
+  });
+  return parts.join(' · ');
+}
+
+// Prepended to model-turn bubbles (Event, Detect, Segment, Generate alike):
+// model badge, round-trip latency, thinking-level chip (event/detect only),
+// and — if the backend's response.model drifted from what was requested —
+// a red "requested <id>" chip. Renders a dim secondary timing line when the
+// response carries a `timing` breakdown (never required).
+function modelMetaHtml(turn) {
+  const r = turn.response || {};
+  const modelId = r.model || turn.model;
+  if (!modelId && turn.latencyMs == null) return '';
+  const chips = [];
+  if (modelId) chips.push('<span class="badge badge-neutral">' + escHtml(modelId) + '</span>');
+  if (turn.latencyMs != null) chips.push('<span class="badge badge-neutral">' + fmtLatency(turn.latencyMs) + '</span>');
+  if (turn.thinking) chips.push('<span class="badge badge-neutral">think:' + escHtml(turn.thinking) + '</span>');
+  // For a segment turn, the backend echoes a COMPOSITE model id
+  // "{detect_model}+{tint_model}" — the requested model only ever selects
+  // the tint model, so compare against the component after the last '+'
+  // (falling back to the raw value for non-composite ids, e.g. a real
+  // detect-fallback single-model swap) rather than the whole string.
+  const usedModel = (r.model && r.model.indexOf('+') !== -1)
+    ? r.model.slice(r.model.lastIndexOf('+') + 1)
+    : r.model;
+  if (turn.model && usedModel && usedModel !== turn.model) {
+    chips.push('<span class="badge badge-b">requested ' + escHtml(turn.model) + '</span>');
+  }
+  let html = '<div class="msg-meta">' + chips.join('') + '</div>';
+  const tLine = timingLine(r.timing);
+  if (tLine) html += '<div class="reasoning" style="margin-top:-4px;">' + escHtml(tLine) + '</div>';
+  return html;
 }
 
 // ============================================================
@@ -953,8 +1085,9 @@ document.addEventListener('keydown', (e) => {
 
 function imageObjectsTurnHtml(turn) {
   const r = turn.response;
+  const meta = modelMetaHtml(turn);
   if (!r || !r.frame_b64) {
-    return '<div class="msg msg-model msg-err"><div>Backend response did not include a frame (frame_b64 missing).</div>' +
+    return '<div class="msg msg-model msg-err">' + meta + '<div>Backend response did not include a frame (frame_b64 missing).</div>' +
       rawDetails(turn.rawResponse) + '</div>';
   }
   const uid = turn.uid;
@@ -984,7 +1117,7 @@ function imageObjectsTurnHtml(turn) {
     ? '<button type="button" class="frame-caption" onclick="handlePillClick(' + frameTime + ', ' + frameTime + ', this)">Frame @ ' + secToMmss(frameTime) + '</button>'
     : '';
 
-  return '<div class="msg msg-model">' +
+  return '<div class="msg msg-model">' + meta +
     '<div class="frame-stage" data-turn-uid="' + uid + '">' +
     '<img class="result-img" src="data:' + mime + ';base64,' + r.frame_b64 + '">' +
     '<svg class="frame-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none">' + overlaySvg + '</svg>' +
@@ -1019,30 +1152,32 @@ function turnHtml(turn) {
       return imageObjectsTurnHtml(turn);
     }
     // generate: freeform image + notes, no overlay
+    const genMeta = modelMetaHtml(turn);
     if (!turn.response || !turn.response.image_b64) {
-      return '<div class="msg msg-model msg-err"><div>Backend response did not include an image (image_b64 missing).</div>' +
+      return '<div class="msg msg-model msg-err">' + genMeta + '<div>Backend response did not include an image (image_b64 missing).</div>' +
         rawDetails(turn.rawResponse) + '</div>';
     }
     const mime = turn.response.mime || 'image/png';
     const notes = turn.response.notes ? ('<div class="reasoning">' + escHtml(turn.response.notes) + '</div>') : '';
-    return '<div class="msg msg-model"><img class="result-img" src="data:' + mime + ';base64,' + turn.response.image_b64 + '">' + notes + rawDetails(turn.rawResponse) + '</div>';
+    return '<div class="msg msg-model">' + genMeta + '<img class="result-img" src="data:' + mime + ';base64,' + turn.response.image_b64 + '">' + notes + rawDetails(turn.rawResponse) + '</div>';
   }
   // event mode
+  const eventMeta = modelMetaHtml(turn);
   const events = turn.response ? turn.response.events : null;
   if (!Array.isArray(events)) {
-    return '<div class="msg msg-model msg-err"><div>Response did not include a parseable events list.</div>' + rawDetails(turn.rawResponse) + '</div>';
+    return '<div class="msg msg-model msg-err">' + eventMeta + '<div>Response did not include a parseable events list.</div>' + rawDetails(turn.rawResponse) + '</div>';
   }
   if (turn.response.parse_error) {
     // Backend could not parse a JSON array out of the model output — never fabricate events.
     const rawText = turn.response.raw != null ? String(turn.response.raw) : '';
-    return '<div class="msg msg-model msg-err"><div>Could not parse a valid events JSON array from the model response: ' +
+    return '<div class="msg msg-model msg-err">' + eventMeta + '<div>Could not parse a valid events JSON array from the model response: ' +
       escHtml(turn.response.parse_error) + '</div>' +
       (rawText ? ('<pre>' + escHtml(rawText) + '</pre>') : '') +
       rawDetails(turn.rawResponse) + '</div>';
   }
   const table = events.length ? renderEventsTable(events) : '<p style="color:var(--text-dim); font-size:0.8rem;">No events returned.</p>';
   const notes = turn.response.notes ? ('<div class="reasoning">' + escHtml(turn.response.notes) + '</div>') : '';
-  return '<div class="msg msg-model">' + table + notes + rawDetails(turn.rawResponse) + '</div>';
+  return '<div class="msg msg-model">' + eventMeta + table + notes + rawDetails(turn.rawResponse) + '</div>';
 }
 
 function renderTranscript() {
@@ -1109,7 +1244,33 @@ function newConversation() {
 // ============================================================
 // Mock responses (?mock=1) — no backend call, deterministic canned data
 // ============================================================
-function mockEventResponse(scope) {
+// Simulated round-trip latency, varied by model tier so the model-comparison
+// UI (badge + latency + timing line) is testable offline via ?mock=1.
+// "pro" tiers (incl. gemini-3-pro-image) are deliberately the slowest,
+// "lite" tiers the fastest, everything else (flash/base) in between.
+function mockLatencyMs(model) {
+  const m = String(model || '');
+  if (/pro/.test(m)) return 2200 + Math.round(Math.random() * 500);
+  if (/lite/.test(m)) return 480 + Math.round(Math.random() * 200);
+  return 900 + Math.round(Math.random() * 300);
+}
+
+// Mirrors the live backend `timing` shape (all values in MILLISECONDS) so
+// mock and live turns drive the exact same `timingLine` render path.
+// `withFrameExtract` is false for the event/chat mock (no frame to extract).
+function mockTiming(elapsedMs, withFrameExtract) {
+  const totalMs = Math.max(100, elapsedMs || 0);
+  const frameExtractMs = withFrameExtract ? Math.min(400, totalMs * 0.15) : 0;
+  const modelMs = Math.max(100, totalMs - frameExtractMs);
+  const timing = {
+    total_ms: Number(totalMs.toFixed(1)),
+    model_ms: Number(modelMs.toFixed(1))
+  };
+  if (withFrameExtract) timing.frame_extract_ms = Number(frameExtractMs.toFixed(1));
+  return timing;
+}
+
+function mockEventResponse(scope, model, elapsedMs) {
   const base = scope.startSec || 0;
   const mk = (offset, label, cat, tech, actor, desc, conf) => ({
     start: secToMmss(base + offset), end: secToMmss(base + offset + 2),
@@ -1122,17 +1283,19 @@ function mockEventResponse(scope) {
       mk(6, 'Submission attempt', 'submission', 'armbar', 'A', 'Athlete A attacks with an armbar from mount.', 0.65)
     ],
     notes: 'Mock response (?mock=1) — synthesized locally, no backend call made.',
-    model: 'mock-vlm-v0'
+    model: model || 'mock-vlm-v0',
+    timing: mockTiming(elapsedMs, false)
   };
 }
 
-function mockImageResponse() {
+function mockImageResponse(model, elapsedMs) {
   const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
   return {
     image_b64: b64,
     mime: 'image/png',
     notes: 'Mock 1x1 image (?mock=1) — synthesized locally, no backend call made.',
-    model: 'mock-vlm-v0'
+    model: model || 'mock-vlm-v0',
+    timing: mockTiming(elapsedMs, true)
   };
 }
 
@@ -1151,7 +1314,7 @@ function mockFrameDataB64() {
   return btoa(mockFrameSvg());
 }
 
-function mockDetectSegmentResponse(task, scope) {
+function mockDetectSegmentResponse(task, scope, model, elapsedMs) {
   const frameTime = (scope && typeof scope.startSec === 'number') ? scope.startSec : 0;
   const withMasks = task === 'segment';
   const objects = [
@@ -1183,8 +1346,9 @@ function mockDetectSegmentResponse(task, scope) {
     frame_time_sec: frameTime,
     objects,
     degraded: { masks_missing: false },
-    model: 'mock-vlm-v0',
-    notes: 'Mock ' + task + ' response (?mock=1) — synthesized locally, no backend call made.'
+    model: model || 'mock-vlm-v0',
+    notes: 'Mock ' + task + ' response (?mock=1) — synthesized locally, no backend call made.',
+    timing: mockTiming(elapsedMs, true)
   };
 }
 
@@ -1209,11 +1373,16 @@ async function sendMessage() {
 
   const mode = currentMode;
   const imageTask = currentImageTask;
+  const task = currentTaskKey();
+  const cfg = TASK_CONFIG[task];
+  const model = document.getElementById('task-model').value;
+  const thinking = cfg.thinking ? currentThinkingLevel : undefined;
+
   const userTurn = {
     role: 'user', scopeType: scope.type, startSec: scope.startSec, endSec: scope.endSec,
     mode, imageTask, promptText
   };
-  const modelTurn = { role: 'model', typing: true, mode, imageTask, uid: 'oturn-' + (++turnUidCounter) };
+  const modelTurn = { role: 'model', typing: true, mode, imageTask, model, thinking, uid: 'oturn-' + (++turnUidCounter) };
   conversation.push(userTurn, modelTurn);
   renderTranscript();
 
@@ -1228,12 +1397,13 @@ async function sendMessage() {
       rawRequest = {
         youtube_id: currentVideoId, youtube_url: currentVideoUrl,
         scope: { type: scope.type, start_sec: scope.startSec, end_sec: scope.endSec },
-        prompt: promptText, history, event_schema_version: 'v1'
+        prompt: promptText, history, event_schema_version: 'v1', model
       };
+      if (cfg.thinking) rawRequest.thinking = thinking;
       logMsg('POST ' + backendUrl() + '/qa/vlm-chat ' + JSON.stringify(rawRequest), 'log-out');
       if (isMock()) {
-        await sleep(300);
-        rawResponse = mockEventResponse(scope);
+        await sleep(mockLatencyMs(model));
+        rawResponse = mockEventResponse(scope, model, performance.now() - t0);
       } else {
         const resp = await fetch(backendUrl() + '/qa/vlm-chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rawRequest)
@@ -1245,14 +1415,15 @@ async function sendMessage() {
       rawRequest = {
         youtube_id: currentVideoId, youtube_url: currentVideoUrl,
         scope: { type: 'timepoint', start_sec: scope.startSec, end_sec: scope.endSec },
-        prompt: promptText, image_task: imageTask, history
+        prompt: promptText, image_task: imageTask, history, model
       };
+      if (cfg.thinking) rawRequest.thinking = thinking;
       logMsg('POST ' + backendUrl() + '/qa/vlm-image ' + JSON.stringify(rawRequest), 'log-out');
       if (isMock()) {
-        await sleep(300);
+        await sleep(mockLatencyMs(model));
         rawResponse = (imageTask === 'detect' || imageTask === 'segment')
-          ? mockDetectSegmentResponse(imageTask, scope)
-          : mockImageResponse();
+          ? mockDetectSegmentResponse(imageTask, scope, model, performance.now() - t0)
+          : mockImageResponse(model, performance.now() - t0);
       } else {
         const resp = await fetch(backendUrl() + '/qa/vlm-image', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rawRequest)

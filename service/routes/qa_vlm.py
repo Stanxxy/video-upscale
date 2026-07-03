@@ -26,6 +26,7 @@ import io
 import json
 import logging
 import subprocess
+import time
 from typing import Literal, Optional
 
 import cv2
@@ -40,19 +41,31 @@ from service.routes import state as route_state
 
 logger = logging.getLogger("service.routes")
 
-CHAT_MODEL = "gemini-3.1-flash-lite"
-IMAGE_MODEL = "gemini-3.1-flash-image"
+# --------------------------------------------------------------------------- #
+# Per-task model allowlists (live-verified) — this is a model-comparison
+# tool, so callers may request any model on their task's list; the request
+# is REJECTED (400) for anything off-list, never silently swapped for a
+# default. Module-level singular constants below are the task DEFAULTS used
+# when a request omits ``model``.
+# --------------------------------------------------------------------------- #
+EVENT_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"]
+CHAT_MODEL = EVENT_MODELS[0]  # default for /qa/vlm-chat
 
-# Box-only detect tier (reliable; no mask). 404/unavailable falls back once.
-DETECT_MODEL = "gemini-3.5-flash"
+DETECT_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"]
+DETECT_MODEL = DETECT_MODELS[0]  # default box-only detect tier
+# 404/model-unavailable falls back once to this fixed tier, regardless of
+# which allowlisted model the caller requested (unrelated to user choice).
 DETECT_MODEL_FALLBACK = "gemini-3.1-flash-lite"
+
+IMAGE_MODELS = ["gemini-3.1-flash-image", "gemini-3.1-flash-lite-image", "gemini-3-pro-image"]
+IMAGE_MODEL = IMAGE_MODELS[0]  # default for generate + segment tint
 
 # Coarse tint-highlight segment tier — EXPERIMENTAL. Gemini 3.x has no
 # segmentation head (see INS-049); instead of asking for pixel masks directly
 # we ask Nano Banana 2 to paint a translucent, distinctly-hued wash over each
 # detected subject, then recover an approximate silhouette polygon from the
 # returned image via classic HSV color thresholding (OpenCV).
-SEGMENT_TINT_MODEL = "gemini-3.1-flash-image"
+SEGMENT_TINT_MODEL = IMAGE_MODEL  # default; request ``model`` overrides per-call
 
 # One tint per detected subject, cycled if there are more subjects than
 # colors. Hue ranges are OpenCV HSV (H: 0-179) and were tuned against a tint
@@ -87,6 +100,8 @@ class QAVLMChatRequest(BaseModel):
     prompt: str
     history: list[QAVLMHistoryTurn] = []
     event_schema_version: str = "v1"
+    model: Optional[str] = None
+    thinking: Optional[Literal["off", "low", "medium", "high"]] = None
 
 
 class QAVLMImageRequest(BaseModel):
@@ -96,6 +111,11 @@ class QAVLMImageRequest(BaseModel):
     prompt: str
     image_task: Literal["generate", "detect", "segment"]
     history: list[QAVLMHistoryTurn] = []
+    model: Optional[str] = None
+    # Honored ONLY for image_task == "detect" (image models reject thinking
+    # config outright); silently ignored for generate/segment rather than
+    # rejected, since the field is generic across all three image tasks.
+    thinking: Optional[Literal["off", "low", "medium", "high"]] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -145,6 +165,41 @@ def _history_to_contents(history: list[QAVLMHistoryTurn]) -> list[types.Content]
         types.Content(role=turn.role, parts=[types.Part(text=turn.text)])
         for turn in history
     ]
+
+
+def _select_model(requested: Optional[str], allowlist: list[str], default: str, task_label: str) -> str:
+    """Resolve the model to use for ``task_label``.
+
+    ``requested`` omitted -> the task default. ``requested`` off the
+    live-verified allowlist -> HTTP 400 with the allowlist in the message
+    (NO silent fallback to a default — this is a model-comparison tool).
+    """
+    if requested is None:
+        return default
+    if requested not in allowlist:
+        raise HTTPException(
+            400,
+            f"Unsupported model {requested!r} for {task_label}; must be one of {allowlist}.",
+        )
+    return requested
+
+
+def thinking_config_for(model_id: str, ui_level: Optional[str]) -> Optional[types.ThinkingConfig]:
+    """Map a UI thinking level to a Gemini ``ThinkingConfig`` for ``model_id``.
+
+    Image models reject any thinking config outright (always ``None``).
+    ``gemini-3.1-pro-preview`` cannot disable thinking at all — "off" is
+    honored as its lowest available level (``thinking_level="low"``) rather
+    than a budget/level combination it would 400 on. Never set both
+    ``thinking_level`` and ``thinking_budget`` on the same config.
+    """
+    if model_id in IMAGE_MODELS:
+        return None
+    if ui_level in (None, "off"):
+        if model_id == "gemini-3.1-pro-preview":
+            return types.ThinkingConfig(thinking_level="low")
+        return types.ThinkingConfig(thinking_budget=0)
+    return types.ThinkingConfig(thinking_level=ui_level)
 
 
 # --------------------------------------------------------------------------- #
@@ -225,6 +280,9 @@ def _annotate_window_membership(events: list[dict], start_sec: int, end_sec: int
 async def vlm_chat(body: QAVLMChatRequest):
     """Run a single Gemini structured-output call over a YouTube time window."""
     _require_gemini_key()
+    total_t0 = time.perf_counter()
+    model = _select_model(body.model, EVENT_MODELS, CHAT_MODEL, "vlm-chat")
+    thinking_cfg = thinking_config_for(model, body.thinking)
     start_sec, end_sec = _effective_window(body.scope)
 
     video_part = types.Part(
@@ -245,23 +303,26 @@ async def vlm_chat(body: QAVLMChatRequest):
     contents.append(types.Content(role="user", parts=[types.Part(text=prompt_text), video_part]))
 
     client = _gemini_client()
+    model_t0 = time.perf_counter()
     try:
         logger.info(
-            "vlm-chat: youtube_id=%s window=%d-%ds model=%s",
-            body.youtube_id, start_sec, end_sec, CHAT_MODEL,
+            "vlm-chat: youtube_id=%s window=%d-%ds model=%s thinking=%s",
+            body.youtube_id, start_sec, end_sec, model, body.thinking,
         )
         response = await client.aio.models.generate_content(
-            model=CHAT_MODEL,
+            model=model,
             contents=contents,
             config=types.GenerateContentConfig(
                 temperature=0.2,
                 response_mime_type="application/json",
                 response_schema=_event_schema(),
+                thinking_config=thinking_cfg,
             ),
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
         logger.error("vlm-chat: Gemini call failed: %s", e, exc_info=True)
         raise HTTPException(502, f"Gemini call failed: {e}")
+    model_ms = (time.perf_counter() - model_t0) * 1000
 
     raw_text = response.text or ""
     try:
@@ -275,13 +336,15 @@ async def vlm_chat(body: QAVLMChatRequest):
         parse_error = str(e)
 
     events = _annotate_window_membership(parsed, start_sec, end_sec)
+    total_ms = (time.perf_counter() - total_t0) * 1000
 
     return {
         "events": events,
         "notes": f"Effective window: {start_sec}-{end_sec}s",
         "raw": raw_text,
-        "model": CHAT_MODEL,
+        "model": model,
         "parse_error": parse_error,
+        "timing": {"total_ms": round(total_ms, 1), "model_ms": round(model_ms, 1)},
     }
 
 
@@ -451,37 +514,54 @@ def _parse_detect_entries(raw_entries: list) -> list[dict]:
     return objects
 
 
-async def _run_detect(client: genai.Client, frame_img: Image.Image) -> tuple[list[dict], str]:
+async def _run_detect(
+    client: genai.Client,
+    frame_img: Image.Image,
+    model: str = DETECT_MODEL,
+    thinking_config: Optional[types.ThinkingConfig] = None,
+    max_output_tokens: int = 4096,
+) -> tuple[list[dict], str, float]:
     """Call the detect-tier model (with one 404/unavailable fallback retry).
+
+    ``model``/``thinking_config``/``max_output_tokens`` let the caller drive
+    the request-selected model + thinking level for a standalone ``detect``
+    task; callers that want the fixed internal default (the segment task's
+    detect-for-subjects step) simply omit them. Returns
+    ``(objects, model_used, model_ms)`` — ``model_ms`` is the real measured
+    Gemini call duration (both attempts if a fallback retry happened).
 
     Raises RuntimeError on any unrecoverable Gemini/transport error or an
     unparseable response — the caller turns that into a 502.
     """
+    if thinking_config is None:
+        thinking_config = types.ThinkingConfig(thinking_budget=0)
     config = types.GenerateContentConfig(
         temperature=0.0,
         response_mime_type="application/json",
-        thinking_config=types.ThinkingConfig(thinking_budget=0),
-        max_output_tokens=4096,
+        thinking_config=thinking_config,
+        max_output_tokens=max_output_tokens,
         response_schema=_detect_schema(),
     )
-    model = DETECT_MODEL
+    active_model = model
+    t0 = time.perf_counter()
     try:
         response = await client.aio.models.generate_content(
-            model=model, contents=[_DETECT_PROMPT, frame_img], config=config,
+            model=active_model, contents=[_DETECT_PROMPT, frame_img], config=config,
         )
     except Exception as e:  # noqa: BLE001 — fall back once on model-unavailable, else re-raise
         if not _is_model_unavailable(e):
-            raise RuntimeError(f"Gemini detect call failed ({model}): {e}") from e
+            raise RuntimeError(f"Gemini detect call failed ({active_model}): {e}") from e
         logger.warning(
-            "vlm-image detect: %s unavailable (%s), retrying with %s", model, e, DETECT_MODEL_FALLBACK
+            "vlm-image detect: %s unavailable (%s), retrying with %s", active_model, e, DETECT_MODEL_FALLBACK
         )
-        model = DETECT_MODEL_FALLBACK
+        active_model = DETECT_MODEL_FALLBACK
         try:
             response = await client.aio.models.generate_content(
-                model=model, contents=[_DETECT_PROMPT, frame_img], config=config,
+                model=active_model, contents=[_DETECT_PROMPT, frame_img], config=config,
             )
         except Exception as e2:  # noqa: BLE001 — surface the real Gemini/transport error
-            raise RuntimeError(f"Gemini detect call failed ({model}): {e2}") from e2
+            raise RuntimeError(f"Gemini detect call failed ({active_model}): {e2}") from e2
+    model_ms = (time.perf_counter() - t0) * 1000
 
     raw_text = response.text or ""
     try:
@@ -493,7 +573,7 @@ async def _run_detect(client: genai.Client, frame_img: Image.Image) -> tuple[lis
             f"Gemini detect returned non-JSON response: {e}: {raw_text[:500]!r}"
         ) from e
 
-    return _parse_detect_entries(parsed), model
+    return _parse_detect_entries(parsed), active_model, model_ms
 
 
 # --------------------------------------------------------------------------- #
@@ -564,29 +644,35 @@ def _extract_tint_polygons(
 async def vlm_image(body: QAVLMImageRequest):
     """Grab one YouTube frame server-side, then run Gemini image generation or segmentation."""
     _require_gemini_key()
+    total_t0 = time.perf_counter()
     if body.scope.type != "timepoint":
         raise HTTPException(400, "vlm-image requires scope.type == 'timepoint'")
     start_sec = body.scope.start_sec
 
     loop = asyncio.get_event_loop()
+    extract_t0 = time.perf_counter()
     try:
         frame_img = await loop.run_in_executor(None, _extract_youtube_frame, body.youtube_url, start_sec)
     except Exception as e:  # noqa: BLE001 — surface the real yt-dlp/ffmpeg error, no placeholder frame
         logger.error("vlm-image: frame extraction failed: %s", e, exc_info=True)
         raise HTTPException(502, f"Frame extraction failed (yt-dlp/ffmpeg): {e}")
+    frame_extract_ms = (time.perf_counter() - extract_t0) * 1000
 
     client = _gemini_client()
 
     if body.image_task == "generate":
+        model = _select_model(body.model, IMAGE_MODELS, IMAGE_MODEL, "vlm-image generate")
+        model_t0 = time.perf_counter()
         try:
             response = await client.aio.models.generate_content(
-                model=IMAGE_MODEL,
+                model=model,
                 contents=[body.prompt, frame_img],
                 config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
             )
         except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
             logger.error("vlm-image generate: Gemini call failed: %s", e, exc_info=True)
             raise HTTPException(502, f"Gemini image generation failed: {e}")
+        model_ms = (time.perf_counter() - model_t0) * 1000
 
         image_bytes = None
         notes = None
@@ -599,11 +685,17 @@ async def vlm_image(body: QAVLMImageRequest):
         if image_bytes is None:
             raise HTTPException(502, "Gemini image model returned no image data (no inline_data part).")
 
+        total_ms = (time.perf_counter() - total_t0) * 1000
         return {
             "image_b64": base64.b64encode(image_bytes).decode("ascii"),
             "mime": "image/png",
             "notes": notes,
-            "model": IMAGE_MODEL,
+            "model": model,
+            "timing": {
+                "total_ms": round(total_ms, 1),
+                "model_ms": round(model_ms, 1),
+                "frame_extract_ms": round(frame_extract_ms, 1),
+            },
         }
 
     frame_b64 = _encode_frame_png(frame_img)
@@ -614,28 +706,48 @@ async def vlm_image(body: QAVLMImageRequest):
     }
 
     if body.image_task == "detect":
+        model = _select_model(body.model, DETECT_MODELS, DETECT_MODEL, "vlm-image detect")
+        thinking_cfg = thinking_config_for(model, body.thinking)
+        thinking_on = getattr(thinking_cfg, "thinking_level", None) is not None
+        max_tokens = 8192 if thinking_on else 4096
         try:
-            objects, model_used = await _run_detect(client, frame_img)
+            objects, model_used, model_ms = await _run_detect(
+                client, frame_img, model=model, thinking_config=thinking_cfg, max_output_tokens=max_tokens,
+            )
         except RuntimeError as e:  # noqa: BLE001 — surface the real Gemini/transport error
             logger.error("vlm-image detect: %s", e, exc_info=True)
             raise HTTPException(502, str(e))
 
+        total_ms = (time.perf_counter() - total_t0) * 1000
         return {
             **base_response,
             "objects": objects,
             "model": model_used,
             "notes": f"{len(objects)} object(s) detected." if objects else "No objects detected.",
+            "timing": {
+                "total_ms": round(total_ms, 1),
+                "model_ms": round(model_ms, 1),
+                "frame_extract_ms": round(frame_extract_ms, 1),
+            },
         }
 
     # image_task == "segment" — EXPERIMENTAL coarse tint-highlight + polygon recovery.
+    # ``body.model``/``body.thinking`` select the TINT image model only; the
+    # internal detect-for-subjects step below keeps its fixed default detect
+    # model + thinking-off (never request-driven — image models reject
+    # thinking anyway, and the detect step is an implementation detail of
+    # segmentation, not something the caller is comparing).
+    tint_model = _select_model(body.model, IMAGE_MODELS, IMAGE_MODEL, "vlm-image segment")
+
     # Step 1: detect (reliable boxes + labels + subject count).
     try:
-        objects, detect_model_used = await _run_detect(client, frame_img)
+        objects, detect_model_used, detect_model_ms = await _run_detect(client, frame_img)
     except RuntimeError as e:  # noqa: BLE001 — surface the real Gemini/transport error
         logger.error("vlm-image segment (detect phase): %s", e, exc_info=True)
         raise HTTPException(502, str(e))
 
     if not objects:
+        total_ms = (time.perf_counter() - total_t0) * 1000
         return {
             **base_response,
             "objects": [],
@@ -644,6 +756,11 @@ async def vlm_image(body: QAVLMImageRequest):
                 "No subjects detected; nothing to tint-segment "
                 "(EXPERIMENTAL coarse tint-highlight segmentation)."
             ),
+            "timing": {
+                "total_ms": round(total_ms, 1),
+                "model_ms": round(detect_model_ms, 1),
+                "frame_extract_ms": round(frame_extract_ms, 1),
+            },
         }
 
     # Step 2: assign one distinct tint color per subject and ask Nano Banana 2
@@ -662,15 +779,17 @@ async def vlm_image(body: QAVLMImageRequest):
     assignments = list(zip(objects[:tintable_count], _TINT_SPECS[:tintable_count]))
     tint_prompt = _build_tint_prompt([(obj["label"], spec) for obj, spec in assignments])
 
+    tint_t0 = time.perf_counter()
     try:
         tint_response = await client.aio.models.generate_content(
-            model=SEGMENT_TINT_MODEL,
+            model=tint_model,
             contents=[tint_prompt, frame_img],
             config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
         logger.error("vlm-image segment (tint phase): Gemini call failed: %s", e, exc_info=True)
         raise HTTPException(502, f"Gemini tint-segmentation call failed: {e}")
+    tint_model_ms = (time.perf_counter() - tint_t0) * 1000
 
     tint_image_bytes, tint_notes = _extract_inline_image_and_text(tint_response)
 
@@ -741,16 +860,25 @@ async def vlm_image(body: QAVLMImageRequest):
 
     notes = (
         f"EXPERIMENTAL coarse tint-highlight segmentation ({detect_model_used} boxes + "
-        f"{SEGMENT_TINT_MODEL} tint recovery). Masks are approximate silhouettes recovered "
+        f"{tint_model} tint recovery). Masks are approximate silhouettes recovered "
         "from a translucent color wash via HSV thresholding — not pixel-precise segmentation."
     )
     if tint_notes:
         notes += f" Gemini notes: {tint_notes}"
 
+    total_ms = (time.perf_counter() - total_t0) * 1000
+    model_ms = detect_model_ms + tint_model_ms
     return {
         **base_response,
         "objects": final_objects,
         "degraded": degraded,
-        "model": f"{detect_model_used}+{SEGMENT_TINT_MODEL}",
+        "model": f"{detect_model_used}+{tint_model}",
         "notes": notes,
+        "timing": {
+            "total_ms": round(total_ms, 1),
+            "model_ms": round(model_ms, 1),
+            "frame_extract_ms": round(frame_extract_ms, 1),
+            "detect_model_ms": round(detect_model_ms, 1),
+            "tint_model_ms": round(tint_model_ms, 1),
+        },
     }
