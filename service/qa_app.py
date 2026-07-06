@@ -39,6 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.routes.qa import identity_analyze
+from service.routes.qa_pipeline import list_pipelines, pipeline_defaults, pipeline_run
 from service.routes.qa_vlm import vlm_chat, vlm_image
 from service.routes.state import init_routes
 
@@ -89,6 +90,11 @@ def create_qa_app() -> FastAPI:
     app.post("/qa/vlm-chat")(vlm_chat)
     app.post("/qa/vlm-image")(vlm_image)
     app.post("/qa/identity-analyze")(identity_analyze)
+
+    # Pipeline DAG runner (build plan 2026-07-03) — QA-only, streaming NDJSON.
+    app.get("/qa/pipelines")(list_pipelines)
+    app.get("/qa/pipeline-defaults")(pipeline_defaults)
+    app.post("/qa/pipeline-run")(pipeline_run)
 
     return app
 

@@ -1,0 +1,335 @@
+"""Default pipeline definitions — ``single-shot``, ``vision-mimic``, ``vision-mimic-multi``.
+
+Registry is architected for N pipelines (build plan §1.4): adding a 4th pipeline
+is "add a dict entry", nothing structural. ``get_default`` returns a deep copy so
+callers can mutate freely without corrupting the registry singleton.
+"""
+from __future__ import annotations
+
+from pydantic import ValidationError
+
+from service.pipelines.models import (
+    NODE_CONFIG_MODELS,
+    STRUCTURAL_NODE_TYPES,
+    AnalyzeConfig,
+    ChunkAnalyzeConfig,
+    ChunkSegmentConfig,
+    ContextChainConfig,
+    DedupConfig,
+    DetectCropConfig,
+    FrameSampleConfig,
+    PipelineDef,
+    StageDef,
+    VideoWindowConfig,
+    WindowConfig,
+)
+from service.pipelines.simplified_tags import DEFAULT_TAXONOMY_TEXT
+from service.routes.qa_vlm import DETECT_MODELS, EVENT_MODELS
+
+# Model-id allowlists per node type, reused (not redefined) from qa_vlm.py's
+# live-verified per-task lists — same no-silent-swap discipline as
+# ``qa_vlm._select_model``: an off-allowlist model is a 400 at validation time,
+# never a late Gemini 4xx mid-stream.
+_MODEL_ALLOWLIST_BY_NODE_TYPE: dict[str, list[str]] = {
+    "analyze": EVENT_MODELS,
+    "detect_crop": DETECT_MODELS,
+    "chunk_segment": EVENT_MODELS,
+    "chunk_analyze": EVENT_MODELS,
+}
+
+
+def _single_shot() -> PipelineDef:
+    return PipelineDef(
+        id="single-shot",
+        label="Single-shot",
+        description=(
+            "Today's /qa/vlm-chat behavior recast as a pipeline — native YouTube "
+            "video window (no frame sampling), one Gemini call, Event JSON v1. "
+            "Zero regression vs the existing QA page."
+        ),
+        stages=[
+            StageDef(
+                id="video_window", type="video_window", label="Video Window",
+                enabled=True, config=VideoWindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="analyze", type="analyze", label="Analyze",
+                enabled=True,
+                config=AnalyzeConfig(
+                    agent_mode="single",
+                    model="gemini-3.5-flash",
+                    thinking="low",
+                    return_format="events-v1",
+                ).model_dump(),
+            ),
+        ],
+    )
+
+
+def _vision_mimic(pipeline_id: str, label: str, agent_mode: str) -> PipelineDef:
+    return PipelineDef(
+        id=pipeline_id,
+        label=label,
+        description=(
+            "Gemini-only mimic of the production vision engine: frame-sample -> "
+            "per-frame role-labeled detect+crop-to-athletes -> sliding window -> "
+            "analyze -> context-chain -> dedup. No tracking model, no upscale — "
+            "see the plan's fidelity caveats (§6)."
+        ),
+        stages=[
+            StageDef(
+                id="frame_sample", type="frame_sample", label="Sample",
+                enabled=True, config=FrameSampleConfig().model_dump(),
+            ),
+            StageDef(
+                id="detect_crop", type="detect_crop", label="Detect + Crop",
+                enabled=True, config=DetectCropConfig().model_dump(),
+            ),
+            StageDef(
+                id="window", type="window", label="Window",
+                enabled=True, config=WindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="analyze", type="analyze", label="Analyze",
+                enabled=True,
+                config=AnalyzeConfig(agent_mode=agent_mode).model_dump(),
+            ),
+            StageDef(
+                id="context_chain", type="context_chain", label="Context Chain",
+                enabled=True, config=ContextChainConfig().model_dump(),
+            ),
+            StageDef(
+                id="dedup", type="dedup", label="Dedup",
+                enabled=True, config=DedupConfig().model_dump(),
+            ),
+        ],
+    )
+
+
+def _vision_mimic_simplified() -> PipelineDef:
+    """``vision-mimic-simplified`` — same fixed stage set as ``vision-mimic``
+    (frame_sample -> detect_crop -> window -> analyze -> context_chain ->
+    dedup), single-agent only, but the ``analyze`` node tags with the NEW
+    experimental 4-axis simplified taxonomy (``return_format=
+    "simplified-tags-v1"``, ``service/pipelines/simplified_tags.py``) instead
+    of the production ``clips-v1`` schema. QA experiment only — see
+    ``working_log/BJJ_TAXONOMY_SIMPLIFIED_GEMINI_TAGGING.md``. The ``analyze``
+    node's ``system_instruction`` defaults to the bundled
+    ``bjj_taxonomy_simplified.md`` text (still overridable via the node's
+    system_instruction card, same as every other pipeline's analyze node)."""
+    return PipelineDef(
+        id="vision-mimic-simplified",
+        label="Vision-engine mimic (simplified taxonomy)",
+        description=(
+            "Same frame-sample -> detect+crop -> window -> analyze -> context-chain -> "
+            "dedup shape as vision-mimic, but the analyze node tags with the NEW "
+            "simplified 4-axis taxonomy (position/actor/action_class/outcome + "
+            "specific_technique_guess) instead of the production clips-v1 schema. "
+            "QA experiment only — no tracking model, no upscale, not routed through "
+            "analyzer.py's clips-v1 prompt."
+        ),
+        stages=[
+            StageDef(
+                id="frame_sample", type="frame_sample", label="Sample",
+                enabled=True, config=FrameSampleConfig().model_dump(),
+            ),
+            StageDef(
+                id="detect_crop", type="detect_crop", label="Detect + Crop",
+                enabled=True, config=DetectCropConfig().model_dump(),
+            ),
+            StageDef(
+                id="window", type="window", label="Window",
+                enabled=True, config=WindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="analyze", type="analyze", label="Analyze",
+                enabled=True,
+                config=AnalyzeConfig(
+                    agent_mode="single",
+                    model="gemini-3.1-flash-lite",
+                    return_format="simplified-tags-v1",
+                    system_instruction=DEFAULT_TAXONOMY_TEXT,
+                ).model_dump(),
+            ),
+            StageDef(
+                id="context_chain", type="context_chain", label="Context Chain",
+                enabled=True, config=ContextChainConfig().model_dump(),
+            ),
+            StageDef(
+                id="dedup", type="dedup", label="Dedup",
+                enabled=True, config=DedupConfig().model_dump(),
+            ),
+        ],
+    )
+
+
+def _chunk_segment_tags() -> PipelineDef:
+    """``chunk-segment-tags`` — YouTube-URL-native, two-Gemini-phase pipeline,
+    SEQUENTIAL analysis (never parallel — continuity over speed, per product
+    decision). Fixed stage set: ``video_window -> chunk_segment -> chunk_analyze
+    -> context_chain -> dedup``.
+
+    PASS 1 (``chunk_segment``): ONE cheap rough-scan Gemini call classifies the
+    whole scoped video into an ordered chunk map (Gracie's BJJ-correct reason
+    enum: match_action/restart_reset/stoppage/pre_match/broadcast).
+
+    PASS 2 (``chunk_analyze``): a SEQUENTIAL native-video loop over only the
+    ``worth_analysis`` chunks, tagging each with the NEW time-keyed
+    ``simplified-tags-time-v1`` format (``service/pipelines/simplified_tags.py``
+    — chunk-relative seconds from Gemini, converted to absolute match seconds
+    in Python). No frame sampling, no download, no tracking model, no upscale.
+    """
+    return PipelineDef(
+        id="chunk-segment-tags",
+        label="Chunk segment + tag (native)",
+        description=(
+            "YouTube-native two-pass pipeline: one cheap Gemini scan segments the "
+            "scope into chunks (match_action/restart_reset/stoppage/pre_match/"
+            "broadcast), then a SEQUENTIAL per-chunk native-video analyze pass tags "
+            "only the worthy (match_action) chunks with the time-keyed 4-axis "
+            "simplified taxonomy. No frame sampling, no tracking model, no upscale."
+        ),
+        stages=[
+            StageDef(
+                id="video_window", type="video_window", label="Video Window",
+                enabled=True, config=VideoWindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="chunk_segment", type="chunk_segment", label="Chunk Segment",
+                enabled=True, config=ChunkSegmentConfig().model_dump(),
+            ),
+            StageDef(
+                id="chunk_analyze", type="chunk_analyze", label="Chunk Analyze",
+                enabled=True, config=ChunkAnalyzeConfig().model_dump(),
+            ),
+            StageDef(
+                id="context_chain", type="context_chain", label="Context Chain",
+                enabled=True, config=ContextChainConfig().model_dump(),
+            ),
+            StageDef(
+                id="dedup", type="dedup", label="Dedup",
+                enabled=True, config=DedupConfig().model_dump(),
+            ),
+        ],
+    )
+
+
+DEFAULT_PIPELINES: dict[str, PipelineDef] = {
+    "single-shot": _single_shot(),
+    "vision-mimic": _vision_mimic("vision-mimic", "Vision-engine mimic", "single"),
+    "vision-mimic-multi": _vision_mimic("vision-mimic-multi", "Vision-engine mimic (multi-agent)", "multi"),
+    "vision-mimic-simplified": _vision_mimic_simplified(),
+    "chunk-segment-tags": _chunk_segment_tags(),
+}
+
+# Fixed stage-type SET per pipeline id (order-independent) — used by fail-closed
+# validation to enforce "FIXED stage set per pipeline; enable/disable/reorder
+# within that set. No arbitrary node authoring" (build plan §1.1).
+PIPELINE_STAGE_TYPES: dict[str, frozenset[str]] = {
+    pid: frozenset(s.type for s in pdef.stages) for pid, pdef in DEFAULT_PIPELINES.items()
+}
+
+
+def get_default(pipeline_id: str) -> PipelineDef:
+    """Return a deep copy of the named pipeline's default definition.
+
+    Raises KeyError (caller converts to HTTP 404/400) for an unknown id — no
+    fabricated/blank default.
+    """
+    return DEFAULT_PIPELINES[pipeline_id].model_copy(deep=True)
+
+
+def list_pipelines() -> list[dict]:
+    """Summary list for ``GET /qa/pipelines`` — id/label/description only (no
+    stage bodies; fetch those via ``GET /qa/pipeline-defaults?id=``)."""
+    return [
+        {"id": p.id, "label": p.label, "description": p.description}
+        for p in DEFAULT_PIPELINES.values()
+    ]
+
+
+class PipelineValidationError(ValueError):
+    """Raised by ``validate_pipeline_def`` — the route layer converts this to HTTP 400.
+    Never silently drops/coerces a bad definition (fail-closed, build plan §3.1)."""
+
+
+def validate_pipeline_def(pipeline: PipelineDef) -> PipelineDef:
+    """Fail-closed validation of a (possibly frontend-edited) ``PipelineDef``.
+
+    Checks, in order:
+    1. ``pipeline.id`` is a known registered pipeline (no arbitrary pipeline ids).
+    2. The stage TYPE SET matches that pipeline's fixed set exactly (order and
+       per-stage ``enabled``/``label``/``id`` may vary — no arbitrary node
+       authoring, no dropped/added node types).
+    3. Every stage's ``type`` has a config model (defensive; (1)+(2) already
+       guarantee this for registered pipelines).
+    4. Every stage's ``config`` dict validates against its node type's Pydantic
+       model with ``extra="forbid"`` — unknown key or bad value -> 400.
+    5. ``analyze``/``detect_crop`` stages' ``model`` field is checked against the
+       corresponding qa_vlm allowlist (``EVENT_MODELS``/``DETECT_MODELS``) — an
+       off-allowlist model id is rejected here, not left to a later Gemini 4xx.
+    6. No structural node type (``STRUCTURAL_NODE_TYPES``) is disabled.
+    7. An ``analyze`` stage with ``return_format="simplified-tags-v1"`` never pairs
+       with ``agent_mode="multi"`` (no multi-agent path for that format — fail
+       closed at validation time rather than a runtime error mid-stream).
+
+    Returns the SAME ``PipelineDef`` (not a reconstructed one) on success so the
+    caller keeps the exact stage order the request specified (reordering within
+    the fixed set is allowed, per build plan §1.1).
+    """
+    if pipeline.id not in PIPELINE_STAGE_TYPES:
+        raise PipelineValidationError(
+            f"Unknown pipeline id {pipeline.id!r}; must be one of {sorted(PIPELINE_STAGE_TYPES)}."
+        )
+
+    expected_types = PIPELINE_STAGE_TYPES[pipeline.id]
+    actual_types = frozenset(s.type for s in pipeline.stages)
+    if actual_types != expected_types:
+        raise PipelineValidationError(
+            f"Pipeline {pipeline.id!r} has a fixed stage set {sorted(expected_types)}; "
+            f"got {sorted(actual_types)}. Enable/disable/reorder is allowed, adding or "
+            f"removing a stage type is not."
+        )
+
+    seen_ids: set[str] = set()
+    for stage in pipeline.stages:
+        if stage.id in seen_ids:
+            raise PipelineValidationError(f"Duplicate stage id {stage.id!r} in pipeline {pipeline.id!r}.")
+        seen_ids.add(stage.id)
+
+        config_model = NODE_CONFIG_MODELS.get(stage.type)
+        if config_model is None:  # pragma: no cover — guarded by the type-set check above
+            raise PipelineValidationError(f"Unknown node type {stage.type!r} for stage {stage.id!r}.")
+
+        try:
+            validated_config = config_model.model_validate(stage.config)
+        except ValidationError as e:
+            raise PipelineValidationError(
+                f"Invalid config for stage {stage.id!r} (type={stage.type!r}): {e}"
+            ) from e
+
+        allowlist = _MODEL_ALLOWLIST_BY_NODE_TYPE.get(stage.type)
+        if allowlist is not None and validated_config.model not in allowlist:
+            raise PipelineValidationError(
+                f"Unsupported model {validated_config.model!r} for stage {stage.id!r} "
+                f"(type={stage.type!r}); must be one of {allowlist}."
+            )
+
+        if stage.type in STRUCTURAL_NODE_TYPES and not stage.enabled:
+            raise PipelineValidationError(
+                f"Stage {stage.id!r} (type={stage.type!r}) is structural and cannot be disabled."
+            )
+
+        if (
+            stage.type == "analyze"
+            and validated_config.return_format == "simplified-tags-v1"
+            and validated_config.agent_mode == "multi"
+        ):
+            raise PipelineValidationError(
+                f"Stage {stage.id!r}: return_format='simplified-tags-v1' does not support "
+                "agent_mode='multi' — the QA-layer 4-axis analyzer (service/pipelines/"
+                "simplified_tags.py) has no multi-agent Judge synthesis path. Use "
+                "agent_mode='single'."
+            )
+
+    return pipeline

@@ -17,6 +17,13 @@ No fabrication / no fallback data:
   boxes/masks: malformed detect entries are dropped, and a ``segment`` call
   whose tint recovery finds no usable mask degrades to boxes-only
   (``degraded.masks_missing``) rather than 502ing or inventing a mask.
+
+Optional ``system_instruction`` (user-loadable taxonomy/schema, e.g. the
+repo's ``bjj_analysis_taxonomy.md``) is forwarded to Gemini via
+``GenerateContentConfig.system_instruction`` — never injected into the
+per-turn prompt text, never hard-coded. Honored for ``vlm-chat`` and for
+``vlm-image`` with ``image_task == "generate"`` only; the ``detect``/
+``segment`` prompts are fixed internal implementation details and ignore it.
 """
 from __future__ import annotations
 
@@ -102,6 +109,11 @@ class QAVLMChatRequest(BaseModel):
     event_schema_version: str = "v1"
     model: Optional[str] = None
     thinking: Optional[Literal["off", "low", "medium", "high"]] = None
+    # Optional Gemini ``system_instruction`` — a persisted, user-loadable
+    # taxonomy/schema (e.g. bjj_analysis_taxonomy.md) the caller wants Gemini
+    # to constrain its technique/action vocabulary to. Never injected into the
+    # per-turn prompt text; always sent as-is via GenerateContentConfig.
+    system_instruction: Optional[str] = None
 
 
 class QAVLMImageRequest(BaseModel):
@@ -116,6 +128,10 @@ class QAVLMImageRequest(BaseModel):
     # config outright); silently ignored for generate/segment rather than
     # rejected, since the field is generic across all three image tasks.
     thinking: Optional[Literal["off", "low", "medium", "high"]] = None
+    # Honored ONLY for image_task == "generate" — the detect/segment prompts
+    # (_DETECT_PROMPT, the tint-highlight prompt) are fixed internal
+    # implementation details, not something a caller's taxonomy should steer.
+    system_instruction: Optional[str] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -158,6 +174,19 @@ def _effective_window(scope: QAVLMScope) -> tuple[int, int]:
             400, f"Invalid scope window: start_sec={start} must be < end_sec={end}"
         )
     return start, end
+
+
+def _clean_system_instruction(raw: Optional[str]) -> Optional[str]:
+    """Normalize a request's ``system_instruction`` for Gemini.
+
+    Empty/whitespace-only input -> ``None`` (never send Gemini an empty-string
+    system instruction). Otherwise returns the trimmed text as-is — the
+    taxonomy/schema content is user-supplied and opaque to this service.
+    """
+    if raw is None:
+        return None
+    cleaned = raw.strip()
+    return cleaned or None
 
 
 def _history_to_contents(history: list[QAVLMHistoryTurn]) -> list[types.Content]:
@@ -283,6 +312,7 @@ async def vlm_chat(body: QAVLMChatRequest):
     total_t0 = time.perf_counter()
     model = _select_model(body.model, EVENT_MODELS, CHAT_MODEL, "vlm-chat")
     thinking_cfg = thinking_config_for(model, body.thinking)
+    system_instruction = _clean_system_instruction(body.system_instruction)
     start_sec, end_sec = _effective_window(body.scope)
 
     video_part = types.Part(
@@ -317,6 +347,7 @@ async def vlm_chat(body: QAVLMChatRequest):
                 response_mime_type="application/json",
                 response_schema=_event_schema(),
                 thinking_config=thinking_cfg,
+                system_instruction=system_instruction,
             ),
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
@@ -520,6 +551,7 @@ async def _run_detect(
     model: str = DETECT_MODEL,
     thinking_config: Optional[types.ThinkingConfig] = None,
     max_output_tokens: int = 4096,
+    prompt: str = _DETECT_PROMPT,
 ) -> tuple[list[dict], str, float]:
     """Call the detect-tier model (with one 404/unavailable fallback retry).
 
@@ -529,6 +561,11 @@ async def _run_detect(
     detect-for-subjects step) simply omit them. Returns
     ``(objects, model_used, model_ms)`` — ``model_ms`` is the real measured
     Gemini call duration (both attempts if a fallback retry happened).
+
+    ``prompt`` is additive/keyword-friendly (default ``_DETECT_PROMPT``, byte-identical
+    to every pre-existing caller): the QA pipeline's ``detect_crop`` node passes a
+    ROLE-LABELED variant (athlete/referee/coach/bystander) instead — same response
+    schema (``_detect_schema()``), different instruction text only.
 
     Raises RuntimeError on any unrecoverable Gemini/transport error or an
     unparseable response — the caller turns that into a 502.
@@ -546,7 +583,7 @@ async def _run_detect(
     t0 = time.perf_counter()
     try:
         response = await client.aio.models.generate_content(
-            model=active_model, contents=[_DETECT_PROMPT, frame_img], config=config,
+            model=active_model, contents=[prompt, frame_img], config=config,
         )
     except Exception as e:  # noqa: BLE001 — fall back once on model-unavailable, else re-raise
         if not _is_model_unavailable(e):
@@ -557,7 +594,7 @@ async def _run_detect(
         active_model = DETECT_MODEL_FALLBACK
         try:
             response = await client.aio.models.generate_content(
-                model=active_model, contents=[_DETECT_PROMPT, frame_img], config=config,
+                model=active_model, contents=[prompt, frame_img], config=config,
             )
         except Exception as e2:  # noqa: BLE001 — surface the real Gemini/transport error
             raise RuntimeError(f"Gemini detect call failed ({active_model}): {e2}") from e2
@@ -662,12 +699,16 @@ async def vlm_image(body: QAVLMImageRequest):
 
     if body.image_task == "generate":
         model = _select_model(body.model, IMAGE_MODELS, IMAGE_MODEL, "vlm-image generate")
+        system_instruction = _clean_system_instruction(body.system_instruction)
         model_t0 = time.perf_counter()
         try:
             response = await client.aio.models.generate_content(
                 model=model,
                 contents=[body.prompt, frame_img],
-                config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
+                config=types.GenerateContentConfig(
+                    response_modalities=["TEXT", "IMAGE"],
+                    system_instruction=system_instruction,
+                ),
             )
         except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
             logger.error("vlm-image generate: Gemini call failed: %s", e, exc_info=True)

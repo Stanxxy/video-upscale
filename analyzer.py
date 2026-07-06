@@ -111,24 +111,64 @@ def _build_response_schema(player_ids):
 
 
 class BJJTechniqueAnalyzer:
-    def __init__(self, api_key, taxonomy_path=None, request_timeout_ms: Optional[int] = None):
+    def __init__(
+        self,
+        api_key,
+        taxonomy_path=None,
+        request_timeout_ms: Optional[int] = None,
+        *,
+        model_id: str = "gemini-3.1-flash-lite",
+        temperature: float = 0.2,
+        thinking_config: Optional[types.ThinkingConfig] = None,
+        taxonomy_text: Optional[str] = None,
+    ):
+        """``model_id``/``temperature``/``thinking_config``/``taxonomy_text`` are
+        additive, keyword-only, production-preserving knobs (QA pipeline seam — see
+        working_log/plans/2026-07-03-vlm-studio-pipeline-dag-build-plan.md §3.3).
+        Defaults are IDENTICAL to the hardcoded values production callers relied on
+        before this seam existed, so any caller that omits them gets byte-identical
+        behavior. ``thinking_config=None`` (the default) means the GenerateContentConfig
+        sent to Gemini OMITS the ``thinking_config`` field entirely, exactly as before.
+        ``taxonomy_text=None`` (the default) means the taxonomy/system text is read
+        from ``taxonomy_path`` exactly as before; a non-None value REPLACES that file
+        read entirely (used by the QA pipeline's per-node ``system_instruction`` override).
+        """
         if not api_key:
             raise ValueError("API Key is required for BJJTechniqueAnalyzer")
         to_ms = _effective_timeout_ms(request_timeout_ms)
         self.client = _gemini_client(api_key, to_ms)
         self._request_timeout_ms = to_ms
-        self.model_id = "gemini-3.1-flash-lite"
+        self.model_id = model_id
+        self.temperature = temperature
+        self.thinking_config = thinking_config
+        self.taxonomy_text = taxonomy_text
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
 
+    def _build_generate_config(self, system_instruction, response_schema):
+        """Build ``GenerateContentConfig`` kwargs additively so the default path
+        (no ``thinking_config``) is byte-identical to the pre-seam call site."""
+        kwargs = dict(
+            system_instruction=system_instruction,
+            temperature=self.temperature,
+            response_mime_type="application/json",
+            response_schema=response_schema,
+        )
+        if self.thinking_config is not None:
+            kwargs["thinking_config"] = self.thinking_config
+        return types.GenerateContentConfig(**kwargs)
+
     def _build_contents_and_prompt(self, frames, frame_indices, previous_context, player_references):
         """Build the prompt text, system instruction, and contents list (shared by sync/async)."""
-        try:
-            with open(self.taxonomy_path, "r") as f:
-                taxonomy_text = f.read()
-        except Exception:
-            taxonomy_text = "Taxonomy file not found."
+        if self.taxonomy_text is not None:
+            taxonomy_text = self.taxonomy_text
+        else:
+            try:
+                with open(self.taxonomy_path, "r") as f:
+                    taxonomy_text = f.read()
+            except Exception:
+                taxonomy_text = "Taxonomy file not found."
 
         system_instruction = f"""
         {taxonomy_text}
@@ -226,11 +266,19 @@ class BJJTechniqueAnalyzer:
             text = text.split("```")[1].split("```")[0]
         return text.strip()
 
-    async def analyze_sequence_async(self, frames, frame_indices, previous_context=None, player_references=None):
+    async def analyze_sequence_async(
+        self, frames, frame_indices, previous_context=None, player_references=None,
+        *, response_schema=None,
+    ):
         """Async version of analyze_sequence — uses client.aio for non-blocking Gemini calls.
 
         Same return signature as analyze_sequence (returns a JSON string).
         The context chain is preserved by the caller; this method is stateless.
+
+        ``response_schema`` is additive/keyword-only (QA pipeline seam): ``None``
+        (the default) reproduces today's ``_build_response_schema(player_ids)`` call
+        exactly. A caller may pass an alternate ``types.Schema`` (e.g. the QA
+        ``events-v1`` schema) to change the structured-output shape.
         """
         if not frames:
             return "No frames."
@@ -239,6 +287,7 @@ class BJJTechniqueAnalyzer:
             frames, frame_indices, previous_context, player_references,
         )
         player_ids = _player_ids_from_refs(player_references)
+        effective_schema = response_schema if response_schema is not None else _build_response_schema(player_ids)
 
         try:
             logger.info(
@@ -248,12 +297,7 @@ class BJJTechniqueAnalyzer:
             response = await self.client.aio.models.generate_content(
                 model=self.model_id,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    temperature=0.2,
-                    response_mime_type="application/json",
-                    response_schema=_build_response_schema(player_ids),
-                ),
+                config=self._build_generate_config(system_instruction, effective_schema),
             )
             text = response.text
             logger.info(
@@ -271,7 +315,12 @@ class BJJTechniqueAnalyzer:
         self._validate_actor_player_ids(parsed, player_ids)
         return parsed
 
-    def analyze_sequence(self, frames, frame_indices, previous_context=None, player_references=None):
+    def analyze_sequence(
+        self, frames, frame_indices, previous_context=None, player_references=None,
+        *, response_schema=None,
+    ):
+        """``response_schema`` is additive/keyword-only (QA pipeline seam) — see
+        ``analyze_sequence_async`` docstring for semantics."""
         if not frames:
             return "No frames."
 
@@ -279,6 +328,7 @@ class BJJTechniqueAnalyzer:
             frames, frame_indices, previous_context, player_references,
         )
         player_ids = _player_ids_from_refs(player_references)
+        effective_schema = response_schema if response_schema is not None else _build_response_schema(player_ids)
 
         try:
             logger.info(
@@ -288,12 +338,7 @@ class BJJTechniqueAnalyzer:
             response = self.client.models.generate_content(
                 model=self.model_id,
                 contents=contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    temperature=0.2,
-                    response_mime_type="application/json",
-                    response_schema=_build_response_schema(player_ids),
-                ),
+                config=self._build_generate_config(system_instruction, effective_schema),
             )
 
             text = response.text
@@ -314,16 +359,51 @@ class BJJTechniqueAnalyzer:
 
 
 class BJJMultiAgentAnalyzer:
-    def __init__(self, api_key, taxonomy_path=None, request_timeout_ms: Optional[int] = None):
+    def __init__(
+        self,
+        api_key,
+        taxonomy_path=None,
+        request_timeout_ms: Optional[int] = None,
+        *,
+        model_id: str = "gemini-3.1-flash-lite",
+        temperature: float = 0.2,
+        thinking_config: Optional[types.ThinkingConfig] = None,
+        taxonomy_text: Optional[str] = None,
+    ):
+        """Additive, keyword-only, production-preserving knobs — mirrors
+        ``BJJTechniqueAnalyzer.__init__`` (see that docstring). ``model_id`` replaces
+        ``self.model_id`` used by every internal Gemini call (3 persona agents + Judge).
+        ``thinking_config`` is added to every internal call ONLY when not None (default
+        omits the field, byte-identical to pre-seam behavior). ``temperature`` is stored
+        for API parity with ``BJJTechniqueAnalyzer`` but is intentionally NOT applied to
+        the persona-agent calls (each has its own fixed, deliberately-tuned per-persona
+        temperature — 0.8/0.6/0.9) or the Judge call (fixed 0.1 for deterministic
+        synthesis); overriding those with a single class-level temperature would change
+        default behavior, which the seam must not do. ``taxonomy_text``, when not None,
+        REPLACES the ``taxonomy_path`` file read used to build the JUDGE's system
+        instruction (the 3 persona agents don't read the taxonomy at all — unaffected).
+        """
         if not api_key:
             raise ValueError("API Key is required for BJJMultiAgentAnalyzer")
         to_ms = _effective_timeout_ms(request_timeout_ms)
         self.client = _gemini_client(api_key, to_ms)
         self._request_timeout_s = to_ms / 1000.0
-        self.model_id = "gemini-3.1-flash-lite"
+        self.model_id = model_id
+        self.temperature = temperature
+        self.thinking_config = thinking_config
+        self.taxonomy_text = taxonomy_text
         if taxonomy_path is None:
             taxonomy_path = os.path.join(os.path.dirname(__file__), "bjj_analysis_taxonomy.md")
         self.taxonomy_path = taxonomy_path
+
+    def _build_generate_config(self, system_instruction, temperature, response_schema=None):
+        kwargs = dict(system_instruction=system_instruction, temperature=temperature)
+        if response_schema is not None:
+            kwargs["response_mime_type"] = "application/json"
+            kwargs["response_schema"] = response_schema
+        if self.thinking_config is not None:
+            kwargs["thinking_config"] = self.thinking_config
+        return types.GenerateContentConfig(**kwargs)
 
     async def run_agent(self, role_name, system_prompt, frames, frame_indices, context, temperature=0.7, player_references=None):
         """Runs a single agent with a specific persona."""
@@ -376,9 +456,8 @@ class BJJMultiAgentAnalyzer:
                 self.client.aio.models.generate_content(
                     model=self.model_id,
                     contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_instruction_base + "\n\n" + system_prompt,
-                        temperature=temperature,
+                    config=self._build_generate_config(
+                        system_instruction_base + "\n\n" + system_prompt, temperature,
                     ),
                 ),
                 timeout=self._request_timeout_s,
@@ -397,7 +476,14 @@ class BJJMultiAgentAnalyzer:
                          exc_info=True)
             return f"--- {role_name} FAILED ---\nError: {str(e)}\n"
 
-    async def analyze_sequence_async(self, frames, frame_indices, previous_context=None, player_references=None):
+    async def analyze_sequence_async(
+        self, frames, frame_indices, previous_context=None, player_references=None,
+        *, response_schema=None,
+    ):
+        """``response_schema`` is additive/keyword-only (QA pipeline seam): ``None``
+        (the default) reproduces today's ``_build_response_schema(player_ids)`` Judge
+        call exactly. Applies ONLY to the final Judge synthesis call; the 3 persona
+        agent calls are unstructured free text (unchanged)."""
         if not frames:
             return "No frames."
 
@@ -490,25 +576,28 @@ class BJJMultiAgentAnalyzer:
         """
 
         try:
-            try:
-                with open(self.taxonomy_path, "r") as f:
-                    taxonomy_text = f.read()
-            except Exception:
-                taxonomy_text = ""
+            if self.taxonomy_text is not None:
+                taxonomy_text = self.taxonomy_text
+            else:
+                try:
+                    with open(self.taxonomy_path, "r") as f:
+                        taxonomy_text = f.read()
+                except Exception:
+                    taxonomy_text = ""
 
             logger.info(
                 "Gemini multi-agent Judge: synthesizing reports (timeout %.0fs)",
                 self._request_timeout_s,
             )
+            effective_schema = response_schema if response_schema is not None else _build_response_schema(player_ids)
             response = await asyncio.wait_for(
                 self.client.aio.models.generate_content(
                     model=self.model_id,
                     contents=judge_prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=taxonomy_text + "\n\nYou are the Synthesizer. Output JSON only.",
-                        temperature=0.1,
-                        response_mime_type="application/json",
-                        response_schema=_build_response_schema(player_ids),
+                    config=self._build_generate_config(
+                        taxonomy_text + "\n\nYou are the Synthesizer. Output JSON only.",
+                        0.1,
+                        response_schema=effective_schema,
                     ),
                 ),
                 timeout=self._request_timeout_s,

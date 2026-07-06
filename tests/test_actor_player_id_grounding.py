@@ -91,6 +91,9 @@ def _make_analyzer_with_mock(response_text: str):
     analyzer.model_id = "gemini-3.1-flash-lite"
     analyzer._request_timeout_ms = 600_000
     analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+    analyzer.taxonomy_text = None
+    analyzer.temperature = 0.2
+    analyzer.thinking_config = None
 
     mock_client = MagicMock()
     mock_response = SimpleNamespace(text=response_text)
@@ -141,6 +144,9 @@ async def test_async_single_agent_sets_response_schema():
     analyzer.model_id = "gemini-3.1-flash-lite"
     analyzer._request_timeout_ms = 600_000
     analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+    analyzer.taxonomy_text = None
+    analyzer.temperature = 0.2
+    analyzer.thinking_config = None
 
     captured = {}
 
@@ -194,6 +200,7 @@ def test_in_enum_actor_player_id_passes_validation():
 def test_prompt_labels_refs_by_player_name_and_id():
     analyzer = BJJTechniqueAnalyzer.__new__(BJJTechniqueAnalyzer)
     analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+    analyzer.taxonomy_text = None
 
     _, contents = analyzer._build_contents_and_prompt(
         ["<frame>"], [0], None, _refs(),
@@ -209,6 +216,7 @@ def test_prompt_labels_refs_by_player_name_and_id():
 def test_prompt_has_no_gi_color_identity_instruction():
     analyzer = BJJTechniqueAnalyzer.__new__(BJJTechniqueAnalyzer)
     analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+    analyzer.taxonomy_text = None
 
     _, contents = analyzer._build_contents_and_prompt(
         ["<frame>"], [0], None, _refs(),
@@ -296,6 +304,9 @@ async def test_multi_agent_judge_sets_schema_and_validates():
     analyzer.model_id = "gemini-3.1-flash-lite"
     analyzer._request_timeout_s = 600.0
     analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+    analyzer.taxonomy_text = None
+    analyzer.temperature = 0.2
+    analyzer.thinking_config = None
 
     judge_json = json.dumps({"clips": [{"actor_player_id": PID_A, "action": "mount"}]})
     captured = {}
@@ -330,6 +341,9 @@ async def test_multi_agent_judge_rejects_out_of_enum():
     analyzer.model_id = "gemini-3.1-flash-lite"
     analyzer._request_timeout_s = 600.0
     analyzer.taxonomy_path = "/nonexistent-taxonomy.md"
+    analyzer.taxonomy_text = None
+    analyzer.temperature = 0.2
+    analyzer.thinking_config = None
 
     bad_json = json.dumps({"clips": [{"actor_player_id": "athlete in white gi"}]})
 

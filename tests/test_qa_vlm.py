@@ -912,6 +912,200 @@ async def test_vlm_image_segment_model_selects_tint_model_but_not_internal_detec
 
 
 # --------------------------------------------------------------------------- #
+# system_instruction (user-loadable taxonomy/schema) — vlm-chat + vlm-image generate
+# --------------------------------------------------------------------------- #
+def test_clean_system_instruction_normalizes_empty_and_whitespace_to_none():
+    assert qa_vlm_route._clean_system_instruction(None) is None
+    assert qa_vlm_route._clean_system_instruction("") is None
+    assert qa_vlm_route._clean_system_instruction("   \n\t  ") is None
+    assert qa_vlm_route._clean_system_instruction("  # Taxonomy\n- armbar  ") == "# Taxonomy\n- armbar"
+
+
+@pytest.mark.asyncio
+async def test_vlm_chat_system_instruction_passed_through_to_config(monkeypatch, client_with_key):
+    fake_client, _ = _fake_client("[]")
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-chat",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 10},
+            "prompt": "x", "history": [],
+            "system_instruction": "# BJJ Taxonomy\n- armbar\n- triangle_choke",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].system_instruction == "# BJJ Taxonomy\n- armbar\n- triangle_choke"
+
+
+@pytest.mark.asyncio
+async def test_vlm_chat_whitespace_only_system_instruction_becomes_none(monkeypatch, client_with_key):
+    fake_client, _ = _fake_client("[]")
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-chat",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 10},
+            "prompt": "x", "history": [],
+            "system_instruction": "   \n  ",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].system_instruction is None
+
+
+@pytest.mark.asyncio
+async def test_vlm_chat_omitted_system_instruction_is_backward_compatible(monkeypatch, client_with_key):
+    """A request that omits ``system_instruction`` entirely (pre-feature contract)
+    must behave exactly as before — Gemini config gets ``system_instruction=None``."""
+    fake_client, _ = _fake_client("[]")
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-chat",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 10},
+            "prompt": "x", "history": [],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].system_instruction is None
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_generate_system_instruction_passed_through_to_config(monkeypatch, client_with_key):
+    frame = Image.new("RGB", (16, 12), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    gen_png = io.BytesIO()
+    Image.new("RGB", (8, 8), (200, 0, 0)).save(gen_png, format="PNG")
+    part = MagicMock()
+    part.inline_data.data = gen_png.getvalue()
+    part.text = None
+    candidate = MagicMock()
+    candidate.content.parts = [part]
+    fake_response = MagicMock()
+    fake_response.candidates = [candidate]
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = AsyncMock(return_value=fake_response)
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Nano-banana this", "image_task": "generate",
+            "system_instruction": "# BJJ Taxonomy\n- armbar",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].system_instruction == "# BJJ Taxonomy\n- armbar"
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_detect_system_instruction_is_not_applied(monkeypatch, client_with_key):
+    """``system_instruction`` must NOT reach the detect config — the detect
+    prompt is a fixed internal implementation detail, not user-steerable."""
+    frame = Image.new("RGB", (200, 150), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    detect_entries = [{"box_2d": [100, 100, 900, 900], "label": "athlete"}]
+    fake_client, _ = _fake_client(json.dumps(detect_entries))
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Detect athletes.", "image_task": "detect",
+            "system_instruction": "# BJJ Taxonomy\n- armbar",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    config = call_kwargs["config"]
+    # GenerateContentConfig for detect never sets system_instruction at all.
+    assert getattr(config, "system_instruction", None) is None
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_segment_system_instruction_is_not_applied(monkeypatch, client_with_key):
+    """``system_instruction`` must NOT reach either the internal detect step or
+    the tint-highlight step of segment — both are fixed implementation details."""
+    frame = Image.new("RGB", (100, 100), (5, 5, 5))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    detect_entries = [{"box_2d": [100, 100, 900, 900], "label": "blue gi athlete"}]
+    detect_response = MagicMock()
+    detect_response.text = json.dumps(detect_entries)
+
+    tint_img = Image.new("RGB", (100, 100), (5, 5, 5))
+    draw = ImageDraw.Draw(tint_img)
+    draw.rectangle([20, 20, 60, 60], fill=(255, 0, 255))
+    tint_buf = io.BytesIO()
+    tint_img.save(tint_buf, format="PNG")
+    tint_response = _fake_image_response(tint_buf.getvalue())
+
+    fake_client = _fake_client_sequence([detect_response, tint_response])
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "segment", "image_task": "segment",
+            "system_instruction": "# BJJ Taxonomy\n- armbar",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    detect_call, tint_call = fake_client.aio.models.generate_content.call_args_list
+    assert getattr(detect_call.kwargs["config"], "system_instruction", None) is None
+    assert getattr(tint_call.kwargs["config"], "system_instruction", None) is None
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_generate_omitted_system_instruction_is_backward_compatible(monkeypatch, client_with_key):
+    frame = Image.new("RGB", (16, 12), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    gen_png = io.BytesIO()
+    Image.new("RGB", (8, 8), (200, 0, 0)).save(gen_png, format="PNG")
+    part = MagicMock()
+    part.inline_data.data = gen_png.getvalue()
+    part.text = None
+    candidate = MagicMock()
+    candidate.content.parts = [part]
+    fake_response = MagicMock()
+    fake_response.candidates = [candidate]
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = AsyncMock(return_value=fake_response)
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Nano-banana this", "image_task": "generate",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["config"].system_instruction is None
+
+
+# --------------------------------------------------------------------------- #
 # MM:SS parsing unit
 # --------------------------------------------------------------------------- #
 def test_parse_mmss():
