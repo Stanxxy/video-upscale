@@ -31,11 +31,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from google.genai import errors as genai_errors
 from httpx import ASGITransport, AsyncClient
 from PIL import Image, ImageDraw
 
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
+from service.pipelines.gemini_retry import GeminiRetryConfig
 from service.routes import init_routes, router
 from service.routes import qa_vlm as qa_vlm_route
 from tests.conftest import make_mock_jobs_store
@@ -93,6 +95,24 @@ class _FakeModelNotFoundError(Exception):
     """Minimal stand-in for google.genai.errors.ClientError with a 404 code."""
 
     code = 404
+
+
+def _server_error(code: int = 503) -> genai_errors.ServerError:
+    """A real ``google.genai.errors.ServerError`` (503 UNAVAILABLE-shaped) —
+    root cause of the bug report this test file's retry tests defend
+    against."""
+    return genai_errors.ServerError(code, {"message": f"{code} error", "status": "UNAVAILABLE"}, None)
+
+
+_FAST_RETRY_CONFIG = GeminiRetryConfig(max_attempts=3, initial_delay_s=0.0, max_delay_s=0.0, exp_base=1.0, jitter_s=0.0)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_sleep(monkeypatch):
+    """Every retry test in this module uses a zero-delay config AND a mocked
+    ``asyncio.sleep`` — belt-and-suspenders against ever actually sleeping in
+    the test suite."""
+    monkeypatch.setattr("service.pipelines.gemini_retry.asyncio.sleep", AsyncMock())
 
 
 # --------------------------------------------------------------------------- #
@@ -402,6 +422,114 @@ async def test_vlm_image_detect_falls_back_on_404_model_unavailable(monkeypatch,
     first_call, second_call = fake_client.aio.models.generate_content.call_args_list
     assert first_call.kwargs["model"] == qa_vlm_route.DETECT_MODEL
     assert second_call.kwargs["model"] == qa_vlm_route.DETECT_MODEL_FALLBACK
+
+
+# --------------------------------------------------------------------------- #
+# Transient-retry resilience (root cause: frame 1116 "503 UNAVAILABLE" bug
+# report) — real google.genai.errors.ServerError, retried via
+# service.pipelines.gemini_retry, never falling back to DETECT_MODEL_FALLBACK
+# (503 is transient, not the 404-only fallback trigger).
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_vlm_image_detect_retries_transient_503_then_succeeds(monkeypatch, client_with_key):
+    frame = Image.new("RGB", (200, 150), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    good_entries = [{"box_2d": [100, 100, 900, 900], "label": "athlete"}]
+    good_response = MagicMock()
+    good_response.text = json.dumps(good_entries)
+    fake_client = _fake_client_sequence([_server_error(503), _server_error(503), good_response])
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Detect athletes.", "image_task": "detect",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    # Stays on the ORIGINAL requested model — a transient 503 is retried in
+    # place, it never triggers the 404-only DETECT_MODEL_FALLBACK swap.
+    assert body["model"] == qa_vlm_route.DETECT_MODEL
+    assert len(body["objects"]) == 1
+
+    assert fake_client.aio.models.generate_content.call_count == 3
+    for call in fake_client.aio.models.generate_content.call_args_list:
+        assert call.kwargs["model"] == qa_vlm_route.DETECT_MODEL
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_detect_exhausted_retries_surfaces_honest_502_not_fabricated(monkeypatch, client_with_key):
+    """Persistent 503s exhaust every retry attempt — the real Gemini error
+    surfaces as a 502 with the genuine message, never a fabricated detection
+    result and never silently swallowed."""
+    frame = Image.new("RGB", (200, 150), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    # Always-503, more than the default gemini_retry_max_attempts (5).
+    fake_client = _fake_client_sequence([_server_error(503) for _ in range(10)])
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Detect athletes.", "image_task": "detect",
+        },
+    )
+    assert resp.status_code == 502
+    assert "503" in resp.text  # the real error message, not a generic/placeholder one
+    # Exactly max_attempts (5) real calls were made against the ORIGINAL model
+    # — retries exhausted BEFORE any 404-only fallback logic could trigger
+    # (503 never satisfies _is_model_unavailable).
+    assert fake_client.aio.models.generate_content.call_count == 5
+    for call in fake_client.aio.models.generate_content.call_args_list:
+        assert call.kwargs["model"] == qa_vlm_route.DETECT_MODEL
+
+
+@pytest.mark.asyncio
+async def test_vlm_image_detect_429_with_retry_after_honors_header_delay(monkeypatch, client_with_key):
+    """A 429 RESOURCE_EXHAUSTED carrying a Retry-After header uses that exact
+    delay (mocked ``asyncio.sleep``) rather than the computed exponential
+    backoff."""
+    import httpx
+
+    frame = Image.new("RGB", (200, 150), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+
+    sleeps: list[float] = []
+
+    async def _fake_sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setattr("service.pipelines.gemini_retry.asyncio.sleep", _fake_sleep)
+
+    response_429 = httpx.Response(
+        status_code=429, headers={"retry-after": "7"}, request=httpx.Request("POST", "http://x"),
+    )
+    rate_limited = genai_errors.ClientError(
+        429, {"message": "rate limited", "status": "RESOURCE_EXHAUSTED"}, response_429,
+    )
+    good_entries = [{"box_2d": [100, 100, 900, 900], "label": "athlete"}]
+    good_response = MagicMock()
+    good_response.text = json.dumps(good_entries)
+    fake_client = _fake_client_sequence([rate_limited, good_response])
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Detect athletes.", "image_task": "detect",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert sleeps == [7.0]  # exact Retry-After value, not the computed backoff delay
 
 
 @pytest.mark.asyncio

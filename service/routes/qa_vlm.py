@@ -44,6 +44,7 @@ from google.genai import types
 from PIL import Image
 from pydantic import BaseModel
 
+from service.pipelines import gemini_retry
 from service.routes import state as route_state
 
 logger = logging.getLogger("service.routes")
@@ -156,6 +157,17 @@ def _gemini_client() -> genai.Client:
         api_key=_require_gemini_key(),
         http_options=types.HttpOptions(timeout=config.gemini_request_timeout_ms),
     )
+
+
+def _default_retry_config() -> gemini_retry.GeminiRetryConfig:
+    """Build a ``GeminiRetryConfig`` from live ``ServiceConfig`` when a route
+    has already loaded one (the normal request path); falls back to the
+    dataclass defaults otherwise (e.g. a caller invoking a helper directly
+    without going through ``init_routes``)."""
+    config = route_state._config
+    if config is not None:
+        return gemini_retry.GeminiRetryConfig.from_service_config(config)
+    return gemini_retry.GeminiRetryConfig()
 
 
 def _effective_window(scope: QAVLMScope) -> tuple[int, int]:
@@ -339,16 +351,20 @@ async def vlm_chat(body: QAVLMChatRequest):
             "vlm-chat: youtube_id=%s window=%d-%ds model=%s thinking=%s",
             body.youtube_id, start_sec, end_sec, model, body.thinking,
         )
-        response = await client.aio.models.generate_content(
-            model=model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                response_mime_type="application/json",
-                response_schema=_event_schema(),
-                thinking_config=thinking_cfg,
-                system_instruction=system_instruction,
+        response = await gemini_retry.call_with_retry(
+            lambda: client.aio.models.generate_content(
+                model=model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    response_mime_type="application/json",
+                    response_schema=_event_schema(),
+                    thinking_config=thinking_cfg,
+                    system_instruction=system_instruction,
+                ),
             ),
+            op_name="vlm-chat",
+            retry_config=_default_retry_config(),
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
         logger.error("vlm-chat: Gemini call failed: %s", e, exc_info=True)
@@ -552,26 +568,41 @@ async def _run_detect(
     thinking_config: Optional[types.ThinkingConfig] = None,
     max_output_tokens: int = 4096,
     prompt: str = _DETECT_PROMPT,
+    retry_config: Optional[gemini_retry.GeminiRetryConfig] = None,
 ) -> tuple[list[dict], str, float]:
-    """Call the detect-tier model (with one 404/unavailable fallback retry).
+    """Call the detect-tier model (transient-retry per attempt, with one
+    404/unavailable fallback retry layered on top — unchanged from before).
 
     ``model``/``thinking_config``/``max_output_tokens`` let the caller drive
     the request-selected model + thinking level for a standalone ``detect``
     task; callers that want the fixed internal default (the segment task's
     detect-for-subjects step) simply omit them. Returns
     ``(objects, model_used, model_ms)`` — ``model_ms`` is the real measured
-    Gemini call duration (both attempts if a fallback retry happened).
+    Gemini call duration (both attempts if a fallback retry happened; each
+    attempt itself may include multiple transient-retry sub-attempts).
 
     ``prompt`` is additive/keyword-friendly (default ``_DETECT_PROMPT``, byte-identical
     to every pre-existing caller): the QA pipeline's ``detect_crop`` node passes a
     ROLE-LABELED variant (athlete/referee/coach/bystander) instead — same response
     schema (``_detect_schema()``), different instruction text only.
 
-    Raises RuntimeError on any unrecoverable Gemini/transport error or an
-    unparseable response — the caller turns that into a 502.
+    ``retry_config`` lets a pipeline caller (``executors.detect_crop_node``)
+    thread its ``RunContext.retry_config`` through; direct route callers
+    (``vlm_image``) omit it and get the live ``ServiceConfig``-derived default.
+
+    A transient error (503/429/500/502/504, connection/timeout) is retried
+    with exponential backoff + jitter (``service.pipelines.gemini_retry``)
+    WITHIN each of the two model attempts below. 404/model-unavailable is
+    NOT transient — it is caught immediately (on the first sub-attempt) and
+    triggers the existing one-shot fallback to ``DETECT_MODEL_FALLBACK``, same
+    as before. Raises RuntimeError on any unrecoverable Gemini/transport error
+    (including transient-retry exhaustion) or an unparseable response — the
+    caller turns that into a 502/error event, never a fabricated result.
     """
     if thinking_config is None:
         thinking_config = types.ThinkingConfig(thinking_budget=0)
+    if retry_config is None:
+        retry_config = _default_retry_config()
     config = types.GenerateContentConfig(
         temperature=0.0,
         response_mime_type="application/json",
@@ -582,8 +613,12 @@ async def _run_detect(
     active_model = model
     t0 = time.perf_counter()
     try:
-        response = await client.aio.models.generate_content(
-            model=active_model, contents=[prompt, frame_img], config=config,
+        response = await gemini_retry.call_with_retry(
+            lambda: client.aio.models.generate_content(
+                model=active_model, contents=[prompt, frame_img], config=config,
+            ),
+            op_name=f"detect:{active_model}",
+            retry_config=retry_config,
         )
     except Exception as e:  # noqa: BLE001 — fall back once on model-unavailable, else re-raise
         if not _is_model_unavailable(e):
@@ -593,8 +628,12 @@ async def _run_detect(
         )
         active_model = DETECT_MODEL_FALLBACK
         try:
-            response = await client.aio.models.generate_content(
-                model=active_model, contents=[prompt, frame_img], config=config,
+            response = await gemini_retry.call_with_retry(
+                lambda: client.aio.models.generate_content(
+                    model=active_model, contents=[prompt, frame_img], config=config,
+                ),
+                op_name=f"detect:{active_model}",
+                retry_config=retry_config,
             )
         except Exception as e2:  # noqa: BLE001 — surface the real Gemini/transport error
             raise RuntimeError(f"Gemini detect call failed ({active_model}): {e2}") from e2
@@ -702,13 +741,17 @@ async def vlm_image(body: QAVLMImageRequest):
         system_instruction = _clean_system_instruction(body.system_instruction)
         model_t0 = time.perf_counter()
         try:
-            response = await client.aio.models.generate_content(
-                model=model,
-                contents=[body.prompt, frame_img],
-                config=types.GenerateContentConfig(
-                    response_modalities=["TEXT", "IMAGE"],
-                    system_instruction=system_instruction,
+            response = await gemini_retry.call_with_retry(
+                lambda: client.aio.models.generate_content(
+                    model=model,
+                    contents=[body.prompt, frame_img],
+                    config=types.GenerateContentConfig(
+                        response_modalities=["TEXT", "IMAGE"],
+                        system_instruction=system_instruction,
+                    ),
                 ),
+                op_name="vlm-image generate",
+                retry_config=_default_retry_config(),
             )
         except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
             logger.error("vlm-image generate: Gemini call failed: %s", e, exc_info=True)
@@ -822,10 +865,14 @@ async def vlm_image(body: QAVLMImageRequest):
 
     tint_t0 = time.perf_counter()
     try:
-        tint_response = await client.aio.models.generate_content(
-            model=tint_model,
-            contents=[tint_prompt, frame_img],
-            config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
+        tint_response = await gemini_retry.call_with_retry(
+            lambda: client.aio.models.generate_content(
+                model=tint_model,
+                contents=[tint_prompt, frame_img],
+                config=types.GenerateContentConfig(response_modalities=["TEXT", "IMAGE"]),
+            ),
+            op_name="vlm-image segment (tint)",
+            retry_config=_default_retry_config(),
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
         logger.error("vlm-image segment (tint phase): Gemini call failed: %s", e, exc_info=True)

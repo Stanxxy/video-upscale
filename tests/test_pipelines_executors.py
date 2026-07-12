@@ -9,9 +9,10 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from google.genai import errors as genai_errors
 from PIL import Image
 
-from service.pipelines import executors, frame_source, registry, simplified_tags
+from service.pipelines import executors, frame_source, gemini_retry, registry, simplified_tags
 from service.pipelines.executors import (
     DEFAULT_BUDGET_CAP,
     RunContext,
@@ -22,7 +23,19 @@ from service.pipelines.executors import (
     estimate_run_plan,
     run_pipeline,
 )
-from service.pipelines.models import ChunkAnalyzeConfig, ChunkSegmentConfig, DedupConfig
+from service.pipelines.models import ChunkAnalyzeConfig, ChunkSegmentConfig, DedupConfig, DetectCropConfig
+
+
+@pytest.fixture(autouse=True)
+def _no_real_sleep(monkeypatch):
+    """Retry tests in this module use real transient google.genai.errors and
+    the real gemini_retry.call_with_retry backoff loop — mock asyncio.sleep
+    process-wide so nothing in this file ever actually sleeps."""
+    monkeypatch.setattr("service.pipelines.gemini_retry.asyncio.sleep", AsyncMock())
+
+
+def _server_error(code: int = 503) -> genai_errors.ServerError:
+    return genai_errors.ServerError(code, {"message": f"{code} error", "status": "UNAVAILABLE"}, None)
 
 
 # --------------------------------------------------------------------------- #
@@ -482,10 +495,207 @@ async def test_video_native_analyze_forwards_system_instruction_to_gemini_config
 
 
 # --------------------------------------------------------------------------- #
-# End-to-end mocked run — vision-mimic pipeline through run_pipeline()
+# detect_crop_node — Bug regression: a malformed 5-element ``box_2d`` gets
+# dropped by the REAL (unmocked) ``_parse_detect_entries``/``_run_detect``
+# path, leaving <2 usable athletes for that frame; the frame after it is back
+# to a full pair. Real traceback was an IndexError inside
+# ``frame_source._pair_continuity`` via ``AthleteTracker.resolve``. Only the
+# Gemini transport (``generate_content``) is mocked here — the malformed-box
+# drop, role parsing, top-2 selection, and tracker hysteresis all run for
+# real, so this exercises the FULL live crash path, not just the pure
+# tracker unit tests in test_pipelines_frame_source.py.
 # --------------------------------------------------------------------------- #
 def _tiny_image():
     return Image.new("RGB", (100, 100), color="gray")
+
+
+@pytest.mark.asyncio
+async def test_detect_crop_node_malformed_box_dropped_to_single_athlete_never_crashes(monkeypatch):
+    responses = [
+        # Frame 0: clean 2-athlete pair — establishes the tracker's held pair.
+        json.dumps([
+            {"box_2d": [100, 100, 400, 300], "label": "athlete: white gi", "confidence": 0.9},
+            {"box_2d": [500, 100, 800, 300], "label": "athlete: blue gi", "confidence": 0.9},
+        ]),
+        # Frame 1: one real athlete + one MALFORMED 5-element box_2d (mirrors
+        # the live log: "dropping malformed entry ... box_2d: [210, 271, 0,
+        # 693, 467]"). The real _parse_detect_entries drops the malformed
+        # entry, leaving exactly 1 usable athlete -> select_top2 degrades to
+        # "single_athlete". This is the frame that used to crash the NEXT
+        # frame's tracker.resolve() call.
+        json.dumps([
+            {"box_2d": [105, 100, 405, 300], "label": "athlete: white gi", "confidence": 0.9},
+            {"box_2d": [210, 271, 0, 693, 467], "label": "athlete: blue gi", "confidence": 0.85},
+        ]),
+        # Frame 2: back to a clean 2-athlete pair — this is the exact call
+        # that raised "IndexError: list index out of range" before the fix
+        # (held_boxes had collapsed to length 1 on frame 1).
+        json.dumps([
+            {"box_2d": [108, 100, 408, 300], "label": "athlete: white gi", "confidence": 0.9},
+            {"box_2d": [505, 100, 805, 300], "label": "athlete: blue gi", "confidence": 0.9},
+        ]),
+    ]
+    call_state = {"i": 0}
+
+    async def _fake_generate(*, model, contents, config):
+        text = responses[call_state["i"]]
+        call_state["i"] += 1
+        return SimpleNamespace(text=text)
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=1,
+        gemini_api_key="k", request_timeout_ms=1000,
+    )
+    ctx.crops = [
+        frame_source.CropFrame(frame_index=0, image=_tiny_image()),
+        frame_source.CropFrame(frame_index=10, image=_tiny_image()),
+        frame_source.CropFrame(frame_index=20, image=_tiny_image()),
+    ]
+
+    cfg = DetectCropConfig().model_dump()
+    events = [e async for e in executors.detect_crop_node(ctx, cfg)]  # must not raise IndexError
+
+    progress = [e for e in events if e["type"] == "progress"]
+    assert [e["degraded"] for e in progress] == [None, "single_athlete", None]
+    assert not any(e["type"] == "error" for e in events)
+
+    # All 3 frames survive (single_athlete crops the one real box, never
+    # fabricating/dropping a frame that has at least 1 usable athlete).
+    assert len(ctx.crops) == 3
+    assert [c.degraded for c in ctx.crops] == [None, "single_athlete", None]
+
+
+# --------------------------------------------------------------------------- #
+# detect_crop_node — transient-retry resilience (root cause: frame 1116
+# "503 UNAVAILABLE" bug report). Runs the REAL _run_detect/gemini_retry code
+# path (only client.aio.models.generate_content is mocked) so this pins the
+# actual retry wiring through RunContext.retry_config, not just the pure
+# gemini_retry unit tests.
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_detect_crop_node_retries_transient_503_then_succeeds(monkeypatch):
+    good_entries = json.dumps([
+        {"box_2d": [100, 100, 400, 300], "label": "athlete: white gi", "confidence": 0.9},
+        {"box_2d": [500, 100, 800, 300], "label": "athlete: blue gi", "confidence": 0.9},
+    ])
+    call_count = {"n": 0}
+
+    async def _fake_generate(*, model, contents, config):
+        call_count["n"] += 1
+        if call_count["n"] < 3:
+            raise _server_error(503)
+        return SimpleNamespace(text=good_entries)
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=1,
+        gemini_api_key="k", request_timeout_ms=1000,
+        retry_config=gemini_retry.GeminiRetryConfig(max_attempts=5, initial_delay_s=0.0, max_delay_s=0.0, jitter_s=0.0),
+    )
+    ctx.crops = [frame_source.CropFrame(frame_index=0, image=_tiny_image())]
+
+    events = [e async for e in executors.detect_crop_node(ctx, DetectCropConfig().model_dump())]
+
+    assert not any(e["type"] == "error" for e in events)
+    assert len(ctx.crops) == 1  # the frame survives — retry succeeded, nothing dropped/fabricated
+    assert call_count["n"] == 3
+
+
+@pytest.mark.asyncio
+async def test_detect_crop_node_exhausted_retries_drops_frame_as_error_not_fabricated(monkeypatch):
+    """Persistent 503s exhaust every retry attempt: the frame is surfaced via
+    the existing ``error`` NDJSON event and dropped from ctx.crops (the
+    pre-existing honest-failure path) — never a fabricated detection."""
+    async def _fake_generate(*, model, contents, config):
+        raise _server_error(503)
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=1,
+        gemini_api_key="k", request_timeout_ms=1000,
+        retry_config=gemini_retry.GeminiRetryConfig(max_attempts=3, initial_delay_s=0.0, max_delay_s=0.0, jitter_s=0.0),
+    )
+    ctx.crops = [frame_source.CropFrame(frame_index=1116, image=_tiny_image())]
+
+    events = [e async for e in executors.detect_crop_node(ctx, DetectCropConfig().model_dump())]
+
+    error_events = [e for e in events if e["type"] == "error"]
+    assert len(error_events) == 1
+    assert "frame 1116" in error_events[0]["message"]
+    assert "503" in error_events[0]["message"]
+    assert len(ctx.crops) == 0  # dropped honestly, never fabricated
+
+
+@pytest.mark.asyncio
+async def test_chunk_segment_node_retries_transient_error_then_succeeds(monkeypatch):
+    call_count = {"n": 0}
+
+    async def _fake_generate(*, model, contents, config):
+        call_count["n"] += 1
+        if call_count["n"] < 2:
+            raise _server_error(500)
+        return SimpleNamespace(text=json.dumps({"chunks": [
+            {"start_s": 0, "end_s": 20, "reason": "match_action"},
+        ]}))
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=20,
+        gemini_api_key="k", request_timeout_ms=1000,
+        retry_config=gemini_retry.GeminiRetryConfig(max_attempts=3, initial_delay_s=0.0, max_delay_s=0.0, jitter_s=0.0),
+    )
+    events = [e async for e in executors.chunk_segment_node(ctx, ChunkSegmentConfig().model_dump())]
+
+    assert not any(e["type"] == "error" for e in events)
+    assert call_count["n"] == 2
+    assert len(ctx.chunks) == 1
+
+
+@pytest.mark.asyncio
+async def test_analyze_video_window_retries_transient_error_then_succeeds(monkeypatch):
+    from service.pipelines.models import AnalyzeConfig
+
+    call_count = {"n": 0}
+
+    async def _fake_generate(*, model, contents, config):
+        call_count["n"] += 1
+        if call_count["n"] < 2:
+            raise _server_error(429)
+        return SimpleNamespace(text="[]")
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=10,
+        gemini_api_key="k", request_timeout_ms=1000,
+        retry_config=gemini_retry.GeminiRetryConfig(max_attempts=3, initial_delay_s=0.0, max_delay_s=0.0, jitter_s=0.0),
+    )
+    cfg = AnalyzeConfig(return_format="events-v1")
+    events = [e async for e in executors._analyze_video_window(ctx, cfg)]
+
+    assert not any(e["type"] == "error" for e in events)
+    assert call_count["n"] == 2
+    assert ctx.final_clips == []
+
+
+# --------------------------------------------------------------------------- #
+# End-to-end mocked run — vision-mimic pipeline through run_pipeline()
+# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -524,7 +734,7 @@ async def test_run_pipeline_vision_mimic_end_to_end_mocked(monkeypatch):
     ]
     call_state = {"i": 0}
 
-    async def _fake_run_detect(client, image, model=None, thinking_config=None, prompt=None):
+    async def _fake_run_detect(client, image, model=None, thinking_config=None, prompt=None, retry_config=None):
         result = detect_results[call_state["i"]]
         call_state["i"] += 1
         return result
@@ -605,7 +815,7 @@ async def test_run_pipeline_vision_mimic_simplified_end_to_end_mocked(monkeypatc
         ],
     )
 
-    async def _fake_run_detect(client, image, model=None, thinking_config=None, prompt=None):
+    async def _fake_run_detect(client, image, model=None, thinking_config=None, prompt=None, retry_config=None):
         return (
             [
                 {"box_2d": [100, 100, 400, 300], "label": "athlete: white gi", "confidence": 0.9},
@@ -834,6 +1044,138 @@ async def test_chunk_analyze_node_overlap_never_goes_before_scope_start():
 
     # start_s(12) - overlap(5) = 7, clamped up to ctx.start_sec(10)
     assert captured["start_sec"] == 10
+
+
+# --------------------------------------------------------------------------- #
+# Bug regression — "chunk-segment-tags emitted a chunk OVER max length".
+# Root cause: chunk_analyze_node's own back-overlap (`chunk["start_s"] -
+# overlap_s`) was applied on top of a base chunk that repair_chunk_bounds had
+# already capped AT max_chunk_s (one of its over-max split pieces), silently
+# growing the REAL analyzed span (`chunk_end - effective_start`, what the
+# `chunk_start` NDJSON event's "scope" reports) past max_chunk_s. Fix: thread
+# PASS 1's max_chunk_s onto ctx.chunk_max_s and clamp effective_start so the
+# with-overlap span never exceeds it.
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_chunk_analyze_node_overlap_never_pushes_analyzed_span_over_max_chunk_s(monkeypatch):
+    """Regression for the live bug: a base chunk sitting exactly AT
+    max_chunk_s (as repair_chunk_bounds's over-max split would produce) must
+    not grow past max_chunk_s once the 5s back-overlap is applied."""
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["video_part"] = contents[0].parts[1]
+        return SimpleNamespace(text=json.dumps({"current_context_summary": "s", "clips": []}))
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=200,
+        gemini_api_key="k", request_timeout_ms=1000,
+    )
+    # A split-piece chunk exactly AT the 60s cap (e.g. repair_chunk_bounds's
+    # second over-max split piece: [55, 115]) — before the fix, applying the
+    # chunk_analyze back-overlap on top pushed the sent span to [50, 115] = 65s.
+    ctx.chunks = [
+        {"index": 1, "start_s": 55, "end_s": 115, "reason": "match_action", "worth_analysis": True, "adjustment": None},
+    ]
+    ctx.chunk_max_s = 60.0  # set by chunk_segment_node from ChunkSegmentConfig.max_chunk_s
+
+    events = [e async for e in executors.chunk_analyze_node(ctx, ChunkAnalyzeConfig(overlap_s=5.0).model_dump())]
+
+    chunk_start_events = [e for e in events if e["type"] == "chunk_start"]
+    assert len(chunk_start_events) == 1
+    scope_start, scope_end = chunk_start_events[0]["scope"]
+    assert scope_end - scope_start <= 60.0  # NEVER exceeds max_chunk_s
+    assert scope_start == 55.0  # clamped to chunk["start_s"] itself, not start_s - overlap_s(50)
+    assert scope_end == 115.0
+
+    assert captured["video_part"].video_metadata.start_offset == "55.0s"
+    assert captured["video_part"].video_metadata.end_offset == "115s"
+
+
+@pytest.mark.asyncio
+async def test_chunk_analyze_node_overlap_fits_under_cap_for_a_short_base_chunk(monkeypatch):
+    """A base chunk well under max_chunk_s still gets its full back-overlap —
+    the clamp only trims overlap that would exceed the cap, never overlap
+    that comfortably fits under it (no regression of the normal case)."""
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["video_part"] = contents[0].parts[1]
+        return SimpleNamespace(text=json.dumps({"current_context_summary": "s", "clips": []}))
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=200,
+        gemini_api_key="k", request_timeout_ms=1000,
+    )
+    ctx.chunks = [
+        {"index": 1, "start_s": 30, "end_s": 40, "reason": "match_action", "worth_analysis": True, "adjustment": None},
+    ]
+    ctx.chunk_max_s = 60.0
+
+    [e async for e in executors.chunk_analyze_node(ctx, ChunkAnalyzeConfig(overlap_s=5.0).model_dump())]
+
+    # 10s base chunk + full 5s overlap = 15s, nowhere near the 60s cap.
+    assert captured["video_part"].video_metadata.start_offset == "25.0s"
+    assert captured["video_part"].video_metadata.end_offset == "40s"
+
+
+@pytest.mark.asyncio
+async def test_chunk_analyze_node_no_chunk_max_s_set_preserves_prior_behavior(monkeypatch):
+    """``ctx.chunk_max_s`` defaults to None (e.g. a caller that never ran
+    chunk_segment_node first) — the new clamp must be a strict no-op then,
+    identical to the pre-fix behavior."""
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["video_part"] = contents[0].parts[1]
+        return SimpleNamespace(text=json.dumps({"current_context_summary": "s", "clips": []}))
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=200,
+        gemini_api_key="k", request_timeout_ms=1000,
+    )
+    ctx.chunks = [
+        {"index": 1, "start_s": 55, "end_s": 115, "reason": "match_action", "worth_analysis": True, "adjustment": None},
+    ]
+    assert ctx.chunk_max_s is None
+
+    [e async for e in executors.chunk_analyze_node(ctx, ChunkAnalyzeConfig(overlap_s=5.0).model_dump())]
+
+    assert captured["video_part"].video_metadata.start_offset == "50.0s"  # unclamped: 55 - 5
+    assert captured["video_part"].video_metadata.end_offset == "115s"
+
+
+@pytest.mark.asyncio
+async def test_chunk_segment_node_sets_ctx_chunk_max_s_from_config(monkeypatch):
+    async def _fake_generate(*, model, contents, config):
+        return SimpleNamespace(text=json.dumps({"chunks": [
+            {"start_s": 0, "end_s": 50, "reason": "match_action"},
+        ]}))
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=50,
+        gemini_api_key="k", request_timeout_ms=1000,
+    )
+    cfg = ChunkSegmentConfig(max_chunk_s=45.0).model_dump()
+    [e async for e in executors.chunk_segment_node(ctx, cfg)]
+
+    assert ctx.chunk_max_s == 45.0
 
 
 @pytest.mark.asyncio

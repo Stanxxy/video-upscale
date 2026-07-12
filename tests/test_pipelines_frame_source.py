@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+from service.pipelines import frame_source
 from service.pipelines.frame_source import (
     AthleteTracker,
     Detection,
@@ -242,6 +243,96 @@ def test_tracker_passes_through_dropped_frames_untouched():
     dropped = SelectionResult(candidates=None, degraded="no_detection")
     assert tracker.resolve(dropped, [], IMG_W, IMG_H) is dropped
     assert tracker.held_boxes is None
+
+
+# --------------------------------------------------------------------------- #
+# Bug regression — IndexError on a <2-box (single_athlete) frame after a
+# 2-athlete pair is already held (real traceback:
+# service/pipelines/frame_source.py:417 `_pair_continuity` -> `new_boxes[1]`/
+# `held_boxes[1]` IndexError, triggered by a malformed 5-element `box_2d`
+# entry being dropped in `_run_detect`/`_parse_detect_entries`, leaving <2
+# usable athletes for that frame).
+# --------------------------------------------------------------------------- #
+def test_pair_continuity_never_indexerrors_on_zero_boxes():
+    assert frame_source._pair_continuity([], []) == 0.0
+    assert frame_source._pair_continuity([], [[0, 0, 10, 10], [20, 20, 30, 30]]) == 0.0
+
+
+def test_pair_continuity_never_indexerrors_on_one_box_vs_held_pair():
+    # This exact shape (len(new_boxes)==1, len(held_boxes)==2) is the crash
+    # trigger from the live traceback — must return a real IoU-based score,
+    # never raise.
+    new_boxes = [[100, 100, 300, 400]]
+    held_boxes = [[105, 105, 305, 405], [900, 900, 950, 950]]
+    score = frame_source._pair_continuity(new_boxes, held_boxes)
+    assert score == pytest.approx(frame_source._iou(new_boxes[0], held_boxes[0]))
+
+
+def test_pair_continuity_never_indexerrors_on_held_pair_vs_one_box():
+    held_boxes = [[100, 100, 300, 400]]
+    new_boxes = [[105, 105, 305, 405], [900, 900, 950, 950]]
+    score = frame_source._pair_continuity(new_boxes, held_boxes)
+    assert score == pytest.approx(frame_source._iou(new_boxes[0], held_boxes[0]))
+
+
+def test_tracker_single_athlete_frame_after_held_pair_does_not_crash_and_is_degraded():
+    """The exact regression scenario: a full 2-athlete pair is held, then one
+    frame degrades to `single_athlete` (1 box — e.g. because a malformed
+    5-element box_2d got dropped upstream), then the NEXT frame is back to a
+    full 2-athlete pair. Must never raise IndexError, must never fabricate a
+    second box for the degraded frame, and the held pair must still be
+    resolvable against the later full-pair frame."""
+    tracker = AthleteTracker(margin=0.15, min_streak=3)
+    a1 = _det([100, 100, 300, 400], "athlete")
+    b1 = _det([400, 100, 600, 400], "athlete")
+    held = tracker.resolve(select_top2([a1, b1], IMG_W, IMG_H), [a1, b1], IMG_W, IMG_H)
+    assert held.degraded is None
+    assert tracker.held_boxes is not None and len(tracker.held_boxes) == 2
+
+    # Frame with only 1 usable athlete (referee also present, but only 1
+    # "athlete"-labeled detection survived upstream malformed-box dropping).
+    only_a = _det([105, 105, 305, 405], "athlete")
+    ref = _det([0, 0, 50, 50], "referee")
+    single_selection = select_top2([only_a, ref], IMG_W, IMG_H)
+    assert single_selection.degraded == "single_athlete"
+    assert len(single_selection.candidates) == 1
+
+    resolved_single = tracker.resolve(single_selection, [only_a, ref], IMG_W, IMG_H)  # must not raise
+    assert resolved_single.degraded == "single_athlete"  # honest, not silently cleared
+    assert len(resolved_single.boxes_px) == 1  # never fabricated a second box
+    assert resolved_single.boxes_px[0] == only_a.box_px  # the crop for THIS frame is real, not held state
+
+    # Tracker's own anchor is untouched by the degraded frame (still the
+    # original held pair) — this is the invariant that prevents the crash.
+    assert tracker.held_boxes == [a1.box_px, b1.box_px] or tracker.held_boxes == [b1.box_px, a1.box_px]
+
+    # Next frame: back to a full 2-athlete pair, close to the ORIGINAL held
+    # pair (not the single-athlete frame) — must not raise, and must resolve
+    # via continuity against the still-intact held pair.
+    a2 = _det([108, 108, 308, 408], "athlete")
+    b2 = _det([405, 105, 605, 405], "athlete")
+    resolved_next = tracker.resolve(select_top2([a2, b2], IMG_W, IMG_H), [a2, b2], IMG_W, IMG_H)  # must not raise
+    assert {tuple(x) for x in resolved_next.boxes_px} == {tuple(a2.box_px), tuple(b2.box_px)}
+
+
+def test_tracker_zero_detection_then_full_pair_does_not_crash():
+    """no_detection (0 boxes) frame sandwiched between full-pair frames — the
+    pre-existing passthrough behavior, re-asserted alongside the new <2
+    handling so both degrade paths are covered by the same crash-scenario
+    family."""
+    tracker = AthleteTracker(margin=0.15, min_streak=3)
+    a1 = _det([100, 100, 300, 400], "athlete")
+    b1 = _det([400, 100, 600, 400], "athlete")
+    tracker.resolve(select_top2([a1, b1], IMG_W, IMG_H), [a1, b1], IMG_W, IMG_H)
+
+    dropped = select_top2([], IMG_W, IMG_H)
+    assert dropped.candidates is None
+    tracker.resolve(dropped, [], IMG_W, IMG_H)  # must not raise
+
+    a2 = _det([102, 102, 302, 402], "athlete")
+    b2 = _det([402, 102, 602, 402], "athlete")
+    resolved = tracker.resolve(select_top2([a2, b2], IMG_W, IMG_H), [a2, b2], IMG_W, IMG_H)  # must not raise
+    assert {tuple(x) for x in resolved.boxes_px} == {tuple(a2.box_px), tuple(b2.box_px)}
 
 
 # --------------------------------------------------------------------------- #

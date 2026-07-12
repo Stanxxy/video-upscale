@@ -25,6 +25,8 @@ from typing import Optional
 
 from google.genai import types
 
+from service.pipelines import gemini_retry
+
 logger = logging.getLogger("service.pipelines.simplified_tags")
 
 # --------------------------------------------------------------------------- #
@@ -229,12 +231,14 @@ class SimplifiedTagsAnalyzer:
         temperature: float = 0.2,
         thinking_config: Optional[types.ThinkingConfig] = None,
         system_instruction: Optional[str] = None,
+        retry_config: Optional[gemini_retry.GeminiRetryConfig] = None,
     ):
         self.client = client
         self.model_id = model_id
         self.temperature = temperature
         self.thinking_config = thinking_config
         self.system_instruction = resolve_system_instruction(system_instruction)
+        self.retry_config = retry_config or gemini_retry.GeminiRetryConfig()
 
     def _build_generate_config(self, response_schema: types.Schema) -> types.GenerateContentConfig:
         kwargs = dict(
@@ -268,10 +272,14 @@ class SimplifiedTagsAnalyzer:
                 "Gemini simplified-tags-v1: sending %d frames to model %s",
                 len(frames), self.model_id,
             )
-            response = await self.client.aio.models.generate_content(
-                model=self.model_id,
-                contents=contents,
-                config=self._build_generate_config(effective_schema),
+            response = await gemini_retry.call_with_retry(
+                lambda: self.client.aio.models.generate_content(
+                    model=self.model_id,
+                    contents=contents,
+                    config=self._build_generate_config(effective_schema),
+                ),
+                op_name="simplified-tags-v1",
+                retry_config=self.retry_config,
             )
             text = response.text
             logger.info(
@@ -460,12 +468,14 @@ class SimplifiedTagsTimeAnalyzer:
         temperature: float = 0.2,
         thinking_config: Optional[types.ThinkingConfig] = None,
         system_instruction: Optional[str] = None,
+        retry_config: Optional[gemini_retry.GeminiRetryConfig] = None,
     ):
         self.client = client
         self.model_id = model_id
         self.temperature = temperature
         self.thinking_config = thinking_config
         self.system_instruction = resolve_system_instruction(system_instruction)
+        self.retry_config = retry_config or gemini_retry.GeminiRetryConfig()
 
     def _build_generate_config(self, response_schema: types.Schema) -> types.GenerateContentConfig:
         kwargs = dict(
@@ -501,10 +511,14 @@ class SimplifiedTagsTimeAnalyzer:
                 "Gemini simplified-tags-time-v1: chunk [%.1f-%.1f]s, model %s",
                 start_sec, end_sec, self.model_id,
             )
-            response = await self.client.aio.models.generate_content(
-                model=self.model_id,
-                contents=[types.Content(role="user", parts=[types.Part(text=prompt), video_part])],
-                config=self._build_generate_config(effective_schema),
+            response = await gemini_retry.call_with_retry(
+                lambda: self.client.aio.models.generate_content(
+                    model=self.model_id,
+                    contents=[types.Content(role="user", parts=[types.Part(text=prompt), video_part])],
+                    config=self._build_generate_config(effective_schema),
+                ),
+                op_name="simplified-tags-time-v1",
+                retry_config=self.retry_config,
             )
             text = response.text
             logger.info(

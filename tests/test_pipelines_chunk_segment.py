@@ -160,6 +160,60 @@ def test_repair_never_naked_cuts_exactly_at_max_chunk_s_boundary():
 
 
 # --------------------------------------------------------------------------- #
+# Bug regression — repair_chunk_bounds must NEVER emit a chunk whose base
+# duration exceeds max_chunk_s, at any input-to-cap ratio, and even when a
+# sub-min merge combines two chunks into an over-max result. (These already
+# pass against the pre-existing split algorithm — root-causing Bug 2 first
+# ruled OUT this layer; the real defect was one layer down in
+# executors.chunk_analyze_node's overlap re-expansion, covered separately in
+# test_pipelines_executors.py. Kept here as the explicit invariant the task
+# asked for, and as a regression guard on this layer regardless.)
+# --------------------------------------------------------------------------- #
+def _assert_every_chunk_within_max(repaired, max_chunk_s):
+    for c in repaired:
+        duration = c["end_s"] - c["start_s"]
+        assert duration <= max_chunk_s + 1e-9, f"chunk {c} duration {duration} exceeds max {max_chunk_s}"
+
+
+def test_repair_over_max_chunk_at_1_5x_max_every_piece_within_cap():
+    raw = [{"start_s": 0, "end_s": 90, "reason": "match_action"}]  # 1.5x of max=60
+    repaired, notes = chunk_segment.repair_chunk_bounds(raw, min_chunk_s=5, max_chunk_s=60, split_overlap_s=5)
+    _assert_every_chunk_within_max(repaired, 60)
+    assert len(repaired) == 2
+    assert notes
+
+
+def test_repair_over_max_chunk_at_2x_max_every_piece_within_cap():
+    raw = [{"start_s": 0, "end_s": 120, "reason": "match_action"}]  # exactly 2x max=60
+    repaired, notes = chunk_segment.repair_chunk_bounds(raw, min_chunk_s=5, max_chunk_s=60, split_overlap_s=5)
+    _assert_every_chunk_within_max(repaired, 60)
+    assert len(repaired) == 3  # the old "one split still leaves a piece >max" failure mode, if present
+    assert notes
+
+
+def test_repair_over_max_chunk_at_3x_max_every_piece_within_cap():
+    raw = [{"start_s": 0, "end_s": 180, "reason": "match_action"}]  # 3x max=60
+    repaired, notes = chunk_segment.repair_chunk_bounds(raw, min_chunk_s=5, max_chunk_s=60, split_overlap_s=5)
+    _assert_every_chunk_within_max(repaired, 60)
+    assert len(repaired) == 4
+    assert notes
+
+
+def test_repair_min_merge_that_would_combine_over_max_still_gets_split():
+    """A sub-min chunk merges into its neighbor (Pass A); if that merge alone
+    pushes the combined chunk over max_chunk_s, Pass B must still split it —
+    the merge and the max-cap are not allowed to fight each other."""
+    raw = [
+        {"start_s": 0, "end_s": 58, "reason": "match_action"},
+        {"start_s": 58, "end_s": 61, "reason": "match_action"},  # 3s sub-min -> merges into prev (58+3=61 > 60)
+    ]
+    repaired, notes = chunk_segment.repair_chunk_bounds(raw, min_chunk_s=5, max_chunk_s=60, split_overlap_s=5)
+    _assert_every_chunk_within_max(repaired, 60)
+    assert len(repaired) == 2  # merged-then-split back into 2 pieces
+    assert notes
+
+
+# --------------------------------------------------------------------------- #
 # Malformed raw entries — dropped, never fabricated
 # --------------------------------------------------------------------------- #
 def test_repair_drops_malformed_entries_never_fabricates():

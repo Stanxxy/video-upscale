@@ -34,7 +34,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from service.pipelines import chunk_segment, registry
+from service.pipelines import chunk_segment, gemini_retry, registry
 from service.pipelines.executors import DEFAULT_BUDGET_CAP, RunContext, estimate_run_plan, run_pipeline
 from service.pipelines.models import PipelineDef
 from service.routes import state as route_state
@@ -121,6 +121,7 @@ async def pipeline_run(body: PipelineRunRequest, request: Request):
         end_sec=end_sec,
         gemini_api_key=config.gemini_api_key,
         request_timeout_ms=config.gemini_request_timeout_ms,
+        retry_config=gemini_retry.GeminiRetryConfig.from_service_config(config),
     )
 
     logger.info(

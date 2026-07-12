@@ -11,9 +11,22 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from google.genai import errors as genai_errors
 from google.genai import types
 
-from service.pipelines import simplified_tags
+from service.pipelines import gemini_retry, simplified_tags
+
+
+@pytest.fixture(autouse=True)
+def _no_real_sleep(monkeypatch):
+    """Retry tests below use the real gemini_retry.call_with_retry backoff
+    loop with real transient google.genai.errors — mock asyncio.sleep so
+    nothing in this file ever actually sleeps."""
+    monkeypatch.setattr("service.pipelines.gemini_retry.asyncio.sleep", AsyncMock())
+
+
+def _server_error(code: int = 503) -> genai_errors.ServerError:
+    return genai_errors.ServerError(code, {"message": f"{code} error", "status": "UNAVAILABLE"}, None)
 
 
 # --------------------------------------------------------------------------- #
@@ -230,6 +243,41 @@ async def test_analyzer_surfaces_gemini_error_as_json_error_never_fabricates():
     assert "simulated Gemini outage" in parsed["error"]
 
 
+@pytest.mark.asyncio
+async def test_analyzer_retries_transient_503_then_succeeds():
+    call_count = {"n": 0}
+
+    async def _fake_generate(*, model, contents, config):
+        call_count["n"] += 1
+        if call_count["n"] < 2:
+            raise _server_error(503)
+        return SimpleNamespace(text=json.dumps({"clips": []}))
+
+    client = MagicMock()
+    client.aio.models.generate_content = _fake_generate
+    analyzer = simplified_tags.SimplifiedTagsAnalyzer(
+        client, model_id="gemini-3.1-flash-lite",
+        retry_config=gemini_retry.GeminiRetryConfig(max_attempts=3, initial_delay_s=0.0, max_delay_s=0.0, jitter_s=0.0),
+    )
+    result = await analyzer.analyze_sequence_async(["f"], [0], None)
+    assert json.loads(result) == {"clips": []}
+    assert call_count["n"] == 2
+
+
+@pytest.mark.asyncio
+async def test_analyzer_exhausted_transient_retries_surfaces_json_error_never_fabricates():
+    client = MagicMock()
+    client.aio.models.generate_content = AsyncMock(side_effect=_server_error(503))
+    analyzer = simplified_tags.SimplifiedTagsAnalyzer(
+        client, model_id="gemini-3.1-flash-lite",
+        retry_config=gemini_retry.GeminiRetryConfig(max_attempts=3, initial_delay_s=0.0, max_delay_s=0.0, jitter_s=0.0),
+    )
+    result = await analyzer.analyze_sequence_async(["f"], [0], None)
+    parsed = json.loads(result)
+    assert "503" in parsed["error"]
+    assert client.aio.models.generate_content.call_count == 3
+
+
 # =============================================================================== #
 # simplified-tags-time-v1 — NATIVE-VIDEO sibling (chunk-segment-tags PASS 2).
 # Distinct from the frame-keyed format above: start_s/end_s (seconds), and an
@@ -355,3 +403,39 @@ async def test_time_analyzer_surfaces_gemini_error_as_json_error_never_fabricate
     result = await analyzer.analyze_chunk("https://y", 0.0, 10.0, None)
     parsed = json.loads(result)
     assert "simulated Gemini outage" in parsed["error"]
+
+
+@pytest.mark.asyncio
+async def test_time_analyzer_retries_transient_429_then_succeeds():
+    call_count = {"n": 0}
+
+    async def _fake_generate(*, model, contents, config):
+        call_count["n"] += 1
+        if call_count["n"] < 3:
+            raise _server_error(429)
+        return SimpleNamespace(text=json.dumps({"clips": []}))
+
+    client = MagicMock()
+    client.aio.models.generate_content = _fake_generate
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+        client, model_id="gemini-3.1-flash-lite",
+        retry_config=gemini_retry.GeminiRetryConfig(max_attempts=5, initial_delay_s=0.0, max_delay_s=0.0, jitter_s=0.0),
+    )
+    result = await analyzer.analyze_chunk("https://y", 0.0, 10.0, None)
+    assert json.loads(result) == {"clips": []}
+    assert call_count["n"] == 3
+
+
+@pytest.mark.asyncio
+async def test_time_analyzer_non_transient_404_fails_fast_no_retry():
+    client = MagicMock()
+    not_found = genai_errors.ClientError(404, {"message": "model not found", "status": "NOT_FOUND"}, None)
+    client.aio.models.generate_content = AsyncMock(side_effect=not_found)
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+        client, model_id="gemini-3.1-flash-lite",
+        retry_config=gemini_retry.GeminiRetryConfig(max_attempts=5, initial_delay_s=0.0, max_delay_s=0.0, jitter_s=0.0),
+    )
+    result = await analyzer.analyze_chunk("https://y", 0.0, 10.0, None)
+    parsed = json.loads(result)
+    assert "model not found" in parsed["error"]
+    assert client.aio.models.generate_content.call_count == 1  # non-transient — no retry attempted

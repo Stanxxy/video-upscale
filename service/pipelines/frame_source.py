@@ -412,11 +412,27 @@ _CONTINUITY_IOU_THRESHOLD = 0.3
 
 
 def _pair_continuity(new_boxes: list[list[float]], held_boxes: list[list[float]]) -> float:
-    """Best-of-2 assignment IoU between this frame's candidate pair and the held
-    pair (order-agnostic — Gemini gives no persistent identity token)."""
-    direct = (_iou(new_boxes[0], held_boxes[0]) + _iou(new_boxes[1], held_boxes[1])) / 2
-    crossed = (_iou(new_boxes[0], held_boxes[1]) + _iou(new_boxes[1], held_boxes[0])) / 2
-    return max(direct, crossed)
+    """Best-of assignment IoU between this frame's candidate boxes and the held
+    boxes (order-agnostic — Gemini gives no persistent identity token).
+
+    Robust to 0/1/2-length inputs: a real 2-vs-2 assignment IoU only makes
+    sense when BOTH sides have exactly 2 boxes (the normal, non-degraded
+    case). ``AthleteTracker.resolve`` guarantees ``held_boxes`` is always
+    ``None`` or length-2 (a degraded <2-box selection never overwrites it —
+    see ``resolve``'s early-return), so in practice this never sees a
+    mismatched pair via that caller. This function stays defensive anyway
+    (never indexes past either list's actual length) so it can be called
+    directly — including from tests — with 0- or 1-length inputs without an
+    ``IndexError``: a mismatched or degenerate pairing has no real 2-vs-2
+    assignment to score, so it's treated as the best available single-box
+    IoU (0.0 if either side is empty)."""
+    if not new_boxes or not held_boxes:
+        return 0.0
+    if len(new_boxes) == 2 and len(held_boxes) == 2:
+        direct = (_iou(new_boxes[0], held_boxes[0]) + _iou(new_boxes[1], held_boxes[1])) / 2
+        crossed = (_iou(new_boxes[0], held_boxes[1]) + _iou(new_boxes[1], held_boxes[0])) / 2
+        return max(direct, crossed)
+    return max(_iou(nb, hb) for nb in new_boxes for hb in held_boxes)
 
 
 def _match_box_to_detections(box: list[float], detections: list[Detection]) -> Optional[Detection]:
@@ -453,11 +469,29 @@ class AthleteTracker:
         against the held pair. Returns a (possibly overridden) ``SelectionResult``
         with the boxes to actually crop this frame. Frames with no candidates
         (``no_detection``) pass through untouched — the tracker holds no state
-        across a dropped frame's absence."""
+        across a dropped frame's absence.
+
+        Frames with a DEGRADED <2-box selection (``single_athlete`` — the only
+        branch of ``select_top2`` that returns exactly 1 candidate; a
+        ``role_uncertain`` selection is always length-2) also pass through
+        untouched, same as ``no_detection``: the crop for THIS frame still
+        uses the real (never fabricated) single box ``select_top2`` found, but
+        the tracker's own ``held_boxes`` pair-continuity anchor is left alone.
+        This is the fix for the IndexError regression (a dropped-to-1-box
+        frame used to overwrite ``held_boxes`` with a length-1 list, which
+        then crashed ``_pair_continuity``'s ``[0]``/``[1]`` indexing on the
+        NEXT full 2-athlete frame) — ``held_boxes`` is now a documented
+        invariant: always ``None`` or exactly length 2, so a later full-pair
+        frame can still re-anchor against the last known-good pair instead of
+        losing tracking over one occluded/partial-detection frame. Nothing is
+        fabricated either way; only the internal bookkeeping is preserved."""
         if selection.candidates is None:
             return selection
 
         new_boxes = selection.boxes_px
+        if len(new_boxes) != 2:
+            return selection
+
         if self.held_boxes is None:
             self.held_boxes = new_boxes
             self._streak = 0

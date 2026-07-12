@@ -38,7 +38,7 @@ from PIL import Image
 
 from analyzer import BJJMultiAgentAnalyzer, BJJTechniqueAnalyzer
 from pipeline import deduplicate_clips
-from service.pipelines import chunk_segment, frame_source, simplified_tags, time_dedup
+from service.pipelines import chunk_segment, frame_source, gemini_retry, simplified_tags, time_dedup
 from service.pipelines.models import (
     AnalyzeConfig,
     ChunkAnalyzeConfig,
@@ -84,6 +84,14 @@ class RunContext:
     request_timeout_ms: int
     taxonomy_path: Optional[str] = None
 
+    # Transient-error retry-with-backoff policy for every QA-layer Gemini call
+    # this RunContext drives (detect_crop, analyze, chunk_segment,
+    # chunk_analyze). Defaults to GeminiRetryConfig()'s dataclass defaults
+    # when not explicitly built from a live ServiceConfig (e.g. existing unit
+    # tests that construct RunContext directly) — see
+    # service/pipelines/gemini_retry.py.
+    retry_config: gemini_retry.GeminiRetryConfig = field(default_factory=gemini_retry.GeminiRetryConfig)
+
     stream_url: Optional[str] = None
     stream_headers: dict = field(default_factory=dict)
     native_fps: Optional[float] = None
@@ -99,6 +107,17 @@ class RunContext:
     # (this pipeline is entirely native-video; ``native_fps`` stays ``None``
     # end-to-end, same "no unit fabrication" discipline as everywhere else).
     chunks: list = field(default_factory=list)
+
+    # PASS 1's ``ChunkSegmentConfig.max_chunk_s`` — threaded through so PASS
+    # 2's ``chunk_analyze_node`` can cap the OVERLAP-EXPANDED analyzed span at
+    # the SAME bound the chunk map itself was repaired against (bug fix: the
+    # back-overlap used to be added on top of a base chunk that was already
+    # AT the cap after ``repair_chunk_bounds``'s over-max split, silently
+    # pushing the real Gemini-analyzed window past ``max_chunk_s``). ``None``
+    # when ``chunk_analyze_node`` runs without a preceding ``chunk_segment``
+    # stage (e.g. directly in a unit test) — the clamp is then a no-op,
+    # preserving prior behavior for callers that never set it.
+    chunk_max_s: Optional[float] = None
 
     current_context: str = "Start of match."
     raw_results: list = field(default_factory=list)  # [{"window":, "frames":, "analysis":}]
@@ -182,7 +201,7 @@ async def detect_crop_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]
         try:
             raw_objects, _model_used, model_ms = await _run_detect(
                 client, crop.image, model=cfg.model, thinking_config=thinking_off,
-                prompt=frame_source.MIMIC_DETECT_PROMPT,
+                prompt=frame_source.MIMIC_DETECT_PROMPT, retry_config=ctx.retry_config,
             )
         except RuntimeError as e:
             yield {"type": "error", "stage_id": "detect_crop", "message": f"frame {crop.frame_index}: {e}"}
@@ -276,7 +295,7 @@ async def _analyze_frame_windows(ctx: RunContext, cfg: AnalyzeConfig) -> AsyncIt
         # analyze path in this module.
         analyzer = simplified_tags.SimplifiedTagsAnalyzer(
             ctx.gemini_client(), model_id=cfg.model, thinking_config=thinking_cfg,
-            system_instruction=cfg.system_instruction,
+            system_instruction=cfg.system_instruction, retry_config=ctx.retry_config,
         )
     else:
         common_kwargs = dict(
@@ -376,9 +395,13 @@ async def _analyze_video_window(ctx: RunContext, cfg: AnalyzeConfig) -> AsyncIte
     yield {"type": "window_start", "window": 1, "scope": [ctx.start_sec, ctx.end_sec]}
     t0 = time.perf_counter()
     try:
-        response = await client.aio.models.generate_content(
-            model=model, contents=[types.Content(role="user", parts=[types.Part(text=prompt_text), video_part])],
-            config=gen_config,
+        response = await gemini_retry.call_with_retry(
+            lambda: client.aio.models.generate_content(
+                model=model, contents=[types.Content(role="user", parts=[types.Part(text=prompt_text), video_part])],
+                config=gen_config,
+            ),
+            op_name="analyze:video_window",
+            retry_config=ctx.retry_config,
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
         yield {"type": "error", "stage_id": "analyze", "message": str(e)}
@@ -457,10 +480,14 @@ async def chunk_segment_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
 
     t0 = time.perf_counter()
     try:
-        response = await client.aio.models.generate_content(
-            model=cfg.model,
-            contents=[types.Content(role="user", parts=[types.Part(text=prompt_text), video_part])],
-            config=gen_config,
+        response = await gemini_retry.call_with_retry(
+            lambda: client.aio.models.generate_content(
+                model=cfg.model,
+                contents=[types.Content(role="user", parts=[types.Part(text=prompt_text), video_part])],
+                config=gen_config,
+            ),
+            op_name="chunk_segment",
+            retry_config=ctx.retry_config,
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
         yield {"type": "error", "stage_id": "chunk_segment", "message": str(e)}
@@ -477,6 +504,7 @@ async def chunk_segment_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
         raw_chunks = []
 
     ctx.chunks = chunk_segment.finalize_chunks(raw_chunks, cfg.min_chunk_s, cfg.max_chunk_s, cfg.analyze_all)
+    ctx.chunk_max_s = cfg.max_chunk_s
 
     worthy_count = sum(1 for c in ctx.chunks if c["worth_analysis"])
     yield {
@@ -509,6 +537,7 @@ async def chunk_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
     thinking_cfg = thinking_config_for(cfg.model, cfg.thinking)
     analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
         ctx.gemini_client(), model_id=cfg.model, thinking_config=thinking_cfg,
+        retry_config=ctx.retry_config,
     )
     chain_enabled = ctx.stage_enabled.get("context_chain", True)
     context = "Start of match."
@@ -523,9 +552,22 @@ async def chunk_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
             continue
 
         # Native-video back-overlap into the prior chunk (LeCun overlap safety
-        # net) — never before ctx.start_sec (the requested scope's own bound).
+        # net) — never before ctx.start_sec (the requested scope's own bound),
+        # and never past ``ctx.chunk_max_s`` (PASS 1's max_chunk_s) either: the
+        # cap is defined on the REAL analyzed span, not just the base chunk
+        # bounds the chunk map displays. Without this second floor, a base
+        # chunk already AT the cap (e.g. one of repair_chunk_bounds's
+        # over-max split pieces) would silently grow past max_chunk_s once
+        # overlap_s is subtracted — the exact "chunk over max length" bug.
+        # Split pieces already carry their own dedup-healing overlap baked
+        # into adjacent pieces' base start_s/end_s (repair_chunk_bounds), so
+        # clamping this SEPARATE back-overlap to fit under the same cap loses
+        # no seam-healing — it only trims back-overlap room that would have
+        # pushed the window over budget.
         effective_start = max(ctx.start_sec, chunk["start_s"] - cfg.overlap_s)
         chunk_end = chunk["end_s"]
+        if ctx.chunk_max_s is not None:
+            effective_start = max(effective_start, chunk_end - ctx.chunk_max_s)
 
         yield {
             "type": "chunk_start", "chunk_index": chunk["index"],
