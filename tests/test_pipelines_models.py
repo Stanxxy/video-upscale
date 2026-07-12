@@ -1,0 +1,298 @@
+"""``service/pipelines/models.py`` + ``registry.py`` — fail-closed config
+validation, structural-node lock, registry default round-trip (build plan §3.1).
+"""
+from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
+
+from service.pipelines import simplified_tags
+from service.pipelines.models import (
+    AnalyzeConfig,
+    ChunkAnalyzeConfig,
+    ChunkSegmentConfig,
+    DetectCropConfig,
+    PipelineDef,
+    StageDef,
+)
+from service.pipelines.registry import PipelineValidationError, get_default, list_pipelines, validate_pipeline_def
+
+
+# --------------------------------------------------------------------------- #
+# Registry defaults round-trip
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "pipeline_id",
+    ["single-shot", "vision-mimic", "vision-mimic-multi", "vision-mimic-simplified", "chunk-segment-tags"],
+)
+def test_get_default_round_trips_through_json(pipeline_id):
+    pdef = get_default(pipeline_id)
+    dumped = pdef.model_dump(mode="json")
+    reloaded = PipelineDef.model_validate(dumped)
+    assert validate_pipeline_def(reloaded).id == pipeline_id
+
+
+def test_get_default_returns_a_deep_copy_not_the_registry_singleton():
+    a = get_default("vision-mimic")
+    a.stages[0].enabled = False
+    b = get_default("vision-mimic")
+    assert b.stages[0].enabled is True  # mutation of `a` must not leak into the registry
+
+
+def test_get_default_unknown_id_raises_keyerror():
+    with pytest.raises(KeyError):
+        get_default("does-not-exist")
+
+
+def test_list_pipelines_summary_shape():
+    summaries = list_pipelines()
+    ids = {p["id"] for p in summaries}
+    assert {
+        "single-shot", "vision-mimic", "vision-mimic-multi", "vision-mimic-simplified", "chunk-segment-tags",
+    } <= ids
+    for p in summaries:
+        assert set(p) == {"id", "label", "description"}
+
+
+# --------------------------------------------------------------------------- #
+# chunk-segment-tags — registry defaults + fixed stage set
+# --------------------------------------------------------------------------- #
+def test_chunk_segment_tags_defaults_fixed_stage_set():
+    pdef = get_default("chunk-segment-tags")
+    assert [s.type for s in pdef.stages] == [
+        "video_window", "chunk_segment", "chunk_analyze", "context_chain", "dedup",
+    ]
+    validate_pipeline_def(pdef)  # must not raise
+
+
+def test_chunk_segment_tags_default_config_values():
+    pdef = get_default("chunk-segment-tags")
+    cs_cfg = ChunkSegmentConfig.model_validate(next(s for s in pdef.stages if s.type == "chunk_segment").config)
+    ca_cfg = ChunkAnalyzeConfig.model_validate(next(s for s in pdef.stages if s.type == "chunk_analyze").config)
+    assert cs_cfg.min_chunk_s == 5.0
+    assert cs_cfg.max_chunk_s == 60.0
+    assert cs_cfg.rough_fps == 1.0
+    assert cs_cfg.analyze_all is False
+    assert ca_cfg.overlap_s == 5.0
+    assert ca_cfg.thinking is None
+
+
+def test_chunk_segment_and_chunk_analyze_are_structural_cannot_disable():
+    pdef = get_default("chunk-segment-tags")
+    for node_type in ("chunk_segment", "chunk_analyze"):
+        p = get_default("chunk-segment-tags")
+        next(s for s in p.stages if s.type == node_type).enabled = False
+        with pytest.raises(PipelineValidationError, match="structural"):
+            validate_pipeline_def(p)
+    validate_pipeline_def(pdef)  # unrelated copy untouched, still valid
+
+
+def test_chunk_segment_config_rejects_unknown_key():
+    with pytest.raises(ValidationError):
+        ChunkSegmentConfig(bogus_field="x")
+
+
+def test_chunk_analyze_config_rejects_unknown_key():
+    with pytest.raises(ValidationError):
+        ChunkAnalyzeConfig(bogus_field="x")
+
+
+def test_chunk_segment_off_allowlist_model_rejected():
+    pdef = get_default("chunk-segment-tags")
+    next(s for s in pdef.stages if s.type == "chunk_segment").config["model"] = "gemini-1.0-nano-experimental"
+    with pytest.raises(PipelineValidationError, match="Unsupported model"):
+        validate_pipeline_def(pdef)
+
+
+def test_chunk_analyze_off_allowlist_model_rejected():
+    pdef = get_default("chunk-segment-tags")
+    next(s for s in pdef.stages if s.type == "chunk_analyze").config["model"] = "gemini-1.0-nano-experimental"
+    with pytest.raises(PipelineValidationError, match="Unsupported model"):
+        validate_pipeline_def(pdef)
+
+
+def test_chunk_segment_tags_unknown_config_key_rejected():
+    pdef = get_default("chunk-segment-tags")
+    next(s for s in pdef.stages if s.type == "chunk_segment").config["not_a_real_key"] = 123
+    with pytest.raises(PipelineValidationError, match="Invalid config"):
+        validate_pipeline_def(pdef)
+
+
+def test_chunk_segment_tags_missing_stage_type_rejected():
+    pdef = get_default("chunk-segment-tags")
+    pdef.stages = [s for s in pdef.stages if s.type != "chunk_analyze"]
+    with pytest.raises(PipelineValidationError, match="fixed stage set"):
+        validate_pipeline_def(pdef)
+
+
+def test_vision_mimic_simplified_defaults():
+    pdef = get_default("vision-mimic-simplified")
+    assert {s.type for s in pdef.stages} == {
+        "frame_sample", "detect_crop", "window", "analyze", "context_chain", "dedup",
+    }
+    analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
+    cfg = AnalyzeConfig.model_validate(analyze_stage.config)
+    assert cfg.return_format == "simplified-tags-v1"
+    assert cfg.model == "gemini-3.1-flash-lite"
+    assert cfg.agent_mode == "single"
+    # system_instruction defaults to the bundled taxonomy text (visible/editable
+    # in the node's system_instruction card), not None.
+    assert cfg.system_instruction == simplified_tags.DEFAULT_TAXONOMY_TEXT
+    validate_pipeline_def(pdef)  # must not raise
+
+
+def test_single_shot_defaults_match_todays_vlm_chat_contract():
+    pdef = get_default("single-shot")
+    analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
+    cfg = AnalyzeConfig.model_validate(analyze_stage.config)
+    assert cfg.model == "gemini-3.5-flash"
+    assert cfg.thinking == "low"
+    assert cfg.return_format == "events-v1"
+    assert cfg.agent_mode == "single"
+    assert cfg.system_instruction is None
+
+
+def test_analyze_config_system_instruction_defaults_none_and_is_settable():
+    assert AnalyzeConfig().system_instruction is None
+    cfg = AnalyzeConfig(system_instruction="custom taxonomy text")
+    assert cfg.system_instruction == "custom taxonomy text"
+
+
+def test_vision_mimic_multi_defaults_agent_mode_multi():
+    pdef = get_default("vision-mimic-multi")
+    analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
+    cfg = AnalyzeConfig.model_validate(analyze_stage.config)
+    assert cfg.agent_mode == "multi"
+
+
+# --------------------------------------------------------------------------- #
+# Fail-closed validation
+# --------------------------------------------------------------------------- #
+def test_unknown_pipeline_id_rejected():
+    pdef = get_default("vision-mimic")
+    pdef.id = "not-a-real-pipeline"
+    with pytest.raises(PipelineValidationError, match="Unknown pipeline id"):
+        validate_pipeline_def(pdef)
+
+
+def test_unknown_config_key_rejected_400_equivalent():
+    pdef = get_default("vision-mimic")
+    detect_stage = next(s for s in pdef.stages if s.type == "detect_crop")
+    detect_stage.config["not_a_real_key"] = 123
+    with pytest.raises(PipelineValidationError, match="Invalid config"):
+        validate_pipeline_def(pdef)
+
+
+def test_bad_config_value_type_rejected():
+    pdef = get_default("vision-mimic")
+    sample_stage = next(s for s in pdef.stages if s.type == "frame_sample")
+    sample_stage.config["sample_fps"] = "not-a-number"
+    with pytest.raises(PipelineValidationError, match="Invalid config"):
+        validate_pipeline_def(pdef)
+
+
+def test_config_out_of_range_rejected():
+    with pytest.raises(ValidationError):
+        DetectCropConfig(padding=-1.0)
+
+
+def test_analyze_off_allowlist_model_rejected():
+    pdef = get_default("single-shot")
+    analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
+    analyze_stage.config["model"] = "gemini-1.0-nano-experimental"
+    with pytest.raises(PipelineValidationError, match="Unsupported model"):
+        validate_pipeline_def(pdef)
+
+
+def test_detect_crop_off_allowlist_model_rejected():
+    pdef = get_default("vision-mimic")
+    detect_stage = next(s for s in pdef.stages if s.type == "detect_crop")
+    detect_stage.config["model"] = "gemini-1.0-nano-experimental"
+    with pytest.raises(PipelineValidationError, match="Unsupported model"):
+        validate_pipeline_def(pdef)
+
+
+def test_analyze_allowlisted_model_swap_is_accepted():
+    pdef = get_default("single-shot")
+    analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
+    analyze_stage.config["model"] = "gemini-3.1-pro-preview"
+    validate_pipeline_def(pdef)  # must not raise
+
+
+def test_structural_node_disabled_rejected():
+    pdef = get_default("vision-mimic")
+    window_stage = next(s for s in pdef.stages if s.type == "window")
+    window_stage.enabled = False
+    with pytest.raises(PipelineValidationError, match="structural"):
+        validate_pipeline_def(pdef)
+
+
+def test_non_structural_node_can_be_disabled():
+    pdef = get_default("vision-mimic")
+    dedup_stage = next(s for s in pdef.stages if s.type == "dedup")
+    dedup_stage.enabled = False
+    # Should NOT raise — dedup is not structural.
+    validate_pipeline_def(pdef)
+
+
+def test_missing_stage_type_rejected():
+    pdef = get_default("vision-mimic")
+    pdef.stages = [s for s in pdef.stages if s.type != "dedup"]
+    with pytest.raises(PipelineValidationError, match="fixed stage set"):
+        validate_pipeline_def(pdef)
+
+
+def test_extra_stage_type_rejected():
+    pdef = get_default("single-shot")
+    pdef.stages.append(
+        StageDef(id="rogue", type="dedup", label="Rogue Dedup", config={})
+    )
+    with pytest.raises(PipelineValidationError, match="fixed stage set"):
+        validate_pipeline_def(pdef)
+
+
+def test_duplicate_stage_id_rejected():
+    pdef = get_default("single-shot")
+    pdef.stages[1].id = pdef.stages[0].id
+    with pytest.raises(PipelineValidationError, match="Duplicate stage id"):
+        validate_pipeline_def(pdef)
+
+
+def test_simplified_tags_v1_return_format_accepted_for_analyze():
+    pdef = get_default("vision-mimic")
+    analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
+    analyze_stage.config["return_format"] = "simplified-tags-v1"
+    validate_pipeline_def(pdef)  # must not raise — accepted on ANY vision-mimic-shaped pipeline
+
+
+def test_simplified_tags_v1_with_multi_agent_rejected():
+    pdef = get_default("vision-mimic-simplified")
+    analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
+    analyze_stage.config["agent_mode"] = "multi"
+    with pytest.raises(PipelineValidationError, match="does not support agent_mode='multi'"):
+        validate_pipeline_def(pdef)
+
+
+def test_reorder_within_fixed_set_is_allowed():
+    pdef = get_default("vision-mimic")
+    pdef.stages = list(reversed(pdef.stages))
+    validated = validate_pipeline_def(pdef)
+    assert validated.stages[0].type == "dedup"  # order preserved as given, not re-sorted
+
+
+# --------------------------------------------------------------------------- #
+# Node config models — extra="forbid" behavior directly
+# --------------------------------------------------------------------------- #
+def test_analyze_config_rejects_unknown_key():
+    with pytest.raises(ValidationError):
+        AnalyzeConfig(agent_mode="single", bogus_field="x")
+
+
+def test_analyze_config_rejects_unknown_agent_mode():
+    with pytest.raises(ValidationError):
+        AnalyzeConfig(agent_mode="triple")
+
+
+def test_analyze_config_rejects_unknown_return_format():
+    with pytest.raises(ValidationError):
+        AnalyzeConfig(return_format="xml-v9")

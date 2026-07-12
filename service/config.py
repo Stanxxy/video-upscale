@@ -31,6 +31,39 @@ class ServiceConfig(BaseSettings):
     # Vision model for optional >2-candidate athlete hints (human never auto-applies).
     gemini_athlete_suggest_model: str = "gemini-3.1-flash-lite"
 
+    # QA-layer Gemini call resilience (service/pipelines/gemini_retry.py).
+    # Retry-with-backoff for TRANSIENT errors only (503 UNAVAILABLE, 429
+    # RESOURCE_EXHAUSTED, 500/502/504, connection/timeout) — 400/404/permission
+    # errors are never retried. QA VLM Studio call sites only
+    # (service/routes/qa_vlm.py, service/pipelines/executors.py,
+    # service/pipelines/simplified_tags.py); production analyzer.py/worker
+    # paths are untouched.
+    gemini_retry_max_attempts: int = Field(
+        default=5,
+        ge=1,
+        description="Total attempts (including the first) for a QA-layer Gemini call before giving up.",
+    )
+    gemini_retry_initial_delay_s: float = Field(
+        default=1.0,
+        gt=0,
+        description="Base backoff delay (seconds) before the first retry; grows by gemini_retry_exp_base each attempt.",
+    )
+    gemini_retry_max_delay_s: float = Field(
+        default=30.0,
+        gt=0,
+        description="Hard cap (seconds) on the computed backoff delay, before any server Retry-After override.",
+    )
+    gemini_retry_exp_base: float = Field(
+        default=2.0,
+        gt=1,
+        description="Exponential backoff growth factor per retry attempt.",
+    )
+    gemini_retry_jitter_s: float = Field(
+        default=1.0,
+        ge=0,
+        description="Max uniform random jitter (seconds) added on top of the computed backoff delay.",
+    )
+
     # Model
     model_path: str = "RealESRGAN_x4plus.pth"
 

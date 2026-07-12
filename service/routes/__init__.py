@@ -18,6 +18,7 @@ from service.routes.recovery import (
     recover_interrupted_job,
 )
 from service.routes.qa import identity_analyze
+from service.routes.qa_vlm import vlm_chat, vlm_image
 from service.routes.state import init_routes
 
 router = APIRouter()
@@ -49,6 +50,10 @@ router.get("/debug/memory")(debug_memory)
 
 # QA harness — Stream 2 Gemini identity-grounding live gate (analyzer only, no GPU)
 router.post("/qa/identity-analyze")(identity_analyze)
+
+# QA VLM Studio — pure-Gemini event chat + single-frame image generation/segmentation
+router.post("/qa/vlm-chat")(vlm_chat)
+router.post("/qa/vlm-image")(vlm_image)
 
 
 def __getattr__(name: str):

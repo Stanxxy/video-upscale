@@ -1,0 +1,3619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BJJ Vision Engine — VLM Studio (QA)</title>
+<script src="https://www.youtube.com/iframe_api"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #6c8cff;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --orange: #fb923c;
+    --obj-0: #6c8cff;
+    --obj-1: #fb923c;
+    --obj-2: #4ade80;
+    --obj-3: #fbbf24;
+    --obj-4: #a78bfa;
+    --obj-5: #22d3ee;
+    --obj-6: #f87171;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 20px; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; color: var(--text-dim); }
+
+  /* Layout: fluid hero column + fixed chat rail */
+  .studio-grid { display: grid; grid-template-columns: 1fr 460px; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .studio-grid { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    min-width: 0;
+  }
+
+  label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; margin-top: 10px; }
+  label:first-child { margin-top: 0; }
+  input, textarea, select {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.85rem;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1; min-width: 120px; }
+
+  .field-inline { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  .field-inline input { flex: 1; min-width: 0; }
+  .field-inline button { flex-shrink: 0; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 18px;
+    border: none; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 500;
+    cursor: pointer; transition: opacity 0.15s;
+    width: 100%; margin-top: 14px;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-danger { background: var(--red); color: #fff; }
+  .btn-success { background: var(--green); color: #000; }
+  .btn-sm { padding: 6px 12px; font-size: 0.8rem; width: auto; margin-top: 0; }
+
+  /* Status */
+  .status-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+  }
+  .status-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--text-dim); flex-shrink: 0;
+  }
+  .status-dot.connected { background: var(--green); }
+  .status-dot.error { background: var(--red); }
+  .status-dot.working { background: var(--yellow); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+  .status-text { font-size: 0.85rem; flex: 1; }
+  .status-phase {
+    font-size: 0.75rem; color: var(--text-dim);
+    background: var(--bg); padding: 3px 8px; border-radius: 4px;
+  }
+
+  /* Log */
+  #log {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 220px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+  .log-entry { white-space: pre-wrap; word-break: break-all; }
+  .log-ts { color: var(--text-dim); }
+  .log-in { color: var(--green); }
+  .log-out { color: var(--accent); }
+  .log-err { color: var(--red); }
+  .log-info { color: var(--yellow); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab {
+    padding: 8px 16px; cursor: pointer; font-size: 0.85rem; font-weight: 500;
+    color: var(--text-dim); border: none; background: none;
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab.tab-disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Badges / chips */
+  .selection-badges { display: flex; gap: 8px; margin: 10px 0 4px; flex-wrap: wrap; align-items: center; }
+  .badge {
+    font-size: 0.75rem; padding: 4px 10px; border-radius: 4px;
+    font-weight: 500; display: inline-block;
+  }
+  .badge-a { background: rgba(74,222,128,0.15); color: var(--green); border: 1px solid rgba(74,222,128,0.3); }
+  .badge-b { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .badge-hint { background: rgba(251,191,36,0.15); color: var(--yellow); border: 1px solid rgba(251,191,36,0.35); }
+  .badge-neutral { background: var(--bg); color: var(--text-dim); border: 1px solid var(--border); }
+  .badge-dim { opacity: 0.4; }
+
+  .err-line { color: var(--red); font-size: 0.78rem; margin-top: 8px; min-height: 1em; }
+  .warn-line { color: var(--yellow); font-size: 0.78rem; margin-top: 8px; min-height: 1em; }
+
+  /* Player */
+  .yt-wrap { position: relative; padding-top: 56.25%; border-radius: 10px; overflow: hidden; background: #000; }
+  #yt-player { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+  .transport { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 0.85rem; color: var(--text-dim); flex-wrap: wrap; }
+  .transport .time { font-family: 'SF Mono', 'Fira Code', monospace; color: var(--text); }
+  .transport button.btn-sm { margin-top: 0; }
+
+  /* Chat rail */
+  .transcript {
+    display: flex; flex-direction: column; gap: 12px;
+    max-height: 70vh; overflow-y: auto; padding-right: 4px;
+  }
+  .msg { border-radius: 10px; padding: 10px 12px; font-size: 0.85rem; line-height: 1.5; max-width: 96%; }
+  .msg-user { background: rgba(108,140,255,0.12); border: 1px solid rgba(108,140,255,0.3); align-self: flex-end; }
+  .msg-model { background: var(--bg); border: 1px solid var(--border); align-self: flex-start; }
+  .msg-err { border-color: rgba(248,113,113,0.4); background: rgba(248,113,113,0.08); }
+  .msg-meta { display: flex; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+  .msg-prompt { white-space: pre-wrap; word-break: break-word; }
+  .msg-table-wrap { overflow-x: auto; }
+  .msg pre { font-size: 0.72rem; color: var(--text-dim); white-space: pre-wrap; max-height: 240px; overflow: auto; margin-top: 6px; }
+  .msg summary { cursor: pointer; color: var(--text-dim); font-size: 0.75rem; margin-top: 8px; }
+  .msg img.result-img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+  .reasoning { color: var(--text-dim); font-size: 0.78rem; margin-top: 6px; }
+
+  .typing-dots { display: flex; gap: 4px; padding: 4px 0; }
+  .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); display: inline-block; animation: pulse 1s infinite; }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+  /* Composer */
+  .composer-chips { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  #composer-input { min-height: 60px; max-height: 240px; resize: none; }
+  .composer-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
+  .composer-actions .btn { width: auto; margin-top: 0; }
+
+  /* Seek pill */
+  .seek-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 10px; font-size: 0.78rem; cursor: pointer; color: var(--accent);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .seek-pill:hover { border-color: var(--accent); }
+  .seek-pill.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .seek-pill.disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; background: transparent; border-style: dashed; }
+  .over-badge { color: var(--yellow); font-size: 0.68rem; }
+
+  /* Spatial (Detect/Segment) overlay: frame stage + SVG boxes/masks + chips */
+  .frame-stage { position: relative; width: 100%; line-height: 0; }
+  .frame-stage img.result-img { width: 100%; display: block; border-radius: 8px; border: 1px solid var(--border); }
+  .frame-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .obj-shape-group { cursor: pointer; opacity: 1; transition: opacity 0.15s; }
+  .obj-shape-group.dim { opacity: 0.12; }
+  .obj-shape-group.dim.hover-highlight { opacity: 0.65; }
+  .obj-shape-group.hover-highlight rect, .obj-shape-group.hover-highlight polygon { filter: brightness(1.35); }
+  .obj-shape-label text { font-family: 'SF Mono', 'Fira Code', monospace; }
+  .frame-empty-msg {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; color: var(--text-dim); font-size: 0.8rem; padding: 8px;
+    background: rgba(0,0,0,0.35); border-radius: 8px;
+  }
+  .obj-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .obj-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 10px 4px 6px; font-size: 0.78rem; cursor: pointer; color: var(--text);
+    transition: opacity 0.15s, border-color 0.15s; font-family: inherit;
+  }
+  .obj-chip:hover { border-color: var(--obj-color, var(--accent)); }
+  .obj-chip:focus-visible { outline: 2px solid var(--obj-color, var(--accent)); outline-offset: 1px; }
+  .obj-chip.active { outline: 2px solid var(--obj-color, var(--accent)); outline-offset: 1px; }
+  .obj-chip.dim { opacity: 0.12; }
+  .obj-chip.dim.hover-highlight { opacity: 0.55; }
+  .obj-chip.hover-highlight { border-color: var(--obj-color, var(--accent)); }
+  .obj-chip-swatch { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+  .obj-chip-conf { color: var(--text-dim); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; }
+  .frame-caption {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 8px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 10px; font-size: 0.78rem; cursor: pointer; color: var(--text-dim);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .frame-caption:hover { border-color: var(--accent); color: var(--accent); }
+  .segment-note { color: var(--text-dim); font-size: 0.75rem; margin-top: 6px; font-style: italic; }
+
+  table.clips { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 8px; }
+  table.clips th, table.clips td {
+    text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top;
+  }
+  table.clips th { color: var(--text-dim); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
+
+  /* ============================================================
+     Pipeline DAG canvas (M3) — plain flex cards, no graph library.
+     ============================================================ */
+  .dag-scroll { overflow-x: auto; padding-bottom: 8px; }
+  .dag-row { display: flex; align-items: stretch; min-width: max-content; }
+  .dag-node-wrap { display: flex; align-items: center; }
+  .dag-edge { color: var(--text-dim); font-size: 1.3rem; padding: 0 6px; align-self: center; }
+  .dag-node {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; min-width: 160px; cursor: pointer;
+  }
+  .dag-node.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .dag-node.disabled { border-style: dashed; opacity: 0.45; }
+  .dag-node-head { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem; margin-bottom: 6px; white-space: nowrap; }
+  .dag-node-kv { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.7rem; color: var(--text-dim); white-space: nowrap; }
+  .dag-node-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; gap: 6px; }
+  .dag-node-foot input[type="checkbox"] { width: auto; }
+  .dag-node-reorder { display: flex; gap: 4px; }
+  .dag-node-reorder .btn { padding: 2px 6px; font-size: 0.7rem; width: auto; margin-top: 0; }
+  .dag-node-lock { font-size: 0.85rem; opacity: 0.6; cursor: help; }
+
+  /* Run view: per-window cards + crops strip */
+  .window-card-header { display: flex; align-items: center; gap: 8px; cursor: pointer; flex-wrap: wrap; }
+  .window-card-header .chevron { margin-left: auto; color: var(--text-dim); }
+  .crops-strip { display: flex; gap: 6px; overflow-x: auto; padding: 8px 0 2px; }
+  .crop-thumb { flex-shrink: 0; text-align: center; }
+  .crop-thumb img { width: 64px; height: 64px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); display: block; }
+  .crop-thumb-label { font-size: 0.65rem; color: var(--text-dim); margin-top: 2px; }
+
+  /* ============================================================
+     Task 3 — Deduped Events rail: two-column results region.
+     LEFT (sticky): player + compact run-status strip.
+     RIGHT (sticky): deduped-events click-to-seek index.
+     Reuses the .studio-grid 460px rail width for visual consistency.
+     ============================================================ */
+  .rail-shell { display: grid; grid-template-columns: 1fr 460px; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .rail-shell { grid-template-columns: 1fr; } }
+
+  .rail-left-sticky { position: sticky; top: 12px; }
+
+  .dedup-rail-card {
+    position: sticky; top: 12px;
+    display: flex; flex-direction: column;
+    max-height: calc(100vh - 24px);
+  }
+  @media (max-width: 980px) {
+    /* Player+status (rail-left-sticky) stays sticky-top even in single-column
+       mode; the rail itself un-sticks and stacks below in normal flow. */
+    .dedup-rail-card { position: static; max-height: 55vh; }
+  }
+  .dedup-rail-list {
+    flex: 1; min-height: 0;
+    overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 8px;
+    margin-top: 8px; padding-right: 2px;
+  }
+  .rail-empty { color: var(--text-dim); font-size: 0.82rem; padding: 10px 4px; }
+  .rail-live-note { color: var(--yellow); font-size: 0.72rem; font-style: italic; padding: 0 2px 2px; }
+
+  .rail-row, .rail-row-static {
+    display: block; width: 100%; text-align: left;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 10px; font-size: 0.8rem; color: var(--text);
+    font-family: inherit; min-width: 0;
+  }
+  .rail-row { cursor: pointer; }
+  .rail-row-static { cursor: default; }
+  .rail-row:hover { border-color: var(--accent); }
+  .rail-row.active { outline: 2px solid var(--accent); outline-offset: -2px; }
+  /* Inset (negative-offset) focus ring — an outward ring would clip against
+     the scroll container's edge for rows near the top/bottom of the list. */
+  .rail-row:focus-visible, .rail-row-static:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: -2px;
+  }
+  .rail-row-errored { border-color: rgba(248,113,113,0.5); background: rgba(248,113,113,0.08); }
+  .rail-row-line1 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .rail-row-label { font-weight: 600; }
+  .rail-row-line2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .rail-row-caption { color: var(--text-dim); font-size: 0.74rem; font-style: italic; margin-top: 2px; width: 100%; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>BJJ Vision Engine — VLM Studio (QA)</h1>
+
+  <!-- ===================== PERSISTENT: Config (both pipelines) ===================== -->
+  <div class="card">
+    <h2>Config</h2>
+    <label>Backend URL</label>
+    <input id="backend-url" value="http://localhost:8000" placeholder="http://localhost:8000">
+
+    <label>YouTube URL or ID</label>
+    <div class="field-inline">
+      <input id="yt-input" placeholder="https://www.youtube.com/watch?v=... or bare 11-char ID">
+      <button class="btn btn-sm btn-primary" onclick="loadVideo()">Load</button>
+    </div>
+    <div class="err-line" id="yt-error" style="display:none"></div>
+  </div>
+
+  <!-- NOTE: the Player card used to live here. Task 3 (deduped-events rail)
+       relocates it into the `.rail-shell` results region below (LEFT sticky
+       column, paired with a compact run-status strip) so the player is
+       physically beside the seekable rail it drives — see `#rail-shell`. The
+       actual `#yt-player` DOM node is a singleton (the YT IFrame API attaches
+       to this one id); `ytPlayer`/`currentTime`/etc. are global JS state, so
+       relocating the markup does not affect player behavior, only its
+       position on the page. -->
+
+  <!-- ===================== Pipeline picker (top bar) ===================== -->
+  <div class="card" id="pipeline-topbar">
+    <h2>Pipeline</h2>
+    <div class="tabs" id="pipeline-tabs" style="border-bottom:none; margin-bottom:6px;"></div>
+
+    <div id="agent-mode-row" style="display:none; margin-top:4px;">
+      <label style="margin-top:0;">Agent mode</label>
+      <div class="tabs" id="agent-mode-toggle" style="margin-bottom:0; border-bottom:none;">
+        <button type="button" class="tab" data-agent="single" onclick="setAgentMode('single')">Single</button>
+        <button type="button" class="tab" data-agent="multi" onclick="setAgentMode('multi')">Multi (4&times; calls)</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px;">
+      <div>
+        <label>Run start (MM:SS)</label>
+        <div class="field-inline">
+          <input id="run-start" placeholder="0:10" oninput="updateRunScopeUi()">
+          <button class="btn btn-sm" onclick="useCurrentForRun('start')">Use current</button>
+        </div>
+      </div>
+      <div>
+        <label>Run end (MM:SS)</label>
+        <div class="field-inline">
+          <input id="run-end" placeholder="0:40" oninput="updateRunScopeUi()">
+          <button class="btn btn-sm" onclick="useCurrentForRun('end')">Use current</button>
+        </div>
+      </div>
+    </div>
+    <div class="selection-badges">
+      <span class="badge badge-a" id="run-chip-start">not set</span>
+      <span class="badge badge-b" id="run-chip-end">not set</span>
+      <span class="badge badge-neutral" id="run-chip-delta">&Delta; &mdash;</span>
+    </div>
+    <div class="err-line" id="run-scope-validation"></div>
+
+    <!-- Task 1: optional per-run budget_cap override (max planned Gemini
+         calls). Omitted from the POST body entirely when left blank — the
+         backend then falls back to DEFAULT_BUDGET_CAP (60). -->
+    <label>Budget cap (max Gemini calls)</label>
+    <input id="budget-cap" type="number" min="1" step="1" placeholder="default 60 — leave blank to use it">
+
+    <button class="btn btn-primary" id="btn-run-pipeline" onclick="runPipeline()">&#9654; Run pipeline</button>
+  </div>
+
+  <!-- ===================== CANVAS: single-shot (today's EXACT surface, zero regression) ===================== -->
+  <div id="canvas-single-shot">
+  <div class="studio-grid">
+    <!-- ===================== LEFT: hero column ===================== -->
+    <div class="left-col">
+
+      <!-- (3) Scope -->
+      <div class="card">
+        <h2>Scope</h2>
+        <div class="tabs">
+          <button class="tab active" id="tab-scope-timepoint" onclick="setScopeType('timepoint')">Single timepoint</button>
+          <button class="tab" id="tab-scope-range" onclick="setScopeType('range')">Range</button>
+        </div>
+
+        <div class="tab-panel active" id="panel-scope-timepoint">
+          <label>Time (MM:SS)</label>
+          <div class="field-inline">
+            <input id="tp-time" placeholder="1:23" oninput="updateScopeUiAndSendState()">
+            <button class="btn btn-sm" onclick="useCurrentForTimepoint()">Use current frame</button>
+          </div>
+          <div class="selection-badges"><span class="badge badge-a" id="tp-chip">not set</span></div>
+        </div>
+
+        <div class="tab-panel" id="panel-scope-range">
+          <div class="row">
+            <div>
+              <label>Start (MM:SS)</label>
+              <div class="field-inline">
+                <input id="rg-start" placeholder="0:10" oninput="updateScopeUiAndSendState()">
+                <button class="btn btn-sm" onclick="useCurrentForRange('start')">Use current</button>
+              </div>
+            </div>
+            <div>
+              <label>End (MM:SS)</label>
+              <div class="field-inline">
+                <input id="rg-end" placeholder="0:20" oninput="updateScopeUiAndSendState()">
+                <button class="btn btn-sm" onclick="useCurrentForRange('end')">Use current</button>
+              </div>
+            </div>
+          </div>
+          <div class="selection-badges">
+            <span class="badge badge-a" id="rg-chip-start">not set</span>
+            <span class="badge badge-b" id="rg-chip-end">not set</span>
+            <span class="badge badge-neutral" id="rg-chip-delta">&Delta; &mdash;</span>
+          </div>
+        </div>
+
+        <div class="err-line" id="scope-validation"></div>
+      </div>
+
+      <!-- (4) Output mode -->
+      <div class="card">
+        <h2>Output mode</h2>
+        <div class="tabs">
+          <button class="tab active" id="tab-mode-event" onclick="setMode('event')">Event JSON</button>
+          <button class="tab" id="tab-mode-image" onclick="setMode('image')">Image</button>
+        </div>
+        <div class="tabs" id="image-subtoggle" style="display:none; margin-bottom:0; border-bottom:none;">
+          <button class="tab active" id="tab-imgtask-generate" onclick="setImageTask('generate')">Generate</button>
+          <button class="tab" id="tab-imgtask-detect" onclick="setImageTask('detect')">Detect</button>
+          <button class="tab" id="tab-imgtask-segment" onclick="setImageTask('segment')">Segment</button>
+        </div>
+
+        <label>Model</label>
+        <select id="task-model" onchange="updateComposerEchoChips()"></select>
+
+        <div id="thinking-row" style="display:none;">
+          <label>Thinking</label>
+          <div class="tabs" id="thinking-toggle" style="margin-bottom:0; border-bottom:none;">
+            <button type="button" class="tab" data-level="off" onclick="setThinkingLevel('off')">Off</button>
+            <button type="button" class="tab" data-level="low" onclick="setThinkingLevel('low')">Low</button>
+            <button type="button" class="tab" data-level="medium" onclick="setThinkingLevel('medium')">Medium</button>
+            <button type="button" class="tab" data-level="high" onclick="setThinkingLevel('high')">High</button>
+          </div>
+        </div>
+
+        <div class="segment-note" id="imgtask-segment-note" style="display:none;">Segment is a coarse, experimental highlight — treat mask boundaries as approximate.</div>
+      </div>
+
+      <!-- (4b) System instruction / Schema -->
+      <div class="card">
+        <h2>System instruction / Schema</h2>
+        <textarea id="system-instruction" rows="5" placeholder="Optional. Paste a system prompt, or load a schema file below. Gemini uses this to constrain its technique/action vocabulary." oninput="onSystemInstructionInput()"></textarea>
+        <div class="field-inline" style="margin-top:8px;">
+          <input type="file" id="schema-file" accept=".md,.markdown,.json,.txt" onchange="onSchemaFileChange(event)">
+          <button type="button" class="btn btn-sm" onclick="clearSystemInstruction()">Clear</button>
+        </div>
+        <div class="selection-badges">
+          <span class="badge badge-neutral" id="schema-file-chip" style="display:none;">&mdash;</span>
+          <span class="badge badge-neutral" id="system-instruction-count">0 chars</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ===================== RIGHT: chat rail ===================== -->
+    <div class="right-col">
+
+      <!-- (5) Transcript -->
+      <div class="card">
+        <h2>Transcript</h2>
+        <div class="transcript" id="transcript"></div>
+      </div>
+
+      <!-- (6) Composer -->
+      <div class="card">
+        <div class="composer-chips">
+          <span class="badge badge-a" id="composer-chip-scope">&mdash;</span>
+          <span class="badge badge-b" id="composer-chip-mode">Event JSON</span>
+          <span class="badge badge-neutral" id="composer-chip-model">&mdash;</span>
+          <span class="badge badge-neutral" id="composer-chip-thinking" style="display:none;">&mdash;</span>
+          <span class="badge badge-hint" id="composer-chip-schema" style="display:none;">&mdash;</span>
+        </div>
+        <textarea id="composer-input" placeholder="Ask about this window..." oninput="autoGrow(this); updateScopeUiAndSendState();" onkeydown="composerKeydown(event)"></textarea>
+        <div class="composer-actions">
+          <button class="btn btn-primary" id="btn-send" style="width:auto; margin-top:0;" onclick="sendMessage()">Send</button>
+          <button class="btn btn-danger btn-sm" onclick="newConversation()">New conversation</button>
+          <button class="btn btn-sm" onclick="copyTranscript()">Copy transcript</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </div>
+
+  <!-- ===================== CANVAS: vision-mimic (DAG + node config) ===================== -->
+  <div id="canvas-vision-mimic" style="display:none;">
+
+    <!-- DAG -->
+    <div class="card">
+      <h2>Pipeline DAG &mdash; <span id="dag-pipeline-label">&mdash;</span></h2>
+      <div class="dag-scroll"><div class="dag-row" id="dag-nodes"></div></div>
+      <div class="err-line" id="dag-reorder-error"></div>
+    </div>
+
+    <!-- Node config panel -->
+    <div class="card" id="node-config-card" style="display:none;">
+      <h2 id="node-config-title">Node config</h2>
+      <div id="node-config-body"></div>
+      <div class="composer-actions">
+        <button type="button" class="btn btn-sm" onclick="resetNodeToDefaults()">Reset node to production defaults</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===================== PERSISTENT: Run results (Run pipeline works for EITHER
+       pipeline — single-shot's own composer/Send flow above is unaffected; this is
+       the separate streaming /qa/pipeline-run surface, shared regardless of which
+       canvas is active) ===================== -->
+
+  <!-- Run header / progress -->
+  <div class="card" id="run-header-card">
+    <h2>Run</h2>
+    <div class="status-bar">
+      <div class="status-dot" id="run-status-dot"></div>
+      <div class="status-text" id="run-status-text">Idle &mdash; configure a pipeline and hit Run pipeline.</div>
+      <div class="status-phase" id="run-elapsed">&mdash;</div>
+    </div>
+    <button type="button" class="btn btn-danger btn-sm" id="btn-cancel-run" style="display:none;" onclick="cancelRun()">Cancel run</button>
+    <div class="err-line" id="run-error-line"></div>
+    <div class="reasoning" id="run-complete-note" style="margin-top:6px;"></div>
+  </div>
+
+  <!-- ===================== Task 3: results rail region — a two-column
+       `.rail-shell` (grid 1fr / 460px, same rail width as `.studio-grid`).
+       LEFT (sticky): the video player (relocated from its old top-of-page
+       slot — see the NOTE left there) + a NEW compact run-status strip only
+       (CEO decision — the full Run card above already carries the cancel
+       button/error-line/note; this mini strip exists so status stays visible
+       while the user scrolls the sticky rail on the right). RIGHT (sticky):
+       the Deduped Events rail — a click-to-seek INDEX over whichever of the
+       5 response formats this run produced. The pre-existing full detail
+       tables (chunk map / deduped-card / per-window cards) are UNCHANGED and
+       stay full-width BELOW this region as the audit surface — this rail
+       does not replace them. ===================== -->
+  <div class="rail-shell" id="rail-shell">
+    <div class="rail-left-sticky">
+      <div class="card">
+        <h2>Player</h2>
+        <div class="yt-wrap"><div id="yt-player"></div></div>
+        <div class="transport">
+          <button class="btn btn-sm" id="btn-playpause" onclick="togglePlayPause()">&#9654;</button>
+          <span class="time"><span id="t-current">0:00</span> / <span id="t-duration">&mdash;:&mdash;</span></span>
+          <span class="status-phase" id="player-state-label">unstarted</span>
+        </div>
+      </div>
+      <div class="card" id="compact-run-status-card">
+        <div class="status-bar" style="margin-bottom:0;">
+          <div class="status-dot" id="compact-run-status-dot"></div>
+          <div class="status-text" id="compact-run-status-text" style="font-size:0.78rem;">Idle</div>
+          <div class="status-phase" id="compact-run-elapsed">&mdash;</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card dedup-rail-card" id="dedup-rail-card">
+      <h2>Deduped Events</h2>
+      <div class="dedup-rail-list" id="dedup-rail-list">
+        <div class="rail-empty">No events yet — run a pipeline.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chunk map (chunk-segment-tags PASS 1) — its OWN distinct table, empty/
+       hidden for every other pipeline (see renderChunkMap()). Audit surface,
+       untouched by Task 3 — the rail above is an index, not a replacement. -->
+  <div id="chunk-map-host"></div>
+
+  <!-- Final deduped clip list — the full detail table (audit surface,
+       untouched by Task 3; the rail above is the click-to-seek index over
+       this same deduped list, not a replacement for it). -->
+  <div class="card" id="deduped-card" style="display:none;">
+    <h2>Deduped clips</h2>
+    <div id="deduped-body"></div>
+  </div>
+
+  <!-- Per-window cards — audit surface, untouched by Task 3. -->
+  <div id="window-cards-host"></div>
+
+  <!-- ===================== PERSISTENT: Message Log (both pipelines) ===================== -->
+  <div class="card">
+    <h2>Message Log</h2>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Global state
+// ============================================================
+let ytApiReady = false;
+let pendingLoadId = null;
+let ytPlayer = null;
+let ytReady = false;
+let pollerStarted = false;
+let duration = 0;      // seconds; 0 = unknown
+let currentTime = 0;
+let currentVideoId = null;
+let currentVideoUrl = '';
+let seekIntent = null;  // { startSec, endSec, armed } while an active pill's playback is pending a snap-pause
+
+let currentScopeType = 'timepoint'; // 'timepoint' | 'range'
+let currentMode = 'event';          // 'event' | 'image'
+let currentImageTask = 'generate';  // 'generate' | 'detect' | 'segment'
+let currentThinkingLevel = null;    // 'off' | 'low' | 'medium' | 'high' | null (task has no thinking control)
+let sending = false;
+
+// Frozen, live-verified model ids per task. Task key = 'event' when
+// currentMode === 'event', else currentImageTask ('generate' | 'detect' | 'segment').
+const TASK_CONFIG = {
+  event:    { models: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'low' },
+  detect:   { models: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'off' },
+  segment:  { models: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'], defaultModel: 'gemini-3.1-flash-image', thinking: false, defaultThinking: null },
+  generate: { models: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'], defaultModel: 'gemini-3.1-flash-image', thinking: false, defaultThinking: null },
+};
+
+let conversation = []; // ordered turns: {role, scopeType, startSec, endSec, mode, imageTask, promptText, response, error, rawRequest, rawResponse, model, thinking, latencyMs, typing, uid}
+
+// ============================================================
+// Pipeline DAG runner (M3) — state
+// ============================================================
+let PIPELINES = [];                    // [{id,label,description}] from GET /qa/pipelines
+let currentPipelineId = 'single-shot'; // drives which canvas is visible
+let currentPipelineDef = null;         // the EDITED PipelineDef for currentPipelineId (session-persistent)
+let PRODUCTION_DEFAULTS = {};          // id -> pristine PipelineDef snapshot, for "reset node to defaults"
+let selectedNodeIndex = null;          // index into currentPipelineDef.stages, or null
+let currentAgentMode = 'single';       // 'single' | 'multi' — synced with the Analyze node's agent_mode
+const nodeSchemaFileNames = {};        // stageId -> last-loaded schema filename (per-node provenance, UI-only)
+
+let activeRunController = null;        // AbortController for the in-flight /qa/pipeline-run stream
+let runState = null;                   // { status, windows[], dedupedClips, plannedWindows, plannedCalls, startedAt, totalMs, errors[] }
+let runElapsedTimer = null;
+
+// Detect/Segment spatial overlay: per-model-turn isolate state, keyed by turn.uid.
+let turnUidCounter = 0;
+const isolateState = {}; // uid -> selected object index, or null
+
+// ============================================================
+// Logging
+// ============================================================
+function logMsg(text, cls) {
+  const el = document.getElementById('log');
+  const ts = new Date().toLocaleTimeString();
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = '<span class="log-ts">[' + ts + ']</span> <span class="' + (cls || '') + '">' + escHtml(text) + '</span>';
+  el.appendChild(entry);
+  el.scrollTop = el.scrollHeight;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function isMock() {
+  return new URLSearchParams(location.search).get('mock') === '1';
+}
+
+function backendUrl() {
+  return document.getElementById('backend-url').value.trim().replace(/\/+$/, '');
+}
+
+// ============================================================
+// MM:SS helpers
+// ============================================================
+function mmssToSec(str) {
+  if (typeof str !== 'string') return { error: 'use MM:SS (e.g. 1:32)' };
+  const t = str.trim();
+  const hms = /^(\d+):([0-5]\d):([0-5]\d)$/.exec(t);
+  if (hms) {
+    const h = parseInt(hms[1], 10);
+    const min = parseInt(hms[2], 10);
+    const sec = parseInt(hms[3], 10);
+    return { value: h * 3600 + min * 60 + sec };
+  }
+  const m = /^(\d+):([0-5]\d)$/.exec(t);
+  if (!m) return { error: 'use MM:SS (e.g. 1:32) or H:MM:SS, not a bare number' };
+  const min = parseInt(m[1], 10);
+  const sec = parseInt(m[2], 10);
+  return { value: min * 60 + sec };
+}
+
+function secToMmss(totalSec) {
+  const t = Math.max(0, Math.floor(totalSec || 0));
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
+
+// ============================================================
+// YouTube URL/ID parsing
+// ============================================================
+function parseYoutubeInput(raw) {
+  const t = (raw || '').trim();
+  if (!t) return { error: 'Enter a YouTube URL or ID' };
+  if (/^[A-Za-z0-9_-]{11}$/.test(t)) return { id: t };
+  let u;
+  try { u = new URL(t); } catch (e) {
+    return { error: 'Could not parse a valid YouTube ID (expects watch?v=, youtu.be/, shorts/, embed/, or a bare 11-char ID)' };
+  }
+  const host = u.hostname.replace(/^www\./, '');
+  if (host === 'youtu.be') {
+    const id = u.pathname.split('/').filter(Boolean)[0];
+    if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return { id };
+  } else if (host === 'youtube.com' || host === 'm.youtube.com') {
+    const v = u.searchParams.get('v');
+    if (v && /^[A-Za-z0-9_-]{11}$/.test(v)) return { id: v };
+    const parts = u.pathname.split('/').filter(Boolean);
+    const idx = parts.findIndex(p => p === 'shorts' || p === 'embed');
+    if (idx !== -1 && parts[idx + 1] && /^[A-Za-z0-9_-]{11}$/.test(parts[idx + 1])) {
+      return { id: parts[idx + 1] };
+    }
+  }
+  return { error: 'Could not parse a valid YouTube ID (expects watch?v=, youtu.be/, shorts/, embed/, or a bare 11-char ID)' };
+}
+
+function loadVideo() {
+  const raw = document.getElementById('yt-input').value;
+  const res = parseYoutubeInput(raw);
+  const errEl = document.getElementById('yt-error');
+  if (res.error) {
+    errEl.textContent = res.error;
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  currentVideoId = res.id;
+  currentVideoUrl = 'https://www.youtube.com/watch?v=' + res.id;
+  duration = 0;
+  currentTime = 0;
+  seekIntent = null;
+  clearActivePill();
+  logMsg('Loading video ' + res.id, 'log-info');
+  if (!ytApiReady) {
+    pendingLoadId = res.id;
+    return;
+  }
+  createOrCuePlayer(res.id);
+  updateScopeUiAndSendState();
+}
+
+function createOrCuePlayer(id) {
+  if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+    ytPlayer.loadVideoById(id);
+  } else {
+    ytPlayer = new YT.Player('yt-player', {
+      videoId: id,
+      width: '100%',
+      height: '100%',
+      playerVars: { rel: 0, playsinline: 1 },
+      events: { onReady: onPlayerReady, onStateChange: onPlayerStateChange }
+    });
+  }
+}
+
+// Called by the YouTube IFrame API script once loaded.
+function onYouTubeIframeAPIReady() {
+  ytApiReady = true;
+  if (pendingLoadId) {
+    const id = pendingLoadId;
+    pendingLoadId = null;
+    createOrCuePlayer(id);
+  }
+}
+
+function onPlayerReady() {
+  ytReady = true;
+  try { duration = ytPlayer.getDuration() || 0; } catch (e) { duration = 0; }
+  logMsg('Player ready. duration=' + (duration ? secToMmss(duration) : 'unknown'), 'log-in');
+  startPoller();
+  updateScopeUiAndSendState();
+}
+
+const YT_STATE_NAMES = { '-1': 'unstarted', '0': 'ended', '1': 'playing', '2': 'paused', '3': 'buffering', '5': 'cued' };
+
+function onPlayerStateChange(e) {
+  const label = YT_STATE_NAMES[String(e.data)] || String(e.data);
+  document.getElementById('player-state-label').textContent = label;
+  if (e.data === 2 /* PAUSED */ && seekIntent) {
+    // User (or native controls) paused before the intent's end was reached -> cancel it.
+    seekIntent = null;
+    clearActivePill();
+    logMsg('Playback paused before pill end reached — seek intent cancelled', 'log-info');
+  }
+  updateTransportUi();
+}
+
+function togglePlayPause() {
+  if (!ytReady) return;
+  const state = ytPlayer.getPlayerState();
+  if (state === 1) { ytPlayer.pauseVideo(); } else { ytPlayer.playVideo(); }
+}
+
+// ============================================================
+// Shared ~4Hz poller: transport UI + seek-and-pause snap logic
+// ============================================================
+function startPoller() {
+  if (pollerStarted) return;
+  pollerStarted = true;
+  setInterval(pollerTick, 250);
+}
+
+function pollerTick() {
+  if (!ytReady || !ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+  let ct;
+  try { ct = ytPlayer.getCurrentTime(); } catch (e) { return; }
+  currentTime = ct;
+  if (!duration) {
+    try { duration = ytPlayer.getDuration() || 0; } catch (e) { /* ignore */ }
+  }
+  updateTransportUi();
+
+  if (seekIntent) {
+    if (!seekIntent.armed) {
+      // Only start watching for the end boundary once playback has actually
+      // ENTERED the [startSec, endSec) window while PLAYING — i.e. currentTime
+      // is both >= startSec AND still < endSec. The upper bound matters: a
+      // stale pre-seek currentTime (e.g. left over from a position way past
+      // this pill's endSec, before the new seekTo() has taken visible effect)
+      // still satisfies `>= startSec` trivially, so checking only the lower
+      // bound would arm-and-fire in the same tick and reproduce the bug. Only
+      // once the playhead is genuinely inside the window do we start looking
+      // for the end boundary.
+      let state = -1;
+      try { state = ytPlayer.getPlayerState(); } catch (e) { /* ignore */ }
+      if (state === 1 /* PLAYING */ && currentTime >= seekIntent.startSec && currentTime < seekIntent.endSec) {
+        seekIntent.armed = true;
+      }
+    }
+    if (seekIntent.armed && currentTime >= seekIntent.endSec - 0.05) {
+      const endSec = seekIntent.endSec;
+      seekIntent = null;
+      try {
+        ytPlayer.pauseVideo();
+        ytPlayer.seekTo(endSec, true);
+      } catch (e) { /* ignore */ }
+      clearActivePill();
+    }
+  }
+}
+
+function updateTransportUi() {
+  document.getElementById('t-current').textContent = secToMmss(currentTime);
+  document.getElementById('t-duration').textContent = duration ? secToMmss(duration) : '—:—';
+  if (ytReady) {
+    const state = ytPlayer.getPlayerState();
+    document.getElementById('btn-playpause').textContent = state === 1 ? '⏸' : '▶';
+  }
+}
+
+// ============================================================
+// Seek-and-pause pill click handler (invoked via inline onclick
+// from dynamically rendered event pills, and reusable elsewhere)
+// ============================================================
+function handlePillClick(startSec, endSec, btnEl) {
+  if (!ytReady) { logMsg('Player not ready yet', 'log-err'); return; }
+  const dur = duration > 0 ? duration : Infinity;
+  const s = clamp(startSec, 0, dur);
+  const e = clamp(endSec, 0, dur);
+  clearActivePill();
+  if (e <= s) {
+    // Single-frame: seek then pause, never play.
+    seekIntent = null;
+    ytPlayer.seekTo(s, true);
+    ytPlayer.pauseVideo();
+  } else {
+    ytPlayer.seekTo(s, true);
+    ytPlayer.playVideo();
+    seekIntent = { startSec: s, endSec: e, armed: false };
+    if (btnEl) btnEl.classList.add('active');
+  }
+}
+
+function clearActivePill() {
+  document.querySelectorAll('.seek-pill.active').forEach(el => el.classList.remove('active'));
+  // Task 3: the deduped-events rail's own active-row highlight shares the
+  // same "one thing highlighted at a time" invariant as .seek-pill.active —
+  // clearing both here (rather than a second, parallel clear function) means
+  // clicking ANY seek-pill (rail row or an audit-table pill) correctly clears
+  // the other's highlight too.
+  document.querySelectorAll('.rail-row.active').forEach(el => el.classList.remove('active'));
+}
+
+// ============================================================
+// Scope (Single timepoint | Range)
+// ============================================================
+function setScopeType(type) {
+  if (type === 'range' && currentMode === 'image') return; // image mode is timepoint-only
+  currentScopeType = type;
+  document.getElementById('tab-scope-timepoint').classList.toggle('active', type === 'timepoint');
+  document.getElementById('tab-scope-range').classList.toggle('active', type === 'range');
+  document.getElementById('panel-scope-timepoint').classList.toggle('active', type === 'timepoint');
+  document.getElementById('panel-scope-range').classList.toggle('active', type === 'range');
+  updateScopeUiAndSendState();
+}
+
+function useCurrentForTimepoint() {
+  if (!ytReady) return;
+  document.getElementById('tp-time').value = secToMmss(Math.floor(currentTime));
+  updateScopeUiAndSendState();
+}
+
+function useCurrentForRange(which) {
+  if (!ytReady) return;
+  const id = which === 'start' ? 'rg-start' : 'rg-end';
+  document.getElementById(id).value = secToMmss(Math.floor(currentTime));
+  updateScopeUiAndSendState();
+}
+
+function computeScope() {
+  if (currentScopeType === 'timepoint') {
+    const raw = document.getElementById('tp-time').value.trim();
+    if (!raw) return { valid: false, reason: 'Enter a time', type: 'timepoint' };
+    const r = mmssToSec(raw);
+    if (r.error) return { valid: false, reason: r.error, type: 'timepoint' };
+    const beyond = duration > 0 && r.value > duration;
+    return { valid: true, type: 'timepoint', startSec: r.value, endSec: r.value,
+      warn: beyond ? ('Time is beyond known video duration (' + secToMmss(duration) + ')') : null };
+  }
+  const rawS = document.getElementById('rg-start').value.trim();
+  const rawE = document.getElementById('rg-end').value.trim();
+  if (!rawS || !rawE) return { valid: false, reason: 'Enter both start and end', type: 'range' };
+  const rs = mmssToSec(rawS);
+  if (rs.error) return { valid: false, reason: 'Start: ' + rs.error, type: 'range' };
+  const re = mmssToSec(rawE);
+  if (re.error) return { valid: false, reason: 'End: ' + re.error, type: 'range' };
+  if (re.value < rs.value) return { valid: false, reason: 'End must be ≥ start', type: 'range' };
+  const beyond = duration > 0 && (rs.value > duration || re.value > duration);
+  return { valid: true, type: 'range', startSec: rs.value, endSec: re.value,
+    warn: beyond ? ('Range extends beyond known video duration (' + secToMmss(duration) + ')') : null };
+}
+
+function updateScopeUiAndSendState() {
+  const scope = computeScope();
+
+  // Timepoint chip
+  const tpChip = document.getElementById('tp-chip');
+  if (currentScopeType === 'timepoint' && scope.valid) {
+    tpChip.textContent = secToMmss(scope.startSec);
+    tpChip.classList.remove('badge-dim');
+  } else {
+    tpChip.textContent = 'not set';
+    tpChip.classList.add('badge-dim');
+  }
+
+  // Range chips + delta
+  const rs = mmssToSec(document.getElementById('rg-start').value.trim());
+  const re = mmssToSec(document.getElementById('rg-end').value.trim());
+  const startChip = document.getElementById('rg-chip-start');
+  const endChip = document.getElementById('rg-chip-end');
+  const deltaChip = document.getElementById('rg-chip-delta');
+  startChip.textContent = rs.error ? 'not set' : secToMmss(rs.value);
+  startChip.classList.toggle('badge-dim', !!rs.error);
+  endChip.textContent = re.error ? 'not set' : secToMmss(re.value);
+  endChip.classList.toggle('badge-dim', !!re.error);
+  if (!rs.error && !re.error) {
+    const d = re.value - rs.value;
+    deltaChip.textContent = 'Δ ' + (d < 0 ? '-' : '') + secToMmss(Math.abs(d));
+    deltaChip.className = 'badge ' + (d < 0 ? 'badge-hint' : 'badge-neutral');
+  } else {
+    deltaChip.textContent = 'Δ —';
+    deltaChip.className = 'badge badge-neutral';
+  }
+
+  // Validation line
+  const valEl = document.getElementById('scope-validation');
+  if (!scope.valid) {
+    valEl.textContent = scope.reason;
+    valEl.className = 'err-line';
+  } else if (scope.warn) {
+    valEl.textContent = scope.warn;
+    valEl.className = 'warn-line';
+  } else {
+    valEl.textContent = '';
+    valEl.className = 'err-line';
+  }
+
+  // Composer echo chips
+  const composerScopeChip = document.getElementById('composer-chip-scope');
+  composerScopeChip.textContent = scope.valid
+    ? (scope.type === 'timepoint' ? secToMmss(scope.startSec) : (secToMmss(scope.startSec) + ' → ' + secToMmss(scope.endSec)))
+    : '—';
+  const composerModeChip = document.getElementById('composer-chip-mode');
+  composerModeChip.textContent = currentMode === 'image' ? ('Image · ' + currentImageTask) : 'Event JSON';
+
+  updateSendButtonState(scope);
+  return scope;
+}
+
+// ============================================================
+// Output mode (Event JSON | Image [Generate | Segment])
+// ============================================================
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('tab-mode-event').classList.toggle('active', mode === 'event');
+  document.getElementById('tab-mode-image').classList.toggle('active', mode === 'image');
+  document.getElementById('image-subtoggle').style.display = mode === 'image' ? 'flex' : 'none';
+  document.getElementById('tab-scope-range').classList.toggle('tab-disabled', mode === 'image');
+
+  // Frozen contract: /qa/vlm-image always sends scope.type = "timepoint".
+  if (mode === 'image' && currentScopeType !== 'timepoint') {
+    setScopeType('timepoint');
+    logMsg('Image mode requires a single timepoint — switched scope to Single timepoint', 'log-info');
+  }
+  updateComposerPlaceholder();
+  populateTaskModels();
+  updateScopeUiAndSendState();
+}
+
+function setImageTask(task) {
+  currentImageTask = task;
+  document.getElementById('tab-imgtask-generate').classList.toggle('active', task === 'generate');
+  document.getElementById('tab-imgtask-detect').classList.toggle('active', task === 'detect');
+  document.getElementById('tab-imgtask-segment').classList.toggle('active', task === 'segment');
+  document.getElementById('imgtask-segment-note').style.display = (task === 'segment') ? 'block' : 'none';
+  updateComposerPlaceholder();
+  populateTaskModels();
+  updateScopeUiAndSendState();
+}
+
+// ============================================================
+// Model selector + thinking-intensity control (per task)
+// ============================================================
+function currentTaskKey() {
+  return currentMode === 'event' ? 'event' : currentImageTask;
+}
+
+function populateTaskModels() {
+  const task = currentTaskKey();
+  const cfg = TASK_CONFIG[task];
+  const sel = document.getElementById('task-model');
+  sel.innerHTML = cfg.models.map(m =>
+    '<option value="' + m + '"' + (m === cfg.defaultModel ? ' selected' : '') + '>' + m + '</option>'
+  ).join('');
+  sel.value = cfg.defaultModel;
+  updateThinkingControl();
+}
+
+function updateThinkingControl() {
+  const task = currentTaskKey();
+  const cfg = TASK_CONFIG[task];
+  const row = document.getElementById('thinking-row');
+  if (!cfg.thinking) {
+    row.style.display = 'none';
+    currentThinkingLevel = null;
+    updateComposerEchoChips();
+    return;
+  }
+  row.style.display = 'block';
+  setThinkingLevel(cfg.defaultThinking);
+}
+
+function setThinkingLevel(level) {
+  currentThinkingLevel = level;
+  document.querySelectorAll('#thinking-toggle .tab').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-level') === level);
+  });
+  updateComposerEchoChips();
+}
+
+function updateComposerEchoChips() {
+  const modelSel = document.getElementById('task-model');
+  const modelChip = document.getElementById('composer-chip-model');
+  modelChip.textContent = modelSel && modelSel.value ? modelSel.value : '—';
+
+  const thinkChip = document.getElementById('composer-chip-thinking');
+  const task = currentTaskKey();
+  if (TASK_CONFIG[task].thinking) {
+    thinkChip.style.display = 'inline-block';
+    thinkChip.textContent = 'think: ' + (currentThinkingLevel || 'off');
+  } else {
+    thinkChip.style.display = 'none';
+  }
+}
+
+// ============================================================
+// System instruction / Schema — persisted config (like backend-url), NOT
+// part of the per-turn prompt. Never cleared by New conversation or Send.
+// ============================================================
+let schemaFileName = null; // filename of the last-loaded schema file, or null if hand-typed/cleared
+
+function systemInstructionText() {
+  return document.getElementById('system-instruction').value;
+}
+
+function onSystemInstructionInput() {
+  // A manual edit invalidates the "loaded from file" provenance label — the
+  // textarea content may no longer match the file on disk.
+  schemaFileName = null;
+  updateSystemInstructionUi();
+}
+
+function onSchemaFileChange(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    // Loading a new file replaces the textarea contents.
+    document.getElementById('system-instruction').value = String(reader.result || '');
+    schemaFileName = file.name;
+    updateSystemInstructionUi();
+    logMsg('Loaded schema file: ' + file.name + ' (' + document.getElementById('system-instruction').value.length + ' chars)', 'log-info');
+  };
+  reader.onerror = () => {
+    logMsg('Failed to read schema file: ' + file.name, 'log-err');
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // allow re-loading the same filename later
+}
+
+function clearSystemInstruction() {
+  document.getElementById('system-instruction').value = '';
+  document.getElementById('schema-file').value = '';
+  schemaFileName = null;
+  updateSystemInstructionUi();
+}
+
+function updateSystemInstructionUi() {
+  const text = systemInstructionText();
+  document.getElementById('system-instruction-count').textContent = text.length + ' chars';
+
+  const fileChip = document.getElementById('schema-file-chip');
+  if (schemaFileName) {
+    fileChip.textContent = schemaFileName;
+    fileChip.style.display = 'inline-block';
+  } else {
+    fileChip.style.display = 'none';
+  }
+
+  const composerChip = document.getElementById('composer-chip-schema');
+  if (text.trim()) {
+    composerChip.textContent = 'schema: ' + (schemaFileName || 'custom');
+    composerChip.style.display = 'inline-block';
+  } else {
+    composerChip.style.display = 'none';
+  }
+}
+
+function updateComposerPlaceholder() {
+  const el = document.getElementById('composer-input');
+  if (currentMode === 'event') {
+    el.placeholder = 'Ask about actions/techniques in this window... e.g. "List all submission attempts."';
+  } else if (currentImageTask === 'generate') {
+    el.placeholder = 'Describe the image to generate for this frame...';
+  } else if (currentImageTask === 'detect') {
+    el.placeholder = 'Describe what to detect in this frame... e.g. "both athletes"';
+  } else {
+    el.placeholder = 'Describe what to segment in this frame (coarse/experimental)...';
+  }
+}
+
+// ============================================================
+// Composer
+// ============================================================
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 240) + 'px';
+}
+
+function composerKeydown(e) {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function updateSendButtonState(scope) {
+  scope = scope || computeScope();
+  const btn = document.getElementById('btn-send');
+  const reasons = [];
+  if (!currentVideoId) reasons.push('load a video first');
+  if (!scope.valid) reasons.push(scope.reason);
+  if (!document.getElementById('composer-input').value.trim()) reasons.push('enter a prompt');
+  if (sending) reasons.push('request in flight');
+  btn.disabled = reasons.length > 0;
+  btn.title = reasons.length ? ('Disabled: ' + reasons.join('; ')) : '';
+}
+
+function setSending(v) {
+  sending = v;
+  updateScopeUiAndSendState();
+}
+
+// ============================================================
+// Conversation / transcript rendering
+// ============================================================
+function scopeChipLabel(turn) {
+  if (turn.scopeType === 'timepoint') return secToMmss(turn.startSec);
+  return secToMmss(turn.startSec) + ' → ' + secToMmss(turn.endSec);
+}
+
+function eventPillHtml(startStr, endStr) {
+  const sRes = mmssToSec(startStr);
+  const eRes = mmssToSec(endStr);
+  if (sRes.error || eRes.error) {
+    return '<span class="seek-pill disabled" title="unparseable time value">' + escHtml(String(startStr)) + ' → ' + escHtml(String(endStr)) + '</span>';
+  }
+  const s = sRes.value, e = eRes.value;
+  const overBadge = (duration > 0 && (s > duration || e > duration)) ? ' <span class="over-badge">&gt; length</span>' : '';
+  const label = (s === e) ? secToMmss(s) : (secToMmss(s) + ' → ' + secToMmss(e));
+  return '<button type="button" class="seek-pill" onclick="handlePillClick(' + s + ', ' + e + ', this)">' + label + overBadge + '</button>';
+}
+
+function renderEventsTable(events) {
+  const rows = events.map(ev => {
+    const pill = eventPillHtml(ev.start, ev.end);
+    const label = escHtml(ev.label || ev.technique || ev.action_category || '—');
+    const actor = escHtml(ev.actor || '—');
+    const desc = escHtml(ev.description || '');
+    const conf = (ev.confidence != null) ? Math.round(ev.confidence * 100) + '%' : '—';
+    return '<tr><td>' + pill + '</td><td>' + label + '</td><td>' + actor + '</td><td>' + desc + '</td><td>' + conf + '</td></tr>';
+  }).join('');
+  return '<div class="msg-table-wrap"><table class="clips"><thead><tr><th>Time</th><th>Label</th><th>Actor</th><th>Description</th><th>Conf</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+function rawDetails(raw) {
+  return '<details><summary>Raw JSON</summary><pre>' + escHtml(JSON.stringify(raw, null, 2)) + '</pre></details>';
+}
+
+// ============================================================
+// simplified-tags-v1 renderer — 4-axis BJJ tagging (Position/Actor/
+// Action-Class/Outcome + free-text technique guess). Distinct shape from
+// clips-v1/events-v1 (start_frame/end_frame, no action/technique/
+// specific_technique fields) so it gets its own table, NOT
+// renderEventsTable()/normalizeClipsToEvents() — reused by both the
+// per-window card body and the final deduped list (see windowCardHtml()/
+// renderDedupedClips()).
+// ============================================================
+function outcomeBadgeHtml(outcome) {
+  const cls = outcome === 'successful' ? 'badge-a'
+    : outcome === 'unsuccessful' ? 'badge-b'
+    : 'badge-neutral badge-dim'; // unclear, or any unrecognized value — dim, never fabricate a meaning
+  return '<span class="badge ' + cls + '">' + escHtml(outcome || 'unclear') + '</span>';
+}
+
+// Same frame->MM:SS-via-native_fps idiom as normalizeClipsToEvents()/
+// windowRangeLabel() — never fabricates a time when native_fps hasn't
+// arrived yet (window_start/run_complete carry it); falls back to a
+// non-seekable "frame N" badge instead.
+function simplifiedTagTimeHtml(tag) {
+  const fps = runState && runState.nativeFps;
+  if (tag.start_frame != null && tag.end_frame != null && fps) {
+    return eventPillHtml(secToMmss(tag.start_frame / fps), secToMmss(tag.end_frame / fps));
+  }
+  if (tag.start_frame != null) {
+    return '<span class="badge badge-neutral" title="native fps unavailable, cannot map frames to wall-clock time">frame ' + tag.start_frame + '</span>';
+  }
+  return '<span class="badge badge-neutral">—</span>';
+}
+
+// ============================================================
+// simplified-tags-time-v1 renderer — chunk-segment-tags PASS 2's time-keyed
+// 4-axis table. Distinct from BOTH renderEventsTable() (events-v1/clips-v1,
+// via normalizeClipsToEvents) and renderSimplifiedTagsTable() (frame-keyed
+// simplified-tags-v1, needs native_fps to convert) — this format's start_s/
+// end_s are ALREADY absolute match seconds (the backend adds the chunk's
+// real start_offset in Python; native_fps is never involved and stays None
+// end-to-end for this pipeline), so no fps gate is needed at all here.
+// ============================================================
+function timeTagTimeHtml(tag) {
+  if (tag.start_s == null || tag.end_s == null) return '<span class="badge badge-neutral">—</span>';
+  return eventPillHtml(secToMmss(tag.start_s), secToMmss(tag.end_s));
+}
+
+function renderTimeTagsTable(tags) {
+  const rows = (tags || []).map(t => {
+    const timeHtml = timeTagTimeHtml(t);
+    const position = escHtml(t.position || '—');
+    const actor = escHtml(t.actor || '—');
+    const giChip = t.actor_gi_color ? (' <span class="badge badge-neutral">' + escHtml(t.actor_gi_color) + '</span>') : '';
+    const actionClass = escHtml(t.action_class || '—');
+    const guess = t.specific_technique_guess ? escHtml(t.specific_technique_guess) : '';
+    const conf = (t.confidence != null) ? Math.round(t.confidence * 100) + '%' : '—';
+    return '<tr><td>' + timeHtml + '</td>' +
+      '<td><span class="badge badge-neutral">' + position + '</span></td>' +
+      '<td>' + actor + giChip + '</td>' +
+      '<td><span class="badge badge-neutral">' + actionClass + '</span></td>' +
+      '<td>' + outcomeBadgeHtml(t.outcome) + '</td>' +
+      '<td style="color:var(--text-dim); font-style:italic;">' + guess + '</td>' +
+      '<td>' + conf + '</td></tr>';
+  }).join('');
+  return '<div class="msg-table-wrap"><table class="clips"><thead><tr>' +
+    '<th>Time</th><th>Position</th><th>Actor</th><th>Action</th><th>Outcome</th><th>Guess</th><th>Conf</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+// ============================================================
+// Chunk map renderer — chunk-segment-tags PASS 1's segmentation result. Its
+// OWN distinct table (never the events renderer): #, Start->End (clickable
+// seek-and-pause pill via the same fps-free path as video-native window
+// scopes — start_s/end_s here are already absolute seconds), Duration,
+// Worth?, Reason. Shows EVERY chunk, worthy and skipped alike.
+// ============================================================
+function chunkMapRowHtml(c, i) {
+  const pill = (c.start_s != null && c.end_s != null) ? eventPillHtml(secToMmss(c.start_s), secToMmss(c.end_s)) : '—';
+  const durS = (c.start_s != null && c.end_s != null) ? (c.end_s - c.start_s) : null;
+  const durHtml = durS != null ? fmtLatency(durS * 1000) : '—';
+  const worthHtml = c.worth_analysis
+    ? '<span class="badge badge-a">yes</span>'
+    : '<span class="badge badge-neutral">no</span> <span class="badge badge-b">SKIPPED</span>';
+  const reasonHtml = '<span class="badge badge-neutral">' + escHtml(c.reason || '—') + '</span>';
+  const adjHtml = c.adjustment ? ('<div class="reasoning" style="margin-top:2px;">' + escHtml(c.adjustment) + '</div>') : '';
+  return '<tr' + (c.worth_analysis ? '' : ' style="opacity:0.6;"') + '>' +
+    '<td>' + (i + 1) + '</td>' +
+    '<td>' + pill + adjHtml + '</td>' +
+    '<td>' + durHtml + '</td>' +
+    '<td>' + worthHtml + '</td>' +
+    '<td>' + reasonHtml + '</td>' +
+  '</tr>';
+}
+
+function renderChunkMap() {
+  const host = document.getElementById('chunk-map-host');
+  if (!host) return;
+  if (!runState || !Array.isArray(runState.chunkMap) || !runState.chunkMap.length) { host.innerHTML = ''; return; }
+  const worthyCount = runState.chunkMap.filter(c => c.worth_analysis).length;
+  const rows = runState.chunkMap.map(chunkMapRowHtml).join('');
+  host.innerHTML = '<div class="card">' +
+    '<h2>Chunk map (' + runState.chunkMap.length + ' chunk(s), ' + worthyCount + ' worth analyzing)</h2>' +
+    '<div class="msg-table-wrap"><table class="clips"><thead><tr>' +
+    '<th>#</th><th>Start&rarr;End</th><th>Duration</th><th>Worth?</th><th>Reason</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+  '</div>';
+}
+
+function renderSimplifiedTagsTable(tags) {
+  const rows = tags.map(t => {
+    const timeHtml = simplifiedTagTimeHtml(t);
+    const position = escHtml(t.position || '—');
+    const actor = escHtml(t.actor || '—');
+    const actionClass = escHtml(t.action_class || '—');
+    const guess = t.specific_technique_guess ? escHtml(t.specific_technique_guess) : '';
+    const conf = (t.confidence != null) ? Math.round(t.confidence * 100) + '%' : '—';
+    return '<tr><td>' + timeHtml + '</td>' +
+      '<td><span class="badge badge-neutral">' + position + '</span></td>' +
+      '<td>' + actor + '</td>' +
+      '<td><span class="badge badge-neutral">' + actionClass + '</span></td>' +
+      '<td>' + outcomeBadgeHtml(t.outcome) + '</td>' +
+      '<td style="color:var(--text-dim); font-style:italic;">' + guess + '</td>' +
+      '<td>' + conf + '</td></tr>';
+  }).join('');
+  return '<div class="msg-table-wrap"><table class="clips"><thead><tr>' +
+    '<th>Time</th><th>Position</th><th>Actor</th><th>Action</th><th>Outcome</th><th>Guess</th><th>Conf</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+// ============================================================
+// Model comparison: latency formatting + per-turn provenance meta row
+// ============================================================
+function fmtLatency(ms) {
+  if (ms == null || isNaN(ms)) return '';
+  if (ms < 1000) return Math.round(ms) + 'ms';
+  return (ms / 1000).toFixed(1) + 's';
+}
+
+function timingLine(timing) {
+  if (!timing || typeof timing !== 'object') return '';
+  const parts = Object.keys(timing).map(k => {
+    const label = k.replace(/_ms$/, '').replace(/_/g, '-');
+    const v = Number(timing[k]);
+    return label + ' ' + (isNaN(v) ? timing[k] : fmtLatency(v));
+  });
+  return parts.join(' · ');
+}
+
+// Prepended to model-turn bubbles (Event, Detect, Segment, Generate alike):
+// model badge, round-trip latency, thinking-level chip (event/detect only),
+// and — if the backend's response.model drifted from what was requested —
+// a red "requested <id>" chip. Renders a dim secondary timing line when the
+// response carries a `timing` breakdown (never required).
+function modelMetaHtml(turn) {
+  const r = turn.response || {};
+  const modelId = r.model || turn.model;
+  if (!modelId && turn.latencyMs == null) return '';
+  const chips = [];
+  if (modelId) chips.push('<span class="badge badge-neutral">' + escHtml(modelId) + '</span>');
+  if (turn.latencyMs != null) chips.push('<span class="badge badge-neutral">' + fmtLatency(turn.latencyMs) + '</span>');
+  if (turn.thinking) chips.push('<span class="badge badge-neutral">think:' + escHtml(turn.thinking) + '</span>');
+  // For a segment turn, the backend echoes a COMPOSITE model id
+  // "{detect_model}+{tint_model}" — the requested model only ever selects
+  // the tint model, so compare against the component after the last '+'
+  // (falling back to the raw value for non-composite ids, e.g. a real
+  // detect-fallback single-model swap) rather than the whole string.
+  const usedModel = (r.model && r.model.indexOf('+') !== -1)
+    ? r.model.slice(r.model.lastIndexOf('+') + 1)
+    : r.model;
+  if (turn.model && usedModel && usedModel !== turn.model) {
+    chips.push('<span class="badge badge-b">requested ' + escHtml(turn.model) + '</span>');
+  }
+  let html = '<div class="msg-meta">' + chips.join('') + '</div>';
+  const tLine = timingLine(r.timing);
+  if (tLine) html += '<div class="reasoning" style="margin-top:-4px;">' + escHtml(tLine) + '</div>';
+  return html;
+}
+
+// ============================================================
+// Detect/Segment spatial overlay — SVG boxes/masks + clickable chips
+// ============================================================
+const OBJ_COLORS = ['#6c8cff', '#fb923c', '#4ade80', '#fbbf24', '#a78bfa', '#22d3ee', '#f87171'];
+function objColor(i) { return OBJ_COLORS[i % OBJ_COLORS.length]; }
+
+function boxArea(o) {
+  const b = o && o.box_2d;
+  if (!Array.isArray(b) || b.length !== 4) return 0;
+  const ymin = b[0], xmin = b[1], ymax = b[2], xmax = b[3];
+  return Math.max(0, xmax - xmin) * Math.max(0, ymax - ymin);
+}
+
+function objectShapeSvg(o, i, uid) {
+  const color = objColor(i);
+  const box = (Array.isArray(o.box_2d) && o.box_2d.length === 4) ? o.box_2d : null;
+  const label = escHtml(o.label || ('object ' + (i + 1)));
+  const confPct = (typeof o.confidence === 'number') ? Math.round(o.confidence * 100) : null;
+  const labelText = label + (confPct != null ? (' ' + confPct + '%') : '');
+
+  let shapes = '';
+  if (box) {
+    const ymin = box[0], xmin = box[1], ymax = box[2], xmax = box[3];
+    const x = xmin, y = ymin, w = Math.max(0, xmax - xmin), h = Math.max(0, ymax - ymin);
+    const hasMask = o.mask && o.mask.kind === 'polygon' && Array.isArray(o.mask.points) && o.mask.points.length >= 3;
+    if (hasMask) {
+      const pts = o.mask.points.map(p => p[0] + ',' + p[1]).join(' ');
+      shapes += '<polygon points="' + pts + '" fill="' + color + '" fill-opacity="0.28" stroke="' + color + '" stroke-width="2.5" vector-effect="non-scaling-stroke"></polygon>';
+      shapes += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + color + '" stroke-width="1" stroke-opacity="0.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"></rect>';
+    } else {
+      shapes += '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="none" stroke="' + color + '" stroke-width="3" vector-effect="non-scaling-stroke"></rect>';
+    }
+    const tagW = Math.max(60, labelText.length * 11);
+    const tagY = Math.max(0, y - 22);
+    shapes += '<g class="obj-shape-label">' +
+      '<rect x="' + x + '" y="' + tagY + '" width="' + tagW + '" height="20" fill="' + color + '" fill-opacity="0.85"></rect>' +
+      '<text x="' + (x + 4) + '" y="' + (tagY + 14) + '" font-size="15" fill="#0a0a0a">' + labelText + '</text></g>';
+  }
+  return '<g class="obj-shape-group" data-obj-idx="' + i + '"' +
+    ' onclick="toggleIsolateObject(\'' + uid + '\', ' + i + ')"' +
+    ' onmouseenter="hoverObject(\'' + uid + '\', ' + i + ', true)"' +
+    ' onmouseleave="hoverObject(\'' + uid + '\', ' + i + ', false)">' + shapes + '</g>';
+}
+
+function objectChipHtml(o, i, uid) {
+  const color = objColor(i);
+  const label = escHtml(o.label || ('object ' + (i + 1)));
+  const confPct = (typeof o.confidence === 'number') ? Math.round(o.confidence * 100) : null;
+  const confHtml = confPct != null ? ('<span class="obj-chip-conf">' + confPct + '%</span>') : '';
+  return '<button type="button" class="obj-chip" data-obj-idx="' + i + '" style="--obj-color:' + color + ';"' +
+    ' onclick="toggleIsolateObject(\'' + uid + '\', ' + i + ')"' +
+    ' onmouseenter="hoverObject(\'' + uid + '\', ' + i + ', true)"' +
+    ' onmouseleave="hoverObject(\'' + uid + '\', ' + i + ', false)">' +
+    '<span class="obj-chip-swatch" style="background:' + color + ';"></span>' +
+    '<span class="obj-chip-label">' + label + '</span>' + confHtml +
+    '</button>';
+}
+
+function applyIsolate(uid) {
+  const idx = isolateState[uid];
+  document.querySelectorAll('.frame-stage[data-turn-uid="' + uid + '"] .obj-shape-group').forEach(g => {
+    const gi = parseInt(g.getAttribute('data-obj-idx'), 10);
+    g.classList.toggle('dim', idx != null && gi !== idx);
+  });
+  document.querySelectorAll('.obj-chips[data-turn-uid="' + uid + '"] .obj-chip').forEach(c => {
+    const ci = parseInt(c.getAttribute('data-obj-idx'), 10);
+    c.classList.toggle('dim', idx != null && ci !== idx);
+    c.classList.toggle('active', idx != null && ci === idx);
+  });
+}
+
+function toggleIsolateObject(uid, idx) {
+  isolateState[uid] = (isolateState[uid] === idx) ? null : idx;
+  applyIsolate(uid);
+}
+
+function clearIsolate(uid) {
+  isolateState[uid] = null;
+  applyIsolate(uid);
+}
+
+function hoverObject(uid, idx, on) {
+  const shape = document.querySelector('.frame-stage[data-turn-uid="' + uid + '"] .obj-shape-group[data-obj-idx="' + idx + '"]');
+  const chip = document.querySelector('.obj-chips[data-turn-uid="' + uid + '"] .obj-chip[data-obj-idx="' + idx + '"]');
+  if (shape) shape.classList.toggle('hover-highlight', on);
+  if (chip) chip.classList.toggle('hover-highlight', on);
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  Object.keys(isolateState).forEach(uid => { if (isolateState[uid] != null) clearIsolate(uid); });
+});
+
+function imageObjectsTurnHtml(turn) {
+  const r = turn.response;
+  const meta = modelMetaHtml(turn);
+  if (!r || !r.frame_b64) {
+    return '<div class="msg msg-model msg-err">' + meta + '<div>Backend response did not include a frame (frame_b64 missing).</div>' +
+      rawDetails(turn.rawResponse) + '</div>';
+  }
+  const uid = turn.uid;
+  const mime = r.frame_mime || 'image/png';
+  const frameTime = (typeof r.frame_time_sec === 'number') ? r.frame_time_sec : null;
+  const objects = Array.isArray(r.objects) ? r.objects : [];
+  const notes = r.notes ? ('<div class="reasoning">' + escHtml(r.notes) + '</div>') : '';
+  const degradedBanner = (r.degraded && r.degraded.masks_missing)
+    ? '<div class="warn-line">Masks unavailable (coarse highlight failed) — showing detection boxes' +
+      (r.degraded.reason ? (': ' + escHtml(r.degraded.reason)) : '') + '</div>'
+    : '';
+
+  let overlaySvg = '';
+  let chipsHtml = '';
+  let emptyOverlay = '';
+
+  if (objects.length === 0) {
+    const label = frameTime != null ? secToMmss(frameTime) : '—';
+    emptyOverlay = '<div class="frame-empty-msg">No objects detected at ' + escHtml(label) + '</div>';
+  } else {
+    const byAreaDesc = objects.map((o, i) => ({ o, i })).sort((a, b) => boxArea(b.o) - boxArea(a.o));
+    overlaySvg = byAreaDesc.map(({ o, i }) => objectShapeSvg(o, i, uid)).join('');
+    chipsHtml = objects.map((o, i) => objectChipHtml(o, i, uid)).join('');
+  }
+
+  const frameCaption = frameTime != null
+    ? '<button type="button" class="frame-caption" onclick="handlePillClick(' + frameTime + ', ' + frameTime + ', this)">Frame @ ' + secToMmss(frameTime) + '</button>'
+    : '';
+
+  return '<div class="msg msg-model">' + meta +
+    '<div class="frame-stage" data-turn-uid="' + uid + '">' +
+    '<img class="result-img" src="data:' + mime + ';base64,' + r.frame_b64 + '">' +
+    '<svg class="frame-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none">' + overlaySvg + '</svg>' +
+    emptyOverlay +
+    '</div>' +
+    degradedBanner +
+    (objects.length ? ('<div class="obj-chips" data-turn-uid="' + uid + '">' + chipsHtml + '</div>') : '') +
+    '<div>' + frameCaption + '</div>' +
+    notes + rawDetails(turn.rawResponse) +
+    '</div>';
+}
+
+function turnHtml(turn) {
+  if (turn.role === 'user') {
+    const modeChip = turn.mode === 'image' ? ('Image · ' + turn.imageTask) : 'Event JSON';
+    return '<div class="msg msg-user">' +
+      '<div class="msg-meta"><span class="badge badge-a">' + escHtml(scopeChipLabel(turn)) + '</span>' +
+      '<span class="badge badge-b">' + escHtml(modeChip) + '</span></div>' +
+      '<div class="msg-prompt">' + escHtml(turn.promptText) + '</div></div>';
+  }
+
+  // model turn
+  if (turn.typing) {
+    return '<div class="msg msg-model"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+  }
+  if (turn.error) {
+    return '<div class="msg msg-model msg-err"><div>' + escHtml(turn.error) + '</div>' +
+      (turn.rawResponse != null ? rawDetails(turn.rawResponse) : '') + '</div>';
+  }
+  if (turn.mode === 'image') {
+    if (turn.imageTask === 'detect' || turn.imageTask === 'segment') {
+      return imageObjectsTurnHtml(turn);
+    }
+    // generate: freeform image + notes, no overlay
+    const genMeta = modelMetaHtml(turn);
+    if (!turn.response || !turn.response.image_b64) {
+      return '<div class="msg msg-model msg-err">' + genMeta + '<div>Backend response did not include an image (image_b64 missing).</div>' +
+        rawDetails(turn.rawResponse) + '</div>';
+    }
+    const mime = turn.response.mime || 'image/png';
+    const notes = turn.response.notes ? ('<div class="reasoning">' + escHtml(turn.response.notes) + '</div>') : '';
+    return '<div class="msg msg-model">' + genMeta + '<img class="result-img" src="data:' + mime + ';base64,' + turn.response.image_b64 + '">' + notes + rawDetails(turn.rawResponse) + '</div>';
+  }
+  // event mode
+  const eventMeta = modelMetaHtml(turn);
+  const events = turn.response ? turn.response.events : null;
+  if (!Array.isArray(events)) {
+    return '<div class="msg msg-model msg-err">' + eventMeta + '<div>Response did not include a parseable events list.</div>' + rawDetails(turn.rawResponse) + '</div>';
+  }
+  if (turn.response.parse_error) {
+    // Backend could not parse a JSON array out of the model output — never fabricate events.
+    const rawText = turn.response.raw != null ? String(turn.response.raw) : '';
+    return '<div class="msg msg-model msg-err">' + eventMeta + '<div>Could not parse a valid events JSON array from the model response: ' +
+      escHtml(turn.response.parse_error) + '</div>' +
+      (rawText ? ('<pre>' + escHtml(rawText) + '</pre>') : '') +
+      rawDetails(turn.rawResponse) + '</div>';
+  }
+  const table = events.length ? renderEventsTable(events) : '<p style="color:var(--text-dim); font-size:0.8rem;">No events returned.</p>';
+  const notes = turn.response.notes ? ('<div class="reasoning">' + escHtml(turn.response.notes) + '</div>') : '';
+  return '<div class="msg msg-model">' + eventMeta + table + notes + rawDetails(turn.rawResponse) + '</div>';
+}
+
+function renderTranscript() {
+  const host = document.getElementById('transcript');
+  host.innerHTML = conversation.map(turnHtml).join('');
+  host.scrollTop = host.scrollHeight;
+}
+
+function modelTextForHistory(t) {
+  if (t.error) return '[error] ' + t.error;
+  if (!t.response) return '';
+  if (t.mode === 'image') {
+    if (t.imageTask === 'detect' || t.imageTask === 'segment') {
+      const n = Array.isArray(t.response.objects) ? t.response.objects.length : 0;
+      return t.response.notes || ('[' + t.imageTask + ' response: ' + n + ' object(s) detected]');
+    }
+    return t.response.notes || '[image response]';
+  }
+  const events = t.response.events;
+  if (Array.isArray(events)) {
+    return events.map(e => (e.start + '-' + e.end + ' ' + (e.label || ''))).join('; ');
+  }
+  return JSON.stringify(t.response);
+}
+
+function transcriptAsText() {
+  return conversation.filter(t => !t.typing).map(t => {
+    if (t.role === 'user') {
+      const modeLabel = t.mode === 'image' ? ('image/' + t.imageTask) : 'event';
+      return '[USER ' + scopeChipLabel(t) + ' | ' + modeLabel + ']\n' + t.promptText;
+    }
+    if (t.error) return '[MODEL ERROR]\n' + t.error;
+    return '[MODEL]\n' + modelTextForHistory(t);
+  }).join('\n\n');
+}
+
+async function copyTranscript() {
+  const text = transcriptAsText();
+  try {
+    await navigator.clipboard.writeText(text);
+    logMsg('Transcript copied to clipboard', 'log-info');
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      logMsg('Transcript copied (fallback path)', 'log-info');
+    } catch (e2) {
+      logMsg('Copy failed: ' + e2.message, 'log-err');
+    }
+    document.body.removeChild(ta);
+  }
+}
+
+function newConversation() {
+  if (conversation.length && !confirm('Start a new conversation? This clears the current transcript.')) return;
+  conversation = [];
+  renderTranscript();
+  logMsg('Conversation cleared', 'log-info');
+}
+
+// ============================================================
+// Mock responses (?mock=1) — no backend call, deterministic canned data
+// ============================================================
+// Simulated round-trip latency, varied by model tier so the model-comparison
+// UI (badge + latency + timing line) is testable offline via ?mock=1.
+// "pro" tiers (incl. gemini-3-pro-image) are deliberately the slowest,
+// "lite" tiers the fastest, everything else (flash/base) in between.
+function mockLatencyMs(model) {
+  const m = String(model || '');
+  if (/pro/.test(m)) return 2200 + Math.round(Math.random() * 500);
+  if (/lite/.test(m)) return 480 + Math.round(Math.random() * 200);
+  return 900 + Math.round(Math.random() * 300);
+}
+
+// Mirrors the live backend `timing` shape (all values in MILLISECONDS) so
+// mock and live turns drive the exact same `timingLine` render path.
+// `withFrameExtract` is false for the event/chat mock (no frame to extract).
+function mockTiming(elapsedMs, withFrameExtract) {
+  const totalMs = Math.max(100, elapsedMs || 0);
+  const frameExtractMs = withFrameExtract ? Math.min(400, totalMs * 0.15) : 0;
+  const modelMs = Math.max(100, totalMs - frameExtractMs);
+  const timing = {
+    total_ms: Number(totalMs.toFixed(1)),
+    model_ms: Number(modelMs.toFixed(1))
+  };
+  if (withFrameExtract) timing.frame_extract_ms = Number(frameExtractMs.toFixed(1));
+  return timing;
+}
+
+function mockEventResponse(scope, model, elapsedMs) {
+  const base = scope.startSec || 0;
+  const mk = (offset, label, cat, tech, actor, desc, conf) => ({
+    start: secToMmss(base + offset), end: secToMmss(base + offset + 2),
+    label, action_category: cat, technique: tech, actor, description: desc, confidence: conf
+  });
+  return {
+    events: [
+      mk(0, 'Takedown attempt', 'takedown', 'single leg', 'A', 'Athlete A shoots for a single leg.', 0.82),
+      mk(3, 'Guard pass', 'guard_pass', 'knee slice', 'B', 'Athlete B slices through half guard.', 0.71),
+      mk(6, 'Submission attempt', 'submission', 'armbar', 'A', 'Athlete A attacks with an armbar from mount.', 0.65)
+    ],
+    notes: 'Mock response (?mock=1) — synthesized locally, no backend call made.',
+    model: model || 'mock-vlm-v0',
+    timing: mockTiming(elapsedMs, false)
+  };
+}
+
+function mockImageResponse(model, elapsedMs) {
+  const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  return {
+    image_b64: b64,
+    mime: 'image/png',
+    notes: 'Mock 1x1 image (?mock=1) — synthesized locally, no backend call made.',
+    model: model || 'mock-vlm-v0',
+    timing: mockTiming(elapsedMs, true)
+  };
+}
+
+// Small canned frame (inline SVG-as-image) used by the mock Detect/Segment
+// response below — a stand-in mat + two athlete silhouettes, no backend call.
+function mockFrameSvg() {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">' +
+    '<rect width="640" height="360" fill="#173b2b"/>' +
+    '<rect x="40" y="30" width="560" height="300" fill="none" stroke="#0f2419" stroke-width="6"/>' +
+    '<circle cx="230" cy="210" r="46" fill="#3a5a9b"/>' +
+    '<circle cx="390" cy="185" r="40" fill="#9b3a3a"/>' +
+    '</svg>';
+}
+
+function mockFrameDataB64() {
+  return btoa(mockFrameSvg());
+}
+
+function mockDetectSegmentResponse(task, scope, model, elapsedMs) {
+  const frameTime = (scope && typeof scope.startSec === 'number') ? scope.startSec : 0;
+  const withMasks = task === 'segment';
+  const objects = [
+    {
+      label: 'Athlete (blue gi)',
+      confidence: 0.91,
+      box_2d: [420, 270, 690, 420],
+      mask: withMasks ? {
+        kind: 'polygon',
+        points: [[345, 420], [400, 435], [420, 480], [415, 560], [380, 640], [330, 680], [290, 650], [275, 570], [280, 490], [300, 440]]
+      } : undefined
+    },
+    {
+      // Deliberately NO mask even when task === 'segment' — exercises the
+      // per-object degrade path (silent box-only render for this one object).
+      label: 'Athlete (red gi)',
+      confidence: 0.87,
+      box_2d: [389, 531, 611, 656]
+    },
+    {
+      label: 'Tatami mat',
+      box_2d: [40, 40, 960, 960],
+      mask: withMasks ? { kind: 'polygon', points: [[60, 60], [940, 60], [940, 940], [60, 940]] } : undefined
+    }
+  ];
+  return {
+    frame_b64: mockFrameDataB64(),
+    frame_mime: 'image/svg+xml',
+    frame_time_sec: frameTime,
+    objects,
+    degraded: { masks_missing: false },
+    model: model || 'mock-vlm-v0',
+    notes: 'Mock ' + task + ' response (?mock=1) — synthesized locally, no backend call made.',
+    timing: mockTiming(elapsedMs, true)
+  };
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// A sleep() that rejects early (AbortError) if `signal` fires mid-wait — lets
+// the mock NDJSON drip honor Cancel exactly like a real aborted fetch().
+function sleepAbortable(ms, signal) {
+  return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) { reject(abortError()); return; }
+    const t = setTimeout(() => { cleanup(); resolve(); }, ms);
+    function onAbort() { cleanup(); reject(abortError()); }
+    function cleanup() { clearTimeout(t); if (signal) signal.removeEventListener('abort', onAbort); }
+    if (signal) signal.addEventListener('abort', onAbort);
+  });
+}
+function abortError() { const e = new Error('The operation was aborted.'); e.name = 'AbortError'; return e; }
+
+// ============================================================================================
+// PIPELINE DAG RUNNER (M3)
+// Frozen contract (per 2026-07-03-vlm-studio-pipeline-dag-build-plan.md §3.2, §4, §5):
+//   GET  /qa/pipelines               -> [{id,label,description}]
+//   GET  /qa/pipeline-defaults?id=   -> PipelineDef {schema_version,id,label,description,stages[]}
+//   POST /qa/pipeline-run            -> streaming NDJSON of {type,...} events
+// ============================================================================================
+
+// ---- Canned production defaults (mirrors what the backend is expected to
+// serve from service/pipelines/registry.py — used verbatim in ?mock=1, and
+// as the initial single-shot default before a live /qa/pipelines fetch
+// resolves). Never silently substituted for a FAILED live fetch — see
+// loadPipelines()/loadPipelineDefaults() below, which fail closed instead.
+// Config objects below mirror service/pipelines/models.py's Pydantic field
+// sets EXACTLY (each has extra="forbid" server-side — sending an unknown key
+// is a hard 400). Do not add convenience keys here that aren't real fields.
+const SINGLE_SHOT_DEFAULT = {
+  schema_version: 1, id: 'single-shot', label: 'Single-shot',
+  description: "Today's /qa/vlm-chat behavior recast as a pipeline — native YouTube video window (no frame sampling), one Gemini call, Event JSON v1. Zero regression vs the existing QA page.",
+  stages: [
+    { id: 'video_window', type: 'video_window', label: 'Video Window', enabled: true, config: {} },
+    { id: 'analyze', type: 'analyze', label: 'Analyze', enabled: true, config: { agent_mode: 'single', model: 'gemini-3.5-flash', thinking: 'low', return_format: 'events-v1', system_instruction: null } }
+  ]
+};
+
+function mockVisionMimicDefault(id, label, agentMode) {
+  return {
+    schema_version: 1, id, label,
+    description: 'Gemini-only mimic of the production vision engine: frame-sample -> per-frame role-labeled detect+crop-to-athletes -> sliding window -> analyze -> context-chain -> dedup. No tracking model, no upscale.',
+    stages: [
+      { id: 'frame_sample', type: 'frame_sample', label: 'Sample', enabled: true, config: { sample_fps: 5.0 } },
+      { id: 'detect_crop', type: 'detect_crop', label: 'Detect + Crop', enabled: true, config: { model: 'gemini-3.5-flash', padding: 0.2, single_athlete_padding: 0.5, min_crop_fraction: 0.4, ema_alpha: 0.6, hysteresis_margin: 0.15, hysteresis_frames: 3, crop_target_size: 768 } },
+      { id: 'window', type: 'window', label: 'Window', enabled: true, config: { window_size: 30, stride: 15 } },
+      { id: 'analyze', type: 'analyze', label: 'Analyze', enabled: true, config: { agent_mode: agentMode, model: 'gemini-3.1-flash-lite', thinking: null, return_format: 'clips-v1', system_instruction: null } },
+      { id: 'context_chain', type: 'context_chain', label: 'Context Chain', enabled: true, config: {} },
+      { id: 'dedup', type: 'dedup', label: 'Dedup', enabled: true, config: { key_by: 'actor_player_id' } }
+    ]
+  };
+}
+const VISION_MIMIC_DEFAULT = mockVisionMimicDefault('vision-mimic', 'Vision-engine mimic', 'single');
+const VISION_MIMIC_MULTI_DEFAULT = mockVisionMimicDefault('vision-mimic-multi', 'Vision-engine mimic (multi-agent)', 'multi');
+
+// Same DAG shape as vision-mimic (single-agent) — only the analyze node's
+// return_format differs (simplified-tags-v1 instead of clips-v1).
+function mockVisionMimicSimplifiedDefault() {
+  const def = mockVisionMimicDefault('vision-mimic-simplified', 'Vision-engine mimic (simplified taxonomy)', 'single');
+  const analyzeStage = def.stages.find(s => s.type === 'analyze');
+  analyzeStage.config.return_format = 'simplified-tags-v1';
+  return def;
+}
+const VISION_MIMIC_SIMPLIFIED_DEFAULT = mockVisionMimicSimplifiedDefault();
+
+// chunk-segment-tags — fixed stage set video_window -> chunk_segment ->
+// chunk_analyze -> context_chain -> dedup (mirrors service/pipelines/
+// registry.py::_chunk_segment_tags()). No frame_sample/window/analyze node
+// types at all — a wholly new DAG shape, not a variant of vision-mimic.
+function mockChunkSegmentTagsDefault() {
+  return {
+    schema_version: 1, id: 'chunk-segment-tags', label: 'Chunk segment + tag (native)',
+    description: 'YouTube-native two-pass pipeline: one cheap Gemini scan segments the scope into chunks (match_action/restart_reset/stoppage/pre_match/broadcast), then a SEQUENTIAL per-chunk native-video analyze pass tags only the worthy (match_action) chunks with the time-keyed 4-axis simplified taxonomy. No frame sampling, no tracking model, no upscale.',
+    stages: [
+      { id: 'video_window', type: 'video_window', label: 'Video Window', enabled: true, config: {} },
+      { id: 'chunk_segment', type: 'chunk_segment', label: 'Chunk Segment', enabled: true, config: { model: 'gemini-3.1-flash-lite', min_chunk_s: 5.0, max_chunk_s: 60.0, rough_fps: 1.0, analyze_all: false } },
+      { id: 'chunk_analyze', type: 'chunk_analyze', label: 'Chunk Analyze', enabled: true, config: { model: 'gemini-3.1-flash-lite', thinking: null, overlap_s: 5.0 } },
+      { id: 'context_chain', type: 'context_chain', label: 'Context Chain', enabled: true, config: {} },
+      { id: 'dedup', type: 'dedup', label: 'Dedup', enabled: true, config: { key_by: 'actor_player_id' } }
+    ]
+  };
+}
+const CHUNK_SEGMENT_TAGS_DEFAULT = mockChunkSegmentTagsDefault();
+
+const MOCK_PIPELINES = [
+  { id: 'single-shot', label: 'Single-shot', description: SINGLE_SHOT_DEFAULT.description },
+  { id: 'vision-mimic', label: 'Vision-engine mimic', description: VISION_MIMIC_DEFAULT.description },
+  { id: 'vision-mimic-multi', label: 'Vision-engine mimic (multi-agent)', description: VISION_MIMIC_MULTI_DEFAULT.description },
+  { id: 'vision-mimic-simplified', label: 'Vision-engine mimic (simplified taxonomy)', description: VISION_MIMIC_SIMPLIFIED_DEFAULT.description },
+  { id: 'chunk-segment-tags', label: 'Chunk segment + tag (native)', description: CHUNK_SEGMENT_TAGS_DEFAULT.description }
+];
+
+// Structural (non-toggleable, position-locked) node types — union across all
+// pipelines (video_window/analyze for single-shot; frame_sample/window/analyze
+// for vision-mimic; chunk_segment/chunk_analyze for chunk-segment-tags). A
+// flat set — rather than a per-pipeline-id map — stays correct for a future
+// data-driven Nth pipeline without needing a new map entry, since no pipeline
+// mixes in a structural type from "another" pipeline's set.
+const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze']);
+const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎' };
+
+function mockPipelineDefaults(id) {
+  if (id === 'single-shot') return JSON.parse(JSON.stringify(SINGLE_SHOT_DEFAULT));
+  if (id === 'vision-mimic') return JSON.parse(JSON.stringify(VISION_MIMIC_DEFAULT));
+  if (id === 'vision-mimic-multi') return JSON.parse(JSON.stringify(VISION_MIMIC_MULTI_DEFAULT));
+  if (id === 'vision-mimic-simplified') return JSON.parse(JSON.stringify(VISION_MIMIC_SIMPLIFIED_DEFAULT));
+  if (id === 'chunk-segment-tags') return JSON.parse(JSON.stringify(CHUNK_SEGMENT_TAGS_DEFAULT));
+  return null;
+}
+
+// ---- Pipeline list + defaults fetch (fail-closed: a failed LIVE fetch never
+// falls back to canned data — that would be exactly the "fallback logic"
+// this project forbids. ?mock=1 uses canned data by design, not as a fallback.)
+async function loadPipelines() {
+  if (isMock()) {
+    PIPELINES = MOCK_PIPELINES;
+  } else {
+    try {
+      const resp = await fetch(backendUrl() + '/qa/pipelines');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      // Frozen contract: {"pipelines": [{id,label,description}, ...]} — an
+      // envelope, not a bare array (service/routes/qa_pipeline.py:list_pipelines).
+      const body = await resp.json();
+      PIPELINES = Array.isArray(body.pipelines) ? body.pipelines : [];
+    } catch (e) {
+      logMsg('Failed to fetch pipeline list from backend: ' + e.message, 'log-err');
+      PIPELINES = [];
+    }
+  }
+  renderPipelineTabs();
+  const wantId = PIPELINES.some(p => p.id === currentPipelineId) ? currentPipelineId : (PIPELINES[0] && PIPELINES[0].id);
+  if (wantId) setPipeline(wantId);
+}
+
+function renderPipelineTabs() {
+  const host = document.getElementById('pipeline-tabs');
+  host.innerHTML = PIPELINES.map(p =>
+    '<button type="button" class="tab' + (p.id === currentPipelineId ? ' active' : '') + '" data-pipeline-id="' + escHtml(p.id) + '" title="' + escHtml(p.description || '') + '" onclick="setPipeline(\'' + p.id + '\')">' + escHtml(p.label) + '</button>'
+  ).join('');
+}
+
+function setPipeline(id) {
+  currentPipelineId = id;
+  document.querySelectorAll('#pipeline-tabs .tab').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-pipeline-id') === id));
+  const isSingleShot = id === 'single-shot';
+  document.getElementById('canvas-single-shot').style.display = isSingleShot ? 'block' : 'none';
+  document.getElementById('canvas-vision-mimic').style.display = isSingleShot ? 'none' : 'block';
+  // chunk-segment-tags has no `analyze` node/agent_mode field at all — the
+  // single/multi top-bar toggle would be a dead control for it.
+  const hasAgentMode = !isSingleShot && id !== 'chunk-segment-tags';
+  document.getElementById('agent-mode-row').style.display = hasAgentMode ? 'block' : 'none';
+  loadPipelineDefaults(id);
+  updateRunButtonState();
+}
+
+async function loadPipelineDefaults(id) {
+  let def;
+  if (isMock()) {
+    def = mockPipelineDefaults(id);
+  } else {
+    try {
+      const resp = await fetch(backendUrl() + '/qa/pipeline-defaults?id=' + encodeURIComponent(id));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      def = await resp.json();
+    } catch (e) {
+      logMsg('Failed to fetch pipeline defaults for "' + id + '": ' + e.message, 'log-err');
+      return; // fail closed — do not touch currentPipelineDef with fabricated data
+    }
+  }
+  if (!def) { logMsg('No pipeline defaults available for "' + id + '"', 'log-err'); return; }
+  PRODUCTION_DEFAULTS[id] = JSON.parse(JSON.stringify(def));
+  currentPipelineDef = JSON.parse(JSON.stringify(def));
+  selectedNodeIndex = null;
+  document.getElementById('node-config-card').style.display = 'none';
+  const analyzeStage = currentPipelineDef.stages.find(s => s.type === 'analyze');
+  if (analyzeStage) {
+    currentAgentMode = analyzeStage.config.agent_mode || 'single';
+    syncAgentModeToggle();
+  }
+  resetRunView();
+  renderDag();
+  logMsg('Loaded pipeline defaults for "' + id + '" (' + currentPipelineDef.stages.length + ' stage(s))', 'log-info');
+}
+
+// ---- Agent-mode sync: top-bar sub-toggle <-> Analyze node's agent_mode field
+function syncAgentModeToggle() {
+  document.querySelectorAll('#agent-mode-toggle .tab').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-agent') === currentAgentMode);
+  });
+}
+
+function setAgentMode(mode) {
+  currentAgentMode = mode;
+  syncAgentModeToggle();
+  if (!currentPipelineDef) return;
+  const analyzeStage = currentPipelineDef.stages.find(s => s.type === 'analyze');
+  if (!analyzeStage) return;
+  analyzeStage.config.agent_mode = mode;
+  renderDag();
+  if (selectedNodeIndex != null && currentPipelineDef.stages[selectedNodeIndex] === analyzeStage) {
+    renderNodeConfigPanel(analyzeStage);
+  }
+}
+
+// ---- DAG canvas rendering
+function isStructuralStage(stage) {
+  return STRUCTURAL_TYPES.has(stage.type);
+}
+
+// Up to 2 dim-mono preview values per node card — reads only real config keys
+// (frozen per service/pipelines/models.py; see CONFIG_FIELD_ORDER below).
+function nodeKeyValues(stage) {
+  const c = stage.config || {};
+  switch (stage.type) {
+    case 'frame_sample': return ['fps ' + c.sample_fps];
+    case 'detect_crop': return [c.model, 'crop ' + c.crop_target_size];
+    case 'window': return [c.window_size + '/' + c.stride];
+    case 'analyze': return [c.model, c.agent_mode];
+    case 'context_chain': return [stage.enabled ? 'on' : 'off'];
+    case 'dedup': return [c.key_by];
+    case 'video_window': return [];
+    case 'chunk_segment': return [c.model, 'min ' + c.min_chunk_s + 's / max ' + c.max_chunk_s + 's'];
+    case 'chunk_analyze': return [c.model, 'overlap ' + c.overlap_s + 's'];
+    default: return [];
+  }
+}
+
+function dagNodeHtml(stage, index) {
+  const structural = isStructuralStage(stage);
+  const disabled = !stage.enabled;
+  const classes = ['dag-node'];
+  if (index === selectedNodeIndex) classes.push('selected');
+  if (disabled) classes.push('disabled');
+  const kv = nodeKeyValues(stage).filter(Boolean).map(v => '<div class="dag-node-kv">' + escHtml(String(v)) + '</div>').join('');
+  const checkbox = structural
+    ? '<span class="dag-node-lock" title="Structural stage — position and enable state are fixed for this pipeline">🔒</span>'
+    : '<input type="checkbox" ' + (stage.enabled ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleStageEnabled(' + index + ')" title="Enable/disable this stage">';
+  const upDisabled = index === 0 ? 'disabled' : '';
+  const downDisabled = index === currentPipelineDef.stages.length - 1 ? 'disabled' : '';
+  return '<div class="dag-node-wrap">' +
+    (index > 0 ? '<div class="dag-edge">&rarr;</div>' : '') +
+    '<div class="' + classes.join(' ') + '" onclick="selectNode(' + index + ')">' +
+      '<div class="dag-node-head"><span>' + (NODE_GLYPH[stage.type] || '⚙') + '</span><span>' + escHtml(stage.label) + '</span></div>' +
+      kv +
+      '<div class="dag-node-foot">' +
+        checkbox +
+        '<span class="dag-node-reorder">' +
+          '<button type="button" class="btn btn-sm" ' + upDisabled + ' onclick="event.stopPropagation(); reorderNode(' + index + ', -1)" title="Move earlier">&uarr;</button>' +
+          '<button type="button" class="btn btn-sm" ' + downDisabled + ' onclick="event.stopPropagation(); reorderNode(' + index + ', 1)" title="Move later">&darr;</button>' +
+        '</span>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function renderDag() {
+  const host = document.getElementById('dag-nodes');
+  const labelEl = document.getElementById('dag-pipeline-label');
+  if (!currentPipelineDef) { host.innerHTML = ''; labelEl.textContent = '—'; return; }
+  host.innerHTML = currentPipelineDef.stages.map((s, i) => dagNodeHtml(s, i)).join('');
+  labelEl.textContent = currentPipelineDef.label || currentPipelineDef.id;
+}
+
+function selectNode(index) {
+  selectedNodeIndex = index;
+  renderDag();
+  renderNodeConfigPanel(currentPipelineDef.stages[index]);
+}
+
+function toggleStageEnabled(index) {
+  const stage = currentPipelineDef.stages[index];
+  if (isStructuralStage(stage)) return; // no checkbox rendered for these; defensive no-op
+  stage.enabled = !stage.enabled;
+  renderDag();
+  if (selectedNodeIndex === index) renderNodeConfigPanel(stage);
+}
+
+let dagReorderErrorTimer = null;
+function showDagReorderError(msg) {
+  const el = document.getElementById('dag-reorder-error');
+  el.textContent = msg;
+  if (dagReorderErrorTimer) clearTimeout(dagReorderErrorTimer);
+  dagReorderErrorTimer = setTimeout(() => { el.textContent = ''; }, 3500);
+}
+
+function reorderNode(index, dir) {
+  const stages = currentPipelineDef.stages;
+  const j = index + dir;
+  if (j < 0 || j >= stages.length) return;
+  if (isStructuralStage(stages[index]) || isStructuralStage(stages[j])) {
+    showDagReorderError('Structural stages have a fixed position — reorder refused.');
+    return;
+  }
+  const tmp = stages[index]; stages[index] = stages[j]; stages[j] = tmp;
+  if (selectedNodeIndex === index) selectedNodeIndex = j;
+  else if (selectedNodeIndex === j) selectedNodeIndex = index;
+  renderDag();
+}
+
+// ---- Node-config panel (per node type)
+const NODE_MODELS = TASK_CONFIG.event.models; // same frozen model list used by single-shot's Event task
+
+// Per-node-type widget hints, keyed by the EXACT config field name the
+// backend's Pydantic model uses (service/pipelines/models.py). This drives
+// nodeConfigFieldsHtml() below, which renders ONLY keys present on the
+// fetched stage.config object — never a hardcoded, possibly-stale field list
+// — so a forbidden key (extra="forbid" server-side) can never be POSTed.
+// agent_mode/thinking/system_instruction on `analyze` get bespoke widgets
+// (agent-mode tabs synced with the top bar, thinking tabs, the reusable
+// schema card) instead of a generic input; everything else here is a plain
+// number/select widget.
+const CONFIG_FIELD_ORDER = {
+  frame_sample: ['sample_fps'],
+  detect_crop: ['model', 'padding', 'single_athlete_padding', 'min_crop_fraction', 'ema_alpha', 'hysteresis_margin', 'hysteresis_frames', 'crop_target_size'],
+  window: ['window_size', 'stride'],
+  analyze: ['agent_mode', 'model', 'thinking', 'return_format', 'system_instruction'],
+  context_chain: [],
+  dedup: ['key_by'],
+  video_window: [],
+  chunk_segment: ['model', 'min_chunk_s', 'max_chunk_s', 'rough_fps', 'analyze_all'],
+  chunk_analyze: ['model', 'thinking', 'overlap_s']
+};
+const CONFIG_FIELD_HINTS = {
+  detect_crop: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    padding: { widget: 'number', step: 0.05, label: 'Padding' },
+    single_athlete_padding: { widget: 'number', step: 0.05, label: 'Single-athlete padding' },
+    min_crop_fraction: { widget: 'number', step: 0.05, label: 'Min crop fraction' },
+    ema_alpha: { widget: 'number', step: 0.05, label: 'EMA alpha' },
+    hysteresis_margin: { widget: 'number', step: 0.05, label: 'Hysteresis margin' },
+    hysteresis_frames: { widget: 'number', step: 1, label: 'Hysteresis frames' },
+    crop_target_size: { widget: 'number', step: 1, label: 'Crop target size (px)' }
+  },
+  frame_sample: {
+    sample_fps: { widget: 'number', step: 0.5, label: 'Sample FPS' }
+  },
+  window: {
+    window_size: { widget: 'number', step: 1, label: 'Window size (frames)' },
+    stride: { widget: 'number', step: 1, label: 'Stride (frames)' }
+  },
+  analyze: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    return_format: { widget: 'select', options: ['clips-v1', 'events-v1', 'raw-text', { value: 'simplified-tags-v1', label: 'Simplified tags (4-axis)' }], label: 'Return format' }
+  },
+  dedup: {
+    key_by: { widget: 'select', options: ['actor_player_id', 'role'], label: 'Key by' }
+  },
+  chunk_segment: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    min_chunk_s: { widget: 'number', step: 1, label: 'Min chunk (s)' },
+    max_chunk_s: { widget: 'number', step: 1, label: 'Max chunk (s)' },
+    rough_fps: { widget: 'number', step: 0.5, label: 'Rough fps' }
+  },
+  chunk_analyze: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    overlap_s: { widget: 'number', step: 1, label: 'Overlap (s)' }
+  }
+};
+
+function numberField(key, label, value, step) {
+  return '<label>' + escHtml(label) + '</label>' +
+    '<input type="number" step="' + step + '" value="' + (value != null ? value : '') + '" onchange="setNodeConfigValue(\'' + key + '\', parseFloat(this.value))">';
+}
+// `options` entries may be a plain string (value === display label, e.g. model
+// ids) or a {value,label} pair when the raw config value isn't a good display
+// label on its own (e.g. return_format's 'simplified-tags-v1').
+function selectField(key, label, value, options) {
+  return '<label>' + escHtml(label) + '</label>' +
+    '<select onchange="setNodeConfigValue(\'' + key + '\', this.value)">' +
+    options.map(o => {
+      const val = (o && typeof o === 'object') ? o.value : o;
+      const disp = (o && typeof o === 'object') ? o.label : o;
+      return '<option value="' + escHtml(val) + '"' + (val === value ? ' selected' : '') + '>' + escHtml(disp) + '</option>';
+    }).join('') +
+    '</select>';
+}
+// Checkbox widget for a real boolean config field (e.g. chunk_segment's
+// analyze_all ablation switch) — distinct from context_chain's bespoke
+// `enabled` checkbox above, which toggles the StageDef.enabled flag, not a
+// config field.
+function booleanField(key, label, value) {
+  return '<label style="display:flex; align-items:center; gap:8px;">' +
+    '<input type="checkbox" style="width:auto;" ' + (value ? 'checked' : '') + ' onchange="setNodeConfigValue(\'' + key + '\', this.checked)"> ' + escHtml(label) +
+    '</label>';
+}
+// Generic fallback for any config key our hint map doesn't (yet) recognize —
+// never silently drops a real backend key just because CONFIG_FIELD_HINTS
+// hasn't been updated for it.
+function genericTextField(key, value) {
+  return '<label>' + escHtml(key) + '</label>' +
+    '<input type="text" value="' + escHtml(value != null ? String(value) : '') + '" onchange="setNodeConfigValue(\'' + key + '\', this.value)">';
+}
+// `thinking` is Optional[Literal["off","low","medium","high"]] = None — the
+// backend treats None identically to "off" (qa_vlm.thinking_config_for), so
+// null/undefined displays as the "Off" tab active.
+function thinkingTabsField(value) {
+  const levels = ['off', 'low', 'medium', 'high'];
+  const active = value || 'off';
+  return '<label>Thinking</label><div class="tabs" style="margin-bottom:0; border-bottom:none;">' +
+    levels.map(l => '<button type="button" class="tab' + (l === active ? ' active' : '') + '" onclick="setNodeConfigValue(\'thinking\', \'' + l + '\'); renderNodeConfigPanel(currentPipelineDef.stages[selectedNodeIndex]);">' + l.charAt(0).toUpperCase() + l.slice(1) + '</button>').join('') +
+    '</div>';
+}
+function agentModeFieldHtml(value) {
+  return '<label>Agent mode</label><div class="tabs" style="margin-bottom:0; border-bottom:none;">' +
+    '<button type="button" class="tab' + (value === 'single' ? ' active' : '') + '" onclick="setAgentMode(\'single\')">Single</button>' +
+    '<button type="button" class="tab' + (value === 'multi' ? ' active' : '') + '" onclick="setAgentMode(\'multi\')">Multi (4&times; calls)</button>' +
+    '</div>';
+}
+
+function setNodeConfigValue(key, value) {
+  if (selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  stage.config[key] = value;
+  renderDag();
+}
+
+// Reuses the same idiom as the single-shot "System instruction / Schema"
+// card (textarea + file-load + char count) but scoped to this node's
+// config.system_instruction, since the global #system-instruction element
+// belongs to the single-shot composer flow, not the Analyze node.
+function nodeSchemaCardHtml(stage) {
+  const text = stage.config.system_instruction || '';
+  const fileName = nodeSchemaFileNames[stage.id];
+  return '<div class="card" style="margin-top:12px; background:var(--bg);">' +
+    '<h2 style="font-size:0.95rem;">System instruction / Schema (this Analyze node)</h2>' +
+    '<textarea rows="5" placeholder="Optional. Paste a system prompt, or load a schema file below." oninput="onNodeSchemaInput(this.value)">' + escHtml(text) + '</textarea>' +
+    '<div class="field-inline" style="margin-top:8px;">' +
+      '<input type="file" accept=".md,.markdown,.json,.txt" onchange="onNodeSchemaFileChange(event)">' +
+      '<button type="button" class="btn btn-sm" onclick="clearNodeSchema()">Clear</button>' +
+    '</div>' +
+    '<div class="selection-badges">' +
+      (fileName ? '<span class="badge badge-neutral" id="node-schema-file-chip">' + escHtml(fileName) + '</span>' : '') +
+      '<span class="badge badge-neutral" id="node-schema-count">' + text.length + ' chars</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function onNodeSchemaInput(value) {
+  if (selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  stage.config.system_instruction = value;
+  delete nodeSchemaFileNames[stage.id];
+  const countEl = document.getElementById('node-schema-count');
+  if (countEl) countEl.textContent = value.length + ' chars';
+  const chipEl = document.getElementById('node-schema-file-chip');
+  if (chipEl) chipEl.style.display = 'none';
+}
+
+function onNodeSchemaFileChange(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file || selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  const reader = new FileReader();
+  reader.onload = () => {
+    stage.config.system_instruction = String(reader.result || '');
+    nodeSchemaFileNames[stage.id] = file.name;
+    renderNodeConfigPanel(stage);
+    logMsg('Loaded schema file for node "' + stage.label + '": ' + file.name, 'log-info');
+  };
+  reader.onerror = () => logMsg('Failed to read schema file: ' + file.name, 'log-err');
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function clearNodeSchema() {
+  if (selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  stage.config.system_instruction = '';
+  delete nodeSchemaFileNames[stage.id];
+  renderNodeConfigPanel(stage);
+}
+
+// Renders node-config inputs bound to the EXACT keys present on the fetched
+// stage.config object (never a hand-maintained field list that could drift
+// from service/pipelines/models.py) — mutates values only via
+// setNodeConfigValue(), never injects a key that wasn't already there.
+// `order` picks a sensible display order for known keys; any key present in
+// stage.config but missing from `order` (future backend field this map
+// hasn't caught up with yet) is still rendered, appended at the end, via the
+// generic text-field fallback — so a real key is never silently dropped.
+function nodeConfigFieldsHtml(stage) {
+  const c = stage.config || {};
+  const order = CONFIG_FIELD_ORDER[stage.type] || Object.keys(c);
+  const hints = CONFIG_FIELD_HINTS[stage.type] || {};
+  const keys = order.filter(k => Object.prototype.hasOwnProperty.call(c, k))
+    .concat(Object.keys(c).filter(k => order.indexOf(k) === -1));
+
+  let html = '';
+
+  // context_chain has NO config fields at all — only the shared StageDef
+  // `enabled` toggle (this node does no work of its own; its enabled flag is
+  // read by the analyze node executor).
+  if (stage.type === 'context_chain') {
+    html += '<label style="display:flex; align-items:center; gap:8px;">' +
+      '<input type="checkbox" style="width:auto;" ' + (stage.enabled ? 'checked' : '') + ' onchange="toggleStageEnabled(selectedNodeIndex)"> Enabled' +
+      '</label>';
+  }
+
+  const isFrameBased = currentPipelineDef && currentPipelineDef.stages.some(s => s.type === 'window');
+
+  keys.forEach(key => {
+    // analyze's agent_mode/thinking/system_instruction get bespoke widgets;
+    // everything else is a generic select/number/text field driven by hints.
+    if (stage.type === 'analyze' && key === 'agent_mode') {
+      html += agentModeFieldHtml(c.agent_mode || 'single');
+      if (c.agent_mode === 'multi') html += '<div class="warn-line" style="margin-top:2px;">Multi-agent = 4&times; Gemini calls per window (3 personas + judge).</div>';
+      return;
+    }
+    if (stage.type === 'analyze' && key === 'thinking') { html += thinkingTabsField(c.thinking); return; }
+    if (stage.type === 'analyze' && key === 'system_instruction') { html += nodeSchemaCardHtml(stage); return; }
+    // chunk_analyze's `thinking` is the same Optional[Literal[...]] shape as
+    // analyze's — reuse the same bespoke tabs widget rather than falling
+    // through to a generic text field.
+    if (stage.type === 'chunk_analyze' && key === 'thinking') { html += thinkingTabsField(c.thinking); return; }
+    // chunk_segment's `analyze_all` is a real boolean (LeCun no-prefilter
+    // ablation switch) — a checkbox, not a select/number/text field.
+    if (stage.type === 'chunk_segment' && key === 'analyze_all') {
+      html += booleanField('analyze_all', 'Analyze ALL chunks (no-prefilter ablation)', c.analyze_all);
+      if (c.analyze_all) html += '<div class="warn-line" style="margin-top:2px;">Forces every chunk worth_analysis=true regardless of reason — a control run, not the production default.</div>';
+      return;
+    }
+
+    const hint = hints[key];
+    if (hint && hint.widget === 'select') {
+      const options = hint.options || NODE_MODELS;
+      html += selectField(key, hint.label || key, c[key], options);
+    } else if (hint && hint.widget === 'number') {
+      html += numberField(key, hint.label || key, c[key], hint.step || 1);
+    } else {
+      html += genericTextField(key, c[key]);
+    }
+
+    if (stage.type === 'analyze' && key === 'return_format' && isFrameBased && c.return_format === 'raw-text') {
+      html += '<div class="warn-line" style="margin-top:2px;">raw-text is not supported on the frame-based (vision-mimic) analyze path — the backend will emit an error event and this run will produce no clips.</div>';
+    }
+    if (stage.type === 'analyze' && key === 'return_format' && isFrameBased && c.return_format === 'events-v1') {
+      const chainStage = currentPipelineDef.stages.find(s => s.type === 'context_chain');
+      if (chainStage && chainStage.enabled) {
+        html += '<div class="warn-line" style="margin-top:2px;">events-v1 does not thread context between windows — context-chain only applies to clips-v1.</div>';
+      }
+    }
+  });
+
+  if (stage.type === 'detect_crop') {
+    html += '<div class="reasoning" style="margin-top:8px;">Upscale is not available in this Gemini-only mimic (fidelity gap — see plan §6); there is no config field for it.</div>';
+  }
+
+  return html || '<p style="color:var(--text-dim); font-size:0.8rem;">No configurable fields for this node type.</p>';
+}
+
+function renderNodeConfigPanel(stage) {
+  const card = document.getElementById('node-config-card');
+  card.style.display = 'block';
+  document.getElementById('node-config-title').textContent = stage.label + ' — config';
+  document.getElementById('node-config-body').innerHTML = nodeConfigFieldsHtml(stage);
+}
+
+function resetNodeToDefaults() {
+  if (selectedNodeIndex == null) return;
+  const defaults = PRODUCTION_DEFAULTS[currentPipelineId];
+  if (!defaults) return;
+  const stageId = currentPipelineDef.stages[selectedNodeIndex].id;
+  const defStage = defaults.stages.find(s => s.id === stageId);
+  if (!defStage) return;
+  currentPipelineDef.stages[selectedNodeIndex] = JSON.parse(JSON.stringify(defStage));
+  renderDag();
+  renderNodeConfigPanel(currentPipelineDef.stages[selectedNodeIndex]);
+  logMsg('Reset node "' + defStage.label + '" to production defaults', 'log-info');
+}
+
+// ---- Global Run scope (top bar) — same MM:SS validation idiom as the
+// single-shot Range scope, but a separate input pair since it drives the
+// pipeline-run flow independent of the composer's own Scope card.
+function computeRunScope() {
+  const rawS = document.getElementById('run-start').value.trim();
+  const rawE = document.getElementById('run-end').value.trim();
+  if (!rawS || !rawE) return { valid: false, reason: 'Enter both run start and end' };
+  const rs = mmssToSec(rawS);
+  if (rs.error) return { valid: false, reason: 'Start: ' + rs.error };
+  const re = mmssToSec(rawE);
+  if (re.error) return { valid: false, reason: 'End: ' + re.error };
+  if (re.value < rs.value) return { valid: false, reason: 'End must be ≥ start' };
+  const beyond = duration > 0 && (rs.value > duration || re.value > duration);
+  return { valid: true, startSec: rs.value, endSec: re.value, warn: beyond ? ('Range extends beyond known video duration (' + secToMmss(duration) + ')') : null };
+}
+
+function updateRunScopeUi() {
+  const scope = computeRunScope();
+  const rs = mmssToSec(document.getElementById('run-start').value.trim());
+  const re = mmssToSec(document.getElementById('run-end').value.trim());
+  const startChip = document.getElementById('run-chip-start');
+  const endChip = document.getElementById('run-chip-end');
+  const deltaChip = document.getElementById('run-chip-delta');
+  startChip.textContent = rs.error ? 'not set' : secToMmss(rs.value);
+  startChip.classList.toggle('badge-dim', !!rs.error);
+  endChip.textContent = re.error ? 'not set' : secToMmss(re.value);
+  endChip.classList.toggle('badge-dim', !!re.error);
+  if (!rs.error && !re.error) {
+    const d = re.value - rs.value;
+    deltaChip.textContent = 'Δ ' + (d < 0 ? '-' : '') + secToMmss(Math.abs(d));
+    deltaChip.className = 'badge ' + (d < 0 ? 'badge-hint' : 'badge-neutral');
+  } else {
+    deltaChip.textContent = 'Δ —';
+    deltaChip.className = 'badge badge-neutral';
+  }
+  const valEl = document.getElementById('run-scope-validation');
+  if (!scope.valid) { valEl.textContent = scope.reason; valEl.className = 'err-line'; }
+  else if (scope.warn) { valEl.textContent = scope.warn; valEl.className = 'warn-line'; }
+  else { valEl.textContent = ''; valEl.className = 'err-line'; }
+  updateRunButtonState();
+}
+
+function useCurrentForRun(which) {
+  if (!ytReady) return;
+  const id = which === 'start' ? 'run-start' : 'run-end';
+  document.getElementById(id).value = secToMmss(Math.floor(currentTime));
+  updateRunScopeUi();
+}
+
+// Run pipeline works for EVERY pipeline, including single-shot: the backend
+// runs single-shot through the exact same /qa/pipeline-run contract (its
+// PipelineDef is just video_window+analyze), so this is a genuinely separate,
+// non-conversational "run the unedited default over a range, see the run
+// view" action — single-shot's own composer/Send flow above is a completely
+// separate code path (POST /qa/vlm-chat) and is untouched by this.
+function updateRunButtonState() {
+  const btn = document.getElementById('btn-run-pipeline');
+  if (!btn) return;
+  const scope = computeRunScope();
+  const reasons = [];
+  if (!currentVideoId) reasons.push('load a video first');
+  if (!scope.valid) reasons.push(scope.reason);
+  if (!currentPipelineDef) reasons.push('pipeline definition not loaded');
+  if (activeRunController) reasons.push('a run is already in progress');
+  btn.disabled = reasons.length > 0;
+  btn.title = reasons.length ? ('Disabled: ' + reasons.join('; ')) : '';
+}
+
+// ---- Run view rendering (persistent, shared by every pipeline)
+function resetRunView() {
+  runState = {
+    status: 'idle', windows: [], dedupedClips: null,
+    plannedFrames: null, plannedWindows: null, plannedCalls: null,
+    startedAt: null, totalMs: null, errors: [], sawRunComplete: false,
+    format: null, dedupApplied: null, dedupSkipReason: null, degradedCounts: null, perStageTiming: null,
+    nativeFps: null, chunkMap: [],
+    // Task 3: raw (possibly-duplicate) normalized rail rows appended live as
+    // window_result/chunk_result/error(chunk_index) events arrive — swapped
+    // out for the real deduped list once run_complete arrives (see
+    // renderDedupRail()).
+    liveEvents: []
+  };
+  stopRunElapsedTimer();
+  const errLine = document.getElementById('run-error-line');
+  if (errLine) errLine.textContent = '';
+  const noteLine = document.getElementById('run-complete-note');
+  if (noteLine) noteLine.textContent = '';
+  renderRunHeader();
+  renderCompactRunStatus();
+  renderChunkMap();
+  renderWindowCards();
+  renderDedupedClips();
+  renderDedupRail();
+}
+
+function startRunElapsedTimer() {
+  stopRunElapsedTimer();
+  runElapsedTimer = setInterval(renderRunElapsed, 250);
+}
+function stopRunElapsedTimer() {
+  if (runElapsedTimer) { clearInterval(runElapsedTimer); runElapsedTimer = null; }
+}
+function renderRunElapsed() {
+  const el = document.getElementById('run-elapsed');
+  const compactEl = document.getElementById('compact-run-elapsed');
+  const label = (!runState || runState.startedAt == null) ? '—' : fmtLatency(performance.now() - runState.startedAt);
+  if (el) el.textContent = label;
+  if (compactEl) compactEl.textContent = label;
+}
+
+// Shared status-dot-class + one-line status text derivation, consumed by
+// BOTH the full run-header-card (renderRunHeader, which also owns the
+// cancel button/error-line/note — untouched) and the NEW compact strip in
+// the rail-shell's sticky left column (renderCompactRunStatus). Single
+// source of truth so the two never drift out of sync.
+function computeRunStatusSummary() {
+  if (!runState || runState.status === 'idle') {
+    return { dotClass: 'status-dot', text: 'Idle — configure a pipeline and hit Run pipeline.' };
+  }
+  if (runState.status === 'running') {
+    const completedWindows = runState.windows.filter(w => w.status === 'complete').length;
+    const totalWindows = runState.plannedWindows != null ? runState.plannedWindows : (runState.windows.length || '?');
+    return {
+      dotClass: 'status-dot working',
+      text: 'Window ' + completedWindows + ' of ' + totalWindows +
+        (runState.plannedCalls != null ? (' · ' + runState.plannedCalls + ' planned Gemini call(s)') : '') +
+        (runState.plannedFrames != null ? (' · ' + runState.plannedFrames + ' sampled frame(s) planned') : '')
+    };
+  }
+  if (runState.status === 'complete') {
+    return {
+      dotClass: 'status-dot connected',
+      text: 'Run complete — ' + (runState.dedupedClips ? runState.dedupedClips.length : 0) + ' clip(s)' +
+        (runState.totalMs != null ? (' · ' + fmtLatency(runState.totalMs) + ' total') : '')
+    };
+  }
+  if (runState.status === 'cancelled') {
+    return {
+      dotClass: 'status-dot error',
+      text: 'Run cancelled — ' + runState.windows.filter(w => w.status === 'complete').length + ' window result(s) retained.'
+    };
+  }
+  // status === 'error'
+  return {
+    dotClass: 'status-dot error',
+    text: 'Run failed' + (runState.errors && runState.errors.length ? ': ' + runState.errors[runState.errors.length - 1].message : '.')
+  };
+}
+
+// Compact strip (rail-shell LEFT column, sticky beside the player) — status
+// dot + one-line text + elapsed ONLY. Deliberately does NOT duplicate the
+// cancel button / err-line / dedup-skip-and-degraded note that the full
+// run-header-card above still owns (CEO decision — this is a glance-strip,
+// not a second control surface).
+function renderCompactRunStatus() {
+  const dot = document.getElementById('compact-run-status-dot');
+  const text = document.getElementById('compact-run-status-text');
+  if (!dot || !text) return;
+  const summary = computeRunStatusSummary();
+  dot.className = summary.dotClass;
+  text.textContent = summary.text;
+}
+
+function renderRunHeader() {
+  const dot = document.getElementById('run-status-dot');
+  const text = document.getElementById('run-status-text');
+  const cancelBtn = document.getElementById('btn-cancel-run');
+  const note = document.getElementById('run-complete-note');
+  if (!dot) return; // canvas not in DOM yet (defensive; always present after initial render)
+  if (!runState) {
+    dot.className = 'status-dot';
+    text.textContent = 'Idle — configure a pipeline and hit Run pipeline.';
+    cancelBtn.style.display = 'none';
+    if (note) note.textContent = '';
+    return;
+  }
+  cancelBtn.style.display = runState.status === 'running' ? 'inline-flex' : 'none';
+  const summary = computeRunStatusSummary();
+  dot.className = summary.dotClass;
+  text.textContent = summary.text;
+  // run_complete carries dedup_applied/dedup_skip_reason/degraded_counts —
+  // surface them plainly rather than only in the Message Log (plan §6: don't
+  // let a dedup no-op or detect-crop degrade go unnoticed).
+  if (note) {
+    const parts = [];
+    if (runState.status === 'complete') {
+      if (runState.dedupApplied === false && runState.dedupSkipReason) parts.push('dedup skipped: ' + runState.dedupSkipReason);
+      if (runState.degradedCounts && Object.keys(runState.degradedCounts).length) {
+        parts.push('degraded frames: ' + Object.entries(runState.degradedCounts).map(([k, v]) => k + '=' + v).join(', '));
+      }
+    }
+    note.textContent = parts.join(' — ');
+  }
+}
+
+// `window` from the backend is 1-based (executors.py enumerate(..., start=1))
+// — used directly as windowIndex, never renumbered. Total window count comes
+// from run_start.planned_windows (there is no per-window total field).
+function findOrCreateWindow(index) {
+  let w = runState.windows.find(w => w.windowIndex === index);
+  if (!w) {
+    w = { windowIndex: index, status: 'running', scope: null, frameIndices: null, frameCount: null, thumbnails: null, clips: null, rawText: null, format: null, contextSummary: null, modelMs: null, expanded: false, errorMessage: null };
+    runState.windows.push(w);
+    runState.windows.sort((a, b) => a.windowIndex - b.windowIndex);
+  }
+  return w;
+}
+
+function toggleWindowExpand(index) {
+  const w = runState && runState.windows.find(w => w.windowIndex === index);
+  if (!w) return;
+  w.expanded = !w.expanded;
+  renderWindowCards();
+}
+
+// Renders the crop thumbnails fed to the analyzer for a window, from the
+// FROZEN `crops` event: {window, frame_indices, thumbnails:[{frame_index,
+// image_b64, degraded}]}. Images are JPEG (executors.py:_thumbnail_b64).
+function renderCropsStrip(thumbnails) {
+  if (!Array.isArray(thumbnails) || !thumbnails.length) return '';
+  const thumbs = thumbnails.map(t => {
+    if (!t.image_b64) return '';
+    const src = 'data:image/jpeg;base64,' + t.image_b64;
+    const label = 'frame ' + t.frame_index + (t.degraded ? (' · ' + t.degraded) : '');
+    const outline = t.degraded ? ' style="outline:2px dashed var(--yellow);"' : '';
+    return '<div class="crop-thumb"><img src="' + src + '"' + outline + ' alt="' + escHtml(label) + '"><div class="crop-thumb-label">' + escHtml(label) + '</div></div>';
+  }).join('');
+  return thumbs ? '<div class="crops-strip">' + thumbs + '</div>' : '';
+}
+
+// video-native window_start: {window, scope:[start_sec,end_sec]} (seconds) —
+// use the existing clickable seek pill. Frame-based window_start: {window,
+// frame_indices, frame_count} — NO native fps travels anywhere in this NDJSON
+// stream, so a wall-clock MM:SS range cannot be derived without fabricating
+// one; show the raw frame-index range as a plain (non-seekable) badge instead.
+function windowRangeLabel(w) {
+  if (Array.isArray(w.scope) && w.scope.length === 2) {
+    return eventPillHtml(secToMmss(w.scope[0]), secToMmss(w.scope[1]));
+  }
+  if (Array.isArray(w.frameIndices) && w.frameIndices.length) {
+    const lo = Math.min.apply(null, w.frameIndices), hi = Math.max.apply(null, w.frameIndices);
+    // frame_indices are REAL source frame numbers; if the run reported native_fps
+    // we can do an ACCURATE frame->seconds conversion (not fabrication) and use
+    // the clickable seek-and-pause pill. Without fps, fall back to a plain badge.
+    const fps = runState && runState.nativeFps;
+    if (fps) return eventPillHtml(secToMmss(lo / fps), secToMmss(hi / fps));
+    return '<span class="badge badge-neutral" title="Frame-based window — native fps unavailable, cannot map frames to wall-clock time">frames ' + lo + '–' + hi + '</span>';
+  }
+  return '<span class="badge badge-neutral">—</span>';
+}
+
+// Adapts an analyze-node clip into the shape renderEventsTable()/eventPillHtml()
+// already expect, covering BOTH frozen response schemas:
+//  - events-v1 (qa_vlm._event_schema): {start,end} are ALREADY MM:SS strings —
+//    passed through verbatim, no adaptation needed.
+//  - clips-v1 (analyzer._build_response_schema): {start_frame,end_frame} are
+//    integer FRAME numbers, not seconds — no fps travels in this stream, so
+//    converting to a real MM:SS time would be fabrication. We label them
+//    "frame N" instead; eventPillHtml() already renders a non-MM:SS string as
+//    a disabled, non-seekable pill (its existing degrade path — no new code
+//    needed there, no crash, no invented time).
+function normalizeClipsToEvents(clips) {
+  return (clips || []).map(c => {
+    let start, end;
+    const fps = runState && runState.nativeFps;
+    if (typeof c.start === 'string' && typeof c.end === 'string') {
+      start = c.start; end = c.end;
+    } else if (c.start_frame != null && c.end_frame != null && fps) {
+      // REAL source frame numbers + real probed fps => accurate MM:SS (clickable pill).
+      start = secToMmss(c.start_frame / fps); end = secToMmss(c.end_frame / fps);
+    } else if (c.start_frame != null && c.end_frame != null) {
+      // No fps in the stream — show frames as a non-seekable label (never fabricate a time).
+      start = 'frame ' + c.start_frame; end = 'frame ' + c.end_frame;
+    } else {
+      start = '—'; end = '—';
+    }
+    return {
+      start, end,
+      label: c.label || c.specific_technique || c.technique || c.action || c.action_category,
+      action_category: c.action_category || c.action,
+      technique: c.technique || c.specific_technique,
+      actor: c.actor || c.actor_player_id || c.role,
+      description: c.description || c.reasoning,
+      confidence: c.confidence
+    };
+  });
+}
+
+function windowCardHtml(w) {
+  const rangeHtml = windowRangeLabel(w);
+  const isErrored = w.status === 'errored';
+  const count = Array.isArray(w.clips) ? w.clips.length : (w.status === 'running' ? '…' : 0);
+  const timing = w.modelMs != null ? fmtLatency(w.modelMs) : '';
+  const cropsHtml = renderCropsStrip(w.thumbnails);
+  let body = '';
+  if (isErrored) {
+    // PASS-2 outage for this chunk (R1 fix) — never rendered as a clean
+    // "0 event(s)" result. Always visible (not gated on w.expanded) so a
+    // degraded chunk can't hide behind a collapsed card.
+    body += '<div class="err-line" style="margin:8px 12px;">chunk failed: ' + escHtml(w.errorMessage || 'PASS-2 call failed') + '</div>';
+  }
+  if (w.expanded) {
+    if (w.format === 'raw-text') {
+      body += w.rawText ? ('<pre>' + escHtml(w.rawText) + '</pre>') : '<p style="color:var(--text-dim); font-size:0.8rem;">' + (w.status === 'running' ? 'Running…' : 'No raw text returned.') + '</p>';
+    } else if (w.format === 'simplified-tags-v1') {
+      body += (Array.isArray(w.clips) && w.clips.length)
+        ? renderSimplifiedTagsTable(w.clips)
+        : '<p style="color:var(--text-dim); font-size:0.8rem;">' + (w.status === 'running' ? 'Running…' : 'No tags in this window.') + '</p>';
+    } else if (w.format === 'simplified-tags-time-v1') {
+      body += (Array.isArray(w.clips) && w.clips.length)
+        ? renderTimeTagsTable(w.clips)
+        : '<p style="color:var(--text-dim); font-size:0.8rem;">' + (w.status === 'running' ? 'Running…' : 'No tags in this chunk.') + '</p>';
+    } else if (Array.isArray(w.clips) && w.clips.length) {
+      body += renderEventsTable(normalizeClipsToEvents(w.clips));
+    } else {
+      body += '<p style="color:var(--text-dim); font-size:0.8rem;">' + (w.status === 'running' ? 'Running…' : 'No clips in this window.') + '</p>';
+    }
+    if (w.contextSummary) body += '<div class="reasoning">context: ' + escHtml(w.contextSummary) + '</div>';
+    if (cropsHtml) body += cropsHtml;
+  }
+  return '<div class="card window-card' + (isErrored ? ' window-card-errored' : '') + '"' +
+      (isErrored ? ' style="outline:2px solid var(--red);"' : '') + '>' +
+    '<div class="window-card-header" onclick="toggleWindowExpand(' + w.windowIndex + ')">' +
+      '<span class="badge badge-neutral">Window ' + w.windowIndex + (runState.plannedWindows ? ('/' + runState.plannedWindows) : '') + '</span>' +
+      '<span onclick="event.stopPropagation()">' + rangeHtml + '</span>' +
+      (isErrored
+        ? '<span class="badge badge-b">ERRORED</span>'
+        : '<span class="badge badge-neutral">' + count + ' event(s)</span>') +
+      (timing ? '<span class="badge badge-neutral">' + timing + '</span>' : '') +
+      '<span class="chevron">' + (w.expanded ? '▾' : '▸') + '</span>' +
+    '</div>' +
+    body +
+  '</div>';
+}
+
+function renderWindowCards() {
+  const host = document.getElementById('window-cards-host');
+  if (!host) return;
+  if (!runState || !runState.windows.length) { host.innerHTML = ''; return; }
+  host.innerHTML = runState.windows.map(windowCardHtml).join('');
+}
+
+function renderDedupedClips() {
+  const card = document.getElementById('deduped-card');
+  if (!card) return;
+  if (!runState || !Array.isArray(runState.dedupedClips)) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  if (runState.format === 'simplified-tags-v1') {
+    document.getElementById('deduped-body').innerHTML = runState.dedupedClips.length
+      ? renderSimplifiedTagsTable(runState.dedupedClips)
+      : '<p style="color:var(--text-dim); font-size:0.8rem;">No tags after dedup.</p>';
+    return;
+  }
+  if (runState.format === 'simplified-tags-time-v1') {
+    document.getElementById('deduped-body').innerHTML = runState.dedupedClips.length
+      ? renderTimeTagsTable(runState.dedupedClips)
+      : '<p style="color:var(--text-dim); font-size:0.8rem;">No tags after dedup.</p>';
+    return;
+  }
+  const events = normalizeClipsToEvents(runState.dedupedClips);
+  document.getElementById('deduped-body').innerHTML = events.length
+    ? renderEventsTable(events)
+    : '<p style="color:var(--text-dim); font-size:0.8rem;">No clips after dedup.</p>';
+}
+
+// ============================================================
+// Task 3 — Deduped Events rail: one normalized row shape funneling all 5
+// response formats (events-v1, clips-v1, simplified-tags-v1 frame-keyed/
+// fps-gated, simplified-tags-time-v1 seconds-keyed) into an identical
+// 2-line row (time pill + bold primary label + actor chip + confidence //
+// position/outcome chips + specific_technique_guess caption). The rail is a
+// click-to-seek INDEX over the SAME data the full detail tables
+// (renderTimeTagsTable/renderSimplifiedTagsTable/renderEventsTable, still
+// rendered full-width below as the audit surface) already show — it does
+// not introduce a new data source.
+// ============================================================
+
+// Normalizes ONE clip/tag item + its `format` string into a single row
+// shape. Never fabricates a time: an item with no derivable real seconds
+// (frame-keyed with no native_fps yet) comes back `seekable:false` with a
+// plain informative `timeLabel` instead (e.g. "frame 45" or "—") — the
+// caller (railRowHtml) renders that as a non-interactive static row, exactly
+// the same no-fake-affordance discipline as eventPillHtml()'s existing
+// disabled-pill fallback.
+function toRailRow(item, format) {
+  item = item || {};
+  if (format === 'simplified-tags-time-v1') {
+    const seekable = item.start_s != null && item.end_s != null;
+    return {
+      seekable,
+      startSec: seekable ? item.start_s : null,
+      endSec: seekable ? item.end_s : null,
+      timeLabel: seekable ? (secToMmss(item.start_s) + ' → ' + secToMmss(item.end_s)) : '—',
+      primaryLabel: item.action_class || item.specific_technique_guess || '—',
+      actorLabel: item.actor || null,
+      giColor: item.actor_gi_color || null,
+      confidence: item.confidence != null ? item.confidence : null,
+      positionLabel: item.position || null,
+      outcome: item.outcome || null,
+      captionText: item.specific_technique_guess || null,
+      errored: false
+    };
+  }
+  if (format === 'simplified-tags-v1') {
+    // Frame-keyed — same fps-gate discipline as simplifiedTagTimeHtml(): only
+    // a REAL probed native_fps (already arrived via window_start/run_complete)
+    // may convert frame numbers to wall-clock seconds; otherwise show the raw
+    // frame number as a non-seekable label, never a fabricated time.
+    const fps = runState && runState.nativeFps;
+    const seekable = item.start_frame != null && item.end_frame != null && !!fps;
+    const timeLabel = seekable
+      ? (secToMmss(item.start_frame / fps) + ' → ' + secToMmss(item.end_frame / fps))
+      : (item.start_frame != null ? ('frame ' + item.start_frame) : '—');
+    return {
+      seekable,
+      startSec: seekable ? item.start_frame / fps : null,
+      endSec: seekable ? item.end_frame / fps : null,
+      timeLabel,
+      primaryLabel: item.action_class || item.specific_technique_guess || '—',
+      actorLabel: item.actor || null,
+      giColor: null,
+      confidence: item.confidence != null ? item.confidence : null,
+      positionLabel: item.position || null,
+      outcome: item.outcome || null,
+      captionText: item.specific_technique_guess || null,
+      errored: false
+    };
+  }
+  // clips-v1 / events-v1 — reuse normalizeClipsToEvents()'s existing
+  // per-item adaptation (handles MM:SS-string start/end, start_frame/
+  // end_frame via native_fps, or the non-seekable "frame N"/"—" fallback)
+  // rather than re-deriving that logic a second time.
+  const ev = normalizeClipsToEvents([item])[0];
+  const parsedStart = mmssToSec(ev.start);
+  const parsedEnd = mmssToSec(ev.end);
+  const seekable = !parsedStart.error && !parsedEnd.error;
+  return {
+    seekable,
+    startSec: seekable ? parsedStart.value : null,
+    endSec: seekable ? parsedEnd.value : null,
+    timeLabel: seekable ? (ev.start + ' → ' + ev.end) : String(ev.start),
+    primaryLabel: ev.label || '—',
+    actorLabel: ev.actor || null,
+    giColor: null,
+    confidence: ev.confidence != null ? ev.confidence : null,
+    positionLabel: null,
+    outcome: null,
+    captionText: ev.description || null,
+    errored: false
+  };
+}
+
+// Renders one normalized row. Seekable rows are a REAL <button> (so they are
+// keyboard-focusable/activatable) wrapping a NON-interactive `.seek-pill`
+// <span> (never a nested <button> — invalid HTML and would double the click
+// target). Non-seekable rows are a plain, non-focusable <div class="rail-row-static">
+// — no fake clickability.
+function railRowHtml(row) {
+  const timePillClass = 'seek-pill' + (row.seekable ? '' : ' disabled');
+  const timeHtml = '<span class="' + timePillClass + '">' + escHtml(row.timeLabel) + '</span>';
+  const actorHtml = row.actorLabel
+    ? ('<span class="badge badge-neutral">' + escHtml(row.actorLabel) + (row.giColor ? (' ' + escHtml(row.giColor)) : '') + '</span>')
+    : '';
+  const confHtml = row.confidence != null ? ('<span class="obj-chip-conf">' + Math.round(row.confidence * 100) + '%</span>') : '';
+  const positionHtml = row.positionLabel ? ('<span class="badge badge-neutral">' + escHtml(row.positionLabel) + '</span>') : '';
+  const outcomeHtml = row.outcome ? outcomeBadgeHtml(row.outcome) : '';
+  const captionHtml = row.captionText ? ('<div class="rail-row-caption">' + escHtml(row.captionText) + '</div>') : '';
+
+  const line1 = '<div class="rail-row-line1">' + timeHtml +
+    '<span class="rail-row-label">' + escHtml(row.primaryLabel || '—') + '</span>' +
+    actorHtml + confHtml + '</div>';
+  const line2Chips = [positionHtml, outcomeHtml].filter(Boolean).join(' ');
+  const line2 = (line2Chips || captionHtml) ? ('<div class="rail-row-line2">' + line2Chips + captionHtml + '</div>') : '';
+  const body = line1 + line2;
+  const erroredCls = row.errored ? ' rail-row-errored' : '';
+
+  if (!row.seekable) {
+    return '<div class="rail-row-static' + erroredCls + '">' + body + '</div>';
+  }
+  return '<button type="button" class="rail-row' + erroredCls + '" onclick="handleRailRowClick(' +
+    row.startSec + ', ' + row.endSec + ', this)">' + body + '</button>';
+}
+
+// Click = seek-and-play-through-then-snap-pause (CEO decision): reuses the
+// EXISTING handlePillClick(startSec,endSec,el) unchanged — no new seek path
+// — then toggles `.rail-row.active` on the clicked row (clearActivePill(),
+// called internally by handlePillClick, already clears any PRIOR
+// .rail-row.active/.seek-pill.active before this runs).
+function handleRailRowClick(startSec, endSec, el) {
+  handlePillClick(startSec, endSec, null);
+  if (el) el.classList.add('active');
+}
+
+function isRailNearBottom(listEl) {
+  const threshold = 48; // px slack — "already near bottom" doesn't require pixel-exact
+  return (listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight) <= threshold;
+}
+
+// Renders the rail. Source of truth:
+//  - Before run_complete: `runState.liveEvents` (raw normalized rows pushed
+//    live as window_result/chunk_result/error(chunk_index) events arrive —
+//    "may include duplicates until complete", per the include-if-clean
+//    live-append spec; explicitly noted in the UI).
+//  - After run_complete: the REAL deduped list (`runState.dedupedClips` +
+//    `runState.format`) — swaps wholesale, never merges with the raw list.
+// Never force-scrolls: only auto-scrolls to the new bottom if the list was
+// ALREADY near its bottom before this render (never yanks a user who has
+// scrolled up to review an earlier row).
+function renderDedupRail() {
+  const listEl = document.getElementById('dedup-rail-list');
+  if (!listEl) return;
+  const wasNearBottom = listEl.scrollHeight === 0 || isRailNearBottom(listEl);
+
+  let rowsHtml = [];
+  let liveNoteHtml = '';
+  if (runState && runState.sawRunComplete && Array.isArray(runState.dedupedClips)) {
+    rowsHtml = runState.dedupedClips.map(c => railRowHtml(toRailRow(c, runState.format)));
+  } else if (runState && Array.isArray(runState.liveEvents) && runState.liveEvents.length) {
+    rowsHtml = runState.liveEvents.map(railRowHtml);
+    liveNoteHtml = '<div class="rail-live-note">Live — raw results, may include duplicates until the run completes.</div>';
+  }
+
+  if (!rowsHtml.length) {
+    listEl.innerHTML = '<div class="rail-empty">No events yet — run a pipeline.</div>';
+    return;
+  }
+  listEl.innerHTML = liveNoteHtml + rowsHtml.join('');
+  if (wasNearBottom) listEl.scrollTop = listEl.scrollHeight;
+}
+
+// ---- NDJSON stream consumer (real backend path)
+async function consumeNdjsonStream(bodyStream, onEvent) {
+  const reader = bodyStream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf('\n')) !== -1) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (!line) continue;
+      dispatchNdjsonLine(line, onEvent);
+    }
+  }
+  const rest = buffer.trim();
+  if (rest) dispatchNdjsonLine(rest, onEvent);
+}
+
+function dispatchNdjsonLine(line, onEvent) {
+  let evt;
+  try { evt = JSON.parse(line); } catch (e) {
+    logMsg('Malformed NDJSON line (skipped): ' + line, 'log-err');
+    return;
+  }
+  onEvent(evt);
+}
+
+// ---- Event dispatch (shared by the live stream and the mock drip)
+// Dispatch table for the FROZEN NDJSON contract (service/pipelines/executors.py
+// + service/routes/qa_pipeline.py — reconciled 2026-07-03). A run does NOT
+// abort on one bad frame/window ('error' is advisory, not terminal) — keep
+// consuming until 'run_complete' arrives (or the stream itself ends/aborts).
+function handlePipelineEvent(evt) {
+  if (!runState) resetRunView();
+  switch (evt.type) {
+    case 'run_start':
+      runState.plannedFrames = evt.planned_frames;
+      runState.plannedWindows = evt.planned_windows;
+      runState.plannedCalls = evt.planned_gemini_calls;
+      logMsg('run_start: ' + JSON.stringify(evt), 'log-in');
+      break;
+    case 'stage_start':
+      logMsg('stage_start: ' + evt.stage_id + ' (' + evt.stage_type + ')' + (evt.skipped ? ' [skipped: disabled]' : ''), 'log-in');
+      break;
+    case 'progress':
+      logMsg('progress: ' + evt.stage_id + ': ' + evt.message +
+        (evt.frame_index != null ? (' (frame ' + evt.frame_index + (evt.degraded ? (', ' + evt.degraded) : '') + ')') : ''), 'log-in');
+      break;
+    case 'stage_complete':
+      logMsg('stage_complete: ' + evt.stage_id + (evt.skipped ? ' [skipped]' : ' ' + timingLine(evt.timing || {})), 'log-in');
+      break;
+    case 'crops': { // dedicated event, once per window, right before window_start
+      const w = findOrCreateWindow(evt.window);
+      w.thumbnails = evt.thumbnails || [];
+      break;
+    }
+    case 'chunk_map': // chunk-segment-tags PASS 1 — the full segmentation map, own distinct table
+      runState.chunkMap = evt.chunks || [];
+      break;
+    case 'chunk_start': { // chunk-segment-tags PASS 2 — reuses the generic per-unit card plumbing
+      const w = findOrCreateWindow(evt.chunk_index);
+      w.status = 'running';
+      if (Array.isArray(evt.scope)) w.scope = evt.scope;
+      w.reason = evt.reason || null;
+      break;
+    }
+    case 'chunk_result': {
+      const w = findOrCreateWindow(evt.chunk_index);
+      w.format = evt.format || null;
+      w.clips = evt.clips || [];
+      w.contextSummary = evt.context_summary || null;
+      w.modelMs = evt.timing && evt.timing.model_ms;
+      w.status = 'complete';
+      // Task 3 live-append: raw normalized rows, may include dupes until
+      // run_complete swaps to the real deduped list.
+      if (Array.isArray(evt.clips)) {
+        const fmt = evt.format || 'simplified-tags-time-v1';
+        runState.liveEvents.push(...evt.clips.map(c => toRailRow(c, fmt)));
+      }
+      break;
+    }
+    case 'window_start': {
+      // frame-based: {window, frame_indices, frame_count}; video-native: {window, scope:[start,end]}.
+      const w = findOrCreateWindow(evt.window);
+      w.status = 'running';
+      if (Array.isArray(evt.scope)) w.scope = evt.scope;
+      if (Array.isArray(evt.frame_indices)) { w.frameIndices = evt.frame_indices; w.frameCount = evt.frame_count; }
+      if (evt.native_fps) runState.nativeFps = evt.native_fps;
+      break;
+    }
+    case 'window_result': {
+      const w = findOrCreateWindow(evt.window);
+      w.format = evt.format || null;
+      if (evt.format === 'raw-text') { w.rawText = evt.raw_text || ''; w.clips = null; }
+      else { w.clips = evt.clips || []; w.rawText = null; }
+      w.contextSummary = evt.context_summary || null;
+      w.modelMs = evt.timing && evt.timing.model_ms;
+      w.status = 'complete';
+      // Task 3 live-append (skipped for raw-text — nothing structured to
+      // normalize into a row; the rail simply stays at whatever it already
+      // had for that run, no crash, no fabricated row).
+      if (evt.format && evt.format !== 'raw-text' && Array.isArray(evt.clips)) {
+        runState.liveEvents.push(...evt.clips.map(c => toRailRow(c, evt.format)));
+      }
+      break;
+    }
+    case 'run_complete':
+      runState.sawRunComplete = true;
+      runState.dedupedClips = evt.clips || [];
+      runState.format = evt.format || null;
+      if (evt.native_fps) runState.nativeFps = evt.native_fps;
+      runState.dedupApplied = evt.dedup_applied != null ? evt.dedup_applied : null;
+      runState.dedupSkipReason = evt.dedup_skip_reason || null;
+      runState.degradedCounts = evt.degraded_counts || null;
+      runState.perStageTiming = evt.per_stage_timing || null;
+      runState.totalMs = evt.timing && evt.timing.total_ms;
+      break;
+    case 'error':
+      // Advisory, not fatal — the run loop keeps going past one bad frame/window
+      // (frame- and window-level try/except live server-side in executors.py).
+      runState.errors.push({ stageId: evt.stage_id || null, message: evt.message });
+      logMsg('ERROR' + (evt.stage_id ? (' [' + evt.stage_id + ']') : '') + ': ' + evt.message, 'log-err');
+      { const el = document.getElementById('run-error-line'); if (el) { el.textContent = (evt.stage_id ? (evt.stage_id + ': ') : '') + evt.message; el.className = 'err-line'; } }
+      // chunk_analyze (R1 fix) attaches a chunk_index to a PASS-2 outage so the
+      // per-chunk card that already exists (from chunk_start) can be marked
+      // ERRORED instead of silently rendering as "0 event(s)" once the loop
+      // moves on to the next chunk without ever sending a chunk_result for
+      // this one — never let a real outage look identical to a clean-empty
+      // chunk in the per-window UI.
+      if (evt.chunk_index != null) {
+        const w = findOrCreateWindow(evt.chunk_index);
+        w.status = 'errored';
+        w.errorMessage = evt.message || 'PASS-2 call failed';
+        // Task 3 errored-row rail state: reuse the SAME chunk_index outage
+        // handling above — a seekable RED row at the failed chunk's known
+        // scope (already captured from the earlier chunk_start event) so QA
+        // can jump straight to the dead spot instead of hunting for it in
+        // the per-window cards below.
+        if (Array.isArray(w.scope) && w.scope.length === 2) {
+          runState.liveEvents.push({
+            seekable: true, startSec: w.scope[0], endSec: w.scope[1],
+            timeLabel: secToMmss(w.scope[0]) + ' → ' + secToMmss(w.scope[1]),
+            primaryLabel: 'Chunk ' + evt.chunk_index + ' failed',
+            actorLabel: null, giColor: null, confidence: null,
+            positionLabel: null, outcome: null,
+            captionText: w.errorMessage, errored: true
+          });
+        }
+      }
+      break;
+    default:
+      logMsg('Unknown pipeline event type: ' + evt.type, 'log-err');
+  }
+  renderRunHeader();
+  renderCompactRunStatus();
+  renderChunkMap();
+  renderWindowCards();
+  renderDedupedClips();
+  renderDedupRail();
+}
+
+// ---- Mock NDJSON drip (?mock=1) — drives the ENTIRE run view offline,
+// emitting the SAME frozen event field names as the real backend so this
+// mock stream and the live consumeNdjsonStream() path share one dispatcher
+// (handlePipelineEvent) with zero shape branching.
+function enabledStages(def) { return def.stages.filter(s => s.enabled); }
+
+function mockThumbnailsForWindow(frameIndices) {
+  return frameIndices.map((fi, k) => ({ frame_index: fi, image_b64: mockFrameDataB64(), degraded: (k === 1) ? 'single_athlete' : null }));
+}
+
+// `windowStartFrame` is a purely-mock internal number (assumed 30fps) used
+// only to synthesize self-consistent canned start_frame/end_frame values for
+// the clips-v1 shape — same category as mockLatencyMs()/mockEventResponse()
+// elsewhere in this file: clearly-labeled demo data, not derived from a real
+// video.
+function mockClipsForWindow(returnFormat, windowStartSec, windowStartFrame, isMulti) {
+  if (returnFormat === 'events-v1') {
+    const mk = (offset, label, cat, tech, actor, desc, conf) => ({
+      start: secToMmss(windowStartSec + offset), end: secToMmss(windowStartSec + offset + 3),
+      label, action_category: cat, technique: tech, actor, description: desc, confidence: conf
+    });
+    const base = [
+      mk(2, 'Takedown attempt', 'takedown', 'single_leg', 'A', 'Mock: athlete A shoots for a single leg.', 0.8),
+      mk(10, 'Submission attempt', 'submission_attempt', 'armbar', 'B', 'Mock: athlete B attacks with an armbar.', 0.6)
+    ];
+    if (isMulti) base.push(mk(16, 'Guard pass', 'guard_pass', 'knee_cut_pass', 'A', 'Mock (multi-agent judge): athlete A slices the guard.', 0.7));
+    return base;
+  }
+  if (returnFormat === 'simplified-tags-v1') {
+    // 4-axis simplified tagging — start_frame/end_frame (frame-based, like
+    // clips-v1), position/actor/action_class/outcome enums + an ungated
+    // free-text specific_technique_guess. NO action/technique/
+    // specific_technique fields (frozen contract — see BJJ_TAXONOMY_SIMPLIFIED_
+    // GEMINI_TAGGING.md).
+    const mk = (offsetSec, position, actor, action_class, outcome, guess, conf) => ({
+      start_frame: windowStartFrame + Math.round(offsetSec * 30),
+      end_frame: windowStartFrame + Math.round((offsetSec + 3) * 30),
+      position, actor, action_class, outcome,
+      specific_technique_guess: guess, confidence: conf
+    });
+    const base = [
+      mk(2, 'standing', 'A', 'takedown_attempt', 'unsuccessful', 'possibly a single leg', 0.75),
+      mk(10, 'mount', 'B', 'submission_arm_lock', 'successful', 'looked like a straight armbar', 0.68)
+    ];
+    if (isMulti) base.push(mk(16, 'side_control', 'A', 'guard_pass', 'unclear', null, 0.55));
+    return base;
+  }
+  // clips-v1 (analyzer._build_response_schema) — start_frame/end_frame, action/
+  // technique/specific_technique, actor_player_id, reasoning.
+  const mk = (offsetSec, action, technique, actorId, conf) => ({
+    start_frame: windowStartFrame + Math.round(offsetSec * 30),
+    end_frame: windowStartFrame + Math.round((offsetSec + 3) * 30),
+    action, technique, specific_technique: technique.replace(/_/g, ' '),
+    actor_player_id: actorId, reasoning: 'Mock (' + action + '/' + technique + ').', confidence: conf
+  });
+  const base = [mk(2, 'takedown', 'single_leg', 'A', 0.8), mk(10, 'submission_attempt', 'armbar', 'B', 0.6)];
+  if (isMulti) base.push(mk(16, 'guard_pass', 'knee_cut_pass', 'A', 0.7));
+  return base;
+}
+
+// Mirrors the Brooks R6 key_by fix (pipeline.deduplicate_clips bucketed by
+// actor_player_id, not role) — good-enough canned collapse, real dedup is
+// backend-owned (service/pipelines/executors.py:dedup_node).
+function mockDedup(clips, keyBy) {
+  const seen = new Map();
+  clips.forEach(c => {
+    const key = ((keyBy === 'role' ? c.role : c.actor_player_id) || 'unknown') + '|' + (c.technique || c.action || '');
+    seen.set(key, c);
+  });
+  const list = Array.from(seen.values());
+  list.sort((a, b) => (a.start_frame != null ? a.start_frame : 0) - (b.start_frame != null ? b.start_frame : 0));
+  return list;
+}
+
+// ---- Mock chunk-segment-tags run — a SEPARATE NDJSON vocabulary
+// (chunk_map/chunk_start/chunk_result, not window_start/window_result)
+// mirroring the real backend's dedicated event types for this pipeline (see
+// service/pipelines/executors.py:chunk_segment_node/chunk_analyze_node).
+// Reuses the generic per-unit card plumbing (findOrCreateWindow/
+// renderWindowCards) via chunk_start/chunk_result, same as the real backend's
+// frontend consumption path.
+function mockChunkListForScope(startSec, endSec) {
+  const dur = Math.max(1, endSec - startSec);
+  // 5 illustrative chunks spanning the scope — 2 of 5 are match_action
+  // (worth analyzing), matching the "skip broadcast filler, never skip live
+  // mat time" rule with a mix of every kept-but-not-analyzed reason too.
+  const specs = [
+    { frac0: 0.00, frac1: 0.08, reason: 'pre_match' },
+    { frac0: 0.08, frac1: 0.45, reason: 'match_action' },
+    { frac0: 0.45, frac1: 0.55, reason: 'restart_reset' },
+    { frac0: 0.55, frac1: 0.90, reason: 'match_action' },
+    { frac0: 0.90, frac1: 1.00, reason: 'broadcast' }
+  ];
+  return specs.map((s, i) => {
+    const start_s = startSec + Math.round(s.frac0 * dur);
+    const end_s = startSec + Math.round(s.frac1 * dur);
+    return { index: i + 1, start_s, end_s, reason: s.reason, worth_analysis: s.reason === 'match_action', adjustment: null };
+  }).filter(c => c.end_s > c.start_s);
+}
+
+function mockTimeTagsForChunk(chunk) {
+  const dur = chunk.end_s - chunk.start_s;
+  const mk = (frac, position, actor, action_class, outcome, guess, conf, gi) => ({
+    start_s: chunk.start_s + Math.round(frac * dur),
+    end_s: chunk.start_s + Math.min(dur, Math.round(frac * dur) + 3),
+    position, actor, action_class, outcome, actor_gi_color: gi || null,
+    specific_technique_guess: guess, confidence: conf
+  });
+  return [
+    mk(0.15, 'standing', 'top', 'takedown_attempt', 'unsuccessful', 'possibly a single leg', 0.75, 'white'),
+    mk(0.55, 'mount', 'bottom', 'submission_arm_lock', 'successful', 'looked like a straight armbar', 0.68, 'blue')
+  ];
+}
+
+// Illustrative mock merge only — real merge logic is backend-owned
+// (service/pipelines/time_dedup.py: time-IoU + exact action_class+actor
+// identity, keep-higher-confidence).
+function mockTimeDedup(clips) {
+  const buckets = new Map();
+  clips.forEach(c => {
+    const key = (c.action_class || '') + '|' + (c.actor || '');
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(c);
+  });
+  const out = [];
+  buckets.forEach(list => {
+    list.sort((a, b) => a.start_s - b.start_s);
+    const merged = [Object.assign({}, list[0])];
+    for (let i = 1; i < list.length; i++) {
+      const cur = merged[merged.length - 1];
+      const nxt = list[i];
+      const overlap = Math.min(cur.end_s, nxt.end_s) - Math.max(cur.start_s, nxt.start_s);
+      if (overlap > 0) {
+        const winner = (nxt.confidence || 0) > (cur.confidence || 0) ? nxt : cur;
+        merged[merged.length - 1] = Object.assign({}, winner, { start_s: Math.min(cur.start_s, nxt.start_s), end_s: Math.max(cur.end_s, nxt.end_s) });
+      } else {
+        merged.push(Object.assign({}, nxt));
+      }
+    }
+    out.push(...merged);
+  });
+  out.sort((a, b) => a.start_s - b.start_s);
+  return out;
+}
+
+async function mockChunkSegmentTagsStream(body, signal, onEvent) {
+  const def = body.pipeline;
+  const stageByType = {};
+  def.stages.forEach(s => { stageByType[s.type] = s; });
+  const csCfg = stageByType.chunk_segment.config;
+  const caCfg = stageByType.chunk_analyze.config;
+  const chainEnabled = !!(stageByType.context_chain && stageByType.context_chain.enabled);
+  const hasDedup = !!(stageByType.dedup && stageByType.dedup.enabled);
+
+  const startSec = body.scope.start_sec, endSec = body.scope.end_sec;
+  const dur = Math.max(1, endSec - startSec);
+  const minChunkS = csCfg.min_chunk_s || 5;
+  const plannedWindows = Math.max(1, Math.ceil(dur / minChunkS));
+  const plannedCalls = 1 + plannedWindows;
+
+  const emit = (evt, delayMs) => sleepAbortable(delayMs, signal).then(() => onEvent(evt));
+
+  await emit({ type: 'run_start', pipeline_id: def.id, planned_frames: 0, planned_windows: plannedWindows, planned_gemini_calls: plannedCalls }, 150);
+
+  let chunkMap = mockChunkListForScope(startSec, endSec);
+  if (csCfg.analyze_all) chunkMap = chunkMap.map(c => Object.assign({}, c, { worth_analysis: true }));
+
+  let allClips = [];
+  for (const stage of def.stages) {
+    if (!stage.enabled) {
+      await emit({ type: 'stage_start', stage_id: stage.id, stage_type: stage.type, skipped: true }, 60);
+      await emit({ type: 'stage_complete', stage_id: stage.id, skipped: true, timing: { stage_ms: 0 } }, 60);
+      continue;
+    }
+    await emit({ type: 'stage_start', stage_id: stage.id, stage_type: stage.type, skipped: false }, 120);
+
+    if (stage.type === 'chunk_segment') {
+      await emit({ type: 'chunk_map', chunks: chunkMap }, 400);
+    }
+
+    if (stage.type === 'chunk_analyze') {
+      let context = 'Start of match.';
+      // Task 3 mock-only errored-row exercise: deterministically fail the
+      // LAST worthy chunk (only when there's more than one, so a mock run
+      // never becomes all-failure) — mirrors a real PASS-2 Gemini/transport
+      // outage (executors.py's chunk_analyze_node error branch) so ?mock=1
+      // drives the deduped-events rail's errored-row state too, not just its
+      // normal seekable rows.
+      const worthyIndices = chunkMap.filter(c => c.worth_analysis).map(c => c.index);
+      const mockFailChunkIndex = worthyIndices.length > 1 ? worthyIndices[worthyIndices.length - 1] : null;
+      for (const chunk of chunkMap) {
+        if (!chunk.worth_analysis) {
+          await emit({ type: 'progress', stage_id: 'chunk_analyze', message: 'chunk ' + chunk.index + ' skipped (reason=' + chunk.reason + ')', chunk_index: chunk.index, reason: chunk.reason, skipped_chunk: true }, 60);
+          continue;
+        }
+        const effectiveStart = Math.max(startSec, chunk.start_s - (caCfg.overlap_s != null ? caCfg.overlap_s : 5));
+        await emit({ type: 'chunk_start', chunk_index: chunk.index, scope: [effectiveStart, chunk.end_s], reason: chunk.reason }, 200);
+        if (chunk.index === mockFailChunkIndex) {
+          await emit({ type: 'error', stage_id: 'chunk_analyze', message: 'Mock (?mock=1): simulated PASS-2 Gemini/transport outage for this chunk.', chunk_index: chunk.index }, 400);
+          continue;
+        }
+        const clips = mockTimeTagsForChunk(chunk);
+        allClips = allClips.concat(clips);
+        context = chainEnabled ? ('Mock chained context after chunk ' + chunk.index + '.') : 'Start of match.';
+        await emit({ type: 'chunk_result', chunk_index: chunk.index, format: 'simplified-tags-time-v1', clips, context_summary: chainEnabled ? context : null, timing: { model_ms: 700 + Math.round(Math.random() * 500) } }, 500);
+      }
+    }
+
+    await emit({ type: 'stage_complete', stage_id: stage.id, skipped: false, timing: { stage_ms: 150 + Math.round(Math.random() * 250) } }, 180);
+  }
+
+  let finalClips = allClips;
+  let dedupApplied = false, dedupSkipReason = null;
+  if (hasDedup) {
+    finalClips = mockTimeDedup(allClips);
+    dedupApplied = true;
+  } else {
+    dedupSkipReason = 'stage disabled';
+  }
+
+  await emit({
+    type: 'run_complete',
+    clips: finalClips,
+    format: 'simplified-tags-time-v1',
+    dedup_applied: dedupApplied,
+    dedup_skip_reason: dedupSkipReason,
+    degraded_counts: {},
+    per_stage_timing: Object.fromEntries(def.stages.map(s => [s.id, s.enabled ? (150 + Math.round(Math.random() * 250)) : 0])),
+    timing: { total_ms: 3200 + Math.round(Math.random() * 400) }
+    // Deliberately NO native_fps key here — this pipeline never samples
+    // frames; ctx.native_fps stays None end-to-end on the real backend too.
+  }, 150);
+}
+
+async function mockPipelineRunStream(body, signal, onEvent) {
+  const def = body.pipeline;
+  const stageByType = {};
+  def.stages.forEach(s => { stageByType[s.type] = s; });
+  if (stageByType.chunk_segment) return mockChunkSegmentTagsStream(body, signal, onEvent);
+  const analyzeStage = stageByType.analyze;
+  const isMulti = !!(analyzeStage && analyzeStage.config.agent_mode === 'multi');
+  const isFrameBased = !!stageByType.window;
+  const hasDetectCrop = !!(stageByType.detect_crop && stageByType.detect_crop.enabled);
+  const hasDedup = !!(stageByType.dedup && stageByType.dedup.enabled);
+  const chainEnabled = !!(stageByType.context_chain && stageByType.context_chain.enabled);
+  const returnFormat = analyzeStage ? analyzeStage.config.return_format : 'events-v1';
+  // Mirrors executors.py:_analyze_frame_windows's hard rejection of raw-text
+  // on the frame-based path — no window ever runs, just an error + empty run_complete.
+  const rawTextUnsupported = isFrameBased && returnFormat === 'raw-text';
+
+  const windowCount = isFrameBased ? 3 : 1;
+  const perWindowCalls = rawTextUnsupported ? 0 : (isMulti ? 4 : 1);
+  const detectCalls = (hasDetectCrop && !rawTextUnsupported) ? windowCount * 6 : 0;
+  const plannedCalls = windowCount * perWindowCalls + detectCalls;
+  const plannedFrames = isFrameBased ? windowCount * 6 : null;
+
+  const emit = (evt, delayMs) => sleepAbortable(delayMs, signal).then(() => onEvent(evt));
+
+  await emit({ type: 'run_start', pipeline_id: def.id, planned_frames: plannedFrames, planned_windows: windowCount, planned_gemini_calls: plannedCalls }, 150);
+
+  for (const stage of def.stages) {
+    if (!stage.enabled) {
+      await emit({ type: 'stage_start', stage_id: stage.id, stage_type: stage.type, skipped: true }, 60);
+      await emit({ type: 'stage_complete', stage_id: stage.id, skipped: true, timing: { stage_ms: 0 } }, 60);
+      continue;
+    }
+    await emit({ type: 'stage_start', stage_id: stage.id, stage_type: stage.type, skipped: false }, 120);
+    if (stage.type === 'analyze' && rawTextUnsupported) {
+      await emit({
+        type: 'error', stage_id: 'analyze',
+        message: "return_format='raw-text' is not supported for a frame-based (vision-mimic) analyze node — analyzer.py always requests structured JSON output. Use 'clips-v1' or 'events-v1'."
+      }, 150);
+    }
+    await emit({ type: 'stage_complete', stage_id: stage.id, skipped: false, timing: { stage_ms: 150 + Math.round(Math.random() * 250) } }, 180);
+  }
+
+  const startSec = body.scope.start_sec;
+  let allClips = [];
+
+  if (!rawTextUnsupported) {
+    for (let i = 1; i <= windowCount; i++) {
+      const wStart = startSec + (i - 1) * (isFrameBased ? 15 : 0);
+      const wEnd = wStart + (isFrameBased ? 30 : Math.max(1, body.scope.end_sec - body.scope.start_sec));
+      const windowStartFrame = (i - 1) * 150; // purely-mock canned numbering (see mockClipsForWindow)
+
+      if (isFrameBased) {
+        const frameIndices = Array.from({ length: 6 }, (_, k) => windowStartFrame + k * 5);
+        if (hasDetectCrop) await emit({ type: 'crops', window: i, frame_indices: frameIndices, thumbnails: mockThumbnailsForWindow(frameIndices) }, 200);
+        // native_fps=30 matches the 30fps already assumed by mockClipsForWindow's
+        // start_frame/end_frame math — lets windowRangeLabel()/normalizeClipsToEvents()/
+        // simplifiedTagTimeHtml() exercise their real seek-pill path in mock mode
+        // instead of always degrading to the non-seekable "frame N" fallback.
+        await emit({ type: 'window_start', window: i, frame_indices: frameIndices, frame_count: frameIndices.length, native_fps: 30 }, 200);
+      } else {
+        await emit({ type: 'window_start', window: i, scope: [wStart, wEnd] }, 200);
+      }
+
+      if (returnFormat === 'raw-text') {
+        const rawText = 'Mock (?mock=1) free-text description of BJJ events in this clip, chronological, with approximate MM:SS timestamps.';
+        await emit({ type: 'window_result', window: i, format: 'raw-text', raw_text: rawText, context_summary: null, timing: { model_ms: 700 + Math.round(Math.random() * 400) } }, 450);
+        continue;
+      }
+
+      const clips = mockClipsForWindow(returnFormat, wStart, windowStartFrame, isMulti);
+      allClips = allClips.concat(clips);
+      // events-v1 on the frame path never threads context (executors.py only
+      // updates ctx.current_context under the clips-v1 branch) — mirror that.
+      const contextSummary = !chainEnabled ? null : (returnFormat === 'clips-v1' ? ('Mock chained context after window ' + i + '.') : 'Start of match.');
+      await emit({ type: 'window_result', window: i, format: returnFormat, clips, context_summary: contextSummary, timing: { model_ms: 700 + Math.round(Math.random() * 500) } }, 500);
+    }
+  }
+
+  let finalClips = allClips;
+  let dedupApplied = false;
+  let dedupSkipReason = null;
+  if (hasDedup) {
+    if (returnFormat === 'clips-v1' && !rawTextUnsupported) {
+      finalClips = mockDedup(allClips, stageByType.dedup.config.key_by);
+      dedupApplied = true;
+    } else {
+      dedupSkipReason = "upstream return_format=" + JSON.stringify(rawTextUnsupported ? 'clips-v1' : returnFormat) + " != 'clips-v1'";
+    }
+  }
+
+  const degradedCounts = (isFrameBased && hasDetectCrop && !rawTextUnsupported) ? { clean: windowCount * 5, single_athlete: windowCount } : null;
+
+  await emit({
+    type: 'run_complete',
+    clips: finalClips,
+    format: rawTextUnsupported ? 'clips-v1' : returnFormat,
+    dedup_applied: dedupApplied,
+    dedup_skip_reason: dedupSkipReason,
+    degraded_counts: degradedCounts,
+    per_stage_timing: Object.fromEntries(def.stages.map(s => [s.id, s.enabled ? (150 + Math.round(Math.random() * 250)) : 0])),
+    timing: { total_ms: 3200 + Math.round(Math.random() * 400) },
+    ...(isFrameBased ? { native_fps: 30 } : {})
+  }, 150);
+}
+
+// ---- Run / Cancel
+// Runs for EVERY pipeline (including single-shot — see updateRunButtonState()).
+async function runPipeline() {
+  if (!currentVideoId) { logMsg('Load a YouTube video first', 'log-err'); return; }
+  const scope = computeRunScope();
+  if (!scope.valid) { logMsg('Invalid run scope: ' + scope.reason, 'log-err'); return; }
+  if (activeRunController) { logMsg('A run is already in progress', 'log-err'); return; }
+  if (!currentPipelineDef) { logMsg('No pipeline definition loaded', 'log-err'); return; }
+
+  resetRunView();
+  runState.status = 'running';
+  runState.startedAt = performance.now();
+  startRunElapsedTimer();
+  updateRunButtonState();
+  renderRunHeader();
+  renderCompactRunStatus();
+
+  // Frozen request contract (service/routes/qa_pipeline.py:PipelineRunRequest):
+  // {youtube_id, youtube_url, scope, pipeline, budget_cap?}. `budget_cap`
+  // is OPTIONAL — omitted from the body entirely when the field is left
+  // blank (never sent as an empty string or NaN), matching the "empty means
+  // default" discipline used elsewhere in this file (e.g. system_instruction).
+  const body = {
+    youtube_id: currentVideoId, youtube_url: currentVideoUrl,
+    scope: { type: 'range', start_sec: scope.startSec, end_sec: scope.endSec },
+    pipeline: currentPipelineDef
+  };
+  const budgetCapRaw = (document.getElementById('budget-cap').value || '').trim();
+  if (budgetCapRaw !== '') {
+    const n = Number(budgetCapRaw);
+    if (Number.isFinite(n) && n > 0) body.budget_cap = Math.round(n);
+  }
+  logMsg('POST ' + backendUrl() + '/qa/pipeline-run ' + JSON.stringify(body), 'log-out');
+
+  activeRunController = new AbortController();
+  updateRunButtonState();
+  try {
+    if (isMock()) {
+      await mockPipelineRunStream(body, activeRunController.signal, handlePipelineEvent);
+    } else {
+      const resp = await fetch(backendUrl() + '/qa/pipeline-run', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: activeRunController.signal
+      });
+      if (!resp.ok || !resp.body) {
+        let detail = 'HTTP ' + resp.status;
+        try { const j = await resp.json(); if (j && j.detail) detail = j.detail; } catch (e) { /* non-JSON error body */ }
+        throw new Error(detail);
+      }
+      await consumeNdjsonStream(resp.body, handlePipelineEvent);
+    }
+    if (runState.status === 'running') {
+      // Live-verified (2026-07-03, curl against the real backend): a run-loop
+      // crash yields exactly ONE {type:"error", stage_id:"run", message}
+      // event and then the stream just ENDS — no run_complete ever arrives.
+      // Per-frame/per-window errors are non-fatal (the run keeps going to
+      // run_complete); only a missing run_complete means the run actually
+      // died. Never report "complete" for a stream that never completed.
+      if (runState.sawRunComplete) {
+        runState.status = 'complete';
+      } else {
+        runState.status = 'error';
+        if (!runState.errors.length) runState.errors.push({ stageId: null, message: 'Stream ended without a run_complete event.' });
+      }
+    }
+    logMsg('Run finished', 'log-info');
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      runState.status = 'cancelled';
+      logMsg('Run cancelled by user — completed window results retained', 'log-info');
+    } else {
+      runState.status = 'error';
+      runState.errors.push({ stageId: null, message: e.message });
+      logMsg('Run error: ' + e.message, 'log-err');
+    }
+  } finally {
+    activeRunController = null;
+    stopRunElapsedTimer();
+    renderRunElapsed();
+    renderRunHeader();
+    renderCompactRunStatus();
+    renderDedupRail();
+    updateRunButtonState();
+  }
+}
+
+function cancelRun() {
+  if (activeRunController) activeRunController.abort();
+}
+
+// ============================================================
+// Send
+// ============================================================
+async function sendMessage() {
+  const scope = computeScope();
+  const promptText = document.getElementById('composer-input').value.trim();
+  if (!currentVideoId) { logMsg('Load a YouTube video first', 'log-err'); return; }
+  if (!scope.valid) { logMsg('Invalid scope: ' + scope.reason, 'log-err'); return; }
+  if (!promptText) { logMsg('Prompt is required', 'log-err'); return; }
+  if (sending) return;
+
+  const priorTurns = conversation.slice();
+  const history = priorTurns.filter(t => !t.typing).map(t => ({
+    role: t.role,
+    text: t.role === 'user' ? t.promptText : modelTextForHistory(t)
+  }));
+
+  const mode = currentMode;
+  const imageTask = currentImageTask;
+  const task = currentTaskKey();
+  const cfg = TASK_CONFIG[task];
+  const model = document.getElementById('task-model').value;
+  const thinking = cfg.thinking ? currentThinkingLevel : undefined;
+  const systemInstruction = systemInstructionText().trim();
+
+  const userTurn = {
+    role: 'user', scopeType: scope.type, startSec: scope.startSec, endSec: scope.endSec,
+    mode, imageTask, promptText
+  };
+  const modelTurn = { role: 'model', typing: true, mode, imageTask, model, thinking, uid: 'oturn-' + (++turnUidCounter) };
+  conversation.push(userTurn, modelTurn);
+  renderTranscript();
+
+  document.getElementById('composer-input').value = '';
+  autoGrow(document.getElementById('composer-input'));
+  setSending(true);
+
+  const t0 = performance.now();
+  try {
+    let rawRequest, rawResponse;
+    if (mode === 'event') {
+      rawRequest = {
+        youtube_id: currentVideoId, youtube_url: currentVideoUrl,
+        scope: { type: scope.type, start_sec: scope.startSec, end_sec: scope.endSec },
+        prompt: promptText, history, event_schema_version: 'v1', model
+      };
+      if (cfg.thinking) rawRequest.thinking = thinking;
+      if (systemInstruction) rawRequest.system_instruction = systemInstruction;
+      logMsg('POST ' + backendUrl() + '/qa/vlm-chat ' + JSON.stringify(rawRequest), 'log-out');
+      if (isMock()) {
+        await sleep(mockLatencyMs(model));
+        rawResponse = mockEventResponse(scope, model, performance.now() - t0);
+      } else {
+        const resp = await fetch(backendUrl() + '/qa/vlm-chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rawRequest)
+        });
+        rawResponse = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(rawResponse.detail || ('HTTP ' + resp.status));
+      }
+    } else {
+      rawRequest = {
+        youtube_id: currentVideoId, youtube_url: currentVideoUrl,
+        scope: { type: 'timepoint', start_sec: scope.startSec, end_sec: scope.endSec },
+        prompt: promptText, image_task: imageTask, history, model
+      };
+      if (cfg.thinking) rawRequest.thinking = thinking;
+      if (systemInstruction) rawRequest.system_instruction = systemInstruction;
+      logMsg('POST ' + backendUrl() + '/qa/vlm-image ' + JSON.stringify(rawRequest), 'log-out');
+      if (isMock()) {
+        await sleep(mockLatencyMs(model));
+        rawResponse = (imageTask === 'detect' || imageTask === 'segment')
+          ? mockDetectSegmentResponse(imageTask, scope, model, performance.now() - t0)
+          : mockImageResponse(model, performance.now() - t0);
+      } else {
+        const resp = await fetch(backendUrl() + '/qa/vlm-image', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rawRequest)
+        });
+        rawResponse = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(rawResponse.detail || ('HTTP ' + resp.status));
+      }
+    }
+    const latencyMs = Math.round(performance.now() - t0);
+    logMsg('response (' + latencyMs + 'ms) ' + JSON.stringify(rawResponse), 'log-in');
+    if (mode === 'event' && rawResponse && rawResponse.parse_error) {
+      logMsg('parse_error: ' + rawResponse.parse_error, 'log-err');
+    }
+    if (mode === 'image' && imageTask === 'generate' && rawResponse && !rawResponse.image_b64) {
+      logMsg('image response missing image_b64', 'log-err');
+    }
+    if (mode === 'image' && (imageTask === 'detect' || imageTask === 'segment') && rawResponse && !rawResponse.frame_b64) {
+      logMsg(imageTask + ' response missing frame_b64', 'log-err');
+    }
+    modelTurn.typing = false;
+    modelTurn.response = rawResponse;
+    modelTurn.rawRequest = rawRequest;
+    modelTurn.rawResponse = rawResponse;
+    modelTurn.latencyMs = latencyMs;
+  } catch (e) {
+    logMsg('ERROR: ' + e.message, 'log-err');
+    modelTurn.typing = false;
+    modelTurn.error = e.message;
+  } finally {
+    renderTranscript();
+    setSending(false);
+  }
+}
+
+// ============================================================
+// Init
+// ============================================================
+setMode('event');
+setScopeType('timepoint');
+updateComposerPlaceholder();
+updateScopeUiAndSendState();
+updateSystemInstructionUi();
+renderTranscript();
+
+updateRunScopeUi();
+loadPipelines();
+
+logMsg('VLM Studio ready.' + (isMock() ? ' Mock mode enabled (?mock=1) — no backend calls will be made.' : ''), 'log-info');
+</script>
+</body>
+</html>
