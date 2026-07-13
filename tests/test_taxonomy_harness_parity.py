@@ -35,7 +35,7 @@ from typing import Any, Dict
 
 import pytest
 
-from shared_lib.models import simplified_taxonomy as sl_taxonomy
+import shared_lib.models.simplified_taxonomy as sl_taxonomy
 
 # Repo-root-relative default (not cwd()) so this resolves correctly whether
 # pytest is invoked from the main checkout or a `-wt-*` sibling worktree:
