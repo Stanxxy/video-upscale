@@ -14,23 +14,27 @@ already told callers never to use).
 
 This module now has two jobs:
 
-1. **Manifest-driven axis vocabulary** (item 1). ``taxonomy_manifest.json``
-   (this directory) is a BYTE-IDENTICAL vendored copy of
-   ``shared_lib/src/shared_lib/models/taxonomy_manifest.json`` (T1,
-   ``shared_lib`` v1.1.0). Vendored rather than imported from the installed
-   ``shared_lib`` package on purpose: this module builds the Gemini
-   structured-output schema (``analyzer.py``) and the SNS dual-emit mapping
-   (``sns.py``) directly from these constants, and the engine should be able
-   to introspect/adjust its own taxonomy artifact without a shared_lib
-   version bump for a pure-vocabulary question — the same reasoning that led
-   the QA pipeline's ``simplified_tags.py`` to hardcode its own frozen enum
-   lists (see its module docstring) rather than import shared_lib. A vendored
-   copy WITHOUT a parity gate is exactly the five-hand-copy failure mode this
-   whole initiative closes (INS-088) — ``tests/test_taxonomy_manifest_parity.py``
-   is the fail-loud (never-skip) guard against drift, following the
-   s8 precedent (``bjj-vision-frontend``'s ``bjjTaxonomy.parity.test.ts``:
-   env-overridable, umbrella-relative default path, throws — not skips — on a
-   missing source file).
+1. **Axis vocabulary, sourced directly from shared_lib** (item 1; revised
+   2026-07-12 by CEO ruling on Evaluator pass 1 MEDIUM-1). ``shared_lib`` is
+   already a runtime dependency of this engine (``requirements-service.txt``)
+   and ``shared_lib.models.simplified_taxonomy`` is the canonical Python
+   module for this vocabulary (T1, ``shared_lib`` v1.1.0) — this module
+   imports its public names (leaf-module import, per the shared_lib import-
+   boundary convention: never ``from shared_lib.models import ...``) directly
+   rather than hand-maintaining a second copy. An earlier revision of this
+   module vendored a byte-identical local ``taxonomy_manifest.json`` with its
+   own parity test; the CEO ruling correctly identified that as the exact
+   five-hand-copy failure mode this whole initiative exists to close
+   (INS-088) — "adjust independently without a shared_lib bump" is the
+   disease, not a feature, and plan AC#1 explicitly demands zero hand-
+   maintained value lists. There is nothing left here to drift, so there is
+   nothing left here to parity-test against shared_lib; a slim parity test
+   against ``bjj-dataset-harness/src/harness/taxonomy.py`` remains
+   (``tests/test_taxonomy_harness_parity.py``) because harness regeneration
+   from the manifest is still an open D2 tail (per D2's own text: "harness
+   ``taxonomy.py`` stays authoritative for probe axes ... regenerated from
+   the same manifest" — not yet wired as of T0/T1), so THAT axis pair can
+   still independently drift.
 
 2. **Sanitization + dual-emit mapping** (items 3-5). Gemini's structured
    output is already ENUM-constrained by ``analyzer._build_response_schema``
@@ -48,77 +52,40 @@ This module now has two jobs:
 """
 from __future__ import annotations
 
-import json
 import logging
 import re
-from pathlib import Path
 from typing import Dict, List, Optional
+
+# Leaf-module import (never `from shared_lib.models import ...`), per the
+# shared_lib import-boundary convention (AGENTS.md). These names are
+# RE-EXPORTED as this module's own public API — every consumer in this repo
+# (analyzer.py, sns.py, this module's own dual-emit tables below) reads the
+# axis vocabulary through `taxonomy_mapper.AXIS1_POSITION` etc., but the
+# single source of truth is shared_lib; nothing here hand-copies a value
+# list (CEO ruling, Evaluator pass 1 MEDIUM-1 — see module docstring item 1).
+from shared_lib.models.simplified_taxonomy import (  # noqa: F401 (re-exported)
+    AXIS1_POSITION,
+    AXIS2_ACTOR_SENTINELS,
+    AXIS3_ACTION,
+    AXIS4_OUTCOME,
+    HARD_PAIR_ACTIONS,
+    TAXONOMY_VERSION,
+    TECHNIQUE_SHORTLISTS,
+    is_valid_actor_sentinel,
+    is_valid_axis1,
+    is_valid_axis3,
+    is_valid_axis4,
+    is_valid_technique_for_class,
+    is_valid_technique_shortlist_value,
+)
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Manifest loading (vendored copy — see module docstring item 1)
-# ---------------------------------------------------------------------------
-
-_MANIFEST_PATH = Path(__file__).resolve().parent / "taxonomy_manifest.json"
-
-
-def _load_manifest() -> dict:
-    if not _MANIFEST_PATH.exists():
-        raise FileNotFoundError(
-            f"[taxonomy_mapper] taxonomy_manifest.json not found at {_MANIFEST_PATH}. "
-            "This module is derived from the manifest at import time and cannot "
-            "fall back to hardcoded values — restore the file."
-        )
-    with _MANIFEST_PATH.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
-
-
-_MANIFEST = _load_manifest()
-
-TAXONOMY_VERSION: int = _MANIFEST["manifest_version"]
-
-# Axis 1 — Position (9, multi-label list)
-AXIS1_POSITION: List[str] = list(_MANIFEST["axis1_position"])
-# Axis 2 — Actor sentinels (production keeps the grounded actor_player_id
-# machinery, D5 — these sentinels are vendored for completeness/parity but
-# are NOT emitted by the production schema; see analyzer.py docstring).
-AXIS2_ACTOR_SENTINELS: List[str] = list(_MANIFEST["axis2_actor_sentinels"])
-# Axis 3 — Action / Technique Class (10, multi-label list)
-AXIS3_ACTION: List[str] = list(_MANIFEST["axis3_action"])
-# Axis 4 — Outcome (3, scalar)
-AXIS4_OUTCOME: List[str] = list(_MANIFEST["axis4_outcome"])
-# Occlusion-confusable neighborhoods (vendored for parity; not yet consumed
-# by any engine logic — a later stream may surface these as Gemini hints).
-HARD_PAIR_ACTIONS: Dict[str, str] = dict(_MANIFEST["hard_pair_actions"])
-# D1 — curated technique shortlist per action class, Gracie's table verbatim.
-TECHNIQUE_SHORTLISTS: Dict[str, List[str]] = {
-    k: list(v) for k, v in _MANIFEST["technique_shortlists"].items()
-}
-
+# Derived (not hand-maintained) from the imported TECHNIQUE_SHORTLISTS —
+# used by resolve_technique_shortlist below.
 _ALL_SHORTLIST_VALUES: frozenset = frozenset(
     v for values in TECHNIQUE_SHORTLISTS.values() for v in values
 )
-
-
-def is_valid_axis1(values: List[str]) -> bool:
-    return all(v in AXIS1_POSITION for v in values)
-
-
-def is_valid_axis3(values: List[str]) -> bool:
-    return all(v in AXIS3_ACTION for v in values)
-
-
-def is_valid_axis4(value: str) -> bool:
-    return value in AXIS4_OUTCOME
-
-
-def is_valid_technique_for_class(action_class: str, technique: str) -> bool:
-    return technique in TECHNIQUE_SHORTLISTS.get(action_class, ())
-
-
-def is_valid_technique_shortlist_value(technique: str) -> bool:
-    return technique in _ALL_SHORTLIST_VALUES
 
 
 # ---------------------------------------------------------------------------
@@ -397,10 +364,27 @@ _AXIS3_LEGACY_PRECEDENCE: List[str] = [
 # split lived only in the ~90-value TechniqueType, which the shortlist/
 # technique mapping below reconstructs where possible). `guard_pass` has no
 # verbatim ActionType twin (`pass`, not `guard_pass`) — `pass` used instead.
-# `back_take` has no ActionType analog at all; `reversal` ("reverses position
-# from bottom to top") is the closest available legacy action — the
-# TechniqueType-level twin (`back_take`, see the shortlist table below)
-# recovers the specific-technique fidelity `reversal` alone would lose.
+#
+# `back_take` has no ActionType analog at all. The obvious-looking candidate,
+# `ActionType.BACK_CONTROL`, is DELIBERATELY REJECTED (Evaluator pass 1
+# review): BACK_CONTROL is one of the enumerated `positional_actions()`
+# members and feeds the legacy POSITIONAL_CONTROL time-tracking calculation
+# (`bjj_taxonomy.py::ActionType.positional_actions()` /
+# `statistics_calculator.py`'s time-in-position accounting) — that
+# calculation assumes each `BACK_CONTROL`-tagged event marks a *span of
+# control being held*, not a discrete transition event. Mapping every
+# `back_take` (a point-in-time "took the back" action, not a duration) into
+# that bucket would silently pollute POSITIONAL_CONTROL with instantaneous
+# events masquerading as held-position spans. `ActionType.REVERSAL`
+# ("reverses position from bottom to top") is the closest available legacy
+# action that is NOT a positional-time-tracking member — it correctly
+# characterizes back_take as a discrete transition, matching how the legacy
+# schema itself distinguishes "Transition Actions" (SWEEP/PASS/REVERSAL/
+# SCRAMBLE) from "Positional Actions" (GUARD_TOP/.../BACK_CONTROL/...) in
+# bjj_taxonomy.py's own section comments. The TechniqueType-level twin
+# (`back_take`, see the shortlist table below) recovers the specific-
+# technique fidelity `reversal` alone would lose.
+#
 # `transition` (the axis3 catch-all) maps to legacy `scramble` — both denote
 # "movement happened, no clean class" in their respective taxonomies.
 ACTION_CLASS_TO_LEGACY_ACTION: Dict[str, str] = {

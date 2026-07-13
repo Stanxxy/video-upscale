@@ -1,10 +1,13 @@
 # BJJ Analysis Taxonomy — Simplified 4-Axis (Production)
 
-**Ground truth:** This file mirrors the simplified 4-axis taxonomy manifest
-(`service/taxonomy_manifest.json`, vendored byte-identical from
-`bjj-vision-backend/shared_lib/src/shared_lib/models/taxonomy_manifest.json`).
-Adopted 2026-07-12 — see `working_log/plans/2026-07-12-simplified-4axis-taxonomy-adoption.md`
-(D5). Supersedes the old free-string `ActionType`(27)/`TechniqueType`(~90)/
+**Ground truth:** This file mirrors the simplified 4-axis taxonomy vocabulary
+sourced directly from `shared_lib.models.simplified_taxonomy`
+(`bjj-vision-backend/shared_lib/src/shared_lib/models/simplified_taxonomy.py`)
+via `service/taxonomy_mapper.py` — no local copy of the value lists is
+hand-maintained in this repo (CEO ruling, Evaluator pass 1 MEDIUM-1: shared_lib
+is already a runtime dependency of this engine). Adopted 2026-07-12 — see
+`working_log/plans/2026-07-12-simplified-4axis-taxonomy-adoption.md` (D5).
+Supersedes the old free-string `ActionType`(27)/`TechniqueType`(~90)/
 `ResultType`(16) prompt that lived in this file before.
 
 **Do NOT use legacy pipeline category labels** such as `STANDUP_GAME`,
