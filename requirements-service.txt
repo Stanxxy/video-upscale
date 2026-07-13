@@ -5,7 +5,12 @@ uvicorn[standard]
 boto3
 pydantic-settings
 cassandra-driver
-shared-lib @ file:///Users/stanliu/bjj-proj/bjj-vision-backend/shared_lib
+# NOTE (s9/T2): pinned to the shared_lib T1 worktree (shared_lib v1.1.0,
+# branch feature/simplified-4axis-taxonomy — new axis1/axis3/axis4/actor_*/
+# technique_shortlist/technique_guess fields, not yet on shared_lib develop).
+# Revert to the plain bjj-vision-backend/shared_lib path once that branch
+# merges to shared_lib's develop/main.
+shared-lib @ file:///Users/stanliu/bjj-proj/bjj-vision-backend/shared_lib-wt-s9
 
 # ML pipeline (tracking + analysis)
 torch
