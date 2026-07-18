@@ -7,17 +7,24 @@ Mirrors ``qa_vlm.py``'s no-fabrication discipline:
   400 BEFORE streaming starts (``registry.validate_pipeline_def``).
 - A run whose estimated Gemini-call count exceeds the budget cap -> 400 BEFORE
   streaming starts (``executors.estimate_run_plan``) — never silently truncated
-  mid-run. **EXCEPTION (Task 1, durable budget fix): ``chunk-segment-tags`` is
-  a two-phase gate, not a single pre-flight block** — its own worst-case
-  estimate (1 rough-scan call + one chunk_analyze call per theoretically
-  smallest chunk) is pathological and false-blocks legitimate short matches
-  (a plain 5min match already worst-cases to 61 > the default cap of 60), so
-  this pipeline SKIPS the pre-stream hard block (the existing >12min scope cap
-  still bounds real spend) and instead streams the real ``chunk_map`` from
-  PASS 1, then gates the ACTUAL worthy-chunk count against the cap inside
-  ``executors.run_pipeline`` — aborting with an ``error`` NDJSON event before
-  PASS 2's deep loop spends a single Gemini call if the real number is over
-  cap. Every other pipeline's pre-flight guard is unchanged.
+  mid-run. **EXCEPTION (Task 1, durable budget fix; reapplied for
+  ``highlight-scan-analyze`` per evaluator CHANGES-REQUIRED item 1,
+  2026-07-18): ``chunk-segment-tags`` AND ``highlight-scan-analyze`` are each
+  a two-phase gate, not a single pre-flight block** — their own worst-case
+  estimates (1 rough-scan call + one PASS-2 call per theoretically smallest
+  chunk/highlight) are pathological and false-block legitimate short matches
+  (chunk-segment-tags: a plain 5min match already worst-cases to 61 > the
+  default cap of 60; highlight-scan-analyze: a plain 5min match worst-cases to
+  101 > 60 at the default ``min_highlight_s=3.0`` — WORSE, since it has no
+  ``worth_analysis`` prefilter at all), so BOTH pipelines SKIP the pre-stream
+  hard block (chunk-segment-tags' existing >12min scope cap still bounds its
+  real spend; highlight-scan-analyze has no analogous scope cap — see the
+  route body for why) and instead stream the real ``chunk_map``/
+  ``highlight_map`` from PASS 1, then gate the ACTUAL worthy-chunk/highlight
+  count against the cap inside ``executors.run_pipeline`` — aborting with an
+  ``error`` NDJSON event before PASS 2's deep loop spends a single Gemini call
+  if the real number is over cap. Every other pipeline's pre-flight guard is
+  unchanged.
 - Real Gemini/transport/ffmpeg errors surface as an ``error`` NDJSON event (the
   stream itself already started 200, so they cannot become an HTTP error code);
   the run continues past a single failed window/frame rather than aborting the
@@ -80,11 +87,20 @@ async def pipeline_run(body: PipelineRunRequest, request: Request):
         raise HTTPException(400, str(e))
 
     is_chunk_segment_pipeline = any(s.type == "chunk_segment" for s in body.pipeline.stages)
+    is_highlight_scan_pipeline = any(s.type == "highlight_scan" for s in body.pipeline.stages)
 
     # v1 hard scope cap for chunk-segment-tags (fail-closed, no silent
     # truncation, no pre-slice-and-stitch) — checked BEFORE the budget guard
     # so a caller gets the actionable cap message rather than the generic
     # budget-cap message when both would technically fire.
+    #
+    # highlight-scan-analyze has NO analogous scope cap: its PASS-1 rough
+    # scan is a single call whose cost scales with duration (same as
+    # chunk_segment's), but nothing in the build plan specified a v1 hard
+    # cap for this pipeline, and the two-phase gate below already bounds
+    # PASS-2 real spend. Revisit if a very long unscoped run turns out to be
+    # a real-world footgun (chunk-segment-tags' cap exists because its PASS-1
+    # cost model was measured against that exact failure mode).
     if is_chunk_segment_pipeline:
         cap_error = chunk_segment.check_scope_cap(end_sec - start_sec)
         if cap_error is not None:
@@ -93,20 +109,28 @@ async def pipeline_run(body: PipelineRunRequest, request: Request):
     planned = estimate_run_plan(body.pipeline, duration_sec=end_sec - start_sec)
     cap = body.budget_cap if body.budget_cap is not None else DEFAULT_BUDGET_CAP
 
-    # Two-phase gate (Task 1, durable budget fix): chunk-segment-tags' own
-    # worst-case estimate (1 + ceil(duration/min_chunk_s)) is pathological — a
-    # real ~10min match plans ~128 worst-case but spends ~15-25 calls once the
-    # PASS-1 worth_analysis prefilter runs; hard-blocking pre-stream on that
-    # worst-case false-blocks even a plain 5min match (1+ceil(300/5)=61>60).
-    # For chunk-segment-tags ONLY, skip this pre-stream hard block — the
-    # >12min scope cap above already bounds real spend — and let the run
-    # START and stream the real chunk_map. The ACTUAL worthy-chunk count is
-    # gated against `cap` immediately after PASS 1 completes, INSIDE
-    # run_pipeline (executors.py), aborting with an `error` event before the
-    # deep PASS-2 loop spends a single Gemini call if the real number is over
-    # cap. The other 4 pipelines are UNCHANGED: their pre-flight guard below
-    # still hard-blocks before streaming starts.
-    if not is_chunk_segment_pipeline and planned["planned_gemini_calls"] > cap:
+    # Two-phase gate (Task 1, durable budget fix; reapplied for
+    # highlight-scan-analyze per evaluator CHANGES-REQUIRED item 1,
+    # 2026-07-18): both chunk-segment-tags' own worst-case estimate
+    # (1 + ceil(duration/min_chunk_s)) and highlight-scan-analyze's
+    # (1 + ceil(duration/min_highlight_s), WORSE — no worth_analysis
+    # prefilter at all) are pathological — a real ~5min match already
+    # worst-cases chunk-segment-tags to 61 and highlight-scan-analyze to 101,
+    # both over the default cap of 60, despite spending far fewer calls once
+    # PASS 1's real (much smaller) output is known. For these TWO pipelines
+    # ONLY, skip this pre-stream hard block — chunk-segment-tags' >12min scope
+    # cap above already bounds its real spend — and let the run START and
+    # stream the real chunk_map/highlight_map. The ACTUAL worthy-chunk/
+    # highlight count is gated against `cap` immediately after PASS 1
+    # completes, INSIDE run_pipeline (executors.py), aborting with an `error`
+    # event before the deep PASS-2 loop spends a single Gemini call if the
+    # real number is over cap. The other pipelines are UNCHANGED: their
+    # pre-flight guard below still hard-blocks before streaming starts.
+    if (
+        not is_chunk_segment_pipeline
+        and not is_highlight_scan_pipeline
+        and planned["planned_gemini_calls"] > cap
+    ):
         raise HTTPException(
             400,
             f"Planned Gemini calls ({planned['planned_gemini_calls']}) exceed the budget cap "

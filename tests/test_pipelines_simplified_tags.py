@@ -439,3 +439,58 @@ async def test_time_analyzer_non_transient_404_fails_fast_no_retry():
     parsed = json.loads(result)
     assert "model not found" in parsed["error"]
     assert client.aio.models.generate_content.call_count == 1  # non-transient — no retry attempted
+
+
+# --------------------------------------------------------------------------- #
+# Additive instrumentation (ADCC eval dashboard, Task 1) — new attributes only,
+# analyze_chunk's return contract (a plain str) is unchanged.
+# --------------------------------------------------------------------------- #
+def test_extract_usage_metadata_reads_real_fields():
+    response = SimpleNamespace(usage_metadata=SimpleNamespace(
+        prompt_token_count=100, candidates_token_count=20, total_token_count=120,
+    ))
+    assert simplified_tags.extract_usage_metadata(response) == {
+        "prompt_token_count": 100, "candidates_token_count": 20, "total_token_count": 120,
+    }
+
+
+def test_extract_usage_metadata_none_when_absent():
+    assert simplified_tags.extract_usage_metadata(SimpleNamespace(text="x")) is None
+
+
+@pytest.mark.asyncio
+async def test_time_analyzer_records_instrumentation_slots_on_success():
+    async def _fake_generate(*, model, contents, config):
+        return SimpleNamespace(
+            text=json.dumps({"clips": []}),
+            usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=2, total_token_count=12),
+        )
+
+    client = MagicMock()
+    client.aio.models.generate_content = _fake_generate
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(client, model_id="gemini-3.1-flash-lite")
+    assert analyzer.last_prompt_text is None  # unset before any call
+
+    result = await analyzer.analyze_chunk("https://y", 5.0, 15.0, "prev")
+    assert json.loads(result) == {"clips": []}
+    assert "NATIVE video clip" in analyzer.last_prompt_text
+    assert analyzer.last_raw_response_text == json.dumps({"clips": []})
+    assert analyzer.last_usage_metadata == {
+        "prompt_token_count": 10, "candidates_token_count": 2, "total_token_count": 12,
+    }
+
+
+@pytest.mark.asyncio
+async def test_time_analyzer_instrumentation_prompt_set_but_response_none_on_failure():
+    """A failed call still records the prompt that was sent (it was built and
+    sent before the exception), but raw_response_text/usage_metadata stay
+    None — never fabricated from a call that never got a response."""
+    client = MagicMock()
+    client.aio.models.generate_content = AsyncMock(side_effect=RuntimeError("simulated outage"))
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(client, model_id="gemini-3.1-flash-lite")
+
+    result = await analyzer.analyze_chunk("https://y", 0.0, 10.0, None)
+    assert "simulated outage" in json.loads(result)["error"]
+    assert analyzer.last_prompt_text is not None
+    assert analyzer.last_raw_response_text is None
+    assert analyzer.last_usage_metadata is None

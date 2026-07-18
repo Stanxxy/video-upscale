@@ -18,6 +18,8 @@ from service.pipelines.models import (
     DedupConfig,
     DetectCropConfig,
     FrameSampleConfig,
+    HighlightAnalyzeConfig,
+    HighlightScanConfig,
     PipelineDef,
     StageDef,
     VideoWindowConfig,
@@ -35,6 +37,8 @@ _MODEL_ALLOWLIST_BY_NODE_TYPE: dict[str, list[str]] = {
     "detect_crop": DETECT_MODELS,
     "chunk_segment": EVENT_MODELS,
     "chunk_analyze": EVENT_MODELS,
+    "highlight_scan": EVENT_MODELS,
+    "highlight_analyze": EVENT_MODELS,
 }
 
 
@@ -214,12 +218,76 @@ def _chunk_segment_tags() -> PipelineDef:
     )
 
 
+def _highlight_scan_analyze() -> PipelineDef:
+    """``highlight-scan-analyze`` — YouTube-URL-native, two-Gemini-phase
+    pipeline, SEQUENTIAL analysis (never parallel — continuity over speed,
+    same product decision as ``chunk-segment-tags``). Fixed stage set:
+    ``video_window -> highlight_scan -> highlight_analyze``.
+
+    Supersedes (conceptually, NOT in code — ``chunk-segment-tags`` stays
+    registered untouched) the mechanical chunk-then-reassemble design: PASS 1
+    finds highlights (not a full scene segmentation), PASS 2 analyzes each
+    highlight finely with a selectable frame rate and a few seconds of
+    surrounding pre/post-roll VIDEO context.
+
+    PASS 1 (``highlight_scan``): ONE cheap rough-scan Gemini call returns an
+    ORDERED list of ``{start_s, end_s}`` highlight spans — no reason enum, no
+    ``worth_analysis`` (build plan "Product Decision": precision over recall
+    accepted for this playground; the human confirms events downstream).
+
+    PASS 2 (``highlight_analyze``): a SEQUENTIAL native-video loop over every
+    highlight, each sent as
+    ``[start_s - preroll_s, end_s + postroll_s]`` (clamped to the requested
+    scope) at a selectable ``fps`` (1, 10, or 15 only — see
+    ``HighlightAnalyzeConfig.fps`` for why fps=5 stays excluded). Tags with
+    the SAME
+    time-keyed ``simplified-tags-time-v1`` format as ``chunk_analyze``.
+
+    NO ``context_chain``, NO ``dedup`` stage — pre-roll video replaces the
+    lossy text context chain. Event clipping (every emitted event is clipped
+    to its highlight's OWN ``[start_s, end_s]``, never the pre/post-roll-
+    expanded window) is NOT a full dedup replacement (corrected 2026-07-18,
+    evaluator CHANGES-REQUIRED item 2 — earlier text here overclaimed that);
+    see ``executors.highlight_analyze_node``'s docstring for the real
+    residual boundary-fragmentation risk and how each sub-case is handled
+    (one fixed, one accepted playground-scope limitation).
+    """
+    return PipelineDef(
+        id="highlight-scan-analyze",
+        label="Highlight scan + analyze (native)",
+        description=(
+            "YouTube-native two-pass pipeline: one cheap Gemini scan finds highlight "
+            "spans worth a closer look (no scene segmentation, no reason enum), then a "
+            "SEQUENTIAL per-highlight native-video analyze pass tags each highlight at a "
+            "selectable frame rate with a few seconds of pre/post-roll video context. No "
+            "context-chain, no dedup stage — event clipping bounds each highlight's own "
+            "output; adjacent-highlight boundary fragmentation is a known, accepted "
+            "limitation for close-together highlights (see engineering docs)."
+        ),
+        stages=[
+            StageDef(
+                id="video_window", type="video_window", label="Video Window",
+                enabled=True, config=VideoWindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_scan", type="highlight_scan", label="Highlight Scan",
+                enabled=True, config=HighlightScanConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_analyze", type="highlight_analyze", label="Highlight Analyze",
+                enabled=True, config=HighlightAnalyzeConfig().model_dump(),
+            ),
+        ],
+    )
+
+
 DEFAULT_PIPELINES: dict[str, PipelineDef] = {
     "single-shot": _single_shot(),
     "vision-mimic": _vision_mimic("vision-mimic", "Vision-engine mimic", "single"),
     "vision-mimic-multi": _vision_mimic("vision-mimic-multi", "Vision-engine mimic (multi-agent)", "multi"),
     "vision-mimic-simplified": _vision_mimic_simplified(),
     "chunk-segment-tags": _chunk_segment_tags(),
+    "highlight-scan-analyze": _highlight_scan_analyze(),
 }
 
 # Fixed stage-type SET per pipeline id (order-independent) — used by fail-closed

@@ -85,6 +85,23 @@ def load_default_taxonomy_text() -> str:
 DEFAULT_TAXONOMY_TEXT: str = load_default_taxonomy_text()
 
 
+def extract_usage_metadata(response) -> Optional[dict]:
+    """Plain-dict token accounting from a ``genai`` response's
+    ``usage_metadata`` (ADCC eval dashboard, Task 1 — LeCun's real-cost
+    preference over placeholder rates). Returns ``None`` if the response
+    carries no ``usage_metadata`` at all (e.g. a bare ``SimpleNamespace(text=...)``
+    test double); individual fields are ``None`` if the SDK object itself
+    didn't populate them. Never fabricates a token count."""
+    usage = getattr(response, "usage_metadata", None)
+    if usage is None:
+        return None
+    return {
+        "prompt_token_count": getattr(usage, "prompt_token_count", None),
+        "candidates_token_count": getattr(usage, "candidates_token_count", None),
+        "total_token_count": getattr(usage, "total_token_count", None),
+    }
+
+
 def _strip_markdown_fences(text: str) -> str:
     """Strip ```json ... ``` / ``` ... ``` fences from a Gemini response
     (shared by both ``SimplifiedTagsAnalyzer`` and ``SimplifiedTagsTimeAnalyzer``
@@ -458,6 +475,18 @@ class SimplifiedTagsTimeAnalyzer:
     still un-converted) — the caller (``executors.chunk_analyze_node``) is
     responsible for adding the real sent ``start_offset`` to produce absolute
     match seconds. This class never sees or fabricates that offset.
+
+    **Additive instrumentation (ADCC eval dashboard, Task 1):** after every
+    ``analyze_chunk`` call (success OR failure), ``self.last_prompt_text`` /
+    ``self.last_raw_response_text`` / ``self.last_usage_metadata`` are set to
+    the exact prompt sent, the raw (pre-fence-strip) response text, and a
+    plain ``{"prompt_token_count","candidates_token_count","total_token_count"}``
+    dict from ``response.usage_metadata`` (``None`` for any field/whole dict
+    the SDK response didn't populate — never fabricated). This is a PURE
+    ADDITION: the method's return value/signature is unchanged, so every
+    existing caller/test that only reads the return string is byte-identical.
+    Callers that don't care about instrumentation never read these attributes
+    and see no behavior change at all.
     """
 
     def __init__(
@@ -476,6 +505,10 @@ class SimplifiedTagsTimeAnalyzer:
         self.thinking_config = thinking_config
         self.system_instruction = resolve_system_instruction(system_instruction)
         self.retry_config = retry_config or gemini_retry.GeminiRetryConfig()
+        # Additive instrumentation slots (Task 1) — see class docstring.
+        self.last_prompt_text: Optional[str] = None
+        self.last_raw_response_text: Optional[str] = None
+        self.last_usage_metadata: Optional[dict] = None
 
     def _build_generate_config(self, response_schema: types.Schema) -> types.GenerateContentConfig:
         kwargs = dict(
@@ -490,21 +523,36 @@ class SimplifiedTagsTimeAnalyzer:
 
     async def analyze_chunk(
         self, youtube_url: str, start_sec: float, end_sec: float, previous_context: Optional[str] = None,
-        *, response_schema=None,
+        *, response_schema=None, fps: int = 1,
     ) -> str:
         """Analyze ONE native-video chunk ``[start_sec, end_sec)``.
 
         ``start_sec``/``end_sec`` are the ACTUAL offsets sent to Gemini's
-        ``video_metadata`` (i.e. already include PASS 2's back-overlap) — the
-        response's ``start_s``/``end_s`` are relative to THIS ``start_sec``,
-        which the caller adds back to get absolute match seconds.
+        ``video_metadata`` (i.e. already include PASS 2's back-overlap for
+        ``chunk_analyze_node``, or the pre/post-roll expansion for
+        ``highlight_analyze_node``) — the response's ``start_s``/``end_s``
+        are relative to THIS ``start_sec``, which the caller adds back to get
+        absolute match seconds.
+
+        ``fps`` (additive, ``highlight-scan-analyze`` PASS 2 —
+        ``HighlightAnalyzeConfig.fps``, real Gemini experiment finding: only
+        1 or 10 are supported by that config's allowlist) defaults to 1,
+        preserving ``chunk_analyze_node``'s prior hardcoded behavior
+        byte-for-byte for every existing caller that doesn't pass it.
         """
         effective_schema = response_schema if response_schema is not None else build_video_response_schema()
         prompt = build_video_prompt(previous_context)
         video_part = types.Part(
             file_data=types.FileData(file_uri=youtube_url),
-            video_metadata=types.VideoMetadata(start_offset=f"{start_sec}s", end_offset=f"{end_sec}s", fps=1),
+            video_metadata=types.VideoMetadata(start_offset=f"{start_sec}s", end_offset=f"{end_sec}s", fps=fps),
         )
+
+        # Additive instrumentation (Task 1) — recorded regardless of outcome;
+        # reset at the top of every call so a prior call's data never leaks
+        # into this one's event.
+        self.last_prompt_text = prompt
+        self.last_raw_response_text = None
+        self.last_usage_metadata = None
 
         try:
             logger.info(
@@ -521,6 +569,8 @@ class SimplifiedTagsTimeAnalyzer:
                 retry_config=self.retry_config,
             )
             text = response.text
+            self.last_raw_response_text = text
+            self.last_usage_metadata = extract_usage_metadata(response)
             logger.info(
                 "Gemini simplified-tags-time-v1: received response (%d chars)",
                 len(text) if text else 0,

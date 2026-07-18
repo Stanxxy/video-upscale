@@ -12,6 +12,8 @@ from service.pipelines.models import (
     ChunkAnalyzeConfig,
     ChunkSegmentConfig,
     DetectCropConfig,
+    HighlightAnalyzeConfig,
+    HighlightScanConfig,
     PipelineDef,
     StageDef,
 )
@@ -23,7 +25,10 @@ from service.pipelines.registry import PipelineValidationError, get_default, lis
 # --------------------------------------------------------------------------- #
 @pytest.mark.parametrize(
     "pipeline_id",
-    ["single-shot", "vision-mimic", "vision-mimic-multi", "vision-mimic-simplified", "chunk-segment-tags"],
+    [
+        "single-shot", "vision-mimic", "vision-mimic-multi", "vision-mimic-simplified",
+        "chunk-segment-tags", "highlight-scan-analyze",
+    ],
 )
 def test_get_default_round_trips_through_json(pipeline_id):
     pdef = get_default(pipeline_id)
@@ -48,7 +53,8 @@ def test_list_pipelines_summary_shape():
     summaries = list_pipelines()
     ids = {p["id"] for p in summaries}
     assert {
-        "single-shot", "vision-mimic", "vision-mimic-multi", "vision-mimic-simplified", "chunk-segment-tags",
+        "single-shot", "vision-mimic", "vision-mimic-multi", "vision-mimic-simplified",
+        "chunk-segment-tags", "highlight-scan-analyze",
     } <= ids
     for p in summaries:
         assert set(p) == {"id", "label", "description"}
@@ -121,6 +127,102 @@ def test_chunk_segment_tags_unknown_config_key_rejected():
 def test_chunk_segment_tags_missing_stage_type_rejected():
     pdef = get_default("chunk-segment-tags")
     pdef.stages = [s for s in pdef.stages if s.type != "chunk_analyze"]
+    with pytest.raises(PipelineValidationError, match="fixed stage set"):
+        validate_pipeline_def(pdef)
+
+
+# --------------------------------------------------------------------------- #
+# highlight-scan-analyze — registry defaults + fixed stage set
+# --------------------------------------------------------------------------- #
+def test_highlight_scan_analyze_defaults_fixed_stage_set():
+    pdef = get_default("highlight-scan-analyze")
+    assert [s.type for s in pdef.stages] == ["video_window", "highlight_scan", "highlight_analyze"]
+    validate_pipeline_def(pdef)  # must not raise
+
+
+def test_highlight_scan_analyze_default_config_values():
+    pdef = get_default("highlight-scan-analyze")
+    hs_cfg = HighlightScanConfig.model_validate(next(s for s in pdef.stages if s.type == "highlight_scan").config)
+    ha_cfg = HighlightAnalyzeConfig.model_validate(next(s for s in pdef.stages if s.type == "highlight_analyze").config)
+    assert hs_cfg.rough_fps == 1.0
+    assert hs_cfg.min_highlight_s == 3.0
+    assert hs_cfg.max_highlight_s == 30.0
+    assert hs_cfg.system_prompt is None
+    assert hs_cfg.initial_prompt is None
+    assert ha_cfg.fps == 1
+    assert ha_cfg.thinking is None
+    assert ha_cfg.preroll_s == 5.0
+    assert ha_cfg.postroll_s == 4.0
+
+
+def test_highlight_scan_and_highlight_analyze_are_structural_cannot_disable():
+    for node_type in ("highlight_scan", "highlight_analyze"):
+        p = get_default("highlight-scan-analyze")
+        next(s for s in p.stages if s.type == node_type).enabled = False
+        with pytest.raises(PipelineValidationError, match="structural"):
+            validate_pipeline_def(p)
+    validate_pipeline_def(get_default("highlight-scan-analyze"))  # unrelated copy untouched, still valid
+
+
+def test_highlight_scan_config_rejects_unknown_key():
+    with pytest.raises(ValidationError):
+        HighlightScanConfig(bogus_field="x")
+
+
+def test_highlight_analyze_config_rejects_unknown_key():
+    with pytest.raises(ValidationError):
+        HighlightAnalyzeConfig(bogus_field="x")
+
+
+def test_highlight_analyze_fps_only_accepts_1_10_or_15():
+    HighlightAnalyzeConfig(fps=1)
+    HighlightAnalyzeConfig(fps=10)
+    HighlightAnalyzeConfig(fps=15)
+    # fps=5 was strictly dominated by fps=10 (build plan "Experiment
+    # Findings") and stays excluded even though 15 was added — this is the
+    # whole point of the test, not an incidental case.
+    with pytest.raises(ValidationError):
+        HighlightAnalyzeConfig(fps=5)
+    with pytest.raises(ValidationError):
+        HighlightAnalyzeConfig(fps=2)
+    with pytest.raises(ValidationError):
+        HighlightAnalyzeConfig(fps=12)
+    with pytest.raises(ValidationError):
+        HighlightAnalyzeConfig(fps=20)
+
+
+def test_highlight_scan_system_prompt_and_initial_prompt_default_none_and_settable():
+    assert HighlightScanConfig().system_prompt is None
+    assert HighlightScanConfig().initial_prompt is None
+    cfg = HighlightScanConfig(system_prompt="custom system text", initial_prompt="custom initial text")
+    assert cfg.system_prompt == "custom system text"
+    assert cfg.initial_prompt == "custom initial text"
+
+
+def test_highlight_scan_off_allowlist_model_rejected():
+    pdef = get_default("highlight-scan-analyze")
+    next(s for s in pdef.stages if s.type == "highlight_scan").config["model"] = "gemini-1.0-nano-experimental"
+    with pytest.raises(PipelineValidationError, match="Unsupported model"):
+        validate_pipeline_def(pdef)
+
+
+def test_highlight_analyze_off_allowlist_model_rejected():
+    pdef = get_default("highlight-scan-analyze")
+    next(s for s in pdef.stages if s.type == "highlight_analyze").config["model"] = "gemini-1.0-nano-experimental"
+    with pytest.raises(PipelineValidationError, match="Unsupported model"):
+        validate_pipeline_def(pdef)
+
+
+def test_highlight_scan_analyze_unknown_config_key_rejected():
+    pdef = get_default("highlight-scan-analyze")
+    next(s for s in pdef.stages if s.type == "highlight_scan").config["not_a_real_key"] = 123
+    with pytest.raises(PipelineValidationError, match="Invalid config"):
+        validate_pipeline_def(pdef)
+
+
+def test_highlight_scan_analyze_missing_stage_type_rejected():
+    pdef = get_default("highlight-scan-analyze")
+    pdef.stages = [s for s in pdef.stages if s.type != "highlight_analyze"]
     with pytest.raises(PipelineValidationError, match="fixed stage set"):
         validate_pipeline_def(pdef)
 

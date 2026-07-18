@@ -200,6 +200,9 @@
   .seek-pill:hover { border-color: var(--accent); }
   .seek-pill.active { outline: 2px solid var(--accent); outline-offset: 1px; }
   .seek-pill.disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; background: transparent; border-style: dashed; }
+  /* Backwards (start > end) range — never render identically to a normal,
+     trustworthy pill (see rangeIsInverted()/eventPillHtml()). */
+  .seek-pill.pill-inverted { color: var(--yellow); border-color: var(--yellow); border-style: dashed; }
   .over-badge { color: var(--yellow); font-size: 0.68rem; }
 
   /* Spatial (Detect/Segment) overlay: frame stage + SVG boxes/masks + chips */
@@ -325,6 +328,21 @@
   .rail-row-label { font-weight: 600; }
   .rail-row-line2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .rail-row-caption { color: var(--text-dim); font-size: 0.74rem; font-style: italic; margin-top: 2px; width: 100%; }
+
+  /* ============================================================
+     highlight-scan-analyze — PASS-1 highlight timeline (replaces the
+     chunk-map table for THIS pipeline only; no charting lib, positioned
+     divs by percentage over the scoped run duration). Gated on
+     currentPipelineId in renderChunkMapHost() — the chunk-map table stays
+     unchanged for chunk-segment-tags.
+     ============================================================ */
+  .timeline-bar { position: relative; width: 100%; height: 36px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; overflow: hidden; }
+  .timeline-block { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; cursor: pointer; background: var(--accent); opacity: 0.45; transition: opacity 0.15s; }
+  .timeline-block:hover { opacity: 0.9; }
+  .timeline-block-complete { background: var(--green); opacity: 0.65; }
+  .timeline-block-errored { background: var(--red); opacity: 0.75; }
+  .timeline-block-running { background: var(--yellow); opacity: 0.75; }
+  .timeline-block-pending { background: var(--accent); opacity: 0.45; }
 </style>
 </head>
 <body>
@@ -596,7 +614,7 @@
     </div>
 
     <div class="card dedup-rail-card" id="dedup-rail-card">
-      <h2>Deduped Events</h2>
+      <h2 id="dedup-rail-title">Deduped Events</h2>
       <div class="dedup-rail-list" id="dedup-rail-list">
         <div class="rail-empty">No events yet — run a pipeline.</div>
       </div>
@@ -1233,6 +1251,19 @@ function scopeChipLabel(turn) {
   return secToMmss(turn.startSec) + ' → ' + secToMmss(turn.endSec);
 }
 
+// A range is "inverted" (start strictly after end) when an upstream bug hands
+// this file a backwards window — e.g. the live-verified highlight_analyze
+// pre/post-roll clamp bug (evaluator loop, 2026-07-18) rendered "1:46 → 1:25"
+// with ZERO visual distinction from a normal pill. The backend fix for the
+// root inverted-window cause is separate/parallel; this guard is the UI-side
+// backstop so a backwards range is never presented as if it were valid —
+// shared by every eventPillHtml() call site (chunk map, window/highlight
+// range labels, the highlight-bounds caption below) rather than re-derived
+// per caller.
+function rangeIsInverted(s, e) {
+  return typeof s === 'number' && typeof e === 'number' && !isNaN(s) && !isNaN(e) && s > e;
+}
+
 function eventPillHtml(startStr, endStr) {
   const sRes = mmssToSec(startStr);
   const eRes = mmssToSec(endStr);
@@ -1241,8 +1272,16 @@ function eventPillHtml(startStr, endStr) {
   }
   const s = sRes.value, e = eRes.value;
   const overBadge = (duration > 0 && (s > duration || e > duration)) ? ' <span class="over-badge">&gt; length</span>' : '';
+  const inverted = rangeIsInverted(s, e);
+  const invertedBadge = inverted
+    ? ' <span class="over-badge" title="Backwards range — start is after end (likely an upstream data bug, not a real span)">&#9888; backwards</span>'
+    : '';
   const label = (s === e) ? secToMmss(s) : (secToMmss(s) + ' → ' + secToMmss(e));
-  return '<button type="button" class="seek-pill" onclick="handlePillClick(' + s + ', ' + e + ', this)">' + label + overBadge + '</button>';
+  // Still a REAL button (handlePillClick already degrades a backwards/zero
+  // range to a single-frame seek-then-pause at the clamped start — never a
+  // crash), just visually flagged via `pill-inverted` so it never reads as a
+  // normal, trustworthy range.
+  return '<button type="button" class="seek-pill' + (inverted ? ' pill-inverted' : '') + '" onclick="handlePillClick(' + s + ', ' + e + ', this)">' + label + overBadge + invertedBadge + '</button>';
 }
 
 function renderEventsTable(events) {
@@ -1365,6 +1404,62 @@ function renderChunkMap() {
     '<th>#</th><th>Start&rarr;End</th><th>Duration</th><th>Worth?</th><th>Reason</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
   '</div>';
+}
+
+// ============================================================
+// highlight-scan-analyze PASS 1 output — a timeline BAR (positioned divs by
+// percentage over the scoped run duration, no charting lib), replacing the
+// chunk-map TABLE for THIS pipeline only (build plan "Playground": "PASS-1
+// output = a timeline bar ... replacing the chunk-map table for THIS
+// pipeline"). One block per highlight; click-to-seek reuses handlePillClick
+// (the same seek-and-pause path as every other clickable time affordance in
+// this file). Colored by the highlight's PASS-2 status (pending/running/
+// complete/errored), read off the SAME runState.windows entries the
+// highlight_start/highlight_result dispatch cases populate (findOrCreateWindow
+// keyed by highlight_index) — no separate status tracking introduced.
+// ============================================================
+function highlightTimelineBlockHtml(h, scopeStart, scopeSpan) {
+  const w = runState.windows.find(win => win.windowIndex === h.index);
+  const status = w ? w.status : 'pending';
+  const statusClass = status === 'complete' ? 'timeline-block-complete'
+    : status === 'errored' ? 'timeline-block-errored'
+    : status === 'running' ? 'timeline-block-running'
+    : 'timeline-block-pending';
+  const leftPct = clamp(((h.start_s - scopeStart) / scopeSpan) * 100, 0, 100);
+  const widthPct = Math.max(0.6, ((h.end_s - h.start_s) / scopeSpan) * 100);
+  const title = 'Highlight ' + h.index + ': ' + secToMmss(h.start_s) + ' → ' + secToMmss(h.end_s) +
+    (h.adjustment ? (' — ' + h.adjustment) : '');
+  return '<div class="timeline-block ' + statusClass + '" style="left:' + leftPct.toFixed(3) + '%; width:' + widthPct.toFixed(3) + '%;" ' +
+    'title="' + escHtml(title) + '" onclick="handlePillClick(' + h.start_s + ', ' + h.end_s + ', null)"></div>';
+}
+
+function renderHighlightTimeline() {
+  const host = document.getElementById('chunk-map-host');
+  if (!host) return;
+  if (!runState || !Array.isArray(runState.highlights) || !runState.highlights.length) { host.innerHTML = ''; return; }
+  // Scope the bar to the RUN's own requested start/end (not just the
+  // highlights' own min/max) so a highlight near either edge isn't rendered
+  // flush against the bar's boundary — falls back to the highlights' own
+  // span only if the run-scope inputs are unset/invalid (defensive, should
+  // not happen once a run has actually produced a highlight_map).
+  const scope = computeRunScope();
+  const scopeStart = scope.valid ? scope.startSec : Math.min.apply(null, runState.highlights.map(h => h.start_s));
+  const scopeEnd = scope.valid ? scope.endSec : Math.max.apply(null, runState.highlights.map(h => h.end_s));
+  const scopeSpan = Math.max(scopeEnd - scopeStart, 0.001);
+  const blocks = runState.highlights.map(h => highlightTimelineBlockHtml(h, scopeStart, scopeSpan)).join('');
+  host.innerHTML = '<div class="card">' +
+    '<h2>Highlight timeline (' + runState.highlights.length + ' highlight(s))</h2>' +
+    '<div class="timeline-bar">' + blocks + '</div>' +
+  '</div>';
+}
+
+// Dispatcher for the shared #chunk-map-host slot: highlight-scan-analyze
+// gets the NEW timeline bar above; every other pipeline keeps the existing
+// chunk-map TABLE (renderChunkMap(), untouched) — gated on currentPipelineId
+// so this repurposing never fires for chunk-segment-tags/vision-mimic.
+function renderChunkMapHost() {
+  if (currentPipelineId === 'highlight-scan-analyze') { renderHighlightTimeline(); return; }
+  renderChunkMap();
 }
 
 function renderSimplifiedTagsTable(tags) {
@@ -1899,8 +1994,8 @@ const MOCK_PIPELINES = [
 // flat set — rather than a per-pipeline-id map — stays correct for a future
 // data-driven Nth pipeline without needing a new map entry, since no pipeline
 // mixes in a structural type from "another" pipeline's set.
-const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze']);
-const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎' };
+const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze', 'highlight_scan', 'highlight_analyze']);
+const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎', highlight_scan: '🔦', highlight_analyze: '🔬' };
 
 function mockPipelineDefaults(id) {
   if (id === 'single-shot') return JSON.parse(JSON.stringify(SINGLE_SHOT_DEFAULT));
@@ -1948,9 +2043,9 @@ function setPipeline(id) {
   const isSingleShot = id === 'single-shot';
   document.getElementById('canvas-single-shot').style.display = isSingleShot ? 'block' : 'none';
   document.getElementById('canvas-vision-mimic').style.display = isSingleShot ? 'none' : 'block';
-  // chunk-segment-tags has no `analyze` node/agent_mode field at all — the
-  // single/multi top-bar toggle would be a dead control for it.
-  const hasAgentMode = !isSingleShot && id !== 'chunk-segment-tags';
+  // chunk-segment-tags/highlight-scan-analyze have no `analyze` node/agent_mode
+  // field at all — the single/multi top-bar toggle would be a dead control.
+  const hasAgentMode = !isSingleShot && id !== 'chunk-segment-tags' && id !== 'highlight-scan-analyze';
   document.getElementById('agent-mode-row').style.display = hasAgentMode ? 'block' : 'none';
   loadPipelineDefaults(id);
   updateRunButtonState();
@@ -2024,6 +2119,8 @@ function nodeKeyValues(stage) {
     case 'video_window': return [];
     case 'chunk_segment': return [c.model, 'min ' + c.min_chunk_s + 's / max ' + c.max_chunk_s + 's'];
     case 'chunk_analyze': return [c.model, 'overlap ' + c.overlap_s + 's'];
+    case 'highlight_scan': return [c.model, 'min ' + c.min_highlight_s + 's / max ' + c.max_highlight_s + 's'];
+    case 'highlight_analyze': return [c.model, 'fps ' + c.fps, 'pre ' + c.preroll_s + 's / post ' + c.postroll_s + 's'];
     default: return [];
   }
 }
@@ -2121,7 +2218,9 @@ const CONFIG_FIELD_ORDER = {
   dedup: ['key_by'],
   video_window: [],
   chunk_segment: ['model', 'min_chunk_s', 'max_chunk_s', 'rough_fps', 'analyze_all'],
-  chunk_analyze: ['model', 'thinking', 'overlap_s']
+  chunk_analyze: ['model', 'thinking', 'overlap_s'],
+  highlight_scan: ['model', 'rough_fps', 'min_highlight_s', 'max_highlight_s', 'system_prompt', 'initial_prompt'],
+  highlight_analyze: ['model', 'fps', 'thinking', 'preroll_s', 'postroll_s']
 };
 const CONFIG_FIELD_HINTS = {
   detect_crop: {
@@ -2157,12 +2256,57 @@ const CONFIG_FIELD_HINTS = {
   chunk_analyze: {
     model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
     overlap_s: { widget: 'number', step: 1, label: 'Overlap (s)' }
+  },
+  // fps/system_prompt/initial_prompt get bespoke widgets (segmented {1,10}
+  // choice / prompt-card textareas) in nodeConfigFieldsHtml — no hint entry
+  // needed for those here (never reached; bespoke branches `return` first).
+  highlight_scan: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    rough_fps: { widget: 'number', step: 0.5, label: 'Rough fps' },
+    min_highlight_s: { widget: 'number', step: 1, label: 'Min highlight (s)' },
+    max_highlight_s: { widget: 'number', step: 1, label: 'Max highlight (s)' }
+  },
+  highlight_analyze: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    // fps=5 is strictly dominated by fps=10 at the same accuracy gain over
+    // fps=1 (build plan "Experiment Findings") and stays excluded; fps=15
+    // was added later per an explicit founder ask — the backend's
+    // HighlightAnalyzeConfig.fps is a Literal[1, 10, 15], not a free float,
+    // so this is a segmented choice (fpsChoiceField), never a slider/number
+    // field. preroll_s/postroll_s ARE real bounded sliders per the plan.
+    preroll_s: { widget: 'range', min: 0, max: 15, step: 0.5, unit: 's', label: 'Pre-roll' },
+    postroll_s: { widget: 'range', min: 0, max: 10, step: 0.5, unit: 's', label: 'Post-roll' }
   }
 };
 
 function numberField(key, label, value, step) {
   return '<label>' + escHtml(label) + '</label>' +
     '<input type="number" step="' + step + '" value="' + (value != null ? value : '') + '" onchange="setNodeConfigValue(\'' + key + '\', parseFloat(this.value))">';
+}
+// Bounded numeric slider (e.g. HighlightAnalyzeConfig.preroll_s/postroll_s,
+// 0-15s/0-10s) — a real <input type="range">, distinct from numberField()'s
+// unbounded number box. Live-updates the adjacent readout on `input` (every
+// drag tick) without re-rendering the whole node-config panel (which would
+// destroy/recreate the range input mid-drag) — only setNodeConfigValue()
+// (which touches #dag-nodes, not this panel) runs on every tick.
+function rangeField(key, label, value, min, max, step, unit) {
+  const spanId = 'range-live-' + key;
+  return '<label>' + escHtml(label) + ': <span id="' + spanId + '">' + value + (unit || '') + '</span></label>' +
+    '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '" ' +
+    'oninput="document.getElementById(\'' + spanId + '\').textContent = this.value + \'' + (unit || '') + '\'; setNodeConfigValue(\'' + key + '\', parseFloat(this.value));">';
+}
+// Segmented {1,10,15} choice for HighlightAnalyzeConfig.fps — a real backend
+// Literal[1, 10, 15] (fps=5 strictly dominated per the build plan's
+// Experiment Findings, and stays excluded; fps=15 added per explicit founder
+// ask, unrelated to the fps=5 finding), so this is deliberately NOT a free
+// slider/number field. Same .tabs button idiom as thinkingTabsField()/
+// agentModeFieldHtml() below.
+function fpsChoiceField(value) {
+  const active = (value === 10 || value === 15) ? value : 1;
+  return '<label>FPS</label><div class="tabs" style="margin-bottom:0; border-bottom:none;">' +
+    [1, 10, 15].map(v => '<button type="button" class="tab' + (v === active ? ' active' : '') +
+      '" onclick="setNodeConfigValue(\'fps\', ' + v + '); renderNodeConfigPanel(currentPipelineDef.stages[selectedNodeIndex]);">' + v + '</button>').join('') +
+    '</div>';
 }
 // `options` entries may be a plain string (value === display label, e.g. model
 // ids) or a {value,label} pair when the raw config value isn't a good display
@@ -2273,6 +2417,75 @@ function clearNodeSchema() {
   renderNodeConfigPanel(stage);
 }
 
+// ============================================================
+// Generalized prompt-card widget — SAME pattern as nodeSchemaCardHtml/
+// system_instruction above (file-load, clear, char count), but parametrized
+// over an arbitrary config KEY so one node can carry TWO independent prompt
+// fields (HighlightScanConfig.system_prompt + .initial_prompt), which the
+// single-field nodeSchemaCardHtml above cannot do (it always writes
+// stage.config.system_instruction). Empty textarea -> sends "" -> the
+// backend's resolve_system_prompt()/build_scan_prompt() normalize that to
+// None (bundled default) — same "empty means default" discipline as
+// system_instruction; there is no separate per-field reset button, exactly
+// like system_instruction — "reset to default" is the shared "Reset node to
+// production defaults" button already on every node-config-card.
+// nodeSchemaFileNames is keyed by `stage.id + ':' + key` here (vs. bare
+// stage.id for the single-field analyze widget) so two fields on the same
+// node never collide.
+// ============================================================
+function nodePromptCardHtml(stage, key, label, placeholder) {
+  const text = stage.config[key] || '';
+  const nameKey = stage.id + ':' + key;
+  const fileName = nodeSchemaFileNames[nameKey];
+  return '<div class="card" style="margin-top:12px; background:var(--bg);">' +
+    '<h2 style="font-size:0.95rem;">' + escHtml(label) + '</h2>' +
+    '<textarea rows="5" placeholder="' + escHtml(placeholder) + '" oninput="onNodePromptInput(\'' + key + '\', this.value)">' + escHtml(text) + '</textarea>' +
+    '<div class="field-inline" style="margin-top:8px;">' +
+      '<input type="file" accept=".md,.markdown,.json,.txt" onchange="onNodePromptFileChange(\'' + key + '\', event)">' +
+      '<button type="button" class="btn btn-sm" onclick="clearNodePrompt(\'' + key + '\')">Clear</button>' +
+    '</div>' +
+    '<div class="selection-badges">' +
+      (fileName ? '<span class="badge badge-neutral" id="node-prompt-file-chip-' + key + '">' + escHtml(fileName) + '</span>' : '') +
+      '<span class="badge badge-neutral" id="node-prompt-count-' + key + '">' + text.length + ' chars</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function onNodePromptInput(key, value) {
+  if (selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  stage.config[key] = value;
+  delete nodeSchemaFileNames[stage.id + ':' + key];
+  const countEl = document.getElementById('node-prompt-count-' + key);
+  if (countEl) countEl.textContent = value.length + ' chars';
+  const chipEl = document.getElementById('node-prompt-file-chip-' + key);
+  if (chipEl) chipEl.style.display = 'none';
+}
+
+function onNodePromptFileChange(key, event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file || selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  const reader = new FileReader();
+  reader.onload = () => {
+    stage.config[key] = String(reader.result || '');
+    nodeSchemaFileNames[stage.id + ':' + key] = file.name;
+    renderNodeConfigPanel(stage);
+    logMsg('Loaded prompt file for node "' + stage.label + '" (' + key + '): ' + file.name, 'log-info');
+  };
+  reader.onerror = () => logMsg('Failed to read prompt file: ' + file.name, 'log-err');
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function clearNodePrompt(key) {
+  if (selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  stage.config[key] = '';
+  delete nodeSchemaFileNames[stage.id + ':' + key];
+  renderNodeConfigPanel(stage);
+}
+
 // Renders node-config inputs bound to the EXACT keys present on the fetched
 // stage.config object (never a hand-maintained field list that could drift
 // from service/pipelines/models.py) — mutates values only via
@@ -2322,6 +2535,33 @@ function nodeConfigFieldsHtml(stage) {
       if (c.analyze_all) html += '<div class="warn-line" style="margin-top:2px;">Forces every chunk worth_analysis=true regardless of reason — a control run, not the production default.</div>';
       return;
     }
+    // highlight_scan's system_prompt/initial_prompt: two independent
+    // playground-editable Gemini prompt fields (build plan "Playground"),
+    // reusing the generalized nodePromptCardHtml widget (NOT the single-field
+    // nodeSchemaCardHtml above, which is hardwired to 'analyze'/
+    // system_instruction only).
+    if (stage.type === 'highlight_scan' && key === 'system_prompt') {
+      html += nodePromptCardHtml(
+        stage, 'system_prompt', 'System prompt (Highlight Scan)',
+        'Optional. Full-replacement override of the bundled PASS-1 system prompt. Empty = use the bundled default.',
+      );
+      return;
+    }
+    if (stage.type === 'highlight_scan' && key === 'initial_prompt') {
+      html += nodePromptCardHtml(
+        stage, 'initial_prompt', 'Initial prompt (Highlight Scan)',
+        'Optional. Overrides the bundled per-run prompt template ($start_sec/$end_sec supported via safe_substitute). Empty = use the bundled default.',
+      );
+      return;
+    }
+    // highlight_analyze's fps is a real backend Literal[1, 10, 15] (fps=5
+    // strictly dominated — build plan "Experiment Findings" — stays
+    // excluded; fps=15 added per explicit founder ask) — a segmented
+    // choice, never a free slider/number field.
+    if (stage.type === 'highlight_analyze' && key === 'fps') { html += fpsChoiceField(c.fps); return; }
+    // highlight_analyze's `thinking` is the same Optional[Literal[...]]
+    // shape as analyze's/chunk_analyze's — reuse the bespoke tabs widget.
+    if (stage.type === 'highlight_analyze' && key === 'thinking') { html += thinkingTabsField(c.thinking); return; }
 
     const hint = hints[key];
     if (hint && hint.widget === 'select') {
@@ -2329,6 +2569,8 @@ function nodeConfigFieldsHtml(stage) {
       html += selectField(key, hint.label || key, c[key], options);
     } else if (hint && hint.widget === 'number') {
       html += numberField(key, hint.label || key, c[key], hint.step || 1);
+    } else if (hint && hint.widget === 'range') {
+      html += rangeField(key, hint.label || key, c[key], hint.min, hint.max, hint.step, hint.unit);
     } else {
       html += genericTextField(key, c[key]);
     }
@@ -2447,6 +2689,14 @@ function resetRunView() {
     startedAt: null, totalMs: null, errors: [], sawRunComplete: false,
     format: null, dedupApplied: null, dedupSkipReason: null, degradedCounts: null, perStageTiming: null,
     nativeFps: null, chunkMap: [],
+    // highlight-scan-analyze PASS 1 output — the finalized highlight list
+    // from the `highlight_map` event (service/pipelines/highlight_scan.py's
+    // finalize_highlights() shape: index/start_s/end_s/adjustment/
+    // start_is_synthetic/end_is_synthetic). Empty for every other pipeline
+    // (that event type is never emitted outside highlight-scan-analyze).
+    // Drives renderHighlightTimeline() (chunk-map-host) + the repurposed
+    // highlights rail (renderDedupRail(), gated on currentPipelineId).
+    highlights: [],
     // Task 3: raw (possibly-duplicate) normalized rail rows appended live as
     // window_result/chunk_result/error(chunk_index) events arrive — swapped
     // out for the real deduped list once run_complete arrives (see
@@ -2460,7 +2710,7 @@ function resetRunView() {
   if (noteLine) noteLine.textContent = '';
   renderRunHeader();
   renderCompactRunStatus();
-  renderChunkMap();
+  renderChunkMapHost();
   renderWindowCards();
   renderDedupedClips();
   renderDedupRail();
@@ -2659,18 +2909,48 @@ function normalizeClipsToEvents(clips) {
   });
 }
 
-function windowCardHtml(w) {
+// highlight-scan-analyze's per-highlight card carries w.highlightBounds (set
+// by the `highlight_start` dispatch case) alongside the card's own range
+// pill (windowRangeLabel(w) -> w.scope, the PRE/POST-ROLL-EXPANDED window
+// actually sent to Gemini). Before this fix that state was captured but
+// never rendered ("dead state" — evaluator loop interpretation-call (c),
+// 2026-07-18), leaving no visible explanation for why this card's range
+// differs from the timeline bar's/highlights rail's range (both of which
+// show the highlight's OWN [start_s,end_s] bounds, not the expanded window).
+// Absent (undefined) for every other pipeline's cards — this renders nothing
+// extra for chunk-segment-tags/vision-mimic, gated purely on the field's
+// presence, no pipeline-id branching needed.
+function highlightCardRangeHtml(w) {
   const rangeHtml = windowRangeLabel(w);
+  if (!Array.isArray(w.highlightBounds) || w.highlightBounds.length !== 2) {
+    return '<span onclick="event.stopPropagation()">' + rangeHtml + '</span>';
+  }
+  const ownPill = eventPillHtml(secToMmss(w.highlightBounds[0]), secToMmss(w.highlightBounds[1]));
+  return (
+    '<span class="badge badge-neutral" style="font-size:0.68rem;" ' +
+      'title="Analyzed window sent to Gemini for this highlight — includes pre/post-roll context, wider than the highlight\'s own reported span">analyzed</span>' +
+    '<span onclick="event.stopPropagation()">' + rangeHtml + '</span>' +
+    '<span class="badge badge-neutral" style="font-size:0.68rem;" ' +
+      'title="The highlight\'s OWN [start_s,end_s] bounds from PASS 1 — emitted events are clipped to this, not the analyzed window above; the timeline bar and Highlights rail both show THIS range">own bounds</span>' +
+    '<span onclick="event.stopPropagation()">' + ownPill + '</span>'
+  );
+}
+
+function windowCardHtml(w) {
+  const rangeHtml = highlightCardRangeHtml(w);
   const isErrored = w.status === 'errored';
   const count = Array.isArray(w.clips) ? w.clips.length : (w.status === 'running' ? '…' : 0);
   const timing = w.modelMs != null ? fmtLatency(w.modelMs) : '';
   const cropsHtml = renderCropsStrip(w.thumbnails);
   let body = '';
   if (isErrored) {
-    // PASS-2 outage for this chunk (R1 fix) — never rendered as a clean
-    // "0 event(s)" result. Always visible (not gated on w.expanded) so a
-    // degraded chunk can't hide behind a collapsed card.
-    body += '<div class="err-line" style="margin:8px 12px;">chunk failed: ' + escHtml(w.errorMessage || 'PASS-2 call failed') + '</div>';
+    // PASS-2 outage for this chunk/highlight (R1 fix, reused verbatim by the
+    // highlight_index branch in handlePipelineEvent's `case 'error':`) —
+    // never rendered as a clean "0 event(s)" result. Always visible (not
+    // gated on w.expanded) so a degraded unit can't hide behind a collapsed
+    // card. "PASS-2" (not "chunk") — this same card/label is shared by
+    // chunk-segment-tags' chunks AND highlight-scan-analyze's highlights.
+    body += '<div class="err-line" style="margin:8px 12px;">PASS-2 failed: ' + escHtml(w.errorMessage || 'PASS-2 call failed') + '</div>';
   }
   if (w.expanded) {
     if (w.format === 'raw-text') {
@@ -2695,7 +2975,7 @@ function windowCardHtml(w) {
       (isErrored ? ' style="outline:2px solid var(--red);"' : '') + '>' +
     '<div class="window-card-header" onclick="toggleWindowExpand(' + w.windowIndex + ')">' +
       '<span class="badge badge-neutral">Window ' + w.windowIndex + (runState.plannedWindows ? ('/' + runState.plannedWindows) : '') + '</span>' +
-      '<span onclick="event.stopPropagation()">' + rangeHtml + '</span>' +
+      rangeHtml +
       (isErrored
         ? '<span class="badge badge-b">ERRORED</span>'
         : '<span class="badge badge-neutral">' + count + ' event(s)</span>') +
@@ -2716,6 +2996,16 @@ function renderWindowCards() {
 function renderDedupedClips() {
   const card = document.getElementById('deduped-card');
   if (!card) return;
+  // highlight-scan-analyze has NO dedup stage at all (build plan: "event
+  // clipping replaces dedup") — run_complete.clips is the raw per-highlight
+  // union, not a deduped list, so this "Deduped clips" full-detail table is
+  // deleted/hidden for this pipeline (build plan "Playground": "no deduped
+  // clips exist"). Its PASS-2 tags are still fully visible via the existing
+  // per-highlight expandable cards below (window-cards-host), each rendering
+  // via renderTimeTagsTable — nothing is silently dropped, only this
+  // specific "deduped" framing is withheld since it would be a lie for this
+  // pipeline. Every OTHER pipeline's behavior here is unchanged.
+  if (currentPipelineId === 'highlight-scan-analyze') { card.style.display = 'none'; return; }
   if (!runState || !Array.isArray(runState.dedupedClips)) { card.style.display = 'none'; return; }
   card.style.display = 'block';
   if (runState.format === 'simplified-tags-v1') {
@@ -2879,9 +3169,76 @@ function isRailNearBottom(listEl) {
 // Never force-scrolls: only auto-scrolls to the new bottom if the list was
 // ALREADY near its bottom before this render (never yanks a user who has
 // scrolled up to review an earlier row).
+// ============================================================
+// highlight-scan-analyze's repurposed rail (build plan "Playground":
+// "Repurpose the dedup rail ... into a highlights rail (click-to-seek index
+// over PASS-1 highlights)"). Distinct from toRailRow()/railRowHtml() above:
+// this indexes PASS-1 SPANS (runState.highlights, from the `highlight_map`
+// event), not per-clip tag rows — there is no dedup/final-clip list to index
+// for this pipeline (see renderDedupedClips()'s hide-for-this-pipeline note).
+// Status badge is read off the SAME runState.windows entries the timeline
+// bar (renderHighlightTimeline()) already reads — one shared status source,
+// no duplicate tracking.
+// ============================================================
+function highlightRailRowHtml(h) {
+  const w = runState && runState.windows.find(win => win.windowIndex === h.index);
+  const status = w ? w.status : 'pending';
+  const isErrored = status === 'errored';
+  const statusHtml = status === 'complete'
+    ? ('<span class="badge badge-a">' + (Array.isArray(w.clips) ? w.clips.length : 0) + ' tag(s)</span>')
+    : isErrored ? '<span class="badge badge-b">errored</span>'
+    : status === 'running' ? '<span class="badge badge-hint">analyzing…</span>'
+    : '<span class="badge badge-neutral">pending</span>';
+  const synthHtml = (h.start_is_synthetic || h.end_is_synthetic)
+    ? ' <span class="badge badge-neutral" title="internal max-length split seam (highlight_scan.repair_highlight_bounds) — not a genuine PASS-1 boundary">split</span>'
+    : '';
+  const timeHtml = '<span class="seek-pill">' + secToMmss(h.start_s) + ' → ' + secToMmss(h.end_s) + '</span>';
+  const adjHtml = h.adjustment ? ('<div class="rail-row-caption">' + escHtml(h.adjustment) + '</div>') : '';
+  // Regression fix (evaluator loop, 2026-07-18): a highlight_analyze error
+  // used to leave this row stuck on the 'running'/"analyzing…" badge FOREVER
+  // (even past run_complete — errors are advisory/non-fatal, so the run
+  // still completed normally) because `case 'error':` in handlePipelineEvent
+  // only ever branched on evt.chunk_index, never evt.highlight_index — the
+  // matching window's status was simply never updated. Now that the
+  // highlight_index branch marks it 'errored', this row picks that up for
+  // free via the SAME status lookup above; the ONLY thing added here is the
+  // `.rail-row-errored` red border/background (reused, not reinvented — same
+  // class the pre-existing chunk-pipeline rail rows use) + surfacing
+  // w.errorMessage, so an errored highlight is unmistakably distinct from a
+  // clean "pending"/"analyzing…" row, not just a text-badge difference.
+  const errCaptionHtml = (isErrored && w && w.errorMessage)
+    ? ('<div class="rail-row-caption">' + escHtml(w.errorMessage) + '</div>')
+    : '';
+  const line1 = '<div class="rail-row-line1">' + timeHtml +
+    '<span class="rail-row-label">Highlight ' + h.index + '</span>' + statusHtml + synthHtml + '</div>';
+  return '<button type="button" class="rail-row' + (isErrored ? ' rail-row-errored' : '') + '" onclick="handleRailRowClick(' + h.start_s + ', ' + h.end_s + ', this)">' + line1 + adjHtml + errCaptionHtml + '</button>';
+}
+
+function renderHighlightsRail(listEl) {
+  const wasNearBottom = listEl.scrollHeight === 0 || isRailNearBottom(listEl);
+  if (!runState || !Array.isArray(runState.highlights) || !runState.highlights.length) {
+    listEl.innerHTML = '<div class="rail-empty">No highlights yet — run the pipeline.</div>';
+    return;
+  }
+  listEl.innerHTML = runState.highlights.map(highlightRailRowHtml).join('');
+  if (wasNearBottom) listEl.scrollTop = listEl.scrollHeight;
+}
+
 function renderDedupRail() {
   const listEl = document.getElementById('dedup-rail-list');
+  const titleEl = document.getElementById('dedup-rail-title');
   if (!listEl) return;
+
+  // Gate on currentPipelineId — every other pipeline (chunk-segment-tags,
+  // vision-mimic, single-shot) keeps the EXACT "Deduped Events" rail below,
+  // untouched.
+  if (currentPipelineId === 'highlight-scan-analyze') {
+    if (titleEl) titleEl.textContent = 'Highlights';
+    renderHighlightsRail(listEl);
+    return;
+  }
+  if (titleEl) titleEl.textContent = 'Deduped Events';
+
   const wasNearBottom = listEl.scrollHeight === 0 || isRailNearBottom(listEl);
 
   let rowsHtml = [];
@@ -3010,6 +3367,30 @@ function handlePipelineEvent(evt) {
       }
       break;
     }
+    case 'highlight_map': // highlight-scan-analyze PASS 1 — the finalized highlight list (drives the timeline bar + highlights rail, NOT a table)
+      runState.highlights = evt.highlights || [];
+      break;
+    case 'highlight_start': { // highlight-scan-analyze PASS 2 — reuses the SAME generic per-unit card plumbing as chunk_start (findOrCreateWindow keyed by highlight_index)
+      const w = findOrCreateWindow(evt.highlight_index);
+      w.status = 'running';
+      if (Array.isArray(evt.scope)) w.scope = evt.scope; // the PRE/POST-ROLL-EXPANDED analyzed window actually sent to Gemini, not the highlight's own bounds
+      w.highlightBounds = Array.isArray(evt.highlight_bounds) ? evt.highlight_bounds : null;
+      break;
+    }
+    case 'highlight_result': {
+      const w = findOrCreateWindow(evt.highlight_index);
+      w.format = evt.format || null;
+      w.clips = evt.clips || []; // already clipped to the highlight's OWN [start_s,end_s] server-side (executors._clip_events_to_highlight_bounds) — never the expanded scope
+      w.modelMs = evt.timing && evt.timing.model_ms;
+      w.droppedOutsideBounds = evt.dropped_outside_bounds != null ? evt.dropped_outside_bounds : null;
+      w.status = 'complete';
+      // No context_summary field for this pipeline (no context_chain stage —
+      // build plan: "pre-roll video replaces the lossy text context chain")
+      // and NO liveEvents push here: this pipeline's rail is repurposed to
+      // index PASS-1 highlights (renderHighlightsRail()), not per-clip rows
+      // — see renderDedupRail()'s currentPipelineId gate.
+      break;
+    }
     case 'run_complete':
       runState.sawRunComplete = true;
       runState.dedupedClips = evt.clips || [];
@@ -3053,13 +3434,44 @@ function handlePipelineEvent(evt) {
           });
         }
       }
+      // REGRESSION FIX (evaluator loop, 2026-07-18) — highlight_analyze's
+      // PASS-2 outages carry `highlight_index` (the executors.py contract:
+      // stage_id="highlight_analyze" + highlight_index on every error this
+      // node yields — see the highlight_start/highlight_result handlers
+      // above, which key off the SAME field), mirroring chunk_analyze's
+      // chunk_index above verbatim. Before this branch existed, an errored
+      // highlight only ever reached `runState.errors[]`/the Message Log —
+      // the matching window's status stayed 'running' FOREVER (even past
+      // run_complete, since errors are advisory/non-fatal and the run
+      // completes normally), so the per-highlight card/timeline block/
+      // Highlights-rail row all displayed a permanent, silently-wrong
+      // "analyzing…"/pending state for a call that had already failed.
+      //
+      // Unlike the chunk_index branch above, this does NOT need a parallel
+      // runState.liveEvents push: the Highlights rail
+      // (renderHighlightsRail()/highlightRailRowHtml()) and the timeline
+      // block (renderHighlightTimeline()/highlightTimelineBlockHtml()) both
+      // already read status straight off THIS SAME `runState.windows` entry
+      // on every render — marking it 'errored' here is sufficient for both
+      // to flip to their errored styling (`.rail-row-errored` /
+      // `.timeline-block-errored`) with zero further plumbing. (The
+      // chunk_index branch's liveEvents push exists because the OLD "Deduped
+      // Events" rail has no equivalent always-available backing list to read
+      // status from before run_complete — the Highlights rail does, via
+      // runState.highlights + this window lookup, so that extra mechanism
+      // would be dead code here.)
+      if (evt.highlight_index != null) {
+        const w = findOrCreateWindow(evt.highlight_index);
+        w.status = 'errored';
+        w.errorMessage = evt.message || 'PASS-2 call failed';
+      }
       break;
     default:
       logMsg('Unknown pipeline event type: ' + evt.type, 'log-err');
   }
   renderRunHeader();
   renderCompactRunStatus();
-  renderChunkMap();
+  renderChunkMapHost();
   renderWindowCards();
   renderDedupedClips();
   renderDedupRail();
