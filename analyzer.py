@@ -7,6 +7,8 @@ import logging
 from typing import Optional
 from PIL import Image
 
+from service import taxonomy_mapper
+
 logger = logging.getLogger(__name__)
 
 # Default when caller does not pass request_timeout_ms (matches ServiceConfig default).
@@ -47,9 +49,23 @@ def _build_response_schema(player_ids):
     Mirrors backend ``models/functions.py:build_response_schema`` (proven pattern:
     ``genai.types.Schema`` + ``response_mime_type='application/json'``).
 
-    ``actor_player_id`` is a STRING enum of the video's player_ids — the grounded
-    identity. String enum is the proven, integer-enum-free pattern. When player_ids
-    is empty the field is an unconstrained STRING (legacy/no-reference path).
+    D5 (simplified-4-axis-taxonomy adoption, 2026-07-12): promotes the QA
+    pipeline's ENUM-constrained axis1/axis3/axis4 schema
+    (``service/pipelines/simplified_tags.py``) into production, replacing the
+    old free-string ``action``/``technique`` fields (which relied on
+    post-hoc frozenset sanitization in ``taxonomy_mapper.py`` — a silent
+    ``unknown -> other`` path this closes at the source). ``technique_guess``
+    is a deliberately UNCONSTRAINED free-text field (D1) — a drift/regression
+    signal only, never gating, mapped into the curated per-class shortlist by
+    ``taxonomy_mapper.resolve_technique_shortlist`` downstream in
+    ``service/sns.py``.
+
+    ``actor_player_id`` is UNCHANGED from the pre-existing production
+    machinery (D5 — do NOT adopt the QA pipeline's free-text/positional
+    actor, per INS-073: this call sends reference images and can ground
+    identity; the QA chunk-segment path cannot): a STRING enum of the
+    video's player_ids. When player_ids is empty the field is an
+    unconstrained STRING (legacy/no-reference path).
     """
     actor_schema_kwargs = dict(
         type=types.Type.STRING,
@@ -63,21 +79,42 @@ def _build_response_schema(player_ids):
 
     clip_schema = types.Schema(
         type=types.Type.OBJECT,
-        required=["start_frame", "end_frame", "action", "technique", "actor_player_id"],
+        required=[
+            "start_frame", "end_frame",
+            "axis1_position", "axis3_action", "axis4_outcome",
+            "actor_player_id",
+        ],
         properties={
             "start_frame": types.Schema(type=types.Type.INTEGER),
             "end_frame": types.Schema(type=types.Type.INTEGER),
-            "action": types.Schema(
-                type=types.Type.STRING,
-                description="Action Type enum value from the taxonomy (snake_case).",
+            "axis1_position": types.Schema(
+                type=types.Type.ARRAY,
+                items=types.Schema(type=types.Type.STRING, enum=list(taxonomy_mapper.AXIS1_POSITION)),
+                description=(
+                    "Axis 1 — Position (multi-label). One or more exact enum values "
+                    "from the taxonomy describing body configuration."
+                ),
             ),
-            "technique": types.Schema(
-                type=types.Type.STRING,
-                description="Technique Type enum value from the taxonomy (snake_case); 'other' if none fits.",
+            "axis3_action": types.Schema(
+                type=types.Type.ARRAY,
+                items=types.Schema(type=types.Type.STRING, enum=list(taxonomy_mapper.AXIS3_ACTION)),
+                description=(
+                    "Axis 3 — Action/Technique Class (multi-label). One or more exact "
+                    "enum values from the taxonomy."
+                ),
             ),
-            "specific_technique": types.Schema(
+            "axis4_outcome": types.Schema(
                 type=types.Type.STRING,
-                description="Human-readable technique name, e.g. 'Double Leg Takedown'.",
+                enum=list(taxonomy_mapper.AXIS4_OUTCOME),
+                description="Axis 4 — Outcome. Exactly one exact enum value from the taxonomy.",
+            ),
+            "technique_guess": types.Schema(
+                type=types.Type.STRING,
+                description=(
+                    "OPTIONAL free-text specific-technique guess (e.g. 'possibly a kimura'). "
+                    "Ungated — never defines or replaces the enum axes above; a drift/"
+                    "regression signal only."
+                ),
             ),
             "actor_player_id": types.Schema(**actor_schema_kwargs),
             "identity_uncertain": types.Schema(
@@ -196,23 +233,34 @@ class BJJTechniqueAnalyzer:
 
         PREVIOUS CONTEXT: "{previous_context if previous_context else "Start of the match."}"
 
+        Tag every distinct grappling exchange visible in this window using EXACTLY the
+        4-axis simplified taxonomy given in the system instruction.
+
         INSTRUCTIONS:
         1. **Analyze the Flow**: Use frame numbers to define start/end points.
-        2. **Resolve Ambiguity**: Use biomechanics.
+        2. **Resolve Ambiguity**: Use biomechanics. Every axis below has an honest
+           "unclear"/"scramble"/"transition" value — use it instead of guessing confidently
+           wrong.
         3. **Context Awareness**: Use PREVIOUS CONTEXT.
-        4. **Identify the Actor**: For each technique, set `actor_player_id` to the player_id of the
+        4. **Identify the Actor**: For each tag, set `actor_player_id` to the player_id of the
            athlete performing it, chosen from the provided players (see Athlete Identification below).
-        5. **Use Enum Values**: The `action` and `technique` fields MUST use exact values from the taxonomy. Do NOT invent new values.
-        6. **Generate Output**: Return ONLY valid JSON matching this format:
+        5. **Use Enum Values ONLY**: `axis1_position` (Axis 1 — Position, one or more enum values),
+           `axis3_action` (Axis 3 — Action/Technique Class, one or more enum values), and
+           `axis4_outcome` (Axis 4 — Outcome, exactly one enum value) MUST use exact values from
+           the taxonomy. Do NOT invent new values, do NOT abbreviate, do NOT combine axes.
+        6. **Optional technique guess**: `technique_guess` is OPTIONAL free text (e.g. "possibly a
+           kimura") — it never gates or replaces the enum axes above.
+        7. **Generate Output**: Return ONLY valid JSON matching this format:
         {{
             "current_context_summary": "string",
             "clips": [
                 {{
                     "start_frame": int,
                     "end_frame": int,
-                    "action": "one of the Action Type enum values from the taxonomy (e.g. takedown, submission_attempt, pass, sweep, guard_bottom, mount, back_control, etc.)",
-                    "technique": "one of the Technique Type enum values from the taxonomy (e.g. double_leg, armbar, guillotine, knee_cut_pass, etc.) — use 'other' if nothing fits",
-                    "specific_technique": "string (human-readable name, e.g. 'Double Leg Takedown')",
+                    "axis1_position": ["<Axis 1 enum value>", "..."],
+                    "axis3_action": ["<Axis 3 enum value>", "..."],
+                    "axis4_outcome": "<Axis 4 enum value>",
+                    "technique_guess": "string (optional, e.g. 'double leg takedown')",
                     "actor_player_id": "the player_id of the athlete performing the technique (must be one of the provided players)",
                     "identity_uncertain": false,
                     "reasoning": "string — may mention gi color / top-bottom as a descriptor, never as identity",
@@ -552,7 +600,10 @@ class BJJMultiAgentAnalyzer:
         1. Synthesize these views into a single ground truth.
         2. Resolve conflicts.
         3. {id_hint}
-        4. Use EXACT enum values from the taxonomy for `action` and `technique` fields. Do NOT invent new values.
+        4. Use EXACT enum values from the taxonomy for `axis1_position` (Axis 1 — Position,
+           one or more values), `axis3_action` (Axis 3 — Action/Technique Class, one or more
+           values), and `axis4_outcome` (Axis 4 — Outcome, exactly one value). Do NOT invent
+           new values. `technique_guess` is OPTIONAL free text and never gates these axes.
         5. Output the final analysis in the required JSON format:
         {{
             "current_context_summary": "string",
@@ -560,9 +611,10 @@ class BJJMultiAgentAnalyzer:
                 {{
                     "start_frame": int,
                     "end_frame": int,
-                    "action": "one of the Action Type enum values from the taxonomy (e.g. takedown, submission_attempt, pass, sweep, guard_bottom, mount, back_control, etc.)",
-                    "technique": "one of the Technique Type enum values from the taxonomy (e.g. double_leg, armbar, guillotine, knee_cut_pass, etc.) — use 'other' if nothing fits",
-                    "specific_technique": "string (human-readable name, e.g. 'Double Leg Takedown')",
+                    "axis1_position": ["<Axis 1 enum value>", "..."],
+                    "axis3_action": ["<Axis 3 enum value>", "..."],
+                    "axis4_outcome": "<Axis 4 enum value>",
+                    "technique_guess": "string (optional, e.g. 'double leg takedown')",
                     "actor_player_id": "the player_id of the athlete performing the technique (must be one of the provided players)",
                     "identity_uncertain": false,
                     "reasoning": "string — may mention gi color / top-bottom as a descriptor, never as identity",
@@ -572,7 +624,7 @@ class BJJMultiAgentAnalyzer:
         }}
 
         TAXONOMY REFERENCE:
-        (See system instruction — it contains the full list of valid Action Type and Technique Type enum values)
+        (See system instruction — it contains the full list of valid Axis 1/3/4 enum values)
         """
 
         try:

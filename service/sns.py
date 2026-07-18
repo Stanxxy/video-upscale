@@ -1,8 +1,11 @@
 import boto3
 import json
+import logging
 from uuid import UUID, uuid4
 from service.models import VideoEventWithCandidates, VideoEventCandidate, AnalysisCompleteEvent
-from service.taxonomy_mapper import VALID_ACTIONS, VALID_TECHNIQUES
+from service import taxonomy_mapper
+
+logger = logging.getLogger(__name__)
 
 
 def frame_to_timestamp(frame_idx: int, fps: float) -> str:
@@ -35,15 +38,35 @@ def clip_to_event(
     Identity is grounded: Gemini emits ``actor_player_id`` (a real player_id from the
     confirmed bindings). We resolve track_id/player_name from the binding. gi-color /
     top-bottom live only in ``reasoning`` and become the ``role`` *descriptor*.
+
+    Simplified-4-axis-taxonomy adoption (T2, 2026-07-12, D5): ``clip`` now carries
+    ``axis1_position``/``axis3_action``/``axis4_outcome``/``technique_guess`` (Gemini's
+    ENUM-constrained ``analyzer._build_response_schema`` output) instead of the old
+    free-string ``action``/``technique``. This is the T2 DUAL-EMIT seam (plan §7 risk
+    #2): the emitted ``VideoEventCandidate`` carries BOTH the new axis fields
+    (``schema_version=2``) AND legacy ``action``/``technique``/``result`` — derived
+    from the new axes via ``taxonomy_mapper.dual_emit_legacy_fields``, never read
+    directly off the clip dict — so the backend's legacy-enum search validators
+    (``event_filter_utils.py``) never see an out-of-enum value.
     """
-    # Use action/technique fields directly — Gemini outputs valid ActionType/TechniqueType values
-    action = clip.get("action", "other")
-    technique = clip.get("technique", "other")
-    # Validate against frontend enum sets; fall back to "other" for anything unrecognised
-    if action not in VALID_ACTIONS:
-        action = "other"
-    if technique not in VALID_TECHNIQUES:
-        technique = "other"
+    axis1_position = taxonomy_mapper.sanitize_axis1_position(clip.get("axis1_position"))
+    axis3_action = taxonomy_mapper.sanitize_axis3_action(clip.get("axis3_action"))
+    axis4_outcome = taxonomy_mapper.sanitize_axis4_outcome(clip.get("axis4_outcome"))
+    technique_guess = clip.get("technique_guess") or None
+    technique_shortlist = taxonomy_mapper.resolve_technique_shortlist(technique_guess, axis3_action)
+
+    legacy = taxonomy_mapper.dual_emit_legacy_fields(axis3_action, axis4_outcome, technique_shortlist)
+    action = legacy["action"]
+    technique = legacy["technique"]
+    result = legacy["result"]
+
+    # D6 (2026-07-12 taxonomy adoption, no eval gate / flip-and-monitor): `transition`
+    # (axis3) and `scramble` (axis1) are LeCun's named "new slop-bucket" regression
+    # signal — log-queryable is the whole requirement, no dashboard needed.
+    if "transition" in axis3_action:
+        logger.info("taxonomy_monitor: axis3_action includes 'transition' video_id=%s", video_id)
+    if "scramble" in axis1_position:
+        logger.info("taxonomy_monitor: axis1_position includes 'scramble' video_id=%s", video_id)
 
     by_pid = _bindings_by_player_id(athlete_bindings)
     player_id = clip.get("actor_player_id")
@@ -66,8 +89,15 @@ def clip_to_event(
         player_name=player_name,
         action=action,
         technique=technique,
+        result=result,
         confidence=clip.get("confidence", 0.0),
-        notes=clip.get("specific_technique", ""),
+        notes=technique_guess or "",
+        schema_version=2,
+        axis1_position=axis1_position,
+        axis3_action=axis3_action,
+        axis4_outcome=axis4_outcome,
+        technique_shortlist=technique_shortlist,
+        technique_guess=technique_guess,
     )
     # Grounded identity fields. The installed shared VideoEventCandidate may not yet
     # declare these (Stream 3); stash them so publish_events can inject the keys into
