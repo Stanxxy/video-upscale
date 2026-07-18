@@ -1112,8 +1112,8 @@ async def test_chunk_analyze_node_converts_chunk_relative_to_absolute_with_overl
     events = [e async for e in executors.chunk_analyze_node(ctx, cfg)]
 
     # effective_start = max(0, 30 - 5) = 25 -> video_metadata sent [25, 60]
-    assert captured["video_part"].video_metadata.start_offset == "25.0s"
-    assert captured["video_part"].video_metadata.end_offset == "60s"
+    assert captured["video_part"].video_metadata.start_offset == "25.000s"
+    assert captured["video_part"].video_metadata.end_offset == "60.000s"
 
     result_events = [e for e in events if e["type"] == "chunk_result"]
     assert len(result_events) == 1
@@ -1289,8 +1289,8 @@ async def test_chunk_analyze_node_overlap_never_pushes_analyzed_span_over_max_ch
     assert scope_start == 55.0  # clamped to chunk["start_s"] itself, not start_s - overlap_s(50)
     assert scope_end == 115.0
 
-    assert captured["video_part"].video_metadata.start_offset == "55.0s"
-    assert captured["video_part"].video_metadata.end_offset == "115s"
+    assert captured["video_part"].video_metadata.start_offset == "55.000s"
+    assert captured["video_part"].video_metadata.end_offset == "115.000s"
 
 
 @pytest.mark.asyncio
@@ -1320,8 +1320,8 @@ async def test_chunk_analyze_node_overlap_fits_under_cap_for_a_short_base_chunk(
     [e async for e in executors.chunk_analyze_node(ctx, ChunkAnalyzeConfig(overlap_s=5.0).model_dump())]
 
     # 10s base chunk + full 5s overlap = 15s, nowhere near the 60s cap.
-    assert captured["video_part"].video_metadata.start_offset == "25.0s"
-    assert captured["video_part"].video_metadata.end_offset == "40s"
+    assert captured["video_part"].video_metadata.start_offset == "25.000s"
+    assert captured["video_part"].video_metadata.end_offset == "40.000s"
 
 
 @pytest.mark.asyncio
@@ -1350,8 +1350,8 @@ async def test_chunk_analyze_node_no_chunk_max_s_set_preserves_prior_behavior(mo
 
     [e async for e in executors.chunk_analyze_node(ctx, ChunkAnalyzeConfig(overlap_s=5.0).model_dump())]
 
-    assert captured["video_part"].video_metadata.start_offset == "50.0s"  # unclamped: 55 - 5
-    assert captured["video_part"].video_metadata.end_offset == "115s"
+    assert captured["video_part"].video_metadata.start_offset == "50.000s"  # unclamped: 55 - 5
+    assert captured["video_part"].video_metadata.end_offset == "115.000s"
 
 
 @pytest.mark.asyncio
@@ -2013,6 +2013,64 @@ async def test_highlight_analyze_node_sends_preroll_postroll_expanded_window(mon
     start_event = next(e for e in events if e["type"] == "highlight_start")
     assert start_event["scope"] == [15.0, 39.0]
     assert start_event["highlight_bounds"] == [20.0, 35.0]
+
+
+@pytest.mark.asyncio
+async def test_highlight_analyze_node_sends_valid_duration_offset_for_float_imprecise_window(monkeypatch):
+    """Real production regression (2026-07-18): Gemini rejected a live request
+    with ``400 INVALID_ARGUMENT ... Field 'start_offset' ... Invalid duration
+    format, failed to parse nano seconds`` because ``window_start = max(ctx.
+    start_sec, highlight["start_s"] - cfg.preroll_s)`` on a highlight starting
+    at 33.3s with a 5.0s preroll computes ``33.3 - 5.0 ==
+    28.299999999999997`` — 15 fractional digits, over protobuf Duration's
+    9-digit limit.
+
+    This exercises the REAL ``SimplifiedTagsTimeAnalyzer.analyze_chunk`` (only
+    the transport-level ``generate_content`` call is mocked, never
+    ``analyze_chunk`` itself) so the fix is proven end-to-end through the
+    actual serialization boundary, not tautologically. Non-tautology verified
+    manually: reverting ``simplified_tags._format_offset_seconds``'s call site
+    to the old ``f"{start_sec}s"``/``f"{end_sec}s"`` makes this test FAIL
+    (``start_offset == "28.299999999999997s"``, 15 fractional digits); the
+    fix makes it PASS.
+    """
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["video_part"] = contents[0].parts[1]
+        return SimpleNamespace(text=json.dumps({"clips": []}))
+
+    fake_client = MagicMock()
+    fake_client.aio.models.generate_content = _fake_generate
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: fake_client)
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=100,
+        gemini_api_key="k", request_timeout_ms=1000,
+    )
+    # Real repro numbers: highlight starts at 33.3s, preroll_s=5.0 ->
+    # window_start = 33.3 - 5.0 == 28.299999999999997 (raw float).
+    ctx.highlights = [{"index": 1, "start_s": 33.3, "end_s": 40.0, "adjustment": None}]
+    cfg = HighlightAnalyzeConfig(preroll_s=5.0, postroll_s=4.0).model_dump()
+
+    events = [e async for e in executors.highlight_analyze_node(ctx, cfg)]
+
+    start_offset = captured["video_part"].video_metadata.start_offset
+    end_offset = captured["video_part"].video_metadata.end_offset
+
+    for offset in (start_offset, end_offset):
+        assert offset.endswith("s")
+        body = offset[:-1]
+        frac_digits = body.split(".")[1] if "." in body else ""
+        assert len(frac_digits) <= 9, (
+            f"{offset!r} has {len(frac_digits)} fractional digits — Gemini's "
+            "protobuf Duration parser rejects anything over 9 (nanoseconds)"
+        )
+    # Pins the exact quantized value too — never the raw 15-digit float.
+    assert start_offset == "28.300s"
+
+    error_events = [e for e in events if e["type"] == "error"]
+    assert error_events == []  # the (mocked) Gemini call succeeded — no 400
 
 
 @pytest.mark.asyncio

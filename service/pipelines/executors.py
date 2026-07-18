@@ -919,6 +919,24 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
         else:
             window_end = min(ctx.end_sec, highlight["end_s"] + cfg.postroll_s)
 
+        # Quantize ONCE, here, to millisecond precision (live-bug fix,
+        # 2026-07-18 — real repro: preroll/postroll float subtraction/addition
+        # e.g. 33.3 - 5.0 == 28.299999999999997, a 15-fractional-digit float
+        # that overflows protobuf Duration's 9-digit limit and Gemini 400s).
+        # ``simplified_tags._format_offset_seconds`` already hardens the
+        # actual Gemini call against this independently (defense at the
+        # serialization boundary), but rounding the SAME window_start/
+        # window_end here too means the "highlight_start" scope event, the
+        # inverted-window guard below, the analyze_chunk call, and
+        # ``_convert_chunk_relative_to_absolute`` all share one clean value
+        # instead of the event/guard seeing raw float noise while only the
+        # Gemini call sees a quantized one. The <1ms rounding delta folded
+        # into the absolute clip times by ``_convert_chunk_relative_to_absolute``
+        # is negligible — far below a video frame (~66ms at 15fps) — and is
+        # intentional, not a bug.
+        window_start = round(window_start, 3)
+        window_end = round(window_end, 3)
+
         yield {
             "type": "highlight_start", "highlight_index": highlight["index"],
             "scope": [window_start, window_end],

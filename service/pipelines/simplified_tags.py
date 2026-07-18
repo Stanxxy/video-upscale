@@ -113,6 +113,31 @@ def _strip_markdown_fences(text: str) -> str:
     return text.strip()
 
 
+def _format_offset_seconds(seconds: float) -> str:
+    """Format a seconds value as a protobuf-``Duration``-safe
+    ``video_metadata`` offset string (``start_offset``/``end_offset``).
+
+    **Live-bug fix (2026-07-18):** ``Duration`` accepts AT MOST 9 fractional
+    digits (nanoseconds). ``highlight_analyze_node``/``chunk_analyze_node``
+    compute these offsets via float subtraction/addition (e.g. pre-roll:
+    ``33.3 - 5.0 == 28.299999999999997``, 15 fractional digits;
+    ``2/3 == 0.6666666666666666``, 16 digits) — a raw ``f"{seconds}s"`` on
+    either overflows the 9-digit limit and Gemini rejects the whole request
+    with ``400 INVALID_ARGUMENT ... Field 'start_offset' ... failed to parse
+    nano seconds``. Quantizing to millisecond precision (3 fractional digits)
+    is far finer than a single video frame (~66ms at 15fps, the fastest fps
+    this pipeline uses) — zero analysis-accuracy cost — and guarantees the
+    emitted string is always a valid Duration regardless of upstream float
+    imprecision. This is the ONE place both ``analyze_chunk`` callers
+    (``chunk_analyze_node`` and ``highlight_analyze_node``) route their
+    ``start_offset``/``end_offset`` through, so fixing it here fixes both.
+    """
+    quantized = round(float(seconds), 3)
+    if quantized == 0:
+        quantized = 0.0  # normalize -0.0 -> 0.0, never emit "-0.000s"
+    return f"{quantized:.3f}s"
+
+
 def resolve_system_instruction(override: Optional[str]) -> str:
     """``None``/whitespace-only -> the bundled default taxonomy text (same
     "empty means default" discipline as ``qa_vlm._clean_system_instruction`` +
@@ -544,7 +569,11 @@ class SimplifiedTagsTimeAnalyzer:
         prompt = build_video_prompt(previous_context)
         video_part = types.Part(
             file_data=types.FileData(file_uri=youtube_url),
-            video_metadata=types.VideoMetadata(start_offset=f"{start_sec}s", end_offset=f"{end_sec}s", fps=fps),
+            video_metadata=types.VideoMetadata(
+                start_offset=_format_offset_seconds(start_sec),
+                end_offset=_format_offset_seconds(end_sec),
+                fps=fps,
+            ),
         )
 
         # Additive instrumentation (Task 1) — recorded regardless of outcome;

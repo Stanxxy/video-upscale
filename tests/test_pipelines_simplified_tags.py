@@ -377,10 +377,61 @@ async def test_time_analyzer_sends_native_video_part_with_offsets(monkeypatch):
     content = captured["contents"][0]
     video_part = content.parts[1]
     assert video_part.file_data.file_uri == "https://youtube.com/watch?v=x"
-    assert video_part.video_metadata.start_offset == "12.0s"
-    assert video_part.video_metadata.end_offset == "42.0s"
+    assert video_part.video_metadata.start_offset == "12.000s"
+    assert video_part.video_metadata.end_offset == "42.000s"
     assert captured["config"].response_schema is not None
     assert json.loads(result) == {"current_context_summary": "s", "clips": []}
+
+
+# --------------------------------------------------------------------------- #
+# `_format_offset_seconds` — live-bug regression (2026-07-18). Gemini rejected
+# a real production request with `400 INVALID_ARGUMENT ... Field 'start_offset'
+# ... Invalid duration format, failed to parse nano seconds` because protobuf
+# `Duration` accepts AT MOST 9 fractional digits, and `highlight_analyze_node`'s
+# preroll subtraction (`33.3 - 5.0`) produces a float with 15 fractional digits
+# when naively formatted (`f"{x}s"`). These tests pin the formatter's own
+# digit-count invariant against the exact adversarial floats from the repro.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "raw_seconds",
+    [
+        33.3 - 5.0,  # == 28.299999999999997 (real repro: preroll subtraction)
+        2 / 3,  # == 0.6666666666666666
+        0.1 + 0.2,  # == 0.30000000000000004
+        599.9999999999999,  # large value, rounds up across an integer boundary
+        35.0,
+        0,
+        12.5,
+    ],
+)
+def test_format_offset_seconds_never_exceeds_9_fractional_digits(raw_seconds):
+    formatted = simplified_tags._format_offset_seconds(raw_seconds)
+
+    assert formatted.endswith("s")
+    assert "e" not in formatted.lower()  # never scientific notation
+    body = formatted[:-1]  # strip trailing "s"
+    if "." in body:
+        frac_digits = body.split(".")[1]
+        assert len(frac_digits) <= 9, (
+            f"{formatted!r} has {len(frac_digits)} fractional digits — "
+            "protobuf Duration accepts at most 9 (nanoseconds)"
+        )
+    # Sanity: the formatted value round-trips to (approximately) the input,
+    # i.e. this is a precision fix, not a silent value-mangling one.
+    assert abs(float(body) - float(raw_seconds)) < 0.01
+
+
+def test_format_offset_seconds_adversarial_floats_produce_expected_strings():
+    """Pins the EXACT output for the repro's specific floats (millisecond/
+    3-fractional-digit precision, never stripped) — guards against a future
+    "simplification" reintroducing the raw-float bug."""
+    assert simplified_tags._format_offset_seconds(33.3 - 5.0) == "28.300s"
+    assert simplified_tags._format_offset_seconds(2 / 3) == "0.667s"
+    assert simplified_tags._format_offset_seconds(0.1 + 0.2) == "0.300s"
+    assert simplified_tags._format_offset_seconds(599.9999999999999) == "600.000s"
+    assert simplified_tags._format_offset_seconds(35.0) == "35.000s"
+    assert simplified_tags._format_offset_seconds(0) == "0.000s"
+    assert simplified_tags._format_offset_seconds(12.5) == "12.500s"
 
 
 @pytest.mark.asyncio
