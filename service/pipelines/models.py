@@ -26,6 +26,7 @@ NodeType = Literal[
     "chunk_analyze",
     "highlight_scan",
     "highlight_analyze",
+    "highlight_critique",
 ]
 
 # Node types that structurally define the pipeline's shape — the UX layer locks
@@ -43,13 +44,44 @@ NodeType = Literal[
 # disabling ``highlight_scan`` leaves ``highlight_analyze`` with no
 # ``ctx.highlights`` to loop over, and disabling ``highlight_analyze`` leaves
 # PASS 1's highlight map with no consumer.
+#
+# ``highlight_critique`` (v2, ``highlight-scan-critique-analyze`` ONLY) is one
+# of that pipeline's THREE fixed Gemini-calling stages (alongside
+# ``highlight_scan``/``highlight_analyze``) — same "fixed stage set, no
+# arbitrary disable" discipline applied uniformly to every Gemini-calling node
+# in this registry (only ``detect_crop``/``context_chain``/``dedup`` are
+# genuinely optional passes, never structural).
 STRUCTURAL_NODE_TYPES: frozenset[str] = frozenset(
     {
         "video_window", "frame_sample", "window", "analyze",
         "chunk_segment", "chunk_analyze",
-        "highlight_scan", "highlight_analyze",
+        "highlight_scan", "highlight_analyze", "highlight_critique",
     }
 )
+
+
+class ThinkingQualityMixin(BaseModel):
+    """Shared per-node config axes (build plan v2,
+    ``2026-07-18-highlight-scan-critique-analyze-v2-plan.md``): Gemini
+    ``thinking`` level + native ``media_resolution``. Reused (not
+    redefined) across every v2 sub-config (``HighlightCritiqueConfig``,
+    ``PositionAxisConfig``, ``TechniqueAxisConfig``, ``ValidatorAxisConfig``)
+    so a future per-node-thinking/quality UI control is one mixin, not N
+    hand-duplicated field pairs (Brooks design-pass finding).
+
+    Both default ``None`` (task/model default — see each call site's own
+    "None means X" mapping, e.g. ``simplified_tags.media_resolution_enum``).
+    The THREE existing independent ``thinking`` fields on
+    ``AnalyzeConfig``/``ChunkAnalyzeConfig``/``HighlightAnalyzeConfig`` are
+    left as-is (not refactored onto this mixin) — those are pre-existing,
+    accepted-behavior fields on pipelines this build must not risk; this
+    mixin is used for NEW v2 config surface only (build plan: "refactor...
+    ONLY if behavior is byte-identical... if risky, leave them").
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    thinking: Optional[Literal["off", "low", "medium", "high"]] = None
+    media_resolution: Optional[Literal["low", "medium", "high"]] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -230,7 +262,7 @@ class ChunkAnalyzeConfig(BaseModel):
     overlap_s: float = Field(default=5.0, ge=0.0)
 
 
-class HighlightScanConfig(BaseModel):
+class HighlightScanConfig(ThinkingQualityMixin):
     """``highlight_scan`` — PASS 1 of ``highlight-scan-analyze``: ONE cheap
     Gemini call over the whole scoped native video (YouTube URL + native
     ``video_metadata``), sampled at ``rough_fps`` (default 1.0, LOW media
@@ -270,6 +302,15 @@ class HighlightScanConfig(BaseModel):
     ``model`` is allowlist-validated against ``qa_vlm.EVENT_MODELS`` at
     ``registry.validate_pipeline_def`` time — same no-silent-swap discipline
     as ``chunk_segment``/``analyze``.
+
+    **v2 additions (``ThinkingQualityMixin``):** ``thinking``/``media_resolution``
+    default ``None`` — ``executors.highlight_scan_node`` now routes
+    ``thinking`` through the shared ``thinking_config_for`` helper (``None``
+    maps to the SAME ``ThinkingConfig(thinking_budget=0)`` this node
+    hardcoded before this change — byte-identical default behavior, now
+    overridable) and ``media_resolution`` through
+    ``simplified_tags.media_resolution_enum`` (``None`` -> the same
+    ``MEDIA_RESOLUTION_LOW`` this node hardcoded before this change).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -279,6 +320,72 @@ class HighlightScanConfig(BaseModel):
     max_highlight_s: float = Field(default=30.0, gt=0.0)
     system_prompt: Optional[str] = None
     initial_prompt: Optional[str] = None
+
+
+class HighlightCritiqueConfig(ThinkingQualityMixin):
+    """``highlight_critique`` — NEW v2 stage (``highlight-scan-critique-analyze``
+    ONLY), sitting between ``highlight_scan`` and ``highlight_analyze``: per
+    scanned highlight, sends a BACKWARD-padded native-video window
+    (``[max(scope_start, start_s - critique_backpad_s), end_s]``) plus the
+    scan's ``description`` and asks Gemini to confirm the description and
+    locate the highlight's TRUE start (the quiet setup cue a rough scan
+    tends to anchor past — Gracie's VTG-drift finding) and a corrected end.
+
+    Output is ADDITIVE (``corrected_start_s``/``corrected_end_s``/
+    ``critique_note`` on the highlight record) — ``executors.
+    highlight_critique_node`` NEVER overwrites the scan's own ``start_s``/
+    ``end_s`` (provenance is kept for the UI's "scan -> corrected" pill).
+
+    ``critique_backpad_s`` (default 6.0s, ``ge=0, le=30``) is the tunable
+    backward pad — the founder's own "measurement tool, tune live" framing
+    (build plan FOUNDER DECISIONS #2), not a value derived from a
+    production-shaped measurement yet.
+
+    ``model`` is allowlist-validated against ``qa_vlm.EVENT_MODELS`` at
+    ``registry.validate_pipeline_def`` time — same no-silent-swap discipline
+    as every other Gemini-calling node config in this module.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = "gemini-3.1-flash-lite"
+    critique_backpad_s: float = Field(default=6.0, ge=0, le=30)
+
+
+class PositionAxisConfig(ThinkingQualityMixin):
+    """``HighlightAnalyzeConfig.position`` sub-config — the position-axis
+    call (Gracie: orthogonal to technique, e.g. "ends in side control").
+    Own ``model``/``thinking``/``media_resolution`` (mixin); the shared
+    top-level ``HighlightAnalyzeConfig.fps``/``preroll_s``/``postroll_s``
+    still govern the window sent to this call (no per-axis fps — build plan
+    v2 keeps a single fps knob across position/technique/validator)."""
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = "gemini-3.1-flash-lite"
+
+
+class TechniqueAxisConfig(ThinkingQualityMixin):
+    """``HighlightAnalyzeConfig.technique`` sub-config — the technique-axis
+    call (actor/action_class/outcome/specific_technique_guess). Independent
+    of, and complementary to, ``PositionAxisConfig`` — both calls fire for
+    every highlight (Gracie: NOT either/or)."""
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = "gemini-3.1-flash-lite"
+
+
+class ValidatorAxisConfig(ThinkingQualityMixin):
+    """``HighlightAnalyzeConfig.validator`` sub-config — the adversarial
+    reconciliation/ditch-authority call. ``media_resolution`` DEFAULTS TO
+    ``"high"`` (unlike every other mixin user, which defaults ``None``) per
+    LeCun's design-pass finding: HIGH resolution is the untried lever for
+    occlusion-limited techniques, worth reserving for the one call whose job
+    is specifically to catch what the analyzer calls missed — never
+    defaulted on the (cheaper, higher-volume) position/technique calls
+    themselves."""
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = "gemini-3.1-flash-lite"
+    media_resolution: Optional[Literal["low", "medium", "high"]] = "high"
 
 
 class HighlightAnalyzeConfig(BaseModel):
@@ -320,6 +427,34 @@ class HighlightAnalyzeConfig(BaseModel):
     ``model`` is allowlist-validated against ``qa_vlm.EVENT_MODELS`` at
     ``registry.validate_pipeline_def`` time — same no-silent-swap discipline
     as ``chunk_analyze``/``analyze``.
+
+    **v2 evolution (this node's executor is SHARED by both
+    ``highlight-scan-analyze`` and ``highlight-scan-critique-analyze`` — the
+    restructure below applies to BOTH pipelines' real Gemini-call count, an
+    intentional, spec-directed consequence, not scope creep):**
+    ``executors.highlight_analyze_node`` no longer sends ONE
+    ``simplified-tags-time-v1`` call per highlight. It now runs an
+    INDEPENDENT ``position`` call (``PositionAxisConfig``) and ``technique``
+    call (``TechniqueAxisConfig``) — complementary, both always fire EXACTLY
+    ONCE per highlight, per Gracie's "position and technique are orthogonal"
+    finding (each returns a single flat verdict — no timestamps, no list to
+    merge; see ``service/pipelines/highlight_axes.py``) — then runs a bounded
+    ``for _ in range(max_validator_iterations)`` ``validator`` pass
+    (``ValidatorAxisConfig``, re-invoked on disagreement — position/technique
+    are NOT re-asked) that can ditch the highlight. ``model``/``thinking``
+    above are RETAINED but now UNUSED by the real per-axis calls (each axis
+    owns its own ``model``/``thinking`` via the mixin) — kept only so
+    ``registry.validate_pipeline_def``'s
+    existing top-level allowlist check and pre-existing tests asserting
+    these fields' presence/defaults stay green without a special case;
+    documented here as a deliberate, minor redundancy rather than silently
+    repurposed. ``fps``/``preroll_s``/``postroll_s`` ARE still real and used
+    (identically to before) for all three axis calls' shared window.
+
+    v1 ships ``max_validator_iterations`` default **1** (single pass, per
+    founder decision) — the LOOP (>1 iteration) is v2, gated on v1
+    measurement; the field exists now (``ge=1, le=5``) so v2 is a default
+    change, never a restructure.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -328,6 +463,10 @@ class HighlightAnalyzeConfig(BaseModel):
     thinking: Optional[Literal["off", "low", "medium", "high"]] = None
     preroll_s: float = Field(default=5.0, ge=0.0, le=15.0)
     postroll_s: float = Field(default=4.0, ge=0.0, le=10.0)
+    position: PositionAxisConfig = Field(default_factory=PositionAxisConfig)
+    technique: TechniqueAxisConfig = Field(default_factory=TechniqueAxisConfig)
+    validator: ValidatorAxisConfig = Field(default_factory=ValidatorAxisConfig)
+    max_validator_iterations: int = Field(default=1, ge=1, le=5)
 
 
 NODE_CONFIG_MODELS: dict[str, type[BaseModel]] = {
@@ -342,6 +481,7 @@ NODE_CONFIG_MODELS: dict[str, type[BaseModel]] = {
     "chunk_analyze": ChunkAnalyzeConfig,
     "highlight_scan": HighlightScanConfig,
     "highlight_analyze": HighlightAnalyzeConfig,
+    "highlight_critique": HighlightCritiqueConfig,
 }
 
 

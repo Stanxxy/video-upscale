@@ -138,8 +138,12 @@ def test_estimate_run_plan_highlight_scan_analyze_is_real_upper_bound():
     pdef = registry.get_default("highlight-scan-analyze")
     planned = estimate_run_plan(pdef, duration_sec=97)
     expected_highlights = math.ceil(97 / 3.0)  # default min_highlight_s=3.0
+    # v2 (build plan item 8): highlight_analyze's shared evolution means each
+    # highlight now costs 2 (position+technique) + max_validator_iterations
+    # (default 1) = 3 calls, not 1 — this pipeline has no highlight_critique
+    # stage, so the factor is exactly 3 (see _highlight_per_highlight_call_factor).
     assert planned["planned_windows"] == expected_highlights
-    assert planned["planned_gemini_calls"] == 1 + expected_highlights
+    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 3
     assert planned["planned_frames"] == 0
 
 
@@ -148,7 +152,38 @@ def test_estimate_run_plan_highlight_scan_analyze_scales_with_min_highlight_s():
     next(s for s in pdef.stages if s.type == "highlight_scan").config["min_highlight_s"] = 10.0
     planned = estimate_run_plan(pdef, duration_sec=100)
     assert planned["planned_windows"] == 10
-    assert planned["planned_gemini_calls"] == 11
+    assert planned["planned_gemini_calls"] == 1 + 10 * 3  # factor=3, see test above
+
+
+def test_estimate_run_plan_highlight_scan_analyze_factor_scales_with_max_validator_iterations():
+    """v2: raising max_validator_iterations must be reflected in the estimate
+    (never under-counted, build plan item 8)."""
+    import math
+
+    pdef = registry.get_default("highlight-scan-analyze")
+    next(s for s in pdef.stages if s.type == "highlight_analyze").config["max_validator_iterations"] = 3
+    planned = estimate_run_plan(pdef, duration_sec=97)
+    expected_highlights = math.ceil(97 / 3.0)
+    # factor = 2 (position+technique) + 3 (validator iterations) = 5
+    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 5
+
+
+# --------------------------------------------------------------------------- #
+# highlight-scan-critique-analyze budget guard — same real-upper-bound
+# discipline, PLUS the highlight_critique stage's +1 per-highlight factor
+# (build plan item 8).
+# --------------------------------------------------------------------------- #
+def test_estimate_run_plan_highlight_scan_critique_analyze_default_factor_is_four():
+    import math
+
+    pdef = registry.get_default("highlight-scan-critique-analyze")
+    planned = estimate_run_plan(pdef, duration_sec=97)
+    expected_highlights = math.ceil(97 / 3.0)  # default min_highlight_s=3.0
+    # factor = 1 (critique) + 2 (position+technique) + 1 (default validator
+    # iterations) = 4.
+    assert planned["planned_windows"] == expected_highlights
+    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 4
+    assert planned["planned_frames"] == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -1841,8 +1876,11 @@ async def test_highlight_scan_node_produces_highlight_map_no_reason_axis(monkeyp
     assert [h["start_s"] for h in highlights] == [20.0, 60.0]
     assert [h["index"] for h in highlights] == [1, 2]
     for h in highlights:
+        # v2 (2026-07-18 plan): description/reasoning are additive keys
+        # (None here since the fake Gemini response didn't include them).
         assert set(h) == {
-            "index", "start_s", "end_s", "adjustment", "start_is_synthetic", "end_is_synthetic",
+            "index", "start_s", "end_s", "description", "reasoning",
+            "adjustment", "start_is_synthetic", "end_is_synthetic",
         }  # no "reason"/"worth_analysis"
     assert ctx.highlights == highlights
     assert ctx.native_fps is None  # this pipeline never samples frames
@@ -1992,11 +2030,24 @@ def test_clip_events_boundary_touching_events_are_dropped_zero_overlap():
 # --------------------------------------------------------------------------- #
 @pytest.mark.asyncio
 async def test_highlight_analyze_node_sends_preroll_postroll_expanded_window(monkeypatch):
+    """v2 (Gracie's real prompts): position call, technique call, then ONE
+    validator call — each independent call gets the SAME preroll/postroll-
+    expanded window + shared fps."""
     captured_windows = []
+    call_count = {"n": 0}
 
     async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
         captured_windows.append((start_sec, end_sec, kw.get("fps")))
-        return json.dumps({"clips": []})
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return json.dumps({"position": "mount", "justification": "j"})
+        if call_count["n"] == 2:
+            return json.dumps({"action_class": "submission_choke", "outcome": "successful", "justification": "j"})
+        return json.dumps({
+            "adversarial_case": "ac", "verdict": "agree",
+            "final_position": None, "final_action_class": None, "final_outcome": None,
+            "wrong_label": None, "reason": None, "evidence": "e",
+        })
 
     monkeypatch.setattr(simplified_tags.SimplifiedTagsTimeAnalyzer, "analyze_chunk", _fake_analyze_chunk)
     monkeypatch.setattr(RunContext, "gemini_client", lambda self: MagicMock())
@@ -2009,10 +2060,18 @@ async def test_highlight_analyze_node_sends_preroll_postroll_expanded_window(mon
     cfg = HighlightAnalyzeConfig(fps=10, preroll_s=5.0, postroll_s=4.0).model_dump()
     events = [e async for e in executors.highlight_analyze_node(ctx, cfg)]
 
-    assert captured_windows == [(15.0, 39.0, 10)]
+    # position call, technique call, validator call — all 3 with the SAME window/fps.
+    assert captured_windows == [(15.0, 39.0, 10), (15.0, 39.0, 10), (15.0, 39.0, 10)]
     start_event = next(e for e in events if e["type"] == "highlight_start")
     assert start_event["scope"] == [15.0, 39.0]
     assert start_event["highlight_bounds"] == [20.0, 35.0]
+    assert start_event["authoritative_bounds"] == [20.0, 35.0]  # no critique -> same as scan bounds
+    result_event = next(e for e in events if e["type"] == "highlight_result")
+    assert result_event["status"] == "analyzed"
+    assert result_event["clips"] == [{
+        "start_s": 20.0, "end_s": 35.0,
+        "position": "mount", "action_class": "submission_choke", "outcome": "successful",
+    }]
 
 
 @pytest.mark.asyncio
@@ -2096,24 +2155,25 @@ async def test_highlight_analyze_node_clamps_window_to_requested_scope():
 
 
 @pytest.mark.asyncio
-async def test_highlight_analyze_node_converts_absolute_and_clips_to_own_bounds(monkeypatch):
-    """End-to-end wiring of absolute conversion (reused _convert_chunk_relative_to_absolute)
-    + event clipping: a clip reported in the pre-roll region (relative to the
-    SENT window) must be dropped once converted to absolute and clipped to
-    the highlight's OWN bounds."""
+async def test_highlight_analyze_node_synthesizes_one_clip_at_authoritative_bounds(monkeypatch):
+    """v2 (Gracie's real prompts): neither position nor technique reports a
+    timestamp — the synthesized clip's start_s/end_s are the highlight's own
+    AUTHORITATIVE bounds directly, not derived from any Gemini-reported
+    offset. The validator's ``disagree`` verdict corrects ONE label
+    (action_class) via ``final_action_class`` while position passes through
+    unchanged."""
+    call_count = {"n": 0}
+
     async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
-        # Sent window is [15.0, 39.0] (20-5 preroll, 35+4 postroll).
-        # Chunk-relative clip at [2.0, 6.0] -> absolute [17.0, 21.0] -> overlaps
-        # highlight bounds [20.0, 35.0] only from 20.0 -> clipped, kept.
-        # Chunk-relative clip at [0.0, 3.0] -> absolute [15.0, 18.0] -> entirely
-        # before highlight bounds start (20.0) -> dropped.
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return json.dumps({"position": "mount", "justification": "mount cue"})
+        if call_count["n"] == 2:
+            return json.dumps({"action_class": "submission_arm_lock", "outcome": "successful", "justification": "arm trapped"})
         return json.dumps({
-            "clips": [
-                {"start_s": 2.0, "end_s": 6.0, "position": "mount", "actor": "top",
-                 "action_class": "submission_arm_lock", "outcome": "successful", "confidence": 0.9},
-                {"start_s": 0.0, "end_s": 3.0, "position": "standing", "actor": "bottom",
-                 "action_class": "takedown_attempt", "outcome": "unclear", "confidence": 0.4},
-            ],
+            "adversarial_case": "could be a choke instead", "verdict": "disagree",
+            "final_position": "mount", "final_action_class": "submission_choke", "final_outcome": "successful",
+            "wrong_label": "action_class", "reason": "neck exposed, not arm", "evidence": "collar grip visible",
         })
 
     monkeypatch.setattr(simplified_tags.SimplifiedTagsTimeAnalyzer, "analyze_chunk", _fake_analyze_chunk)
@@ -2128,11 +2188,18 @@ async def test_highlight_analyze_node_converts_absolute_and_clips_to_own_bounds(
     events = [e async for e in executors.highlight_analyze_node(ctx, cfg)]
 
     result_event = next(e for e in events if e["type"] == "highlight_result")
-    assert result_event["dropped_outside_bounds"] == 1
+    assert result_event["status"] == "analyzed"
+    assert result_event["verdict"] == "disagree"
     assert len(result_event["clips"]) == 1
-    assert result_event["clips"][0]["start_s"] == 20.0  # clamped up from 17.0
-    assert result_event["clips"][0]["end_s"] == 21.0
-    assert result_event["clips"][0]["action_class"] == "submission_arm_lock"
+    clip = result_event["clips"][0]
+    # Bounds are the highlight's OWN authoritative bounds directly (20/35),
+    # never a Gemini-reported/converted offset (position/technique don't
+    # report timestamps at all in Gracie's real schema).
+    assert clip["start_s"] == 20.0
+    assert clip["end_s"] == 35.0
+    assert clip["position"] == "mount"  # unchanged (validator's final_position echoes it)
+    assert clip["action_class"] == "submission_choke"  # CORRECTED by the validator's disagree verdict
+    assert clip["outcome"] == "successful"
     assert ctx.final_format == "simplified-tags-time-v1"
     assert ctx.final_clips == result_event["clips"]
     assert ctx.native_fps is None
@@ -2183,16 +2250,26 @@ async def test_highlight_analyze_node_swallowed_analyzer_error_surfaces_as_error
 
 @pytest.mark.asyncio
 async def test_highlight_analyze_node_continues_past_one_highlight_error():
+    """v2: highlight 1's FIRST call (position) raises -> the whole highlight
+    is skipped with an error event WITHOUT ever attempting the technique
+    call (never a wasted Gemini call past the first failure); the loop
+    continues to highlight 2, whose position+technique+validator calls (2,
+    3, 4) all succeed."""
     call_count = {"n": 0}
 
     async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
         call_count["n"] += 1
         if call_count["n"] == 1:
             raise RuntimeError("transient failure on highlight 1")
-        return json.dumps({"clips": [
-            {"start_s": 1.0, "end_s": 3.0, "position": "mount", "actor": "top",
-             "action_class": "submission_choke", "outcome": "successful", "confidence": 0.8},
-        ]})
+        if call_count["n"] == 2:  # position call for highlight 2
+            return json.dumps({"position": "mount", "justification": "j"})
+        if call_count["n"] == 3:  # technique call for highlight 2
+            return json.dumps({"action_class": "submission_choke", "outcome": "successful", "justification": "j"})
+        return json.dumps({  # validator call for highlight 2
+            "adversarial_case": "ac", "verdict": "agree",
+            "final_position": None, "final_action_class": None, "final_outcome": None,
+            "wrong_label": None, "reason": None, "evidence": "e",
+        })
 
     ctx = RunContext(
         youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=100,
@@ -2208,7 +2285,7 @@ async def test_highlight_analyze_node_continues_past_one_highlight_error():
         mp.setattr(RunContext, "gemini_client", lambda self: MagicMock())
         events = [e async for e in executors.highlight_analyze_node(ctx, HighlightAnalyzeConfig().model_dump())]
 
-    assert call_count["n"] == 2  # loop continued to highlight 2 after highlight 1's error
+    assert call_count["n"] == 4  # highlight 1: 1 call (position, raised); highlight 2: 3 calls
     error_events = [e for e in events if e["type"] == "error"]
     assert len(error_events) == 1
     assert "highlight 1" in error_events[0]["message"]
@@ -2221,6 +2298,7 @@ async def test_highlight_analyze_node_continues_past_one_highlight_error():
     result_events = [e for e in events if e["type"] == "highlight_result"]
     assert len(result_events) == 1
     assert result_events[0]["highlight_index"] == 2
+    assert result_events[0]["status"] == "analyzed"
     assert ctx.final_clips == result_events[0]["clips"]
 
 
@@ -2233,7 +2311,7 @@ async def test_highlight_analyze_node_no_context_chain_always_passes_none_previo
 
     async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
         captured_contexts.append(previous_context)
-        return json.dumps({"current_context_summary": "some narrative state", "clips": []})
+        return json.dumps({"current_context_summary": "some narrative state"})
 
     ctx = RunContext(
         youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=100,
@@ -2249,7 +2327,13 @@ async def test_highlight_analyze_node_no_context_chain_always_passes_none_previo
         mp.setattr(RunContext, "gemini_client", lambda self: MagicMock())
         [e async for e in executors.highlight_analyze_node(ctx, HighlightAnalyzeConfig().model_dump())]
 
-    assert captured_contexts == [None, None]  # never threaded, even though the fake returned a summary
+    # v2: position + technique + validator calls ALL fire per highlight
+    # (position/technique are always called exactly once; the validator
+    # never resolves an agree/disagree/ditch verdict from this malformed
+    # fake, so it stops after 1 round — default max_validator_iterations)
+    # = 3 calls x 2 highlights = 6 — never threaded, even though the fake
+    # returned a summary.
+    assert captured_contexts == [None] * 6
 
 
 @pytest.mark.asyncio
@@ -2426,7 +2510,11 @@ async def test_run_pipeline_highlight_scan_analyze_end_to_end_mocked(monkeypatch
     planned = estimate_run_plan(pdef, duration_sec=90)
     events = [e async for e in run_pipeline(pdef, ctx, planned, budget_cap=DEFAULT_BUDGET_CAP)]
 
-    assert analyze_calls["count"] == 2
+    # v2: 2 highlights x 3 calls each (position + technique, always called
+    # once each; validator, default max_validator_iterations=1 — this fake's
+    # {"clips": []} response never resolves an agree/disagree/ditch verdict,
+    # so it ditches after exactly 1 round) = 6.
+    assert analyze_calls["count"] == 6
     types_seen = [e["type"] for e in events]
     assert types_seen[-1] == "run_complete"
     assert "error" not in types_seen
@@ -2523,7 +2611,9 @@ async def test_run_pipeline_highlight_scan_analyze_within_budget_cap_runs_the_de
     planned = estimate_run_plan(pdef, duration_sec=90)
     events = [e async for e in run_pipeline(pdef, ctx, planned, budget_cap=DEFAULT_BUDGET_CAP)]
 
-    assert analyze_calls["count"] == 3
+    # v2: 3 highlights x 3 calls each (position+technique fixed, validator
+    # 1 round default) = 9.
+    assert analyze_calls["count"] == 9
     types_seen = [e["type"] for e in events]
     assert types_seen[-1] == "run_complete"
     assert "error" not in types_seen
@@ -2592,16 +2682,19 @@ async def test_highlight_analyze_node_clamps_preroll_to_zero_at_synthetic_start_
         mp.setattr(RunContext, "gemini_client", lambda self: MagicMock())
         [e async for e in executors.highlight_analyze_node(ctx, cfg)]
 
+    # v2: position + technique calls both fire per highlight (validator
+    # skipped, empty clips) — dedupe to the per-highlight window sequence.
+    unique_windows = list(dict.fromkeys(captured_windows))
     # Piece 1: genuine start (0, no preroll needed since already at scope start),
     # SYNTHETIC end (35) -> postroll clamped to 0, NOT 35+4=39.
-    assert captured_windows[0] == (0.0, 35.0)
+    assert unique_windows[0] == (0.0, 35.0)
     # Piece 2: SYNTHETIC start (35) -> preroll clamped to 0, NOT 35-5=30;
     # genuine end (70) -> full postroll applies (70+4=74).
-    assert captured_windows[1] == (35.0, 74.0)
+    assert unique_windows[1] == (35.0, 74.0)
     # The two sent windows share NO frames at all — the manufactured seam
     # duplicate the evaluator's repro found (piece1=[0,39] vs piece2=[30,70],
     # a 9s overlap) is structurally eliminated.
-    assert captured_windows[0][1] <= captured_windows[1][0]
+    assert unique_windows[0][1] <= unique_windows[1][0]
 
 
 @pytest.mark.asyncio
@@ -2635,12 +2728,14 @@ async def test_highlight_analyze_node_synthetic_seam_fix_eliminates_evaluator_re
     monkeypatch.setattr(RunContext, "gemini_client", lambda self: MagicMock())
     [e async for e in executors.highlight_analyze_node(ctx, cfg)]
 
-    assert captured_windows == [(0.0, 35.0), (35.0, 74.0)]
+    # v2: position + technique calls both fire per highlight — dedupe.
+    unique_windows = list(dict.fromkeys(captured_windows))
+    assert unique_windows == [(0.0, 35.0), (35.0, 74.0)]
     # No shared video content across the manufactured seam (contiguous, not
     # overlapping) — this is the concrete "eliminate the duplicate at the
     # source" claim; it is NOT a claim that Gemini can never report adjacent
     # truncated fragments of one action straddling 35s (see docstrings).
-    assert captured_windows[0][1] == captured_windows[1][0]
+    assert unique_windows[0][1] == unique_windows[1][0]
 
 
 @pytest.mark.asyncio
@@ -2683,5 +2778,7 @@ async def test_highlight_analyze_node_genuinely_close_highlights_fragmentation_i
     # Highlight 1's postroll (20+4=24) and highlight 2's preroll (26-5=21)
     # OVERLAP in [21, 24] — genuine pre/post-roll context video shared by two
     # DISTINCT highlights. This is the accepted residual, pinned here.
-    assert captured_windows == [(5.0, 24.0), (21.0, 44.0)]
-    assert captured_windows[0][1] > captured_windows[1][0]  # windows DO overlap — accepted, not a bug
+    # v2: position + technique calls both fire per highlight — dedupe.
+    unique_windows = list(dict.fromkeys(captured_windows))
+    assert unique_windows == [(5.0, 24.0), (21.0, 44.0)]
+    assert unique_windows[0][1] > unique_windows[1][0]  # windows DO overlap — accepted, not a bug

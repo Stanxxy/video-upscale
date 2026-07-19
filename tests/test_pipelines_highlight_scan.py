@@ -19,15 +19,33 @@ def test_schema_top_level_envelope():
     assert schema.type == types.Type.OBJECT
     assert schema.required == ["highlights"]
     highlight_item = schema.properties["highlights"].items
-    assert set(highlight_item.required) == {"start_s", "end_s"}
+    # v2 (2026-07-18-highlight-scan-critique-analyze-v2-plan.md, "Node 1"):
+    # description/reasoning are ADDITIVE required fields — see
+    # test_schema_has_description_and_reasoning_axis below for the dedicated
+    # regression pinning their content/type.
+    assert set(highlight_item.required) == {"start_s", "end_s", "description", "reasoning"}
 
 
-def test_schema_has_no_reason_or_worth_analysis_axis():
-    """Stage-1 contract: ONLY {start_s, end_s} — no reason enum, no
-    worth_analysis, no per-clip detail (unlike chunk_segment's PASS 1)."""
+def test_schema_has_no_reason_enum_or_worth_analysis_axis():
+    """Stage-1 contract: no ``reason`` ENUM, no ``worth_analysis``, no
+    per-clip technique/position detail (unlike chunk_segment's PASS 1) —
+    updated 2026-07-18 (v2 plan) to allow the new description/reasoning
+    free-text fields, which are NOT the enum/worth_analysis this test
+    guards against."""
     schema = highlight_scan.build_highlight_schema()
     highlight_item = schema.properties["highlights"].items
-    assert set(highlight_item.properties) == {"start_s", "end_s"}
+    assert set(highlight_item.properties) == {"start_s", "end_s", "description", "reasoning"}
+    assert not highlight_item.properties["description"].enum
+    assert not highlight_item.properties["reasoning"].enum
+    assert "worth_analysis" not in highlight_item.properties
+    assert "reason" not in highlight_item.properties  # no reason ENUM (distinct from the "reasoning" free-text field)
+
+
+def test_schema_description_and_reasoning_are_free_text_strings():
+    schema = highlight_scan.build_highlight_schema()
+    highlight_item = schema.properties["highlights"].items
+    assert highlight_item.properties["description"].type == types.Type.STRING
+    assert highlight_item.properties["reasoning"].type == types.Type.STRING
 
 
 def test_schema_start_end_are_numbers():
@@ -255,6 +273,18 @@ def test_repair_split_no_pieces_exceed_max():
         assert (piece["end_s"] - piece["start_s"]) <= 30.0 + 1e-9
 
 
+def test_repair_split_pieces_inherit_parent_description_and_reasoning():
+    """v2 (2026-07-18 plan): a split piece is a mechanical cut of ONE
+    continuous highlight, not N distinct judgments — every piece inherits
+    the SAME parent description/reasoning."""
+    raw = [{"start_s": 0.0, "end_s": 70.0, "description": "long scramble", "reasoning": "sustained exchange"}]
+    repaired, _notes = highlight_scan.repair_highlight_bounds(raw, min_highlight_s=1.0, max_highlight_s=30.0)
+    assert len(repaired) == 3
+    for piece in repaired:
+        assert piece["description"] == "long scramble"
+        assert piece["reasoning"] == "sustained exchange"
+
+
 def test_repair_split_with_explicit_nonzero_overlap_param_still_works():
     """The overlap behavior itself remains directly testable via the
     parameter, even though production callers never pass a nonzero value."""
@@ -270,14 +300,27 @@ def test_repair_split_with_explicit_nonzero_overlap_param_still_works():
 # --------------------------------------------------------------------------- #
 def test_finalize_highlights_assigns_1_based_index_and_no_reason_key():
     raw = [
-        {"start_s": 10.0, "end_s": 20.0},
-        {"start_s": 30.0, "end_s": 40.0},
+        {"start_s": 10.0, "end_s": 20.0, "description": "grip fight", "reasoning": "live exchange"},
+        {"start_s": 30.0, "end_s": 40.0, "description": "sweep attempt", "reasoning": "scramble"},
     ]
     out = highlight_scan.finalize_highlights(raw, min_highlight_s=1.0, max_highlight_s=60.0)
     assert [h["index"] for h in out] == [1, 2]
     for h in out:
+        # v2 (2026-07-18 plan): description/reasoning are additive pass-through keys.
         assert set(h) == {
-            "index", "start_s", "end_s", "adjustment", "start_is_synthetic", "end_is_synthetic",
+            "index", "start_s", "end_s", "description", "reasoning",
+            "adjustment", "start_is_synthetic", "end_is_synthetic",
         }
         assert h["start_is_synthetic"] is False
         assert h["end_is_synthetic"] is False
+    assert out[0]["description"] == "grip fight" and out[0]["reasoning"] == "live exchange"
+    assert out[1]["description"] == "sweep attempt" and out[1]["reasoning"] == "scramble"
+
+
+def test_finalize_highlights_description_reasoning_none_when_absent_never_fabricated():
+    """A raw highlight missing description/reasoning (e.g. a test double, or
+    a malformed real response) gets None, never a fabricated string."""
+    raw = [{"start_s": 10.0, "end_s": 20.0}]
+    out = highlight_scan.finalize_highlights(raw, min_highlight_s=1.0, max_highlight_s=60.0)
+    assert out[0]["description"] is None
+    assert out[0]["reasoning"] is None

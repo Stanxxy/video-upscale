@@ -19,6 +19,7 @@ from service.pipelines.models import (
     DetectCropConfig,
     FrameSampleConfig,
     HighlightAnalyzeConfig,
+    HighlightCritiqueConfig,
     HighlightScanConfig,
     PipelineDef,
     StageDef,
@@ -39,6 +40,7 @@ _MODEL_ALLOWLIST_BY_NODE_TYPE: dict[str, list[str]] = {
     "chunk_analyze": EVENT_MODELS,
     "highlight_scan": EVENT_MODELS,
     "highlight_analyze": EVENT_MODELS,
+    "highlight_critique": EVENT_MODELS,
 }
 
 
@@ -281,6 +283,68 @@ def _highlight_scan_analyze() -> PipelineDef:
     )
 
 
+def _highlight_scan_critique_analyze() -> PipelineDef:
+    """``highlight-scan-critique-analyze`` — v2 build plan
+    (``2026-07-18-highlight-scan-critique-analyze-v2-plan.md``). ADDITIVE
+    sibling of ``highlight-scan-analyze`` (that pipeline stays registered,
+    untouched at the DAG-shape level) with ONE new stage inserted between
+    scan and analyze: ``video_window -> highlight_scan -> highlight_critique
+    -> highlight_analyze``.
+
+    ``highlight_scan``: unchanged stage TYPE, evolved output (``description``/
+    ``reasoning`` per highlight — see ``highlight_scan.build_highlight_schema``).
+
+    ``highlight_critique`` (NEW): per scanned highlight, a backward-padded
+    native-video window + the scan's own description, asking Gemini to
+    confirm the description and locate the highlight's TRUE (possibly
+    earlier) start — corrects Gemini's long-video timestamp drift (Gracie's
+    VTG-drift finding). Output is ADDITIVE (``corrected_start_s``/
+    ``corrected_end_s``/``critique_note``), never overwrites the scan's own
+    bounds.
+
+    ``highlight_analyze``: reads ``corrected_start_s``/``corrected_end_s``
+    (falling back to the scan's own ``start_s``/``end_s`` when absent) as the
+    AUTHORITATIVE bounds, then runs independent position + technique calls
+    (Gracie: orthogonal axes, each returns ONE flat verdict, both always
+    fire) reconciled by a bounded validator pass with strict ditch authority
+    (see ``HighlightAnalyzeConfig``'s v2 docstring /
+    ``executors.highlight_analyze_node``). This SAME executor/config also
+    serves ``highlight-scan-analyze`` (no ``highlight_critique`` stage there
+    — ``corrected_*`` stays absent, so behavior falls back to the scan's own
+    bounds unchanged).
+    """
+    return PipelineDef(
+        id="highlight-scan-critique-analyze",
+        label="Highlight scan + critique + analyze (native, v2)",
+        description=(
+            "v2: YouTube-native three-pass pipeline — a cheap Gemini scan finds highlight "
+            "spans (with a body-movement description + reasoning), a per-highlight backward-"
+            "padded critique call corrects long-video timestamp drift, then independent "
+            "position + technique verdicts reconciled by a bounded, ditch-capable validator "
+            "pass tag each highlight. No context-chain, no dedup stage — pre-roll "
+            "video + event clipping (against the critique-corrected bounds) replace them."
+        ),
+        stages=[
+            StageDef(
+                id="video_window", type="video_window", label="Video Window",
+                enabled=True, config=VideoWindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_scan", type="highlight_scan", label="Highlight Scan",
+                enabled=True, config=HighlightScanConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_critique", type="highlight_critique", label="Highlight Critique",
+                enabled=True, config=HighlightCritiqueConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_analyze", type="highlight_analyze", label="Highlight Analyze",
+                enabled=True, config=HighlightAnalyzeConfig().model_dump(),
+            ),
+        ],
+    )
+
+
 DEFAULT_PIPELINES: dict[str, PipelineDef] = {
     "single-shot": _single_shot(),
     "vision-mimic": _vision_mimic("vision-mimic", "Vision-engine mimic", "single"),
@@ -288,6 +352,7 @@ DEFAULT_PIPELINES: dict[str, PipelineDef] = {
     "vision-mimic-simplified": _vision_mimic_simplified(),
     "chunk-segment-tags": _chunk_segment_tags(),
     "highlight-scan-analyze": _highlight_scan_analyze(),
+    "highlight-scan-critique-analyze": _highlight_scan_critique_analyze(),
 }
 
 # Fixed stage-type SET per pipeline id (order-independent) — used by fail-closed
@@ -382,6 +447,20 @@ def validate_pipeline_def(pipeline: PipelineDef) -> PipelineDef:
                 f"Unsupported model {validated_config.model!r} for stage {stage.id!r} "
                 f"(type={stage.type!r}); must be one of {allowlist}."
             )
+
+        # v2: highlight_analyze's position/technique/validator sub-configs
+        # each carry their OWN `model` field (ThinkingQualityMixin subclasses)
+        # — same no-silent-swap discipline as every top-level `model` field
+        # above, extended here since these are nested, not reachable by the
+        # generic top-level check.
+        if stage.type == "highlight_analyze":
+            for axis_name in ("position", "technique", "validator"):
+                axis_cfg = getattr(validated_config, axis_name)
+                if axis_cfg.model not in EVENT_MODELS:
+                    raise PipelineValidationError(
+                        f"Unsupported model {axis_cfg.model!r} for stage {stage.id!r} "
+                        f"(type={stage.type!r}, axis={axis_name!r}); must be one of {EVENT_MODELS}."
+                    )
 
         if stage.type in STRUCTURAL_NODE_TYPES and not stage.enabled:
             raise PipelineValidationError(

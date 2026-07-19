@@ -138,6 +138,55 @@ def _format_offset_seconds(seconds: float) -> str:
     return f"{quantized:.3f}s"
 
 
+# --------------------------------------------------------------------------- #
+# media_resolution mapping (v2 build plan,
+# 2026-07-18-highlight-scan-critique-analyze-v2-plan.md) — the ONE place a
+# ``ThinkingQualityMixin.media_resolution`` UI value is mapped to a Gemini
+# ``types.MediaResolution`` enum, reused (not duplicated) by every call site
+# that needs it: ``SimplifiedTagsTimeAnalyzer._build_generate_config`` (the
+# shared native-video PASS-2 call — ``chunk_analyze_node``,
+# ``highlight_analyze_node``'s position/technique/validator calls, and
+# ``highlight_critique_node``) AND ``executors.highlight_scan_node``'s own
+# inline rough-scan call, which carries the same ``None`` -> LOW default.
+# --------------------------------------------------------------------------- #
+_MEDIA_RESOLUTION_ENUM: dict[str, "types.MediaResolution"] = {
+    "low": types.MediaResolution.MEDIA_RESOLUTION_LOW,
+    "medium": types.MediaResolution.MEDIA_RESOLUTION_MEDIUM,
+    "high": types.MediaResolution.MEDIA_RESOLUTION_HIGH,
+}
+
+
+def media_resolution_enum(level: Optional[str]) -> "types.MediaResolution":
+    """Map a ``ThinkingQualityMixin.media_resolution`` value (``"low"``/
+    ``"medium"``/``"high"``/``None``) to a Gemini ``types.MediaResolution``.
+
+    ``None`` -> ``MEDIA_RESOLUTION_LOW`` — the existing codebase default for
+    cheap/rough Gemini calls (``chunk_segment_node``/``highlight_scan_node``
+    already hardcode this tier for their own PASS-1 rough scans; this
+    function extends the SAME default to the PASS-2 ``analyze_chunk`` call,
+    which previously set no ``media_resolution`` at all — build plan v2 §2:
+    "map None -> existing default (LOW)... this touches the shared PASS-2
+    call, not each site").
+
+    **Measured cost/behavior-neutral for the accepted ``chunk-segment-tags``
+    pipeline (INS-089 addendum, 2026-07-18):** this function's ``None`` ->
+    LOW default also changes ``chunk_analyze_node``'s PASS-2 call from
+    setting NO ``media_resolution`` at all to explicit LOW. This is a
+    DELIBERATE, measured-neutral change, not an unmeasured side effect on
+    already-accepted/committed code: LOW vs. unset were directly re-measured
+    against the real Gemini API (fixed fps=1 window) and came back
+    IDENTICAL — 4808 tokens both (INS-089's addendum documents this: "LOW/
+    MEDIUM/UNSPECIFIED share the 70-tok/frame tier; only HIGH differs").
+    ``chunk-segment-tags``' existing tests (``tests/test_pipelines_executors.py``
+    /``tests/test_qa_pipeline_routes.py``) all stay green under this change —
+    see ``working_log/knowledge-base/insights/
+    INS-089-gemini-native-video-cost-model-and-25-dollar-anchor-reconciliation.md``.
+    """
+    if level is None:
+        return types.MediaResolution.MEDIA_RESOLUTION_LOW
+    return _MEDIA_RESOLUTION_ENUM[level]
+
+
 def resolve_system_instruction(override: Optional[str]) -> str:
     """``None``/whitespace-only -> the bundled default taxonomy text (same
     "empty means default" discipline as ``qa_vlm._clean_system_instruction`` +
@@ -535,12 +584,15 @@ class SimplifiedTagsTimeAnalyzer:
         self.last_raw_response_text: Optional[str] = None
         self.last_usage_metadata: Optional[dict] = None
 
-    def _build_generate_config(self, response_schema: types.Schema) -> types.GenerateContentConfig:
+    def _build_generate_config(
+        self, response_schema: types.Schema, media_resolution: Optional[str] = None,
+    ) -> types.GenerateContentConfig:
         kwargs = dict(
             system_instruction=self.system_instruction,
             temperature=self.temperature,
             response_mime_type="application/json",
             response_schema=response_schema,
+            media_resolution=media_resolution_enum(media_resolution),
         )
         if self.thinking_config is not None:
             kwargs["thinking_config"] = self.thinking_config
@@ -548,7 +600,8 @@ class SimplifiedTagsTimeAnalyzer:
 
     async def analyze_chunk(
         self, youtube_url: str, start_sec: float, end_sec: float, previous_context: Optional[str] = None,
-        *, response_schema=None, fps: int = 1,
+        *, response_schema=None, fps: int = 1, media_resolution: Optional[str] = None,
+        prompt_text: Optional[str] = None,
     ) -> str:
         """Analyze ONE native-video chunk ``[start_sec, end_sec)``.
 
@@ -564,9 +617,24 @@ class SimplifiedTagsTimeAnalyzer:
         1 or 10 are supported by that config's allowlist) defaults to 1,
         preserving ``chunk_analyze_node``'s prior hardcoded behavior
         byte-for-byte for every existing caller that doesn't pass it.
+
+        ``media_resolution`` (additive, v2 build plan §2 — mirrors exactly
+        how ``fps`` was added above): ``None`` -> ``media_resolution_enum``'s
+        own default (``MEDIA_RESOLUTION_LOW``) for every caller that doesn't
+        pass it.
+
+        ``prompt_text`` (additive, v2 — the ONE shared native-video call this
+        function wraps is reused by ``highlight_critique_node`` and the
+        position/technique/validator calls in ``highlight_analyze_node``,
+        none of which want ``simplified-tags-time-v1``'s own
+        ``build_video_prompt``): ``None`` -> ``build_video_prompt(previous_context)``,
+        preserving every existing caller's prior behavior byte-for-byte; a
+        non-``None`` value is sent VERBATIM (the caller has already built its
+        own final prompt text — this function never re-substitutes or
+        re-wraps it).
         """
         effective_schema = response_schema if response_schema is not None else build_video_response_schema()
-        prompt = build_video_prompt(previous_context)
+        prompt = prompt_text if prompt_text is not None else build_video_prompt(previous_context)
         video_part = types.Part(
             file_data=types.FileData(file_uri=youtube_url),
             video_metadata=types.VideoMetadata(
@@ -592,7 +660,7 @@ class SimplifiedTagsTimeAnalyzer:
                 lambda: self.client.aio.models.generate_content(
                     model=self.model_id,
                     contents=[types.Content(role="user", parts=[types.Part(text=prompt), video_part])],
-                    config=self._build_generate_config(effective_schema),
+                    config=self._build_generate_config(effective_schema, media_resolution),
                 ),
                 op_name="simplified-tags-time-v1",
                 retry_config=self.retry_config,

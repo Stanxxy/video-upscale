@@ -130,10 +130,17 @@ only report the spans that are genuinely worth a closer look.
 Timestamps (`start_s`/`end_s`) must be ABSOLUTE match seconds in
 [$start_sec, $end_sec], never relative to a sub-window.
 
+For each highlight also report:
+- `description`: a body-movement description ONLY (grips, level changes,
+  positions) — NEVER a technique name/label. This is a recall lever, not a
+  classification. Exclude broadcast REPLAYS (a cut back to footage already
+  shown) — do not report the same exchange twice because it was replayed.
+- `reasoning`: a short free-text justification for why you flagged this span.
+
 Return ONLY valid JSON matching this shape — no prose:
 {
     "highlights": [
-        { "start_s": $start_sec, "end_s": 0 }
+        { "start_s": $start_sec, "end_s": 0, "description": "string", "reasoning": "string" }
     ]
 }
 """.strip()
@@ -150,12 +157,25 @@ def resolve_system_prompt(override: Optional[str]) -> str:
 
 def build_highlight_schema() -> types.Schema:
     """Gemini structured-output schema for PASS 1: an ORDERED list of
-    ``{start_s, end_s}`` ONLY — no ``reason``, no per-highlight detail. The
-    smaller the schema/prompt surface, the cheaper this rough-scan call
-    stays (build plan cost model)."""
+    ``{start_s, end_s, description, reasoning}`` — no ``reason`` ENUM, no
+    ``worth_analysis``, no per-clip technique/position detail (that stays
+    PASS 2's job). The schema/prompt surface stays small so this rough-scan
+    call stays cheap (build plan cost model).
+
+    ``description``/``reasoning`` (v2 build plan,
+    ``2026-07-18-highlight-scan-critique-analyze-v2-plan.md``, "Node 1"):
+    ADDITIVE to the v1 ``{start_s, end_s}`` shape. ``description`` is a
+    body-movement string (NO technique label — recall-biased, "what
+    physically happens", not "what this is called"); ``reasoning`` is a
+    short free-text justification for WHY this span was flagged (forces the
+    model to justify its own recall judgment rather than pattern-matching
+    silently). Both REQUIRED at the Gemini schema level (forces the model to
+    always produce them) but treated as optional/pass-through Python-side by
+    ``repair_highlight_bounds``/``finalize_highlights`` (``.get(...)``, never
+    a hard failure if a malformed response omits them)."""
     highlight_schema = types.Schema(
         type=types.Type.OBJECT,
-        required=["start_s", "end_s"],
+        required=["start_s", "end_s", "description", "reasoning"],
         properties={
             "start_s": types.Schema(
                 type=types.Type.NUMBER, format="float",
@@ -164,6 +184,18 @@ def build_highlight_schema() -> types.Schema:
             "end_s": types.Schema(
                 type=types.Type.NUMBER, format="float",
                 description="Highlight end, ABSOLUTE match seconds (same clock as the requested scope).",
+            ),
+            "description": types.Schema(
+                type=types.Type.STRING,
+                description=(
+                    "Body-movement description ONLY — what physically happens (grips, level "
+                    "changes, positions), NEVER a technique name/label. Recall lever, not a "
+                    "classification."
+                ),
+            ),
+            "reasoning": types.Schema(
+                type=types.Type.STRING,
+                description="Short free-text justification for why this span was flagged as a highlight.",
             ),
         },
     )
@@ -267,7 +299,14 @@ def repair_highlight_bounds(
                     start_s, end_s, scope_start, scope_end, clamped_start, clamped_end,
                 )
             start_s, end_s = clamped_start, clamped_end
-        cleaned.append({"start_s": start_s, "end_s": end_s})
+        # description/reasoning (v2, additive): pass-through only, never
+        # validated/fabricated — a malformed/omitted value from Gemini
+        # (schema requires them, but a response could still fail schema
+        # enforcement upstream) becomes None here, not a fabricated string.
+        cleaned.append({
+            "start_s": start_s, "end_s": end_s,
+            "description": entry.get("description"), "reasoning": entry.get("reasoning"),
+        })
 
     cleaned.sort(key=lambda h: h["start_s"])
 
@@ -336,6 +375,12 @@ def repair_highlight_bounds(
             is_last_piece = piece_end >= highlight["end_s"]
             piece = {
                 "start_s": cursor, "end_s": piece_end,
+                # description/reasoning (v2, additive): each split piece
+                # inherits the SAME parent description/reasoning — they
+                # describe one continuous highlight that this split
+                # mechanically cut into contiguous pieces, not N distinct
+                # judgments.
+                "description": highlight.get("description"), "reasoning": highlight.get("reasoning"),
                 "adjustment": note if first_piece else (note + " (continuation)"),
                 "start_is_synthetic": not first_piece,
                 "end_is_synthetic": not is_last_piece,
@@ -375,6 +420,8 @@ def finalize_highlights(
             "index": i,
             "start_s": highlight["start_s"],
             "end_s": highlight["end_s"],
+            "description": highlight.get("description"),
+            "reasoning": highlight.get("reasoning"),
             "adjustment": highlight.get("adjustment"),
             "start_is_synthetic": highlight.get("start_is_synthetic", False),
             "end_is_synthetic": highlight.get("end_is_synthetic", False),
