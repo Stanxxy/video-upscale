@@ -26,6 +26,7 @@ from service.pipelines.models import (
     VideoWindowConfig,
     WindowConfig,
 )
+from service.pipelines.highlight_scan import DEFAULT_INITIAL_PROMPT, DEFAULT_SYSTEM_PROMPT
 from service.pipelines.simplified_tags import DEFAULT_TAXONOMY_TEXT
 from service.routes.qa_vlm import DETECT_MODELS, EVENT_MODELS
 
@@ -331,7 +332,24 @@ def _highlight_scan_critique_analyze() -> PipelineDef:
             ),
             StageDef(
                 id="highlight_scan", type="highlight_scan", label="Highlight Scan",
-                enabled=True, config=HighlightScanConfig().model_dump(),
+                enabled=True,
+                # v2-ONLY playground pre-fill (2026-07-19): populate this
+                # registry stage's own system_prompt/initial_prompt with the
+                # bundled constants so GET /qa/pipeline-defaults?id=
+                # highlight-scan-critique-analyze returns them POPULATED
+                # (playground textareas show the founder's 4-category prompt
+                # pre-filled). Deliberately NOT done on ``HighlightScanConfig``'s
+                # own pydantic field default (stays None) and NOT done on
+                # ``_highlight_scan_analyze()`` (v1)'s registry entry below —
+                # v1's playground textarea keeps showing empty/None exactly as
+                # before this change. Clearing either field here still falls
+                # back through ``resolve_system_prompt``/``build_scan_prompt``
+                # to the SAME bundled constants (see ``highlight_scan.py``),
+                # so "empty textarea -> None -> bundled default" is unbroken.
+                config=HighlightScanConfig(
+                    system_prompt=DEFAULT_SYSTEM_PROMPT,
+                    initial_prompt=DEFAULT_INITIAL_PROMPT,
+                ).model_dump(),
             ),
             StageDef(
                 id="highlight_critique", type="highlight_critique", label="Highlight Critique",

@@ -86,30 +86,40 @@ HIGHLIGHT_SPLIT_OVERLAP_S: float = 0.0
 # Bundled default Gemini ``system_instruction`` for the PASS-1 rough scan.
 # Overridable via ``HighlightScanConfig.system_prompt`` (full replacement,
 # same "empty means default" discipline as ``AnalyzeConfig.system_instruction``).
+#
+# Founder's 4-category polished prompt (2026-07-19, playground pre-fill
+# request): replaces the earlier generic "any active exchange" scan prompt.
+# This is the SHARED bundled default read by BOTH ``highlight-scan-analyze``
+# (v1) and ``highlight-scan-critique-analyze`` (v2) whenever a run's
+# ``HighlightScanConfig.system_prompt`` is ``None``/empty — see
+# ``service/pipelines/registry.py``'s ``_highlight_scan_critique_analyze()``
+# for why only v2's REGISTRY DEFAULT explicitly serializes this text into
+# ``GET /qa/pipeline-defaults`` (v1's registry entry keeps ``system_prompt=None``,
+# so its playground textarea stays empty as before — only the text it
+# resolves to when left empty/cleared has changed, which is this constant
+# replacement's whole point).
 DEFAULT_SYSTEM_PROMPT: str = """
-You are scanning a BJJ (Brazilian Jiu-Jitsu) match video to find HIGHLIGHTS —
-spans of live grappling action worth a closer, finer-grained look later. You
-are NOT reading grips or naming techniques yet, only judging WHERE the
-interesting live action is.
+You are a BJJ match analyst doing a COARSE first pass over ONE ADCC no-gi match video. Your only job: find every moment that belongs on a highlight reel. A finer-grained model will refine and sub-classify these clips later — you do not need to name the specific technique, guard, or grip. You need to find the moment and bound it in time.
 
-A "highlight" is a contiguous span of live grappling exchange: a takedown
-attempt, a guard pass, a sweep, a submission attempt, a scramble, a
-back-take, or any other active technique exchange. It is NOT: walkouts,
-introductions, staredowns, referee stand-ups with no exchange, stall resets,
-injury timeouts, points/penalty conferences, commentary desk cutaways,
-replays, sponsor reads, or crowd shots.
+Flag a moment as a highlight if it is ANY of these:
 
-HARD RULE: precision over recall is fine here (a human confirms every
-highlight afterward) — but never invent a highlight where nothing is
-happening, and never merge two clearly separate exchanges into one span just
-because they are close together in time.
+1. SUBMISSION OR SUBMISSION ATTEMPT — any choke, arm lock, or leg lock (including heel hooks) that is genuinely threatening, whether it finishes the match or is escaped/defended. A serious attempt that fails is still a reel moment — flag it.
+2. BACK TAKE — one athlete establishes control of the opponent's back (hooks in, seatbelt, or back mount). Always a highlight, even before any submission is attempted.
+3. DECISIVE SWEEP — the bottom player reverses the position and ends up on top, flipping who is winning the exchange.
+4. DECISIVE GUARD PASS — the top player clears the opponent's legs and establishes a dominant pin (side control, mount, knee-on-belly, etc.). This must be a completed, advantage-changing pass — not a half-attempt that gets immediately contested or recovered.
 
-CLEAN CUT POINTS ONLY: start a highlight only when live action visibly
-begins, and end it only once the position has settled/reset or the exchange
-has clearly concluded — at least ~2 seconds of stillness, or a stoppage.
-NEVER cut while a limb is being isolated, a pass is clearing the legs, a
-takedown is in the air, a back-take is mid-transition, or a scramble is
-still resolving.
+Do NOT flag: grip fighting or hand-fighting; sleeve/collar/wrist control battles; positional entries or scrambles that don't complete into one of the four categories above; guard recovery or re-guarding; takedowns AND takedown defense of any kind (standing exchanges are out of scope for this pass, even if dynamic); stalling, referee resets, or dead time. These are the noise floor — firing on them is a worse mistake than missing a borderline highlight.
+
+This is a RECALL-first pass: do not miss real highlights, but do not pad the list with connective tissue. When you're unsure whether something is a genuine finish, near-finish, or advantage-change versus mere positional jockeying, use this test: would a knowledgeable BJJ fan clip this moment and send it to a friend? If yes, flag it. If it's just two athletes working, skip it.
+
+For every highlight you find, report it as a start and end timestamp in seconds. Keep the span tight — start just before the decisive action begins, end just after it resolves (finish, tap, back taken, pass completed, sweep landed). Do not pad spans with pre-highlight setup or post-highlight transition.
+
+REPORTING EACH HIGHLIGHT — two more fields are required per highlight, and a finer-grained downstream model depends on both being concrete, not filler:
+
+- `description`: a BODY-MOVEMENT description of what physically happens — whose hip, grip, limb, hook, or base moved, and how the control or position changed. Describe the mechanics you actually see (e.g. "bottom player underhooks the far leg and rolls the top player over his shoulder onto their back" / "top player steps over the near leg, drives the knee across the hip, and settles chest-to-chest in side control"). NEVER a bare technique label or position name on its own (not "arm bar," not "knee slice pass") — a technique name may appear only as a byproduct of describing the movement, never as a substitute for it. This is a recall lever for the next pass, not a classification — it must be concrete enough that someone who cannot see the video could still picture what happened.
+- `reasoning`: state which of the four categories above triggered the flag (submission/submission attempt, back take, decisive sweep, or decisive guard pass) and the specific visual cue that convinced you (e.g. "opponent's arm is isolated and hyperextending, tap looks imminent" / "both hooks are in and the back is fully controlled" / "bottom player is now on top in side control after the roll"). If none of the four is a good fit for why you flagged it, that is a signal you should not be flagging it.
+
+Both fields are mandatory for every highlight — a vague, generic, or placeholder description or reasoning is a failure to complete the task, not an acceptable answer.
 """.strip()
 
 # Bundled default per-run "user turn" prompt for the PASS-1 rough scan.
@@ -119,23 +129,11 @@ still resolving.
 # escaping (unlike ``str.format`` templates) — ``Template`` only treats ``$``
 # specially.
 DEFAULT_INITIAL_PROMPT: str = """
-Scan this BJJ video from $start_sec s to $end_sec s (absolute match seconds)
-at LOW sampling resolution and find every HIGHLIGHT per the system
-instructions.
+Now watch this match from $start_sec s to $end_sec s (absolute match seconds) and list every highlight moment you find in that span, in chronological order. Do not skip anything that meets the definition, even if it happens in the first or last few seconds of the requested span.
 
-Break the $start_sec-$end_sec s span into an ORDERED list of highlight spans.
-Do NOT try to cover the entire span (this is not a scene segmentation) —
-only report the spans that are genuinely worth a closer look.
+Timestamps (`start_s`/`end_s`) must be ABSOLUTE match seconds in [$start_sec, $end_sec], never relative to this sub-window.
 
-Timestamps (`start_s`/`end_s`) must be ABSOLUTE match seconds in
-[$start_sec, $end_sec], never relative to a sub-window.
-
-For each highlight also report:
-- `description`: a body-movement description ONLY (grips, level changes,
-  positions) — NEVER a technique name/label. This is a recall lever, not a
-  classification. Exclude broadcast REPLAYS (a cut back to footage already
-  shown) — do not report the same exchange twice because it was replayed.
-- `reasoning`: a short free-text justification for why you flagged this span.
+For each highlight, also report `description` (a concrete body-movement description — grips, hips, limbs, hooks, control — never a bare technique label) and `reasoning` (which of the four categories triggered the flag, plus the specific visual cue). Both are mandatory per the system instructions — do not leave either generic or empty.
 
 Return ONLY valid JSON matching this shape — no prose:
 {
