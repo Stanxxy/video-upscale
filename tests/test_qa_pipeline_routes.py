@@ -316,6 +316,87 @@ async def test_pipeline_run_chunk_segment_tags_within_budget_and_cap_streams_ok(
     assert [ln["type"] for ln in lines] == ["run_start", "chunk_map", "run_complete"]
 
 
+# --------------------------------------------------------------------------- #
+# highlight-scan-analyze — evaluator CHANGES-REQUIRED item 1 (2026-07-18):
+# same two-phase-gate exemption as chunk-segment-tags above, reapplied
+# verbatim for this pipeline (it has no worth_analysis prefilter at all, so
+# its pathological worst-case pre-flight estimate is even worse).
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_pipeline_defaults_highlight_scan_analyze(client_with_key):
+    resp = await client_with_key.get("/qa/pipeline-defaults", params={"id": "highlight-scan-analyze"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == "highlight-scan-analyze"
+    assert [s["type"] for s in body["stages"]] == ["video_window", "highlight_scan", "highlight_analyze"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_run_highlight_scan_analyze_worst_case_estimate_does_not_pre_stream_block(client_with_key, monkeypatch):
+    """highlight-scan-analyze's pathological worst-case pre-flight estimate
+    (1 + ceil(duration/min_highlight_s) — 300s / 3s min_highlight -> 101
+    planned calls > DEFAULT_BUDGET_CAP of 60) must NOT hard-block the run
+    pre-stream — that estimate false-blocks even a plain 5-minute match whose
+    REAL PASS-2 call count (== the real PASS-1 highlight count) is far lower
+    in practice. The run must be allowed to start (200, streaming) — the
+    two-phase gate on the ACTUAL highlight count lives inside run_pipeline
+    (see test_pipelines_executors.py), not here."""
+    pdef = registry.get_default("highlight-scan-analyze").model_dump(mode="json")
+
+    async def _fake_run_pipeline(pipeline, ctx, planned, budget_cap=None):
+        yield {"type": "run_start", "planned_gemini_calls": planned["planned_gemini_calls"]}
+        yield {"type": "highlight_map", "highlights": []}
+        yield {"type": "run_complete", "clips": [], "format": "simplified-tags-time-v1"}
+
+    monkeypatch.setattr(qa_pipeline_route, "run_pipeline", _fake_run_pipeline)
+
+    # 300s / 3s min_highlight -> 100 highlights + 1 = 101 planned calls >
+    # DEFAULT_BUDGET_CAP (60) — the generic pre-flight guard would have 400'd
+    # here without the exemption; it must not.
+    resp = await client_with_key.post("/qa/pipeline-run", json={
+        "youtube_id": YT_ID, "youtube_url": YT_URL,
+        "scope": {"type": "range", "start_sec": 0, "end_sec": 300},
+        "pipeline": pdef,
+    })
+    assert resp.status_code == 200
+    lines = [json.loads(line) for line in resp.text.strip().split("\n")]
+    assert [ln["type"] for ln in lines] == ["run_start", "highlight_map", "run_complete"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_run_highlight_scan_analyze_within_budget_and_cap_streams_ok(client_with_key, monkeypatch):
+    pdef = registry.get_default("highlight-scan-analyze").model_dump(mode="json")
+
+    async def _fake_run_pipeline(pipeline, ctx, planned, budget_cap=None):
+        yield {"type": "run_start", "planned_gemini_calls": planned["planned_gemini_calls"]}
+        yield {"type": "highlight_map", "highlights": []}
+        yield {"type": "run_complete", "clips": [], "format": "simplified-tags-time-v1"}
+
+    monkeypatch.setattr(qa_pipeline_route, "run_pipeline", _fake_run_pipeline)
+
+    resp = await client_with_key.post("/qa/pipeline-run", json={
+        "youtube_id": YT_ID, "youtube_url": YT_URL,
+        "scope": {"type": "range", "start_sec": 0, "end_sec": 30},
+        "pipeline": pdef,
+    })
+    assert resp.status_code == 200
+    lines = [json.loads(line) for line in resp.text.strip().split("\n")]
+    assert [ln["type"] for ln in lines] == ["run_start", "highlight_map", "run_complete"]
+
+
+@pytest.mark.asyncio
+async def test_pipeline_run_highlight_scan_analyze_structural_disable_400(client_with_key):
+    pdef = registry.get_default("highlight-scan-analyze").model_dump(mode="json")
+    next(s for s in pdef["stages"] if s["type"] == "highlight_scan")["enabled"] = False
+    resp = await client_with_key.post("/qa/pipeline-run", json={
+        "youtube_id": YT_ID, "youtube_url": YT_URL,
+        "scope": {"type": "range", "start_sec": 0, "end_sec": 30},
+        "pipeline": pdef,
+    })
+    assert resp.status_code == 400
+    assert "structural" in resp.text
+
+
 @pytest.mark.asyncio
 async def test_pipeline_run_streams_ndjson_lines(client_with_key, monkeypatch):
     pdef = registry.get_default("single-shot").model_dump(mode="json")

@@ -18,11 +18,15 @@ from service.pipelines.models import (
     DedupConfig,
     DetectCropConfig,
     FrameSampleConfig,
+    HighlightAnalyzeConfig,
+    HighlightCritiqueConfig,
+    HighlightScanConfig,
     PipelineDef,
     StageDef,
     VideoWindowConfig,
     WindowConfig,
 )
+from service.pipelines.highlight_scan import DEFAULT_INITIAL_PROMPT, DEFAULT_SYSTEM_PROMPT
 from service.pipelines.simplified_tags import DEFAULT_TAXONOMY_TEXT
 from service.routes.qa_vlm import DETECT_MODELS, EVENT_MODELS
 
@@ -35,6 +39,9 @@ _MODEL_ALLOWLIST_BY_NODE_TYPE: dict[str, list[str]] = {
     "detect_crop": DETECT_MODELS,
     "chunk_segment": EVENT_MODELS,
     "chunk_analyze": EVENT_MODELS,
+    "highlight_scan": EVENT_MODELS,
+    "highlight_analyze": EVENT_MODELS,
+    "highlight_critique": EVENT_MODELS,
 }
 
 
@@ -214,12 +221,156 @@ def _chunk_segment_tags() -> PipelineDef:
     )
 
 
+def _highlight_scan_analyze() -> PipelineDef:
+    """``highlight-scan-analyze`` — YouTube-URL-native, two-Gemini-phase
+    pipeline, SEQUENTIAL analysis (never parallel — continuity over speed,
+    same product decision as ``chunk-segment-tags``). Fixed stage set:
+    ``video_window -> highlight_scan -> highlight_analyze``.
+
+    Supersedes (conceptually, NOT in code — ``chunk-segment-tags`` stays
+    registered untouched) the mechanical chunk-then-reassemble design: PASS 1
+    finds highlights (not a full scene segmentation), PASS 2 analyzes each
+    highlight finely with a selectable frame rate and a few seconds of
+    surrounding pre/post-roll VIDEO context.
+
+    PASS 1 (``highlight_scan``): ONE cheap rough-scan Gemini call returns an
+    ORDERED list of ``{start_s, end_s}`` highlight spans — no reason enum, no
+    ``worth_analysis`` (build plan "Product Decision": precision over recall
+    accepted for this playground; the human confirms events downstream).
+
+    PASS 2 (``highlight_analyze``): a SEQUENTIAL native-video loop over every
+    highlight, each sent as
+    ``[start_s - preroll_s, end_s + postroll_s]`` (clamped to the requested
+    scope) at a selectable ``fps`` (1, 10, or 15 only — see
+    ``HighlightAnalyzeConfig.fps`` for why fps=5 stays excluded). Tags with
+    the SAME
+    time-keyed ``simplified-tags-time-v1`` format as ``chunk_analyze``.
+
+    NO ``context_chain``, NO ``dedup`` stage — pre-roll video replaces the
+    lossy text context chain. Event clipping (every emitted event is clipped
+    to its highlight's OWN ``[start_s, end_s]``, never the pre/post-roll-
+    expanded window) is NOT a full dedup replacement (corrected 2026-07-18,
+    evaluator CHANGES-REQUIRED item 2 — earlier text here overclaimed that);
+    see ``executors.highlight_analyze_node``'s docstring for the real
+    residual boundary-fragmentation risk and how each sub-case is handled
+    (one fixed, one accepted playground-scope limitation).
+    """
+    return PipelineDef(
+        id="highlight-scan-analyze",
+        label="Highlight scan + analyze (native)",
+        description=(
+            "YouTube-native two-pass pipeline: one cheap Gemini scan finds highlight "
+            "spans worth a closer look (no scene segmentation, no reason enum), then a "
+            "SEQUENTIAL per-highlight native-video analyze pass tags each highlight at a "
+            "selectable frame rate with a few seconds of pre/post-roll video context. No "
+            "context-chain, no dedup stage — event clipping bounds each highlight's own "
+            "output; adjacent-highlight boundary fragmentation is a known, accepted "
+            "limitation for close-together highlights (see engineering docs)."
+        ),
+        stages=[
+            StageDef(
+                id="video_window", type="video_window", label="Video Window",
+                enabled=True, config=VideoWindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_scan", type="highlight_scan", label="Highlight Scan",
+                enabled=True, config=HighlightScanConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_analyze", type="highlight_analyze", label="Highlight Analyze",
+                enabled=True, config=HighlightAnalyzeConfig().model_dump(),
+            ),
+        ],
+    )
+
+
+def _highlight_scan_critique_analyze() -> PipelineDef:
+    """``highlight-scan-critique-analyze`` — v2 build plan
+    (``2026-07-18-highlight-scan-critique-analyze-v2-plan.md``). ADDITIVE
+    sibling of ``highlight-scan-analyze`` (that pipeline stays registered,
+    untouched at the DAG-shape level) with ONE new stage inserted between
+    scan and analyze: ``video_window -> highlight_scan -> highlight_critique
+    -> highlight_analyze``.
+
+    ``highlight_scan``: unchanged stage TYPE, evolved output (``description``/
+    ``reasoning`` per highlight — see ``highlight_scan.build_highlight_schema``).
+
+    ``highlight_critique`` (NEW): per scanned highlight, a backward-padded
+    native-video window + the scan's own description, asking Gemini to
+    confirm the description and locate the highlight's TRUE (possibly
+    earlier) start — corrects Gemini's long-video timestamp drift (Gracie's
+    VTG-drift finding). Output is ADDITIVE (``corrected_start_s``/
+    ``corrected_end_s``/``critique_note``), never overwrites the scan's own
+    bounds.
+
+    ``highlight_analyze``: reads ``corrected_start_s``/``corrected_end_s``
+    (falling back to the scan's own ``start_s``/``end_s`` when absent) as the
+    AUTHORITATIVE bounds, then runs independent position + technique calls
+    (Gracie: orthogonal axes, each returns ONE flat verdict, both always
+    fire) reconciled by a bounded validator pass with strict ditch authority
+    (see ``HighlightAnalyzeConfig``'s v2 docstring /
+    ``executors.highlight_analyze_node``). This SAME executor/config also
+    serves ``highlight-scan-analyze`` (no ``highlight_critique`` stage there
+    — ``corrected_*`` stays absent, so behavior falls back to the scan's own
+    bounds unchanged).
+    """
+    return PipelineDef(
+        id="highlight-scan-critique-analyze",
+        label="Highlight scan + critique + analyze (native, v2)",
+        description=(
+            "v2: YouTube-native three-pass pipeline — a cheap Gemini scan finds highlight "
+            "spans (with a body-movement description + reasoning), a per-highlight backward-"
+            "padded critique call corrects long-video timestamp drift, then independent "
+            "position + technique verdicts reconciled by a bounded, ditch-capable validator "
+            "pass tag each highlight. No context-chain, no dedup stage — pre-roll "
+            "video + event clipping (against the critique-corrected bounds) replace them."
+        ),
+        stages=[
+            StageDef(
+                id="video_window", type="video_window", label="Video Window",
+                enabled=True, config=VideoWindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_scan", type="highlight_scan", label="Highlight Scan",
+                enabled=True,
+                # v2-ONLY playground pre-fill (2026-07-19): populate this
+                # registry stage's own system_prompt/initial_prompt with the
+                # bundled constants so GET /qa/pipeline-defaults?id=
+                # highlight-scan-critique-analyze returns them POPULATED
+                # (playground textareas show the founder's 4-category prompt
+                # pre-filled). Deliberately NOT done on ``HighlightScanConfig``'s
+                # own pydantic field default (stays None) and NOT done on
+                # ``_highlight_scan_analyze()`` (v1)'s registry entry below —
+                # v1's playground textarea keeps showing empty/None exactly as
+                # before this change. Clearing either field here still falls
+                # back through ``resolve_system_prompt``/``build_scan_prompt``
+                # to the SAME bundled constants (see ``highlight_scan.py``),
+                # so "empty textarea -> None -> bundled default" is unbroken.
+                config=HighlightScanConfig(
+                    system_prompt=DEFAULT_SYSTEM_PROMPT,
+                    initial_prompt=DEFAULT_INITIAL_PROMPT,
+                ).model_dump(),
+            ),
+            StageDef(
+                id="highlight_critique", type="highlight_critique", label="Highlight Critique",
+                enabled=True, config=HighlightCritiqueConfig().model_dump(),
+            ),
+            StageDef(
+                id="highlight_analyze", type="highlight_analyze", label="Highlight Analyze",
+                enabled=True, config=HighlightAnalyzeConfig().model_dump(),
+            ),
+        ],
+    )
+
+
 DEFAULT_PIPELINES: dict[str, PipelineDef] = {
     "single-shot": _single_shot(),
     "vision-mimic": _vision_mimic("vision-mimic", "Vision-engine mimic", "single"),
     "vision-mimic-multi": _vision_mimic("vision-mimic-multi", "Vision-engine mimic (multi-agent)", "multi"),
     "vision-mimic-simplified": _vision_mimic_simplified(),
     "chunk-segment-tags": _chunk_segment_tags(),
+    "highlight-scan-analyze": _highlight_scan_analyze(),
+    "highlight-scan-critique-analyze": _highlight_scan_critique_analyze(),
 }
 
 # Fixed stage-type SET per pipeline id (order-independent) — used by fail-closed
@@ -314,6 +465,20 @@ def validate_pipeline_def(pipeline: PipelineDef) -> PipelineDef:
                 f"Unsupported model {validated_config.model!r} for stage {stage.id!r} "
                 f"(type={stage.type!r}); must be one of {allowlist}."
             )
+
+        # v2: highlight_analyze's position/technique/validator sub-configs
+        # each carry their OWN `model` field (ThinkingQualityMixin subclasses)
+        # — same no-silent-swap discipline as every top-level `model` field
+        # above, extended here since these are nested, not reachable by the
+        # generic top-level check.
+        if stage.type == "highlight_analyze":
+            for axis_name in ("position", "technique", "validator"):
+                axis_cfg = getattr(validated_config, axis_name)
+                if axis_cfg.model not in EVENT_MODELS:
+                    raise PipelineValidationError(
+                        f"Unsupported model {axis_cfg.model!r} for stage {stage.id!r} "
+                        f"(type={stage.type!r}, axis={axis_name!r}); must be one of {EVENT_MODELS}."
+                    )
 
         if stage.type in STRUCTURAL_NODE_TYPES and not stage.enabled:
             raise PipelineValidationError(

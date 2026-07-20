@@ -200,6 +200,9 @@
   .seek-pill:hover { border-color: var(--accent); }
   .seek-pill.active { outline: 2px solid var(--accent); outline-offset: 1px; }
   .seek-pill.disabled { color: var(--text-dim); cursor: not-allowed; opacity: 0.5; background: transparent; border-style: dashed; }
+  /* Backwards (start > end) range — never render identically to a normal,
+     trustworthy pill (see rangeIsInverted()/eventPillHtml()). */
+  .seek-pill.pill-inverted { color: var(--yellow); border-color: var(--yellow); border-style: dashed; }
   .over-badge { color: var(--yellow); font-size: 0.68rem; }
 
   /* Spatial (Detect/Segment) overlay: frame stage + SVG boxes/masks + chips */
@@ -325,6 +328,47 @@
   .rail-row-label { font-weight: 600; }
   .rail-row-line2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .rail-row-caption { color: var(--text-dim); font-size: 0.74rem; font-style: italic; margin-top: 2px; width: 100%; }
+
+  /* ============================================================
+     highlight-scan-analyze — PASS-1 highlight timeline (replaces the
+     chunk-map table for THIS pipeline only; no charting lib, positioned
+     divs by percentage over the scoped run duration). Gated on
+     currentPipelineId in renderChunkMapHost() — the chunk-map table stays
+     unchanged for chunk-segment-tags.
+     ============================================================ */
+  .timeline-bar { position: relative; width: 100%; height: 36px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; overflow: hidden; }
+  .timeline-block { position: absolute; top: 4px; bottom: 4px; border-radius: 4px; cursor: pointer; background: var(--accent); opacity: 0.45; transition: opacity 0.15s; }
+  .timeline-block:hover { opacity: 0.9; }
+  .timeline-block-complete { background: var(--green); opacity: 0.65; }
+  .timeline-block-errored { background: var(--red); opacity: 0.75; }
+  .timeline-block-running { background: var(--yellow); opacity: 0.75; }
+  .timeline-block-pending { background: var(--accent); opacity: 0.45; }
+
+  /* ============================================================
+     highlight-scan-critique-analyze (v2) ONLY — ditched highlights (a
+     validator "ditch" verdict, distinct from a PASS-2 transport ERROR),
+     critique ghost/corrected timeline blocks, and the struck-through
+     "scan -> corrected" pill state. Gated in JS on
+     currentPipelineId === 'highlight-scan-critique-analyze'; these classes
+     are simply never applied for any other pipeline.
+     ============================================================ */
+  .rail-row-ditched { border-color: var(--border); background: rgba(139,143,163,0.10); opacity: 0.72; }
+  .timeline-block-ditched {
+    background: repeating-linear-gradient(45deg, var(--text-dim), var(--text-dim) 4px, transparent 4px, transparent 8px);
+    opacity: 0.55;
+  }
+  /* Ghost outline = the highlight's ORIGINAL (scan) bounds, rendered UNDER
+     the solid authoritative-bounds block so both are visible when a
+     critique correction moved the edges. Never itself colored by PASS-2
+     status (that's the solid block's job) — always a plain dashed outline. */
+  .timeline-block-ghost { background: transparent; border: 1px dashed var(--text-dim); opacity: 0.7; z-index: 0; }
+  .timeline-block { z-index: 1; }
+  .pill-struck { text-decoration: line-through; opacity: 0.55; }
+  .v2-axis-card { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .v2-axis-card:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .v2-axis-card-label { font-weight: 600; font-size: 0.82rem; margin-bottom: 4px; }
+  details.v2-axis-details summary { cursor: pointer; color: var(--text-dim); font-size: 0.82rem; margin-top: 8px; }
+  details.v2-validator-summary summary { cursor: pointer; font-size: 0.78rem; color: var(--accent); }
 </style>
 </head>
 <body>
@@ -395,6 +439,15 @@
          backend then falls back to DEFAULT_BUDGET_CAP (60). -->
     <label>Budget cap (max Gemini calls)</label>
     <input id="budget-cap" type="number" min="1" step="1" placeholder="default 60 — leave blank to use it">
+
+    <!-- v2 (highlight-scan-critique-analyze) ONLY — cheap per-highlight cost
+         badge, NOT a full estimator (build plan "Cost badge pre-run"): N
+         highlight(s) (last scan's count, or a rough scope/avg-length
+         fallback before any scan has run) × ~(3 + max_validator_iterations)
+         Gemini calls each (1 critique + 2 analyze + L validator), plus the
+         1 scan call. Hidden entirely for every other pipeline
+         (renderCostBadge()'s own currentPipelineId gate). -->
+    <div class="selection-badges" id="cost-estimate-badge" style="display:none;"></div>
 
     <button class="btn btn-primary" id="btn-run-pipeline" onclick="runPipeline()">&#9654; Run pipeline</button>
   </div>
@@ -534,6 +587,19 @@
       <div class="err-line" id="dag-reorder-error"></div>
     </div>
 
+    <!-- v2 (highlight-scan-critique-analyze) ONLY — pipeline-level default
+         thinking + video-quality pair that pre-fills every v2 node/sub-config
+         on load (see applyV2GlobalDefaultToNulls()); a node whose OWN value
+         diverges shows a "custom" badge on that node's own row instead.
+         Hidden entirely for every other pipeline (renderV2GlobalDefaultCard()'s
+         own currentPipelineId gate — never rendered/shown for
+         chunk-segment-tags/highlight-scan-analyze/vision-mimic/single-shot). -->
+    <div class="card" id="v2-global-default-card" style="display:none;">
+      <h2>Pipeline default — thinking + quality</h2>
+      <div class="reasoning" style="margin-top:0;">Pre-fills every v2 node/sub-config that hasn't been individually overridden. A node's own control still wins once you touch it (shows a "custom" badge here has no effect on it).</div>
+      <div class="field-inline" style="align-items:flex-end; gap:16px; margin-top:8px;" id="v2-global-default-body"></div>
+    </div>
+
     <!-- Node config panel -->
     <div class="card" id="node-config-card" style="display:none;">
       <h2 id="node-config-title">Node config</h2>
@@ -596,7 +662,7 @@
     </div>
 
     <div class="card dedup-rail-card" id="dedup-rail-card">
-      <h2>Deduped Events</h2>
+      <h2 id="dedup-rail-title">Deduped Events</h2>
       <div class="dedup-rail-list" id="dedup-rail-list">
         <div class="rail-empty">No events yet — run a pipeline.</div>
       </div>
@@ -668,6 +734,12 @@ let PRODUCTION_DEFAULTS = {};          // id -> pristine PipelineDef snapshot, f
 let selectedNodeIndex = null;          // index into currentPipelineDef.stages, or null
 let currentAgentMode = 'single';       // 'single' | 'multi' — synced with the Analyze node's agent_mode
 const nodeSchemaFileNames = {};        // stageId -> last-loaded schema filename (per-node provenance, UI-only)
+
+// v2 (highlight-scan-critique-analyze) ONLY — pipeline-level thinking/quality
+// default (build plan UI item 1). Session-persistent, not per-pipeline (there
+// is only one v2 pipeline id to apply it to). Never consulted by any other
+// pipeline's rendering path.
+let v2GlobalDefault = { thinking: 'off', media_resolution: 'low' };
 
 let activeRunController = null;        // AbortController for the in-flight /qa/pipeline-run stream
 let runState = null;                   // { status, windows[], dedupedClips, plannedWindows, plannedCalls, startedAt, totalMs, errors[] }
@@ -1233,6 +1305,19 @@ function scopeChipLabel(turn) {
   return secToMmss(turn.startSec) + ' → ' + secToMmss(turn.endSec);
 }
 
+// A range is "inverted" (start strictly after end) when an upstream bug hands
+// this file a backwards window — e.g. the live-verified highlight_analyze
+// pre/post-roll clamp bug (evaluator loop, 2026-07-18) rendered "1:46 → 1:25"
+// with ZERO visual distinction from a normal pill. The backend fix for the
+// root inverted-window cause is separate/parallel; this guard is the UI-side
+// backstop so a backwards range is never presented as if it were valid —
+// shared by every eventPillHtml() call site (chunk map, window/highlight
+// range labels, the highlight-bounds caption below) rather than re-derived
+// per caller.
+function rangeIsInverted(s, e) {
+  return typeof s === 'number' && typeof e === 'number' && !isNaN(s) && !isNaN(e) && s > e;
+}
+
 function eventPillHtml(startStr, endStr) {
   const sRes = mmssToSec(startStr);
   const eRes = mmssToSec(endStr);
@@ -1241,8 +1326,16 @@ function eventPillHtml(startStr, endStr) {
   }
   const s = sRes.value, e = eRes.value;
   const overBadge = (duration > 0 && (s > duration || e > duration)) ? ' <span class="over-badge">&gt; length</span>' : '';
+  const inverted = rangeIsInverted(s, e);
+  const invertedBadge = inverted
+    ? ' <span class="over-badge" title="Backwards range — start is after end (likely an upstream data bug, not a real span)">&#9888; backwards</span>'
+    : '';
   const label = (s === e) ? secToMmss(s) : (secToMmss(s) + ' → ' + secToMmss(e));
-  return '<button type="button" class="seek-pill" onclick="handlePillClick(' + s + ', ' + e + ', this)">' + label + overBadge + '</button>';
+  // Still a REAL button (handlePillClick already degrades a backwards/zero
+  // range to a single-frame seek-then-pause at the clamped start — never a
+  // crash), just visually flagged via `pill-inverted` so it never reads as a
+  // normal, trustworthy range.
+  return '<button type="button" class="seek-pill' + (inverted ? ' pill-inverted' : '') + '" onclick="handlePillClick(' + s + ', ' + e + ', this)">' + label + overBadge + invertedBadge + '</button>';
 }
 
 function renderEventsTable(events) {
@@ -1365,6 +1458,121 @@ function renderChunkMap() {
     '<th>#</th><th>Start&rarr;End</th><th>Duration</th><th>Worth?</th><th>Reason</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
   '</div>';
+}
+
+// ============================================================
+// highlight-scan-analyze PASS 1 output — a timeline BAR (positioned divs by
+// percentage over the scoped run duration, no charting lib), replacing the
+// chunk-map TABLE for THIS pipeline only (build plan "Playground": "PASS-1
+// output = a timeline bar ... replacing the chunk-map table for THIS
+// pipeline"). One block per highlight; click-to-seek reuses handlePillClick
+// (the same seek-and-pause path as every other clickable time affordance in
+// this file). Colored by the highlight's PASS-2 status (pending/running/
+// complete/errored), read off the SAME runState.windows entries the
+// highlight_start/highlight_result dispatch cases populate (findOrCreateWindow
+// keyed by highlight_index) — no separate status tracking introduced.
+// ============================================================
+function highlightTimelineBlockHtml(h, scopeStart, scopeSpan) {
+  const w = runState.windows.find(win => win.windowIndex === h.index);
+  const status = w ? w.status : 'pending';
+  const statusClass = status === 'complete' ? 'timeline-block-complete'
+    : status === 'errored' ? 'timeline-block-errored'
+    : status === 'running' ? 'timeline-block-running'
+    : 'timeline-block-pending';
+  const leftPct = clamp(((h.start_s - scopeStart) / scopeSpan) * 100, 0, 100);
+  const widthPct = Math.max(0.6, ((h.end_s - h.start_s) / scopeSpan) * 100);
+  const title = 'Highlight ' + h.index + ': ' + secToMmss(h.start_s) + ' → ' + secToMmss(h.end_s) +
+    (h.adjustment ? (' — ' + h.adjustment) : '');
+  return '<div class="timeline-block ' + statusClass + '" style="left:' + leftPct.toFixed(3) + '%; width:' + widthPct.toFixed(3) + '%;" ' +
+    'title="' + escHtml(title) + '" onclick="handlePillClick(' + h.start_s + ', ' + h.end_s + ', null)"></div>';
+}
+
+function renderHighlightTimeline() {
+  const host = document.getElementById('chunk-map-host');
+  if (!host) return;
+  if (!runState || !Array.isArray(runState.highlights) || !runState.highlights.length) { host.innerHTML = ''; return; }
+  // Scope the bar to the RUN's own requested start/end (not just the
+  // highlights' own min/max) so a highlight near either edge isn't rendered
+  // flush against the bar's boundary — falls back to the highlights' own
+  // span only if the run-scope inputs are unset/invalid (defensive, should
+  // not happen once a run has actually produced a highlight_map).
+  const scope = computeRunScope();
+  const scopeStart = scope.valid ? scope.startSec : Math.min.apply(null, runState.highlights.map(h => h.start_s));
+  const scopeEnd = scope.valid ? scope.endSec : Math.max.apply(null, runState.highlights.map(h => h.end_s));
+  const scopeSpan = Math.max(scopeEnd - scopeStart, 0.001);
+  const blocks = runState.highlights.map(h => highlightTimelineBlockHtml(h, scopeStart, scopeSpan)).join('');
+  host.innerHTML = '<div class="card">' +
+    '<h2>Highlight timeline (' + runState.highlights.length + ' highlight(s))</h2>' +
+    '<div class="timeline-bar">' + blocks + '</div>' +
+  '</div>';
+}
+
+// ============================================================
+// v2 (highlight-scan-critique-analyze) ONLY — timeline block variant that
+// additionally renders a GHOST outline at the highlight's ORIGINAL (scan)
+// bounds whenever a critique correction moved the edges, plus a DITCHED
+// hatch state (distinct from an ERRORED PASS-2 outage — see
+// highlightRailRowHtmlV2's comment for the same distinction). A brand-new
+// function (not a branch bolted onto highlightTimelineBlockHtml/
+// renderHighlightTimeline above) so v1's rendering path is executed
+// completely unchanged for highlight-scan-analyze.
+// ============================================================
+function highlightTimelineBlockHtmlV2(h, scopeStart, scopeSpan) {
+  const w = runState.windows.find(win => win.windowIndex === h.index);
+  const status = w ? w.status : 'pending';
+  const ditched = w && w.ditchStatus === 'ditched';
+  const statusClass = ditched ? 'timeline-block-ditched'
+    : status === 'complete' ? 'timeline-block-complete'
+    : status === 'errored' ? 'timeline-block-errored'
+    : status === 'running' ? 'timeline-block-running'
+    : 'timeline-block-pending';
+  const hasCorrection = h.corrected_start_s != null && h.corrected_end_s != null;
+  const authStart = hasCorrection ? h.corrected_start_s : h.start_s;
+  const authEnd = hasCorrection ? h.corrected_end_s : h.end_s;
+  const leftPct = clamp(((authStart - scopeStart) / scopeSpan) * 100, 0, 100);
+  const widthPct = Math.max(0.6, ((authEnd - authStart) / scopeSpan) * 100);
+  const titleParts = ['Highlight ' + h.index + ': ' + secToMmss(authStart) + ' → ' + secToMmss(authEnd)];
+  if (hasCorrection) titleParts.push('corrected from scan bounds ' + secToMmss(h.start_s) + ' → ' + secToMmss(h.end_s));
+  if (ditched) titleParts.push('DITCHED: ' + (w.ditchReason || 'validator ditch'));
+  if (h.adjustment) titleParts.push(h.adjustment);
+  const solidBlock = '<div class="timeline-block ' + statusClass + '" style="left:' + leftPct.toFixed(3) + '%; width:' + widthPct.toFixed(3) + '%;" ' +
+    'title="' + escHtml(titleParts.join(' — ')) + '" onclick="handlePillClick(' + authStart + ', ' + authEnd + ', null)"></div>';
+  if (!hasCorrection) return solidBlock;
+  // Ghost outline at the ORIGINAL scan bounds, rendered BEHIND the solid
+  // (corrected) block — only emitted when the two actually differ.
+  const ghostLeftPct = clamp(((h.start_s - scopeStart) / scopeSpan) * 100, 0, 100);
+  const ghostWidthPct = Math.max(0.6, ((h.end_s - h.start_s) / scopeSpan) * 100);
+  const ghostBlock = '<div class="timeline-block timeline-block-ghost" style="left:' + ghostLeftPct.toFixed(3) + '%; width:' + ghostWidthPct.toFixed(3) + '%;" ' +
+    'title="Original scan bounds: ' + escHtml(secToMmss(h.start_s) + ' → ' + secToMmss(h.end_s)) + '" onclick="handlePillClick(' + h.start_s + ', ' + h.end_s + ', null)"></div>';
+  return ghostBlock + solidBlock;
+}
+
+function renderHighlightTimelineV2() {
+  const host = document.getElementById('chunk-map-host');
+  if (!host) return;
+  if (!runState || !Array.isArray(runState.highlights) || !runState.highlights.length) { host.innerHTML = ''; return; }
+  const scope = computeRunScope();
+  const scopeStart = scope.valid ? scope.startSec : Math.min.apply(null, runState.highlights.map(h => h.start_s));
+  const scopeEnd = scope.valid ? scope.endSec : Math.max.apply(null, runState.highlights.map(h => h.end_s));
+  const scopeSpan = Math.max(scopeEnd - scopeStart, 0.001);
+  const blocks = runState.highlights.map(h => highlightTimelineBlockHtmlV2(h, scopeStart, scopeSpan)).join('');
+  const correctedCount = runState.highlights.filter(h => h.corrected_start_s != null).length;
+  host.innerHTML = '<div class="card">' +
+    '<h2>Highlight timeline (' + runState.highlights.length + ' highlight(s), ' + correctedCount + ' corrected)</h2>' +
+    '<div class="reasoning" style="margin-top:0;">Dashed outline = original scan bounds; solid block = critique-corrected (or original, if unchanged) bounds; hatched = ditched by the validator.</div>' +
+    '<div class="timeline-bar">' + blocks + '</div>' +
+  '</div>';
+}
+
+// Dispatcher for the shared #chunk-map-host slot: highlight-scan-analyze
+// gets the (untouched) v1 timeline bar; highlight-scan-critique-analyze gets
+// the v2 variant above; every other pipeline keeps the existing chunk-map
+// TABLE (renderChunkMap(), untouched) — gated on currentPipelineId so this
+// repurposing never fires for chunk-segment-tags/vision-mimic.
+function renderChunkMapHost() {
+  if (currentPipelineId === 'highlight-scan-critique-analyze') { renderHighlightTimelineV2(); return; }
+  if (currentPipelineId === 'highlight-scan-analyze') { renderHighlightTimeline(); return; }
+  renderChunkMap();
 }
 
 function renderSimplifiedTagsTable(tags) {
@@ -1899,8 +2107,8 @@ const MOCK_PIPELINES = [
 // flat set — rather than a per-pipeline-id map — stays correct for a future
 // data-driven Nth pipeline without needing a new map entry, since no pipeline
 // mixes in a structural type from "another" pipeline's set.
-const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze']);
-const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎' };
+const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze', 'highlight_scan', 'highlight_analyze', 'highlight_critique']);
+const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎', highlight_scan: '🔦', highlight_analyze: '🔬', highlight_critique: '🧐' };
 
 function mockPipelineDefaults(id) {
   if (id === 'single-shot') return JSON.parse(JSON.stringify(SINGLE_SHOT_DEFAULT));
@@ -1948,9 +2156,10 @@ function setPipeline(id) {
   const isSingleShot = id === 'single-shot';
   document.getElementById('canvas-single-shot').style.display = isSingleShot ? 'block' : 'none';
   document.getElementById('canvas-vision-mimic').style.display = isSingleShot ? 'none' : 'block';
-  // chunk-segment-tags has no `analyze` node/agent_mode field at all — the
-  // single/multi top-bar toggle would be a dead control for it.
-  const hasAgentMode = !isSingleShot && id !== 'chunk-segment-tags';
+  // chunk-segment-tags/highlight-scan-analyze/highlight-scan-critique-analyze
+  // have no `analyze` node/agent_mode field at all — the single/multi top-bar
+  // toggle would be a dead control.
+  const hasAgentMode = !isSingleShot && id !== 'chunk-segment-tags' && id !== 'highlight-scan-analyze' && id !== 'highlight-scan-critique-analyze';
   document.getElementById('agent-mode-row').style.display = hasAgentMode ? 'block' : 'none';
   loadPipelineDefaults(id);
   updateRunButtonState();
@@ -1980,8 +2189,17 @@ async function loadPipelineDefaults(id) {
     currentAgentMode = analyzeStage.config.agent_mode || 'single';
     syncAgentModeToggle();
   }
+  // v2 ONLY — seed every null thinking/media_resolution field with the
+  // current global default on load (build plan: "pre-fills all nodes on
+  // pipeline load"). A field that already carries a real, non-null value
+  // straight from the backend default (e.g. ValidatorAxisConfig.media_resolution
+  // = "high") is a pre-existing, intentional per-node customization — left
+  // untouched, not silently overwritten — so it shows a "custom" badge
+  // immediately, honestly reflecting that it diverges from the baseline.
+  if (id === 'highlight-scan-critique-analyze') applyV2GlobalDefaultToNulls();
   resetRunView();
   renderDag();
+  renderV2GlobalDefaultCard();
   logMsg('Loaded pipeline defaults for "' + id + '" (' + currentPipelineDef.stages.length + ' stage(s))', 'log-info');
 }
 
@@ -2024,6 +2242,9 @@ function nodeKeyValues(stage) {
     case 'video_window': return [];
     case 'chunk_segment': return [c.model, 'min ' + c.min_chunk_s + 's / max ' + c.max_chunk_s + 's'];
     case 'chunk_analyze': return [c.model, 'overlap ' + c.overlap_s + 's'];
+    case 'highlight_scan': return [c.model, 'min ' + c.min_highlight_s + 's / max ' + c.max_highlight_s + 's'];
+    case 'highlight_critique': return [c.model, 'backpad ' + c.critique_backpad_s + 's'];
+    case 'highlight_analyze': return [c.model, 'fps ' + c.fps, 'pre ' + c.preroll_s + 's / post ' + c.postroll_s + 's'];
     default: return [];
   }
 }
@@ -2121,7 +2342,32 @@ const CONFIG_FIELD_ORDER = {
   dedup: ['key_by'],
   video_window: [],
   chunk_segment: ['model', 'min_chunk_s', 'max_chunk_s', 'rough_fps', 'analyze_all'],
-  chunk_analyze: ['model', 'thinking', 'overlap_s']
+  chunk_analyze: ['model', 'thinking', 'overlap_s'],
+  // v2 fields (`thinking`/`media_resolution` — ThinkingQualityMixin) are
+  // listed FIRST here, matching the backend's own model_dump() field order
+  // (mixin fields declared before the subclass's own) and the "one row up
+  // top" placement the v2 build plan asks for. A bespoke combined row
+  // renders them (nodeConfigFieldsHtml), gated on
+  // currentPipelineId==='highlight-scan-critique-analyze' — v1
+  // (highlight-scan-analyze) falls through unchanged to the pre-existing
+  // generic-field handling for these two keys (unaffected by this reorder;
+  // see nodeConfigFieldsHtml's gate).
+  highlight_scan: ['thinking', 'media_resolution', 'model', 'rough_fps', 'min_highlight_s', 'max_highlight_s', 'system_prompt', 'initial_prompt'],
+  // NEW v2 node type (HighlightCritiqueConfig) — only ever present on the
+  // highlight-scan-critique-analyze pipeline's stage set; never reached for
+  // any other pipeline.
+  highlight_critique: ['thinking', 'media_resolution', 'model', 'critique_backpad_s'],
+  // `position`/`technique`/`validator`/`max_validator_iterations` are v2
+  // additions to the SAME shared HighlightAnalyzeConfig model consumed by
+  // BOTH highlight-scan-analyze and highlight-scan-critique-analyze (see
+  // service/pipelines/models.py's v2 docstring) — listed here so their
+  // display order is deliberate, not incidental key-iteration order. The
+  // actual v2 widgets for them are gated on currentPipelineId in
+  // nodeConfigFieldsHtml; v1 renders NOTHING for these four keys (a
+  // deliberate, non-behavioral suppression of what would otherwise be a
+  // raw "[object Object]"/number dump via the generic-field fallback — see
+  // that gate's comment for why this is not new v1 behavior).
+  highlight_analyze: ['model', 'fps', 'thinking', 'preroll_s', 'postroll_s', 'position', 'technique', 'validator', 'max_validator_iterations']
 };
 const CONFIG_FIELD_HINTS = {
   detect_crop: {
@@ -2157,12 +2403,63 @@ const CONFIG_FIELD_HINTS = {
   chunk_analyze: {
     model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
     overlap_s: { widget: 'number', step: 1, label: 'Overlap (s)' }
+  },
+  // fps/system_prompt/initial_prompt get bespoke widgets (segmented {1,10}
+  // choice / prompt-card textareas) in nodeConfigFieldsHtml — no hint entry
+  // needed for those here (never reached; bespoke branches `return` first).
+  highlight_scan: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    rough_fps: { widget: 'number', step: 0.5, label: 'Rough fps' },
+    min_highlight_s: { widget: 'number', step: 1, label: 'Min highlight (s)' },
+    max_highlight_s: { widget: 'number', step: 1, label: 'Max highlight (s)' }
+  },
+  highlight_analyze: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    // fps=5 is strictly dominated by fps=10 at the same accuracy gain over
+    // fps=1 (build plan "Experiment Findings") and stays excluded; fps=15
+    // was added later per an explicit founder ask — the backend's
+    // HighlightAnalyzeConfig.fps is a Literal[1, 10, 15], not a free float,
+    // so this is a segmented choice (fpsChoiceField), never a slider/number
+    // field. preroll_s/postroll_s ARE real bounded sliders per the plan.
+    preroll_s: { widget: 'range', min: 0, max: 15, step: 0.5, unit: 's', label: 'Pre-roll' },
+    postroll_s: { widget: 'range', min: 0, max: 10, step: 0.5, unit: 's', label: 'Post-roll' }
+  },
+  // thinking/media_resolution get the bespoke v2ThinkingQualityRowHtml combined
+  // row (nodeConfigFieldsHtml) — no hint entry needed for those here.
+  highlight_critique: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    critique_backpad_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Critique backward pad' }
   }
 };
 
 function numberField(key, label, value, step) {
   return '<label>' + escHtml(label) + '</label>' +
     '<input type="number" step="' + step + '" value="' + (value != null ? value : '') + '" onchange="setNodeConfigValue(\'' + key + '\', parseFloat(this.value))">';
+}
+// Bounded numeric slider (e.g. HighlightAnalyzeConfig.preroll_s/postroll_s,
+// 0-15s/0-10s) — a real <input type="range">, distinct from numberField()'s
+// unbounded number box. Live-updates the adjacent readout on `input` (every
+// drag tick) without re-rendering the whole node-config panel (which would
+// destroy/recreate the range input mid-drag) — only setNodeConfigValue()
+// (which touches #dag-nodes, not this panel) runs on every tick.
+function rangeField(key, label, value, min, max, step, unit) {
+  const spanId = 'range-live-' + key;
+  return '<label>' + escHtml(label) + ': <span id="' + spanId + '">' + value + (unit || '') + '</span></label>' +
+    '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + value + '" ' +
+    'oninput="document.getElementById(\'' + spanId + '\').textContent = this.value + \'' + (unit || '') + '\'; setNodeConfigValue(\'' + key + '\', parseFloat(this.value));">';
+}
+// Segmented {1,10,15} choice for HighlightAnalyzeConfig.fps — a real backend
+// Literal[1, 10, 15] (fps=5 strictly dominated per the build plan's
+// Experiment Findings, and stays excluded; fps=15 added per explicit founder
+// ask, unrelated to the fps=5 finding), so this is deliberately NOT a free
+// slider/number field. Same .tabs button idiom as thinkingTabsField()/
+// agentModeFieldHtml() below.
+function fpsChoiceField(value) {
+  const active = (value === 10 || value === 15) ? value : 1;
+  return '<label>FPS</label><div class="tabs" style="margin-bottom:0; border-bottom:none;">' +
+    [1, 10, 15].map(v => '<button type="button" class="tab' + (v === active ? ' active' : '') +
+      '" onclick="setNodeConfigValue(\'fps\', ' + v + '); renderNodeConfigPanel(currentPipelineDef.stages[selectedNodeIndex]);">' + v + '</button>').join('') +
+    '</div>';
 }
 // `options` entries may be a plain string (value === display label, e.g. model
 // ids) or a {value,label} pair when the raw config value isn't a good display
@@ -2215,6 +2512,171 @@ function setNodeConfigValue(key, value) {
   const stage = currentPipelineDef.stages[selectedNodeIndex];
   stage.config[key] = value;
   renderDag();
+  renderCostBadge(); // cheap no-op unless the v2 pipeline + max_validator_iterations changed
+}
+
+// ============================================================
+// v2 (highlight-scan-critique-analyze) ONLY — shared per-node/per-sub-config
+// thinking + media_resolution controls (build plan UI item 1: "Every node
+// card ... shows thinking + quality in one row" + "a per-node override shows
+// a small custom badge"). Reuses the SAME `.tabs` segmented-button idiom as
+// thinkingTabsField()/fpsChoiceField() above (not reinvented), generalized
+// over an arbitrary onclick expression so it can drive either a top-level
+// stage.config field (scan/critique) OR a nested axis sub-config field
+// (highlight_analyze's position/technique/validator) OR the global-default
+// control itself — three different write targets, one rendering routine.
+// ============================================================
+function segmentedTabsHtml(label, levels, active, clickExprFn) {
+  return '<label>' + escHtml(label) + '</label><div class="tabs" style="margin-bottom:0; border-bottom:none;">' +
+    levels.map(l => '<button type="button" class="tab' + (l === active ? ' active' : '') +
+      '" onclick="' + clickExprFn(l) + '">' + l.charAt(0).toUpperCase() + l.slice(1) + '</button>').join('') +
+    '</div>';
+}
+// Top-level media_resolution control (HighlightScanConfig/HighlightCritiqueConfig
+// — mixin field lives directly on stage.config). `value` is the raw backend
+// value (Optional[Literal["low","medium","high"]] = None); None displays as
+// "Low" active (simplified_tags.media_resolution_enum(None) == LOW, the same
+// null-means-low mapping the backend docstrings state for every mixin user
+// except ValidatorAxisConfig's own explicit non-null "high" default).
+function qualityChoiceField(value) {
+  return segmentedTabsHtml('Quality', ['low', 'medium', 'high'], value || 'low',
+    l => "setNodeConfigValue('media_resolution', '" + l + "'); renderNodeConfigPanel(currentPipelineDef.stages[selectedNodeIndex]);");
+}
+// Nested axis sub-config (HighlightAnalyzeConfig.position/technique/validator)
+// thinking/quality controls — write through setAxisConfigValue(axisKey, field, value)
+// rather than setNodeConfigValue (which only knows stage.config[key], not
+// stage.config[axisKey][field]).
+function axisThinkingTabsField(axisKey, value) {
+  return segmentedTabsHtml('Thinking', ['off', 'low', 'medium', 'high'], value || 'off',
+    l => "setAxisConfigValue('" + axisKey + "', 'thinking', '" + l + "'); renderNodeConfigPanel(currentPipelineDef.stages[selectedNodeIndex]);");
+}
+function axisQualityChoiceField(axisKey, value) {
+  return segmentedTabsHtml('Quality', ['low', 'medium', 'high'], value || 'low',
+    l => "setAxisConfigValue('" + axisKey + "', 'media_resolution', '" + l + "'); renderNodeConfigPanel(currentPipelineDef.stages[selectedNodeIndex]);");
+}
+function setAxisConfigValue(axisKey, field, value) {
+  if (selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  if (!stage.config[axisKey]) return;
+  stage.config[axisKey][field] = value;
+  renderDag();
+}
+
+// "Custom" badge — a node/sub-config's OWN thinking/media_resolution differs
+// from the CURRENT pipeline-level global default (either because the user
+// edited it directly, or because the backend's own default for it is
+// non-null, e.g. ValidatorAxisConfig.media_resolution="high"). Null is
+// treated as "off"/"low" for this comparison (the same defaulting the
+// backend itself documents), so a freshly-loaded, never-touched node never
+// shows "custom" just because its raw JSON value happens to be null.
+function v2IsCustom(target) {
+  if (!target) return false;
+  const th = target.thinking == null ? 'off' : target.thinking;
+  const q = target.media_resolution == null ? 'low' : target.media_resolution;
+  return th !== v2GlobalDefault.thinking || q !== v2GlobalDefault.media_resolution;
+}
+function v2CustomBadgeHtml(target) {
+  return v2IsCustom(target)
+    ? ' <span class="badge badge-hint" title="Differs from this pipeline\'s global thinking/quality default">custom</span>'
+    : '';
+}
+// One combined "thinking + quality" row for a TOP-LEVEL stage.config (scan,
+// critique) — reuses the module-level thinkingTabsField() (already wired to
+// setNodeConfigValue('thinking', ...)) alongside the new qualityChoiceField()
+// above, plus the custom badge.
+function v2ThinkingQualityRowHtml(stage) {
+  const c = stage.config;
+  return '<div class="field-inline" style="align-items:flex-end; gap:16px;">' +
+      thinkingTabsField(c.thinking) + qualityChoiceField(c.media_resolution) +
+    '</div>' + v2CustomBadgeHtml(c);
+}
+// Compact/collapsible per-axis (position/technique/validator) thinking+quality
+// panel for the highlight_analyze node — a <details> wrapper so three axes'
+// worth of controls don't turn the node card into a wall (build plan UI item 1).
+function v2AxisConfigsHtml(stage) {
+  const c = stage.config;
+  const axes = [
+    { key: 'position', label: 'Position axis' },
+    { key: 'technique', label: 'Technique axis' },
+    { key: 'validator', label: 'Validator axis (adversarial + ditch authority)' },
+  ];
+  const rows = axes.map(a => {
+    const t = c[a.key] || {};
+    return '<div class="v2-axis-card">' +
+      '<div class="v2-axis-card-label">' + escHtml(a.label) + v2CustomBadgeHtml(t) + '</div>' +
+      '<div class="field-inline" style="align-items:flex-end; gap:16px;">' +
+        axisThinkingTabsField(a.key, t.thinking) + axisQualityChoiceField(a.key, t.media_resolution) +
+      '</div>' +
+    '</div>';
+  }).join('');
+  return '<details class="v2-axis-details"><summary>Per-axis thinking + quality (position / technique / validator)</summary>' + rows + '</details>';
+}
+
+// ---- v2 pipeline-level global default control + its cascade-on-change
+function v2GlobalThinkingFieldHtml() {
+  return segmentedTabsHtml('Default thinking', ['off', 'low', 'medium', 'high'], v2GlobalDefault.thinking,
+    l => "setV2GlobalDefault('thinking', '" + l + "');");
+}
+function v2GlobalQualityFieldHtml() {
+  return segmentedTabsHtml('Default quality', ['low', 'medium', 'high'], v2GlobalDefault.media_resolution,
+    l => "setV2GlobalDefault('media_resolution', '" + l + "');");
+}
+// Every {stage_type, sub_config_key} pair that carries a ThinkingQualityMixin
+// in v2 — the walk list for BOTH the on-load null-seed pass and the
+// on-change cascade below. `sub` null => the mixin fields live directly on
+// stage.config (highlight_scan/highlight_critique); otherwise
+// stage.config[sub] (highlight_analyze's position/technique/validator).
+const V2_QUALITY_TARGETS = [
+  { stageType: 'highlight_scan', sub: null },
+  { stageType: 'highlight_critique', sub: null },
+  { stageType: 'highlight_analyze', sub: 'position' },
+  { stageType: 'highlight_analyze', sub: 'technique' },
+  { stageType: 'highlight_analyze', sub: 'validator' },
+];
+function v2QualityTarget(stageType, sub) {
+  if (!currentPipelineDef) return null;
+  const stage = currentPipelineDef.stages.find(s => s.type === stageType);
+  if (!stage) return null;
+  return sub ? stage.config[sub] : stage.config;
+}
+// On-load pass (loadPipelineDefaults, v2 only): fills every NULL thinking/
+// media_resolution field with the current global default. Never touches a
+// field that already carries a real (non-null) value straight from the
+// backend default — that is treated as an intentional per-node
+// customization (e.g. ValidatorAxisConfig.media_resolution="high"), not
+// something to silently overwrite.
+function applyV2GlobalDefaultToNulls() {
+  V2_QUALITY_TARGETS.forEach(({ stageType, sub }) => {
+    const t = v2QualityTarget(stageType, sub);
+    if (!t) return;
+    if (t.thinking == null) t.thinking = v2GlobalDefault.thinking;
+    if (t.media_resolution == null) t.media_resolution = v2GlobalDefault.media_resolution;
+  });
+}
+// User changes the GLOBAL control: cascades the NEW value only into targets
+// that were still following the OLD default (never clobbers a node the user
+// already customized away from it, and never clobbers validator's
+// intentional "high" — which was never following "low" to begin with).
+function setV2GlobalDefault(field, value) {
+  const previous = v2GlobalDefault[field];
+  v2GlobalDefault[field] = value;
+  const fallback = field === 'thinking' ? 'off' : 'low';
+  V2_QUALITY_TARGETS.forEach(({ stageType, sub }) => {
+    const t = v2QualityTarget(stageType, sub);
+    if (!t) return;
+    const cur = t[field] == null ? fallback : t[field];
+    if (cur === (previous == null ? fallback : previous)) t[field] = value;
+  });
+  renderV2GlobalDefaultCard();
+  renderDag();
+  if (selectedNodeIndex != null) renderNodeConfigPanel(currentPipelineDef.stages[selectedNodeIndex]);
+}
+function renderV2GlobalDefaultCard() {
+  const card = document.getElementById('v2-global-default-card');
+  if (!card) return;
+  if (currentPipelineId !== 'highlight-scan-critique-analyze' || !currentPipelineDef) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('v2-global-default-body').innerHTML = v2GlobalThinkingFieldHtml() + v2GlobalQualityFieldHtml();
 }
 
 // Reuses the same idiom as the single-shot "System instruction / Schema"
@@ -2273,6 +2735,75 @@ function clearNodeSchema() {
   renderNodeConfigPanel(stage);
 }
 
+// ============================================================
+// Generalized prompt-card widget — SAME pattern as nodeSchemaCardHtml/
+// system_instruction above (file-load, clear, char count), but parametrized
+// over an arbitrary config KEY so one node can carry TWO independent prompt
+// fields (HighlightScanConfig.system_prompt + .initial_prompt), which the
+// single-field nodeSchemaCardHtml above cannot do (it always writes
+// stage.config.system_instruction). Empty textarea -> sends "" -> the
+// backend's resolve_system_prompt()/build_scan_prompt() normalize that to
+// None (bundled default) — same "empty means default" discipline as
+// system_instruction; there is no separate per-field reset button, exactly
+// like system_instruction — "reset to default" is the shared "Reset node to
+// production defaults" button already on every node-config-card.
+// nodeSchemaFileNames is keyed by `stage.id + ':' + key` here (vs. bare
+// stage.id for the single-field analyze widget) so two fields on the same
+// node never collide.
+// ============================================================
+function nodePromptCardHtml(stage, key, label, placeholder) {
+  const text = stage.config[key] || '';
+  const nameKey = stage.id + ':' + key;
+  const fileName = nodeSchemaFileNames[nameKey];
+  return '<div class="card" style="margin-top:12px; background:var(--bg);">' +
+    '<h2 style="font-size:0.95rem;">' + escHtml(label) + '</h2>' +
+    '<textarea rows="5" placeholder="' + escHtml(placeholder) + '" oninput="onNodePromptInput(\'' + key + '\', this.value)">' + escHtml(text) + '</textarea>' +
+    '<div class="field-inline" style="margin-top:8px;">' +
+      '<input type="file" accept=".md,.markdown,.json,.txt" onchange="onNodePromptFileChange(\'' + key + '\', event)">' +
+      '<button type="button" class="btn btn-sm" onclick="clearNodePrompt(\'' + key + '\')">Clear</button>' +
+    '</div>' +
+    '<div class="selection-badges">' +
+      (fileName ? '<span class="badge badge-neutral" id="node-prompt-file-chip-' + key + '">' + escHtml(fileName) + '</span>' : '') +
+      '<span class="badge badge-neutral" id="node-prompt-count-' + key + '">' + text.length + ' chars</span>' +
+    '</div>' +
+  '</div>';
+}
+
+function onNodePromptInput(key, value) {
+  if (selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  stage.config[key] = value;
+  delete nodeSchemaFileNames[stage.id + ':' + key];
+  const countEl = document.getElementById('node-prompt-count-' + key);
+  if (countEl) countEl.textContent = value.length + ' chars';
+  const chipEl = document.getElementById('node-prompt-file-chip-' + key);
+  if (chipEl) chipEl.style.display = 'none';
+}
+
+function onNodePromptFileChange(key, event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file || selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  const reader = new FileReader();
+  reader.onload = () => {
+    stage.config[key] = String(reader.result || '');
+    nodeSchemaFileNames[stage.id + ':' + key] = file.name;
+    renderNodeConfigPanel(stage);
+    logMsg('Loaded prompt file for node "' + stage.label + '" (' + key + '): ' + file.name, 'log-info');
+  };
+  reader.onerror = () => logMsg('Failed to read prompt file: ' + file.name, 'log-err');
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function clearNodePrompt(key) {
+  if (selectedNodeIndex == null) return;
+  const stage = currentPipelineDef.stages[selectedNodeIndex];
+  stage.config[key] = '';
+  delete nodeSchemaFileNames[stage.id + ':' + key];
+  renderNodeConfigPanel(stage);
+}
+
 // Renders node-config inputs bound to the EXACT keys present on the fetched
 // stage.config object (never a hand-maintained field list that could drift
 // from service/pipelines/models.py) — mutates values only via
@@ -2322,6 +2853,85 @@ function nodeConfigFieldsHtml(stage) {
       if (c.analyze_all) html += '<div class="warn-line" style="margin-top:2px;">Forces every chunk worth_analysis=true regardless of reason — a control run, not the production default.</div>';
       return;
     }
+    // highlight_scan's system_prompt/initial_prompt: two independent
+    // playground-editable Gemini prompt fields (build plan "Playground"),
+    // reusing the generalized nodePromptCardHtml widget (NOT the single-field
+    // nodeSchemaCardHtml above, which is hardwired to 'analyze'/
+    // system_instruction only).
+    if (stage.type === 'highlight_scan' && key === 'system_prompt') {
+      html += nodePromptCardHtml(
+        stage, 'system_prompt', 'System prompt (Highlight Scan)',
+        'Optional. Full-replacement override of the bundled PASS-1 system prompt. Empty = use the bundled default.',
+      );
+      return;
+    }
+    if (stage.type === 'highlight_scan' && key === 'initial_prompt') {
+      html += nodePromptCardHtml(
+        stage, 'initial_prompt', 'Initial prompt (Highlight Scan)',
+        'Optional. Overrides the bundled per-run prompt template ($start_sec/$end_sec supported via safe_substitute). Empty = use the bundled default.',
+      );
+      return;
+    }
+    // v2 ONLY (highlight-scan-critique-analyze) — highlight_scan's own
+    // thinking/media_resolution (ThinkingQualityMixin, additive to the
+    // pre-existing HighlightScanConfig fields above). Gated on
+    // currentPipelineId so highlight-scan-analyze (SAME node type, same
+    // config fields present in its fetched defaults too) falls through
+    // UNCHANGED to the generic hint-driven fallback below — exactly the
+    // pre-existing behavior for these two keys before this v2 UI build.
+    if (stage.type === 'highlight_scan' && key === 'thinking' && currentPipelineId === 'highlight-scan-critique-analyze') {
+      html += v2ThinkingQualityRowHtml(stage);
+      return;
+    }
+    if (stage.type === 'highlight_scan' && key === 'media_resolution' && currentPipelineId === 'highlight-scan-critique-analyze') {
+      return; // rendered by the 'thinking' branch above (one combined row) — no-op here
+    }
+    // NEW v2 node type — highlight_critique only ever appears on
+    // highlight-scan-critique-analyze's stage set, so no pipeline-id gate
+    // is needed here (unlike highlight_scan/highlight_analyze above, which
+    // are genuinely shared node types).
+    if (stage.type === 'highlight_critique' && key === 'thinking') { html += v2ThinkingQualityRowHtml(stage); return; }
+    if (stage.type === 'highlight_critique' && key === 'media_resolution') { return; } // combined into the 'thinking' row above
+    // highlight_analyze's fps is a real backend Literal[1, 10, 15] (fps=5
+    // strictly dominated — build plan "Experiment Findings" — stays
+    // excluded; fps=15 added per explicit founder ask) — a segmented
+    // choice, never a free slider/number field.
+    if (stage.type === 'highlight_analyze' && key === 'fps') { html += fpsChoiceField(c.fps); return; }
+    // highlight_analyze's `thinking` is the same Optional[Literal[...]]
+    // shape as analyze's/chunk_analyze's — reuse the bespoke tabs widget.
+    // NOTE (v2): this top-level field is RETAINED-but-UNUSED by the real
+    // per-axis calls for BOTH pipelines now (service/pipelines/models.py's
+    // v2 docstring) — left rendering exactly as before (untouched branch);
+    // the real, functional thinking controls for v2 live on the
+    // position/technique/validator sub-configs below.
+    if (stage.type === 'highlight_analyze' && key === 'thinking') { html += thinkingTabsField(c.thinking); return; }
+    // v2 additions to the SAME shared HighlightAnalyzeConfig model
+    // (position/technique/validator sub-configs + max_validator_iterations)
+    // — present in the fetched config for BOTH highlight-scan-analyze AND
+    // highlight-scan-critique-analyze (shared backend model), but the real
+    // per-axis UI is gated to v2 only per this build's explicit scope. For
+    // v1 (highlight-scan-analyze) these four keys render NOTHING — a
+    // deliberate, non-behavioral suppression: falling through to the
+    // generic-field fallback below would dump raw "[object Object]" boxes
+    // for the three sub-config objects (never a useful widget), so
+    // withholding them is strictly an improvement over that fallback, not
+    // a new capability being added to v1.
+    if (stage.type === 'highlight_analyze' && key === 'position') {
+      if (currentPipelineId === 'highlight-scan-critique-analyze') html += v2AxisConfigsHtml(stage);
+      return;
+    }
+    if (stage.type === 'highlight_analyze' && (key === 'technique' || key === 'validator')) {
+      return; // rendered together with 'position' above (one collapsible block)
+    }
+    if (stage.type === 'highlight_analyze' && key === 'max_validator_iterations') {
+      if (currentPipelineId === 'highlight-scan-critique-analyze') {
+        html += rangeField('max_validator_iterations', 'Max validator iterations', c.max_validator_iterations, 1, 5, 1, '');
+        if (c.max_validator_iterations > 1) {
+          html += '<div class="warn-line" style="margin-top:2px;">&gt;1 iteration is the v2 argue-to-agreement LOOP — not yet measured on gold (build plan DEFERRED); v1 default is 1 (single pass).</div>';
+        }
+      }
+      return;
+    }
 
     const hint = hints[key];
     if (hint && hint.widget === 'select') {
@@ -2329,6 +2939,8 @@ function nodeConfigFieldsHtml(stage) {
       html += selectField(key, hint.label || key, c[key], options);
     } else if (hint && hint.widget === 'number') {
       html += numberField(key, hint.label || key, c[key], hint.step || 1);
+    } else if (hint && hint.widget === 'range') {
+      html += rangeField(key, hint.label || key, c[key], hint.min, hint.max, hint.step, hint.unit);
     } else {
       html += genericTextField(key, c[key]);
     }
@@ -2437,6 +3049,57 @@ function updateRunButtonState() {
   if (activeRunController) reasons.push('a run is already in progress');
   btn.disabled = reasons.length > 0;
   btn.title = reasons.length ? ('Disabled: ' + reasons.join('; ')) : '';
+  renderCostBadge();
+}
+
+// ============================================================
+// v2 (highlight-scan-critique-analyze) ONLY — cheap per-highlight cost
+// badge (build plan UI item 6: "N highlights × ~(3 + max_validator_iterations)
+// calls ≈ M ... using the last scan's highlight count (or the estimate). Do
+// NOT build a full estimator."). N is the LAST completed scan's real
+// highlight count (runState.highlights) when available; otherwise a rough
+// scope-duration ÷ average-highlight-length fallback so the badge isn't
+// simply blank before the first run. M = 1 (scan call) + N × (3 + L)
+// (LeCun's own per-highlight cost model: 1 critique + 2 analyze [position +
+// technique] + L validator rounds). Hidden entirely for every other
+// pipeline.
+// ============================================================
+function renderCostBadge() {
+  const el = document.getElementById('cost-estimate-badge');
+  if (!el) return;
+  if (currentPipelineId !== 'highlight-scan-critique-analyze' || !currentPipelineDef) { el.style.display = 'none'; return; }
+
+  const analyzeStage = currentPipelineDef.stages.find(s => s.type === 'highlight_analyze');
+  const scanStage = currentPipelineDef.stages.find(s => s.type === 'highlight_scan');
+  const iterations = (analyzeStage && analyzeStage.config.max_validator_iterations) || 1;
+  const perHighlight = 3 + iterations;
+
+  let n, nLabel;
+  if (runState && Array.isArray(runState.highlights) && runState.highlights.length) {
+    n = runState.highlights.length;
+    nLabel = String(n);
+  } else {
+    const scope = computeRunScope();
+    const minS = (scanStage && scanStage.config.min_highlight_s) || 3;
+    const maxS = (scanStage && scanStage.config.max_highlight_s) || 30;
+    const avgS = Math.max((minS + maxS) / 2, 1);
+    if (scope.valid) {
+      n = Math.max(1, Math.round((scope.endSec - scope.startSec) / avgS));
+      nLabel = '~' + n + ' (estimated from scope ÷ avg highlight length)';
+    } else {
+      n = null;
+      nLabel = '? (set a run scope, or run a scan, to estimate)';
+    }
+  }
+
+  el.style.display = 'flex';
+  if (n == null) {
+    el.innerHTML = '<span class="badge badge-neutral">' + escHtml(nLabel) + '</span>';
+    return;
+  }
+  const total = 1 + n * perHighlight;
+  el.innerHTML = '<span class="badge badge-hint" title="1 scan call + N highlight(s) × (1 critique + 2 analyze + ' + iterations + ' validator round(s))">' +
+    escHtml(nLabel) + ' highlight(s) × ~' + perHighlight + ' calls ≈ ' + total + ' Gemini call(s)</span>';
 }
 
 // ---- Run view rendering (persistent, shared by every pipeline)
@@ -2447,6 +3110,14 @@ function resetRunView() {
     startedAt: null, totalMs: null, errors: [], sawRunComplete: false,
     format: null, dedupApplied: null, dedupSkipReason: null, degradedCounts: null, perStageTiming: null,
     nativeFps: null, chunkMap: [],
+    // highlight-scan-analyze PASS 1 output — the finalized highlight list
+    // from the `highlight_map` event (service/pipelines/highlight_scan.py's
+    // finalize_highlights() shape: index/start_s/end_s/adjustment/
+    // start_is_synthetic/end_is_synthetic). Empty for every other pipeline
+    // (that event type is never emitted outside highlight-scan-analyze).
+    // Drives renderHighlightTimeline() (chunk-map-host) + the repurposed
+    // highlights rail (renderDedupRail(), gated on currentPipelineId).
+    highlights: [],
     // Task 3: raw (possibly-duplicate) normalized rail rows appended live as
     // window_result/chunk_result/error(chunk_index) events arrive — swapped
     // out for the real deduped list once run_complete arrives (see
@@ -2460,10 +3131,11 @@ function resetRunView() {
   if (noteLine) noteLine.textContent = '';
   renderRunHeader();
   renderCompactRunStatus();
-  renderChunkMap();
+  renderChunkMapHost();
   renderWindowCards();
   renderDedupedClips();
   renderDedupRail();
+  renderCostBadge();
 }
 
 function startRunElapsedTimer() {
@@ -2659,18 +3331,48 @@ function normalizeClipsToEvents(clips) {
   });
 }
 
-function windowCardHtml(w) {
+// highlight-scan-analyze's per-highlight card carries w.highlightBounds (set
+// by the `highlight_start` dispatch case) alongside the card's own range
+// pill (windowRangeLabel(w) -> w.scope, the PRE/POST-ROLL-EXPANDED window
+// actually sent to Gemini). Before this fix that state was captured but
+// never rendered ("dead state" — evaluator loop interpretation-call (c),
+// 2026-07-18), leaving no visible explanation for why this card's range
+// differs from the timeline bar's/highlights rail's range (both of which
+// show the highlight's OWN [start_s,end_s] bounds, not the expanded window).
+// Absent (undefined) for every other pipeline's cards — this renders nothing
+// extra for chunk-segment-tags/vision-mimic, gated purely on the field's
+// presence, no pipeline-id branching needed.
+function highlightCardRangeHtml(w) {
   const rangeHtml = windowRangeLabel(w);
+  if (!Array.isArray(w.highlightBounds) || w.highlightBounds.length !== 2) {
+    return '<span onclick="event.stopPropagation()">' + rangeHtml + '</span>';
+  }
+  const ownPill = eventPillHtml(secToMmss(w.highlightBounds[0]), secToMmss(w.highlightBounds[1]));
+  return (
+    '<span class="badge badge-neutral" style="font-size:0.68rem;" ' +
+      'title="Analyzed window sent to Gemini for this highlight — includes pre/post-roll context, wider than the highlight\'s own reported span">analyzed</span>' +
+    '<span onclick="event.stopPropagation()">' + rangeHtml + '</span>' +
+    '<span class="badge badge-neutral" style="font-size:0.68rem;" ' +
+      'title="The highlight\'s OWN [start_s,end_s] bounds from PASS 1 — emitted events are clipped to this, not the analyzed window above; the timeline bar and Highlights rail both show THIS range">own bounds</span>' +
+    '<span onclick="event.stopPropagation()">' + ownPill + '</span>'
+  );
+}
+
+function windowCardHtml(w) {
+  const rangeHtml = highlightCardRangeHtml(w);
   const isErrored = w.status === 'errored';
   const count = Array.isArray(w.clips) ? w.clips.length : (w.status === 'running' ? '…' : 0);
   const timing = w.modelMs != null ? fmtLatency(w.modelMs) : '';
   const cropsHtml = renderCropsStrip(w.thumbnails);
   let body = '';
   if (isErrored) {
-    // PASS-2 outage for this chunk (R1 fix) — never rendered as a clean
-    // "0 event(s)" result. Always visible (not gated on w.expanded) so a
-    // degraded chunk can't hide behind a collapsed card.
-    body += '<div class="err-line" style="margin:8px 12px;">chunk failed: ' + escHtml(w.errorMessage || 'PASS-2 call failed') + '</div>';
+    // PASS-2 outage for this chunk/highlight (R1 fix, reused verbatim by the
+    // highlight_index branch in handlePipelineEvent's `case 'error':`) —
+    // never rendered as a clean "0 event(s)" result. Always visible (not
+    // gated on w.expanded) so a degraded unit can't hide behind a collapsed
+    // card. "PASS-2" (not "chunk") — this same card/label is shared by
+    // chunk-segment-tags' chunks AND highlight-scan-analyze's highlights.
+    body += '<div class="err-line" style="margin:8px 12px;">PASS-2 failed: ' + escHtml(w.errorMessage || 'PASS-2 call failed') + '</div>';
   }
   if (w.expanded) {
     if (w.format === 'raw-text') {
@@ -2695,10 +3397,144 @@ function windowCardHtml(w) {
       (isErrored ? ' style="outline:2px solid var(--red);"' : '') + '>' +
     '<div class="window-card-header" onclick="toggleWindowExpand(' + w.windowIndex + ')">' +
       '<span class="badge badge-neutral">Window ' + w.windowIndex + (runState.plannedWindows ? ('/' + runState.plannedWindows) : '') + '</span>' +
-      '<span onclick="event.stopPropagation()">' + rangeHtml + '</span>' +
+      rangeHtml +
       (isErrored
         ? '<span class="badge badge-b">ERRORED</span>'
         : '<span class="badge badge-neutral">' + count + ' event(s)</span>') +
+      (timing ? '<span class="badge badge-neutral">' + timing + '</span>' : '') +
+      '<span class="chevron">' + (w.expanded ? '▾' : '▸') + '</span>' +
+    '</div>' +
+    body +
+  '</div>';
+}
+
+// ============================================================
+// v2 (highlight-scan-critique-analyze) ONLY — per-highlight card variant.
+// A brand-new function (not a branch bolted onto windowCardHtml/
+// highlightCardRangeHtml above) so v1's (and chunk-segment-tags') rendering
+// path executes completely unchanged for every other pipeline; dispatched
+// from renderWindowCards() below purely by currentPipelineId.
+// ============================================================
+
+// Three-state range pill: plain scan bounds (never critiqued/corrected) ->
+// struck-through scan pill + bold "corrected" pill (critique applied) -> scan
+// pill + an honest "critique: not applied" note (critique ran, Gemini said
+// movement_confirmed=false, original bounds kept — build plan: "show that
+// state honestly", never silently as if nothing happened).
+function highlightCardRangeHtmlV2(w, h) {
+  const rangeHtml = windowRangeLabel(w); // the PRE/POST-ROLL-EXPANDED window actually analyzed
+  const scanPill = (h && h.start_s != null && h.end_s != null) ? eventPillHtml(secToMmss(h.start_s), secToMmss(h.end_s)) : null;
+  const hasCorrection = h && h.corrected_start_s != null && h.corrected_end_s != null;
+  let ownBoundsHtml = '';
+  if (hasCorrection) {
+    const correctedPill = eventPillHtml(secToMmss(h.corrected_start_s), secToMmss(h.corrected_end_s));
+    ownBoundsHtml =
+      '<span class="badge badge-neutral" style="font-size:0.68rem;" title="Original PASS-1 scan bounds — superseded by the critique correction">scan</span>' +
+      '<span class="pill-struck" onclick="event.stopPropagation()">' + scanPill + '</span>' +
+      '<span class="badge badge-a" style="font-size:0.68rem;" title="Corrected by the highlight_critique stage — AUTHORITATIVE for the analyze window + event clipping">corrected</span>' +
+      '<strong onclick="event.stopPropagation()">' + correctedPill + '</strong>';
+  } else if (h && h.movement_confirmed === false) {
+    ownBoundsHtml =
+      (scanPill ? ('<span onclick="event.stopPropagation()">' + scanPill + '</span>') : '') +
+      '<span class="badge badge-neutral" style="font-size:0.68rem;" title="' + escHtml(h.critique_note || 'critique could not confirm the scan description') + '">critique: not applied</span>';
+  } else if (scanPill) {
+    ownBoundsHtml = '<span onclick="event.stopPropagation()">' + scanPill + '</span>';
+  }
+  return (
+    '<span class="badge badge-neutral" style="font-size:0.68rem;" title="Analyzed window sent to Gemini for this highlight — includes pre/post-roll context">analyzed</span>' +
+    '<span onclick="event.stopPropagation()">' + rangeHtml + '</span>' +
+    ownBoundsHtml
+  );
+}
+
+// Best-effort parse of one axis's raw Gemini JSON (position/technique/
+// validator — service/pipelines/highlight_axes.py's schemas) for the
+// validator-summary expand below. Never throws on a malformed/absent
+// string — returns null, and the caller falls back to a plain "no
+// structured output captured" note rather than crashing the card.
+function v2ParseAxisRaw(w, axisKey) {
+  try {
+    const raw = w.axisCalls && w.axisCalls[axisKey] && w.axisCalls[axisKey].raw_response_text;
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+// Collapsible "Analyzer<->Validator: N round(s) — agreed/disagreed(field->X)/
+// ditched" summary (build plan UI item 4) — expands to the validator's own
+// adversarial_case/verdict/evidence plus each axis call's raw label +
+// justification (highlight_axes.py's exact field names). Rendered for BOTH
+// analyzed AND ditched highlights (build plan item 5: "card still expands to
+// the full analyzer+validator transcript that led to the ditch").
+function v2ValidatorSummaryHtml(w) {
+  if (!w.axisCalls) return '';
+  const valJson = v2ParseAxisRaw(w, 'validator');
+  const posJson = v2ParseAxisRaw(w, 'position');
+  const techJson = v2ParseAxisRaw(w, 'technique');
+  const rounds = w.validatorRounds || (valJson ? 1 : 0);
+  let outcomeLabel = w.verdict || 'unresolved';
+  if (w.ditchStatus === 'ditched') outcomeLabel = 'ditched';
+  else if (w.verdict === 'disagree' && valJson && valJson.wrong_label) {
+    outcomeLabel = 'disagreed (' + valJson.wrong_label + ' → ' + (valJson['final_' + valJson.wrong_label] || '?') + ')';
+  } else if (w.verdict === 'agree') outcomeLabel = 'agreed';
+
+  const detail = [];
+  if (valJson) {
+    detail.push('<div><strong>Adversarial case:</strong> ' + escHtml(valJson.adversarial_case || '—') + '</div>');
+    detail.push('<div><strong>Verdict:</strong> ' + escHtml(valJson.verdict || '—') + (valJson.reason ? (' — ' + escHtml(valJson.reason)) : '') + '</div>');
+    detail.push('<div><strong>Evidence:</strong> ' + escHtml(valJson.evidence || '—') + '</div>');
+  }
+  if (posJson) detail.push('<div style="margin-top:4px;"><strong>Position call:</strong> ' + escHtml(posJson.position || '—') + ' — ' + escHtml(posJson.justification || '') + '</div>');
+  if (techJson) detail.push('<div><strong>Technique call:</strong> ' + escHtml(techJson.action_class || '—') + ' / ' + escHtml(techJson.outcome || '—') + ' — ' + escHtml(techJson.justification || '') + '</div>');
+
+  return '<details class="v2-validator-summary" style="margin-top:8px;">' +
+    '<summary>Analyzer&harr;Validator: ' + rounds + ' round(s) — ' + escHtml(outcomeLabel) + '</summary>' +
+    '<div class="reasoning" style="margin-top:6px;">' + (detail.join('') || 'No structured validator/axis output captured for this highlight.') + '</div>' +
+  '</details>';
+}
+
+function windowCardHtmlV2(w) {
+  const h = (runState.highlights || []).find(x => x.index === w.windowIndex);
+  const rangeHtml = highlightCardRangeHtmlV2(w, h);
+  const isErrored = w.status === 'errored';
+  const isDitched = w.ditchStatus === 'ditched';
+  const count = Array.isArray(w.clips) ? w.clips.length : (w.status === 'running' ? '…' : 0);
+  const timing = w.modelMs != null ? fmtLatency(w.modelMs) : '';
+  const cropsHtml = renderCropsStrip(w.thumbnails);
+  let body = '';
+  if (isErrored) {
+    body += '<div class="err-line" style="margin:8px 12px;">PASS-2 failed: ' + escHtml(w.errorMessage || 'PASS-2 call failed') + '</div>';
+  }
+  // Ditch reason is ALWAYS visible (build plan item 5: "an always-visible
+  // caption, not just tooltip") — never gated on w.expanded, same
+  // never-hide-a-non-standard-result discipline as the isErrored line above.
+  if (isDitched) {
+    body += '<div class="reasoning" style="margin:8px 12px;">Ditched by the validator: ' + escHtml(w.ditchReason || 'strict ditch criterion') + '</div>';
+  }
+  if (w.expanded) {
+    if (h && (h.description || h.reasoning)) {
+      body += '<div class="reasoning" style="margin:0 12px 8px;">' +
+        (h.description ? ('<div><strong>Scan description:</strong> ' + escHtml(h.description) + '</div>') : '') +
+        (h.reasoning ? ('<div><strong>Scan reasoning:</strong> ' + escHtml(h.reasoning) + '</div>') : '') +
+      '</div>';
+    }
+    if (!isDitched) {
+      body += (Array.isArray(w.clips) && w.clips.length)
+        ? renderTimeTagsTable(w.clips)
+        : '<p style="color:var(--text-dim); font-size:0.8rem;">' + (w.status === 'running' ? 'Running…' : 'No tags for this highlight.') + '</p>';
+    }
+    body += v2ValidatorSummaryHtml(w);
+    if (cropsHtml) body += cropsHtml;
+  }
+  const statusBadge = isDitched
+    ? '<span class="badge badge-neutral" title="' + escHtml(w.ditchReason || '') + '">ditched</span>'
+    : isErrored ? '<span class="badge badge-b">ERRORED</span>'
+    : '<span class="badge badge-neutral">' + count + ' event(s)</span>';
+  return '<div class="card window-card' + (isErrored ? ' window-card-errored' : '') + (isDitched ? ' rail-row-ditched' : '') + '"' +
+      (isErrored ? ' style="outline:2px solid var(--red);"' : '') + '>' +
+    '<div class="window-card-header" onclick="toggleWindowExpand(' + w.windowIndex + ')">' +
+      '<span class="badge badge-neutral">Highlight ' + w.windowIndex + (runState.plannedWindows ? ('/' + runState.plannedWindows) : '') + '</span>' +
+      rangeHtml +
+      statusBadge +
       (timing ? '<span class="badge badge-neutral">' + timing + '</span>' : '') +
       '<span class="chevron">' + (w.expanded ? '▾' : '▸') + '</span>' +
     '</div>' +
@@ -2710,12 +3546,24 @@ function renderWindowCards() {
   const host = document.getElementById('window-cards-host');
   if (!host) return;
   if (!runState || !runState.windows.length) { host.innerHTML = ''; return; }
-  host.innerHTML = runState.windows.map(windowCardHtml).join('');
+  const renderer = currentPipelineId === 'highlight-scan-critique-analyze' ? windowCardHtmlV2 : windowCardHtml;
+  host.innerHTML = runState.windows.map(renderer).join('');
 }
 
 function renderDedupedClips() {
   const card = document.getElementById('deduped-card');
   if (!card) return;
+  // highlight-scan-analyze/highlight-scan-critique-analyze have NO dedup
+  // stage at all (build plan: "event clipping replaces dedup") — run_complete.
+  // clips is the raw per-highlight union, not a deduped list, so this
+  // "Deduped clips" full-detail table is deleted/hidden for both pipelines
+  // (build plan "Playground": "no deduped clips exist"). Their PASS-2 tags
+  // are still fully visible via the existing per-highlight expandable cards
+  // below (window-cards-host), each rendering via renderTimeTagsTable —
+  // nothing is silently dropped, only this specific "deduped" framing is
+  // withheld since it would be a lie for these pipelines. Every OTHER
+  // pipeline's behavior here is unchanged.
+  if (currentPipelineId === 'highlight-scan-analyze' || currentPipelineId === 'highlight-scan-critique-analyze') { card.style.display = 'none'; return; }
   if (!runState || !Array.isArray(runState.dedupedClips)) { card.style.display = 'none'; return; }
   card.style.display = 'block';
   if (runState.format === 'simplified-tags-v1') {
@@ -2879,9 +3727,145 @@ function isRailNearBottom(listEl) {
 // Never force-scrolls: only auto-scrolls to the new bottom if the list was
 // ALREADY near its bottom before this render (never yanks a user who has
 // scrolled up to review an earlier row).
+// ============================================================
+// highlight-scan-analyze's repurposed rail (build plan "Playground":
+// "Repurpose the dedup rail ... into a highlights rail (click-to-seek index
+// over PASS-1 highlights)"). Distinct from toRailRow()/railRowHtml() above:
+// this indexes PASS-1 SPANS (runState.highlights, from the `highlight_map`
+// event), not per-clip tag rows — there is no dedup/final-clip list to index
+// for this pipeline (see renderDedupedClips()'s hide-for-this-pipeline note).
+// Status badge is read off the SAME runState.windows entries the timeline
+// bar (renderHighlightTimeline()) already reads — one shared status source,
+// no duplicate tracking.
+// ============================================================
+function highlightRailRowHtml(h) {
+  const w = runState && runState.windows.find(win => win.windowIndex === h.index);
+  const status = w ? w.status : 'pending';
+  const isErrored = status === 'errored';
+  const statusHtml = status === 'complete'
+    ? ('<span class="badge badge-a">' + (Array.isArray(w.clips) ? w.clips.length : 0) + ' tag(s)</span>')
+    : isErrored ? '<span class="badge badge-b">errored</span>'
+    : status === 'running' ? '<span class="badge badge-hint">analyzing…</span>'
+    : '<span class="badge badge-neutral">pending</span>';
+  const synthHtml = (h.start_is_synthetic || h.end_is_synthetic)
+    ? ' <span class="badge badge-neutral" title="internal max-length split seam (highlight_scan.repair_highlight_bounds) — not a genuine PASS-1 boundary">split</span>'
+    : '';
+  const timeHtml = '<span class="seek-pill">' + secToMmss(h.start_s) + ' → ' + secToMmss(h.end_s) + '</span>';
+  const adjHtml = h.adjustment ? ('<div class="rail-row-caption">' + escHtml(h.adjustment) + '</div>') : '';
+  // Regression fix (evaluator loop, 2026-07-18): a highlight_analyze error
+  // used to leave this row stuck on the 'running'/"analyzing…" badge FOREVER
+  // (even past run_complete — errors are advisory/non-fatal, so the run
+  // still completed normally) because `case 'error':` in handlePipelineEvent
+  // only ever branched on evt.chunk_index, never evt.highlight_index — the
+  // matching window's status was simply never updated. Now that the
+  // highlight_index branch marks it 'errored', this row picks that up for
+  // free via the SAME status lookup above; the ONLY thing added here is the
+  // `.rail-row-errored` red border/background (reused, not reinvented — same
+  // class the pre-existing chunk-pipeline rail rows use) + surfacing
+  // w.errorMessage, so an errored highlight is unmistakably distinct from a
+  // clean "pending"/"analyzing…" row, not just a text-badge difference.
+  const errCaptionHtml = (isErrored && w && w.errorMessage)
+    ? ('<div class="rail-row-caption">' + escHtml(w.errorMessage) + '</div>')
+    : '';
+  const line1 = '<div class="rail-row-line1">' + timeHtml +
+    '<span class="rail-row-label">Highlight ' + h.index + '</span>' + statusHtml + synthHtml + '</div>';
+  return '<button type="button" class="rail-row' + (isErrored ? ' rail-row-errored' : '') + '" onclick="handleRailRowClick(' + h.start_s + ', ' + h.end_s + ', this)">' + line1 + adjHtml + errCaptionHtml + '</button>';
+}
+
+function renderHighlightsRail(listEl) {
+  const wasNearBottom = listEl.scrollHeight === 0 || isRailNearBottom(listEl);
+  if (!runState || !Array.isArray(runState.highlights) || !runState.highlights.length) {
+    listEl.innerHTML = '<div class="rail-empty">No highlights yet — run the pipeline.</div>';
+    return;
+  }
+  listEl.innerHTML = runState.highlights.map(highlightRailRowHtml).join('');
+  if (wasNearBottom) listEl.scrollTop = listEl.scrollHeight;
+}
+
+// ============================================================
+// v2 (highlight-scan-critique-analyze) ONLY — highlights rail row variant.
+// A brand-new function (not a branch on highlightRailRowHtml above) so v1's
+// rail stays byte-unchanged. Adds: the three-state critique pill (reusing
+// highlightCardRangeHtmlV2's own struck/corrected logic, condensed for the
+// rail's tighter layout), and a DITCHED state that is deliberately
+// `rail-row-ditched` (neutral grey) — NEVER `rail-row-errored` (red) — a
+// validator "ditch" is a real, successful analyzer/validator verdict, not a
+// PASS-2 transport failure (build plan item 5: "greyed... NOT the red
+// errored style").
+// ============================================================
+function highlightRailRowHtmlV2(h) {
+  const w = runState && runState.windows.find(win => win.windowIndex === h.index);
+  const status = w ? w.status : 'pending';
+  const isErrored = status === 'errored';
+  const isDitched = w && w.ditchStatus === 'ditched';
+  const statusHtml = isDitched
+    ? '<span class="badge badge-neutral">ditched</span>'
+    : status === 'complete' ? ('<span class="badge badge-a">' + (Array.isArray(w.clips) ? w.clips.length : 0) + ' tag(s)</span>')
+    : isErrored ? '<span class="badge badge-b">errored</span>'
+    : status === 'running' ? '<span class="badge badge-hint">analyzing…</span>'
+    : '<span class="badge badge-neutral">pending</span>';
+  const synthHtml = (h.start_is_synthetic || h.end_is_synthetic)
+    ? ' <span class="badge badge-neutral" title="internal max-length split seam (highlight_scan.repair_highlight_bounds) — not a genuine PASS-1 boundary">split</span>'
+    : '';
+  const hasCorrection = h.corrected_start_s != null && h.corrected_end_s != null;
+  const scanTimeStr = secToMmss(h.start_s) + ' → ' + secToMmss(h.end_s);
+  let timeHtml, correctedBadgeHtml = '';
+  if (hasCorrection) {
+    const correctedStr = secToMmss(h.corrected_start_s) + ' → ' + secToMmss(h.corrected_end_s);
+    timeHtml = '<span class="seek-pill pill-struck">' + escHtml(scanTimeStr) + '</span> <strong class="seek-pill">' + escHtml(correctedStr) + '</strong>';
+    correctedBadgeHtml = ' <span class="badge badge-a" title="corrected by highlight_critique">corrected</span>';
+  } else {
+    timeHtml = '<span class="seek-pill">' + escHtml(scanTimeStr) + '</span>';
+    if (h.movement_confirmed === false) correctedBadgeHtml = ' <span class="badge badge-neutral" title="' + escHtml(h.critique_note || 'movement_confirmed=false') + '">critique: not applied</span>';
+  }
+  const adjHtml = h.adjustment ? ('<div class="rail-row-caption">' + escHtml(h.adjustment) + '</div>') : '';
+  const errCaptionHtml = (isErrored && w && w.errorMessage)
+    ? ('<div class="rail-row-caption">' + escHtml(w.errorMessage) + '</div>')
+    : '';
+  // Ditch reason: ALWAYS-VISIBLE caption (build plan item 5), never only a
+  // tooltip — same discipline as windowCardHtmlV2's ditched note.
+  const ditchCaptionHtml = (isDitched && w)
+    ? ('<div class="rail-row-caption">Ditched: ' + escHtml(w.ditchReason || 'strict ditch criterion') + '</div>')
+    : '';
+  const seekStart = hasCorrection ? h.corrected_start_s : h.start_s;
+  const seekEnd = hasCorrection ? h.corrected_end_s : h.end_s;
+  const line1 = '<div class="rail-row-line1">' + timeHtml +
+    '<span class="rail-row-label">Highlight ' + h.index + '</span>' + statusHtml + correctedBadgeHtml + synthHtml + '</div>';
+  const rowCls = isDitched ? ' rail-row-ditched' : (isErrored ? ' rail-row-errored' : '');
+  return '<button type="button" class="rail-row' + rowCls + '" onclick="handleRailRowClick(' + seekStart + ', ' + seekEnd + ', this)">' +
+    line1 + adjHtml + ditchCaptionHtml + errCaptionHtml + '</button>';
+}
+
+function renderHighlightsRailV2(listEl) {
+  const wasNearBottom = listEl.scrollHeight === 0 || isRailNearBottom(listEl);
+  if (!runState || !Array.isArray(runState.highlights) || !runState.highlights.length) {
+    listEl.innerHTML = '<div class="rail-empty">No highlights yet — run the pipeline.</div>';
+    return;
+  }
+  listEl.innerHTML = runState.highlights.map(highlightRailRowHtmlV2).join('');
+  if (wasNearBottom) listEl.scrollTop = listEl.scrollHeight;
+}
+
 function renderDedupRail() {
   const listEl = document.getElementById('dedup-rail-list');
+  const titleEl = document.getElementById('dedup-rail-title');
   if (!listEl) return;
+
+  // Gate on currentPipelineId — every other pipeline (chunk-segment-tags,
+  // vision-mimic, single-shot) keeps the EXACT "Deduped Events" rail below,
+  // untouched.
+  if (currentPipelineId === 'highlight-scan-critique-analyze') {
+    if (titleEl) titleEl.textContent = 'Highlights';
+    renderHighlightsRailV2(listEl);
+    return;
+  }
+  if (currentPipelineId === 'highlight-scan-analyze') {
+    if (titleEl) titleEl.textContent = 'Highlights';
+    renderHighlightsRail(listEl);
+    return;
+  }
+  if (titleEl) titleEl.textContent = 'Deduped Events';
+
   const wasNearBottom = listEl.scrollHeight === 0 || isRailNearBottom(listEl);
 
   let rowsHtml = [];
@@ -3010,6 +3994,69 @@ function handlePipelineEvent(evt) {
       }
       break;
     }
+    case 'highlight_map': // highlight-scan-analyze/highlight-scan-critique-analyze PASS 1 — the finalized highlight list (drives the timeline bar + highlights rail, NOT a table)
+      runState.highlights = evt.highlights || [];
+      break;
+    // v2 (highlight-scan-critique-analyze) ONLY — highlight_critique stage
+    // events (NEW node type; never emitted for any other pipeline's stage
+    // set). Mutates the matching runState.highlights entry IN PLACE with the
+    // SAME snake_case keys the backend uses (corrected_start_s/
+    // corrected_end_s/critique_note/movement_confirmed) — no separate
+    // "window" tracked for the critique phase; the rail/timeline/card
+    // renderers read these fields straight off the highlight object.
+    case 'highlight_critique_start':
+      // Advisory only — no dedicated "critiquing…" status surfaced (function
+      // over polish, per the plan's own framing); listed as a known event
+      // type purely so it doesn't fall through to the `default:` "Unknown
+      // pipeline event type" log-err below.
+      break;
+    case 'highlight_critique_result': {
+      const h = (runState.highlights || []).find(x => x.index === evt.highlight_index);
+      if (h) {
+        h.corrected_start_s = evt.corrected_start_s != null ? evt.corrected_start_s : null;
+        h.corrected_end_s = evt.corrected_end_s != null ? evt.corrected_end_s : null;
+        h.critique_note = evt.critique_note || null;
+        h.movement_confirmed = evt.movement_confirmed != null ? evt.movement_confirmed : null;
+      }
+      break;
+    }
+    case 'highlight_start': { // highlight-scan-analyze/highlight-scan-critique-analyze PASS 2 (or v2 PASS 3) — reuses the SAME generic per-unit card plumbing as chunk_start (findOrCreateWindow keyed by highlight_index)
+      const w = findOrCreateWindow(evt.highlight_index);
+      w.status = 'running';
+      if (Array.isArray(evt.scope)) w.scope = evt.scope; // the PRE/POST-ROLL-EXPANDED analyzed window actually sent to Gemini, not the highlight's own bounds
+      w.highlightBounds = Array.isArray(evt.highlight_bounds) ? evt.highlight_bounds : null;
+      // v2 additive field (also present, unused, in v1's event — harmless to
+      // always capture; only v2's rendering ever reads it).
+      w.authoritativeBounds = Array.isArray(evt.authoritative_bounds) ? evt.authoritative_bounds : null;
+      break;
+    }
+    case 'highlight_result': {
+      const w = findOrCreateWindow(evt.highlight_index);
+      w.format = evt.format || null;
+      w.clips = evt.clips || []; // already clipped to the highlight's OWN [start_s,end_s] server-side (executors._clip_events_to_highlight_bounds) — never the expanded scope
+      w.modelMs = evt.timing && evt.timing.model_ms;
+      w.droppedOutsideBounds = evt.dropped_outside_bounds != null ? evt.dropped_outside_bounds : null;
+      w.status = 'complete';
+      // v2 additive fields ("Ditched" contract + per-axis telemetry) — the
+      // SAME shared executor now emits these for v1 (highlight-scan-analyze)
+      // too (see service/pipelines/models.py's v2 docstring), but v1's
+      // rendering (windowCardHtml/highlightRailRowHtml/highlightTimelineBlockHtml)
+      // never reads them, so capturing them unconditionally here is a
+      // harmless no-op for v1 — only windowCardHtmlV2/highlightRailRowHtmlV2/
+      // highlightTimelineBlockHtmlV2 (gated on currentPipelineId) look at
+      // w.ditchStatus/w.ditchReason/w.validatorRounds/w.verdict/w.axisCalls.
+      w.ditchStatus = evt.status || null; // "analyzed" | "ditched"
+      w.ditchReason = evt.ditch_reason || null;
+      w.validatorRounds = evt.validator_rounds != null ? evt.validator_rounds : null;
+      w.verdict = evt.verdict || null;
+      w.axisCalls = evt.axis_calls || null;
+      // No context_summary field for this pipeline (no context_chain stage —
+      // build plan: "pre-roll video replaces the lossy text context chain")
+      // and NO liveEvents push here: this pipeline's rail is repurposed to
+      // index PASS-1 highlights (renderHighlightsRail()), not per-clip rows
+      // — see renderDedupRail()'s currentPipelineId gate.
+      break;
+    }
     case 'run_complete':
       runState.sawRunComplete = true;
       runState.dedupedClips = evt.clips || [];
@@ -3053,16 +4100,48 @@ function handlePipelineEvent(evt) {
           });
         }
       }
+      // REGRESSION FIX (evaluator loop, 2026-07-18) — highlight_analyze's
+      // PASS-2 outages carry `highlight_index` (the executors.py contract:
+      // stage_id="highlight_analyze" + highlight_index on every error this
+      // node yields — see the highlight_start/highlight_result handlers
+      // above, which key off the SAME field), mirroring chunk_analyze's
+      // chunk_index above verbatim. Before this branch existed, an errored
+      // highlight only ever reached `runState.errors[]`/the Message Log —
+      // the matching window's status stayed 'running' FOREVER (even past
+      // run_complete, since errors are advisory/non-fatal and the run
+      // completes normally), so the per-highlight card/timeline block/
+      // Highlights-rail row all displayed a permanent, silently-wrong
+      // "analyzing…"/pending state for a call that had already failed.
+      //
+      // Unlike the chunk_index branch above, this does NOT need a parallel
+      // runState.liveEvents push: the Highlights rail
+      // (renderHighlightsRail()/highlightRailRowHtml()) and the timeline
+      // block (renderHighlightTimeline()/highlightTimelineBlockHtml()) both
+      // already read status straight off THIS SAME `runState.windows` entry
+      // on every render — marking it 'errored' here is sufficient for both
+      // to flip to their errored styling (`.rail-row-errored` /
+      // `.timeline-block-errored`) with zero further plumbing. (The
+      // chunk_index branch's liveEvents push exists because the OLD "Deduped
+      // Events" rail has no equivalent always-available backing list to read
+      // status from before run_complete — the Highlights rail does, via
+      // runState.highlights + this window lookup, so that extra mechanism
+      // would be dead code here.)
+      if (evt.highlight_index != null) {
+        const w = findOrCreateWindow(evt.highlight_index);
+        w.status = 'errored';
+        w.errorMessage = evt.message || 'PASS-2 call failed';
+      }
       break;
     default:
       logMsg('Unknown pipeline event type: ' + evt.type, 'log-err');
   }
   renderRunHeader();
   renderCompactRunStatus();
-  renderChunkMap();
+  renderChunkMapHost();
   renderWindowCards();
   renderDedupedClips();
   renderDedupRail();
+  renderCostBadge(); // e.g. highlight_map arriving updates N for the live-run estimate
 }
 
 // ---- Mock NDJSON drip (?mock=1) — drives the ENTIRE run view offline,

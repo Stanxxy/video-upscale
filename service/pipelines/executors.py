@@ -21,6 +21,12 @@ Structural data flow through ``RunContext``:
   ``enabled`` flag is consulted by ``analyze`` before that loop runs).
 - ``dedup`` (if enabled and upstream format == clips-v1) overwrites
   ``ctx.final_clips`` with the deduped list.
+- ``chunk_segment``/``chunk_analyze`` are ``chunk-segment-tags``'s own PASS-1/
+  PASS-2 pair (``ctx.chunks`` in between); ``highlight_scan``/
+  ``highlight_analyze`` are ``highlight-scan-analyze``'s sibling pair
+  (``ctx.highlights`` in between) — the newer pipeline has NO ``context_chain``/
+  ``dedup`` stages at all (pre-roll video + per-highlight event clipping
+  replace them; see ``highlight_analyze_node``'s docstring).
 """
 from __future__ import annotations
 
@@ -38,7 +44,16 @@ from PIL import Image
 
 from analyzer import BJJMultiAgentAnalyzer, BJJTechniqueAnalyzer
 from pipeline import deduplicate_clips
-from service.pipelines import chunk_segment, frame_source, gemini_retry, simplified_tags, time_dedup
+from service.pipelines import (
+    chunk_segment,
+    frame_source,
+    gemini_retry,
+    highlight_axes,
+    highlight_critique,
+    highlight_scan,
+    simplified_tags,
+    time_dedup,
+)
 from service.pipelines.models import (
     AnalyzeConfig,
     ChunkAnalyzeConfig,
@@ -46,6 +61,9 @@ from service.pipelines.models import (
     DedupConfig,
     DetectCropConfig,
     FrameSampleConfig,
+    HighlightAnalyzeConfig,
+    HighlightCritiqueConfig,
+    HighlightScanConfig,
     PipelineDef,
     WindowConfig,
 )
@@ -118,6 +136,13 @@ class RunContext:
     # stage (e.g. directly in a unit test) — the clamp is then a no-op,
     # preserving prior behavior for callers that never set it.
     chunk_max_s: Optional[float] = None
+
+    # ``highlight-scan-analyze`` PASS 1 output: finalized highlight dicts
+    # ({"index","start_s","end_s","adjustment"}), set by
+    # ``highlight_scan_node``, consumed by ``highlight_analyze_node``. Same
+    # "entirely native-video, ``native_fps`` stays None" discipline as
+    # ``chunks`` above — this pipeline never samples frames either.
+    highlights: list = field(default_factory=list)
 
     current_context: str = "Start of match."
     raw_results: list = field(default_factory=list)  # [{"window":, "frames":, "analysis":}]
@@ -510,6 +535,13 @@ async def chunk_segment_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
     yield {
         "type": "chunk_map", "chunks": ctx.chunks,
         "timing": {"model_ms": round(model_ms, 1)},
+        # Additive-only (ADCC eval dashboard, Task 1): the PASS-1 rough-scan
+        # call's prompt/raw response/token usage. Never replaces or renames
+        # an existing key — a consumer that only reads "chunks"/"timing"
+        # (the QA VLM Studio frontend, existing tests) is byte-identical.
+        "prompt_text": prompt_text,
+        "raw_response_text": raw_text,
+        "usage_metadata": simplified_tags.extract_usage_metadata(response),
     }
     yield {
         "type": "progress", "stage_id": "chunk_segment",
@@ -529,6 +561,10 @@ async def chunk_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
             "type": "error", "stage_id": "chunk_analyze",
             "message": "chunk_analyze node has no ctx.chunks — the chunk_segment stage must run "
                        "first and produce a non-empty chunk map.",
+            # No specific chunk to attribute (there are zero) — key present
+            # (None) for the same consistent-contract reason as the
+            # highlight_analyze no-highlights guard (2026-07-18 fix).
+            "chunk_index": None,
         }
         ctx.final_format = "simplified-tags-time-v1"
         ctx.final_clips = []
@@ -581,14 +617,22 @@ async def chunk_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
                 ctx.youtube_url, effective_start, chunk_end, ctx_for_call,
             )
         except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
-            yield {"type": "error", "stage_id": "chunk_analyze", "message": f"chunk {chunk['index']}: {e}"}
+            yield {
+                "type": "error", "stage_id": "chunk_analyze",
+                "message": f"chunk {chunk['index']}: {e}",
+                "chunk_index": chunk["index"],
+            }
             continue
         model_ms = (time.perf_counter() - t0) * 1000
 
         try:
             result_data = json.loads(result_str)
         except (ValueError, TypeError) as e:
-            yield {"type": "error", "stage_id": "chunk_analyze", "message": f"chunk {chunk['index']}: non-JSON response: {e}"}
+            yield {
+                "type": "error", "stage_id": "chunk_analyze",
+                "message": f"chunk {chunk['index']}: non-JSON response: {e}",
+                "chunk_index": chunk["index"],
+            }
             continue
 
         # SimplifiedTagsTimeAnalyzer.analyze_chunk() never raises on a Gemini/
@@ -621,6 +665,17 @@ async def chunk_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
             "type": "chunk_result", "chunk_index": chunk["index"], "format": "simplified-tags-time-v1",
             "clips": clips, "context_summary": context if chain_enabled else None,
             "timing": {"model_ms": round(model_ms, 1)},
+            # Additive-only (ADCC eval dashboard, Task 1): the PASS-2 deep
+            # call's prompt/raw response/token usage, read off the analyzer
+            # instance's post-call instrumentation slots (never a change to
+            # analyze_chunk's return contract — see SimplifiedTagsTimeAnalyzer
+            # docstring). Absent (None) whenever analyzer isn't the real
+            # SimplifiedTagsTimeAnalyzer (e.g. a test double that replaces
+            # analyze_chunk entirely) — existing consumers ignoring these keys
+            # are byte-identical.
+            "prompt_text": getattr(analyzer, "last_prompt_text", None),
+            "raw_response_text": getattr(analyzer, "last_raw_response_text", None),
+            "usage_metadata": getattr(analyzer, "last_usage_metadata", None),
         }
 
     ctx.final_format = "simplified-tags-time-v1"
@@ -649,6 +704,786 @@ def _convert_chunk_relative_to_absolute(raw_clips: list, effective_start: float,
         converted["end_s"] = effective_start + rel_end
         out.append(converted)
     return out
+
+
+# --------------------------------------------------------------------------- #
+# highlight_scan — PASS 1 of highlight-scan-analyze: one cheap rough-scan
+# Gemini call producing an ORDERED list of highlight spans (see
+# service/pipelines/highlight_scan.py for the schema/prompt/bound-repair pure
+# helpers). Deliberately simpler than chunk_segment_node: no reason enum, no
+# worth_analysis derivation.
+# --------------------------------------------------------------------------- #
+async def highlight_scan_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
+    cfg = HighlightScanConfig.model_validate(config)
+    client = ctx.gemini_client()
+    # v2 (ThinkingQualityMixin): cfg.thinking/cfg.media_resolution default
+    # None -> thinking_config_for(..., None) == ThinkingConfig(thinking_budget=0)
+    # and simplified_tags.media_resolution_enum(None) == MEDIA_RESOLUTION_LOW,
+    # i.e. BYTE-IDENTICAL to this node's prior hardcoded values — now
+    # overridable per the build plan's per-node thinking+quality decision.
+    thinking_cfg = thinking_config_for(cfg.model, cfg.thinking)
+
+    video_part = types.Part(
+        file_data=types.FileData(file_uri=ctx.youtube_url),
+        video_metadata=types.VideoMetadata(
+            start_offset=f"{ctx.start_sec}s", end_offset=f"{ctx.end_sec}s", fps=cfg.rough_fps,
+        ),
+    )
+    gen_config = types.GenerateContentConfig(
+        temperature=0.0,
+        response_mime_type="application/json",
+        response_schema=highlight_scan.build_highlight_schema(),
+        thinking_config=thinking_cfg,
+        media_resolution=simplified_tags.media_resolution_enum(cfg.media_resolution),
+        system_instruction=highlight_scan.resolve_system_prompt(cfg.system_prompt),
+    )
+    prompt_text = highlight_scan.build_scan_prompt(ctx.start_sec, ctx.end_sec, cfg.initial_prompt)
+
+    t0 = time.perf_counter()
+    try:
+        response = await gemini_retry.call_with_retry(
+            lambda: client.aio.models.generate_content(
+                model=cfg.model,
+                contents=[types.Content(role="user", parts=[types.Part(text=prompt_text), video_part])],
+                config=gen_config,
+            ),
+            op_name="highlight_scan",
+            retry_config=ctx.retry_config,
+        )
+    except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
+        yield {"type": "error", "stage_id": "highlight_scan", "message": str(e)}
+        ctx.highlights = []
+        return
+    model_ms = (time.perf_counter() - t0) * 1000
+
+    raw_text = response.text or ""
+    try:
+        data = json.loads(raw_text)
+        raw_highlights = data.get("highlights", []) if isinstance(data, dict) else []
+    except (ValueError, TypeError) as e:
+        yield {"type": "error", "stage_id": "highlight_scan", "message": f"non-JSON response: {e}"}
+        raw_highlights = []
+
+    # scope_start/scope_end (live-bug fix, 2026-07-18): PASS 1 is an LLM and
+    # can emit a highlight entirely outside the requested scope (real repro:
+    # scope 40-85s, PASS 1 returned index 3 start_s=111/end_s=124) — dropped/
+    # clamped here so the highlight_map streamed to the UI is scope-valid and
+    # never flows an out-of-scope highlight into highlight_analyze_node's
+    # preroll/postroll window math (which could otherwise invert). See
+    # highlight_scan.repair_highlight_bounds docstring.
+    ctx.highlights = highlight_scan.finalize_highlights(
+        raw_highlights, cfg.min_highlight_s, cfg.max_highlight_s,
+        scope_start=ctx.start_sec, scope_end=ctx.end_sec,
+    )
+
+    yield {
+        "type": "highlight_map", "highlights": ctx.highlights,
+        "timing": {"model_ms": round(model_ms, 1)},
+        "prompt_text": prompt_text,
+        "raw_response_text": raw_text,
+        "usage_metadata": simplified_tags.extract_usage_metadata(response),
+    }
+    yield {
+        "type": "progress", "stage_id": "highlight_scan",
+        "message": f"{len(ctx.highlights)} highlight(s) found",
+    }
+
+
+# --------------------------------------------------------------------------- #
+# highlight_critique — NEW v2 stage (highlight-scan-critique-analyze ONLY),
+# sitting between highlight_scan and highlight_analyze. Per scanned
+# highlight, sends a BACKWARD-padded native-video window and asks Gemini to
+# confirm the scan's description and locate the highlight's TRUE (possibly
+# earlier) start + a corrected end. Mutates ctx.highlights IN PLACE, adding
+# corrected_start_s/corrected_end_s/critique_note — ADDITIVE ONLY, never
+# overwrites start_s/end_s (see service/pipelines/highlight_critique.py).
+# --------------------------------------------------------------------------- #
+async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
+    cfg = HighlightCritiqueConfig.model_validate(config)
+
+    if not ctx.highlights:
+        yield {
+            "type": "error", "stage_id": "highlight_critique",
+            "message": "highlight_critique node has no ctx.highlights — the highlight_scan stage "
+                       "must run first and produce a non-empty highlight map.",
+            "highlight_index": None,
+        }
+        return
+
+    thinking_cfg = thinking_config_for(cfg.model, cfg.thinking)
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+        ctx.gemini_client(), model_id=cfg.model, thinking_config=thinking_cfg,
+        system_instruction=highlight_critique.DEFAULT_CRITIQUE_SYSTEM_PROMPT,
+        retry_config=ctx.retry_config,
+    )
+    critique_schema = highlight_critique.build_critique_schema()
+
+    for highlight in ctx.highlights:
+        # BACKWARD-padded window only (Gracie: search for the earlier true
+        # setup cue) — never extends past the highlight's own scanned end.
+        window_start = round(max(ctx.start_sec, highlight["start_s"] - cfg.critique_backpad_s), 3)
+        window_end = round(highlight["end_s"], 3)
+
+        yield {
+            "type": "highlight_critique_start", "highlight_index": highlight["index"],
+            "scope": [window_start, window_end],
+        }
+
+        # Reuse of the offset-quantization + inverted-window guard (INS-107 /
+        # the existing highlight_analyze_node fix) — never send Gemini an
+        # inverted or zero-length native-video offset.
+        if window_start >= window_end:
+            yield {
+                "type": "error", "stage_id": "highlight_critique",
+                "message": (
+                    f"highlight {highlight['index']}: computed window "
+                    f"[{window_start:.2f}, {window_end:.2f}] is invalid (start >= end) — "
+                    "skipping, never sending an inverted/zero-length offset to Gemini."
+                ),
+                "highlight_index": highlight["index"],
+            }
+            continue
+
+        t0 = time.perf_counter()
+        try:
+            result_str = await analyzer.analyze_chunk(
+                ctx.youtube_url, window_start, window_end, None,
+                response_schema=critique_schema,
+                prompt_text=highlight_critique.build_critique_prompt(
+                    # Gracie's EXACT token names ($window_start_sec/
+                    # $window_end_sec/$critique_backpad_s/$scan_start_sec/
+                    # $scan_end_sec/$description) — see
+                    # highlight_critique.build_critique_prompt's docstring
+                    # for why a name mismatch here would be a silent
+                    # leftover-token bug (Template.safe_substitute never
+                    # raises), and
+                    # tests/test_pipelines_highlight_v2.py's
+                    # test_critique_prompt_leaves_no_leftover_tokens for the
+                    # regression guard.
+                    window_start_sec=window_start, window_end_sec=window_end,
+                    critique_backpad_s=cfg.critique_backpad_s,
+                    scan_start_sec=highlight["start_s"], scan_end_sec=highlight["end_s"],
+                    description=highlight.get("description"),
+                ),
+                fps=1, media_resolution=cfg.media_resolution,
+            )
+        except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error, no fabrication
+            yield {
+                "type": "error", "stage_id": "highlight_critique",
+                "message": f"highlight {highlight['index']}: {e}",
+                "highlight_index": highlight["index"],
+            }
+            continue
+        model_ms = (time.perf_counter() - t0) * 1000
+
+        try:
+            result_data = json.loads(result_str)
+        except (ValueError, TypeError) as e:
+            yield {
+                "type": "error", "stage_id": "highlight_critique",
+                "message": f"highlight {highlight['index']}: non-JSON response: {e}",
+                "highlight_index": highlight["index"],
+            }
+            continue
+
+        if isinstance(result_data, dict) and "error" in result_data:
+            yield {
+                "type": "error", "stage_id": "highlight_critique",
+                "message": f"highlight {highlight['index']}: PASS-2 Gemini call failed: {result_data['error']}",
+                "highlight_index": highlight["index"],
+            }
+            continue
+
+        # ABSOLUTE-seconds contract (see highlight_critique.py module
+        # docstring): Gracie's prompt explicitly tells Gemini the window's
+        # own absolute match-second bounds and asks for corrected_start_s/
+        # corrected_end_s on THAT SAME clock — "never relative to this
+        # clip's own 0:00". This is the OPPOSITE of every other
+        # analyze_chunk caller in this package (which frame the clip as
+        # starting at 0:00 and get chunk-relative seconds back). Do NOT run
+        # these values through _convert_chunk_relative_to_absolute — they
+        # are already absolute, only sanity-clamped below.
+        raw_start = result_data.get("corrected_start_s")
+        raw_end = result_data.get("corrected_end_s")
+        movement_confirmed = result_data.get("movement_confirmed")
+
+        applied = False
+        if movement_confirmed is False:
+            # Gate (evaluator LOW 1, 2026-07-18): Gemini explicitly said the
+            # description does NOT match this clip — the schema doesn't
+            # make corrected_start_s/corrected_end_s conditional on
+            # movement_confirmed, so a model can (and did, live) still emit
+            # them alongside movement_confirmed=false. Never apply a
+            # correction in that case, even if the fields are present and
+            # well-formed: the scan's ORIGINAL start_s/end_s stay
+            # authoritative (corrected_* left absent, same fallback
+            # highlight_analyze_node already uses). Surface the mismatch via
+            # critique_note/telemetry instead of silently discarding it.
+            highlight["critique_note"] = (
+                result_data.get("note") or "movement_confirmed=false — original bounds kept, correction not applied"
+            )
+        elif isinstance(raw_start, (int, float)) and isinstance(raw_end, (int, float)):
+            # Sanity clamp (engineering decision, not spec-mandated): a
+            # correction must land within [window_start, highlight's own
+            # end_s] and have positive duration, else it is DROPPED (never
+            # fabricated/coerced into a plausible-looking value) — the
+            # highlight then falls back to its original start_s/end_s in
+            # highlight_analyze_node (corrected_* stays absent).
+            corrected_start = max(window_start, min(float(raw_start), highlight["end_s"]))
+            corrected_end = min(highlight["end_s"], float(raw_end))
+            if corrected_end > corrected_start:
+                highlight["corrected_start_s"] = corrected_start
+                highlight["corrected_end_s"] = corrected_end
+                highlight["critique_note"] = result_data.get("note")
+                applied = True
+
+        yield {
+            "type": "highlight_critique_result", "highlight_index": highlight["index"],
+            "movement_confirmed": result_data.get("movement_confirmed"),
+            "corrected_start_s": highlight.get("corrected_start_s"),
+            "corrected_end_s": highlight.get("corrected_end_s"),
+            "critique_note": highlight.get("critique_note"),
+            "applied": applied,
+            "timing": {"model_ms": round(model_ms, 1)},
+            "prompt_text": getattr(analyzer, "last_prompt_text", None),
+            "raw_response_text": getattr(analyzer, "last_raw_response_text", None),
+            "usage_metadata": getattr(analyzer, "last_usage_metadata", None),
+        }
+
+    corrected_count = sum(1 for h in ctx.highlights if h.get("corrected_start_s") is not None)
+    yield {
+        "type": "progress", "stage_id": "highlight_critique",
+        "message": f"{corrected_count}/{len(ctx.highlights)} highlight(s) corrected",
+    }
+
+
+# --------------------------------------------------------------------------- #
+# highlight_analyze — PASS 2 of highlight-scan-analyze (AND
+# highlight-scan-critique-analyze — this executor is SHARED): SEQUENTIAL
+# native-video loop over every highlight from PASS 1, each sent with
+# pre/post-roll context video instead of a threaded text context_chain.
+# --------------------------------------------------------------------------- #
+def _clip_events_to_highlight_bounds(
+    events: list[dict], bound_start: float, bound_end: float,
+) -> tuple[list[dict], int]:
+    """Bounds every emitted event to its highlight's OWN ``[bound_start,
+    bound_end]`` — NOT the pre/post-roll-expanded window it was actually sent
+    in (build plan "Target design" — Stage 2).
+
+    **Honest correctness statement (corrected 2026-07-18, evaluator
+    CHANGES-REQUIRED item 2 — earlier text here claimed this "replaces dedup"
+    /  makes running with no dedup stage unconditionally "safe"; that
+    overclaimed).** ``highlight_analyze_node`` sends Gemini a video window
+    EXPANDED by ``preroll_s``/``postroll_s`` around each highlight's own
+    span, so neighboring highlights' SENT windows routinely overlap in real
+    video content even though their own ``[start_s, end_s]`` bounds do not.
+    This function DOES prevent one event from satisfying two DIFFERENT
+    highlights' clip tests from bounds alone (bounds themselves never
+    overlap — merge only extends outward, split pieces are zero-overlap; see
+    ``highlight_scan.py``). It does NOT prevent a single real action that
+    genuinely spans the overlapping pre/post-roll content from being
+    reported — independently, by two different Gemini calls — as two
+    adjacent truncated fragments instead of one event. That residual case is
+    handled by policy, not by this function: see ``highlight_scan.py``
+    module docstring's "Correctness statement" and
+    ``highlight_analyze_node``'s docstring below for the two residual
+    sub-cases (manufactured split seams — FIXED via preroll/postroll
+    clamping; genuinely-close distinct highlights — ACCEPTED, playground
+    scope).
+
+    Given events already converted to absolute seconds:
+    - An event with ZERO overlap with the bounds (entirely in the pre-roll or
+      post-roll region) is DROPPED.
+    - An event that PARTIALLY overlaps the bounds (e.g. starts during
+      pre-roll but continues into the highlight) is CLIPPED (its
+      ``start_s``/``end_s`` truncated to the bounds), not dropped outright —
+      the exchange is real and belongs to this highlight, only its reported
+      edges overshot into the context video.
+
+    Returns ``(kept_events, dropped_count)``. An event missing/with
+    non-numeric ``start_s``/``end_s`` is also dropped (logged) — never
+    fabricated, same discipline as ``_convert_chunk_relative_to_absolute``.
+    """
+    kept: list[dict] = []
+    dropped = 0
+    for event in events:
+        try:
+            start_s = float(event["start_s"])
+            end_s = float(event["end_s"])
+        except (KeyError, TypeError, ValueError):
+            logger.warning("highlight_analyze: dropping event with malformed start_s/end_s: %r", event)
+            dropped += 1
+            continue
+        if end_s <= bound_start or start_s >= bound_end:
+            # Zero overlap with the highlight's OWN bounds — belongs entirely
+            # to the pre-roll/post-roll context, not this highlight.
+            dropped += 1
+            continue
+        clipped = dict(event)
+        clipped["start_s"] = max(start_s, bound_start)
+        clipped["end_s"] = min(end_s, bound_end)
+        kept.append(clipped)
+    return kept, dropped
+
+
+async def _call_axis_json(
+    analyzer: "simplified_tags.SimplifiedTagsTimeAnalyzer", youtube_url: str,
+    window_start: float, window_end: float, *,
+    response_schema, prompt_text: str, fps: int, media_resolution: Optional[str],
+) -> tuple[Optional[dict], Optional[str]]:
+    """Shared call+parse+error-check for the position/technique/validator
+    axis calls in ``highlight_analyze_node`` — DRYs up the exact
+    transport-exception / non-JSON / swallowed-``{"error": ...}`` pattern
+    already used by every other Gemini-calling node in this module (never a
+    fourth hand-copy of the same three checks). Returns ``(data, None)`` on
+    success or ``(None, error_message)`` — never raises."""
+    try:
+        result_str = await analyzer.analyze_chunk(
+            youtube_url, window_start, window_end, None,
+            response_schema=response_schema, prompt_text=prompt_text,
+            fps=fps, media_resolution=media_resolution,
+        )
+    except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error, no fabrication
+        return None, str(e)
+    try:
+        data = json.loads(result_str)
+    except (ValueError, TypeError) as e:
+        return None, f"non-JSON response: {e}"
+    if isinstance(data, dict) and "error" in data:
+        return None, f"PASS-2 Gemini call failed: {data['error']}"
+    return data, None
+
+
+async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
+    """PASS 2 of ``highlight-scan-analyze`` — SHARED, unchanged executor, ALSO
+    ``highlight-scan-critique-analyze``'s PASS 3.
+
+    **v2 restructure (build plan
+    ``2026-07-18-highlight-scan-critique-analyze-v2-plan.md``, "Node 3";
+    Gracie's real prompts, ``v2_node_prompts.md``, integrated 2026-07-18):**
+    per highlight this runs an INDEPENDENT ``position`` call and
+    ``technique`` call — Gracie: orthogonal, both always fire — never either/
+    or — EXACTLY ONCE EACH (LeCun's own cost model, build plan design-pass:
+    ``1 + N(3+L)`` — position/technique are a FLAT +2 per highlight; only the
+    validator loops L times). Unlike an earlier engineering scaffold of this
+    function (which modeled each axis as a LIST of chunk-relative-timestamped
+    tags, merged by time-overlap, AND re-ran all three calls every
+    iteration), Gracie's real prompts ask for exactly ONE flat verdict per
+    axis per highlight — "Decide the ONE position value ... in this clip" /
+    "Decide the ONE action_class value and the ONE outcome value ... in this
+    clip" — no timestamps, no actor, no confidence score. A bounded
+    ``for _ in range(cfg.max_validator_iterations)`` loop THEN re-invokes
+    JUST the ``validator`` call (never position/technique again) to
+    reconcile those two single, fixed verdicts (adversarial review + a
+    strict ditch test — see ``highlight_axes.VALIDATOR_SYSTEM_PROMPT``),
+    returning either ``verdict="agree"``/``"disagree"`` (with
+    ``final_position``/``final_action_class``/``final_outcome`` — the SAME
+    labels on agree, a correction on disagree) or ``verdict="ditch"`` (the
+    WHOLE highlight is dropped, zero clips, ``status="ditched"``). The
+    validator ``for`` loop is structurally bounded — it cannot hang
+    regardless of how the validator answers; exhausting every iteration
+    without an ``agree``/``disagree``/``ditch`` verdict falls through to the
+    loop's own ``else`` clause, which ditches with an "unresolved
+    disagreement" reason. v1 ships ``max_validator_iterations=1`` (single
+    pass, founder decision) — an unresolved verdict on that one pass ditches
+    immediately via this SAME fallthrough, never a special-cased "v1 vs v2"
+    branch.
+
+    A non-ditched highlight's ``clips`` list contains exactly ONE synthesized
+    clip spanning the highlight's own AUTHORITATIVE bounds
+    (``{start_s, end_s, position, action_class, outcome}`` plus the
+    justification/evidence trail) — there is nothing left to clip/convert
+    from chunk-relative seconds (none of the three axis calls report
+    timestamps at all), so ``_convert_chunk_relative_to_absolute``/
+    ``_clip_events_to_highlight_bounds`` (both still used by
+    ``chunk_analyze_node`` and directly unit-tested, untouched) are no longer
+    called from this function.
+
+    ``corrected_start_s``/``corrected_end_s`` (set by the upstream
+    ``highlight_critique`` stage, ABSENT when that stage didn't run — e.g.
+    the OLDER ``highlight-scan-analyze`` pipeline, which has no
+    ``highlight_critique`` stage at all) are read as the AUTHORITATIVE bounds
+    for both window expansion and event clipping, falling back to the scan's
+    own ``start_s``/``end_s`` when absent — this is what makes the critique
+    stage's correction actually take effect downstream, and what makes this
+    shared executor's behavior IDENTICAL to before for any highlight that was
+    never critiqued.
+
+    **Residual duplicate/fragmentation risk (evaluator CHANGES-REQUIRED item
+    2, 2026-07-18 — read this before assuming "no dedup stage" is a fully
+    solved problem):** ``preroll_s``/``postroll_s`` expand each highlight's
+    SENT video window beyond its own authoritative bounds, so neighboring
+    highlights' sent windows can share real video content even though their
+    own bounds never overlap. A single real action that genuinely spans that
+    shared content can be independently seen and reported by two different
+    Gemini calls; ``_clip_events_to_highlight_bounds`` then truncates each
+    report to its own highlight's bounds, yielding two adjacent fragments
+    instead of one event. Two sub-cases, handled differently by product
+    decision (see ``highlight_scan.py`` module docstring's "Correctness
+    statement" for the full reasoning):
+
+    1. **Split siblings of one over-long PASS-1 highlight** (this pipeline's
+       own ``max_highlight_s`` bound-repair) — FIXED below: a highlight whose
+       ``start_is_synthetic``/``end_is_synthetic`` flag is set (see
+       ``highlight_scan.repair_highlight_bounds``) has ``preroll_s``/
+       ``postroll_s`` clamped to ZERO on that synthetic edge, so sibling
+       calls' sent windows share NO frames across a seam WE manufactured.
+    2. **Two genuinely distinct PASS-1 highlights sitting closer together
+       than ``preroll_s + postroll_s``** — ACCEPTED, not fixed: real
+       pre/post-roll context doing its intended job on two independently
+       judged highlights. Playground scope (precision over recall,
+       human-in-the-loop confirms events) — see
+       ``tests/test_pipelines_executors.py``'s pinned regression test for
+       this exact, accepted behavior.
+    """
+    cfg = HighlightAnalyzeConfig.model_validate(config)
+
+    if not ctx.highlights:
+        yield {
+            "type": "error", "stage_id": "highlight_analyze",
+            "message": "highlight_analyze node has no ctx.highlights — the highlight_scan stage "
+                       "must run first and produce a non-empty highlight map.",
+            # No specific highlight to attribute (there are zero) — the key is
+            # still present (None) so a frontend consumer can rely on
+            # `highlight_index` always being a key on every highlight_analyze
+            # error event, never only sometimes present (contract fix,
+            # 2026-07-18).
+            "highlight_index": None,
+        }
+        ctx.final_format = "simplified-tags-time-v1"
+        ctx.final_clips = []
+        return
+
+    # Three independent analyzers, one per axis — each with its OWN
+    # thinking/media_resolution/model (mixin sub-configs). Built ONCE, reused
+    # across every highlight/iteration (same discipline as the single
+    # `analyzer` instance the pre-v2 version of this function built once).
+    position_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+        ctx.gemini_client(), model_id=cfg.position.model,
+        thinking_config=thinking_config_for(cfg.position.model, cfg.position.thinking),
+        system_instruction=highlight_axes.POSITION_SYSTEM_PROMPT, retry_config=ctx.retry_config,
+    )
+    technique_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+        ctx.gemini_client(), model_id=cfg.technique.model,
+        thinking_config=thinking_config_for(cfg.technique.model, cfg.technique.thinking),
+        system_instruction=highlight_axes.TECHNIQUE_SYSTEM_PROMPT, retry_config=ctx.retry_config,
+    )
+    validator_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+        ctx.gemini_client(), model_id=cfg.validator.model,
+        thinking_config=thinking_config_for(cfg.validator.model, cfg.validator.thinking),
+        system_instruction=highlight_axes.VALIDATOR_SYSTEM_PROMPT, retry_config=ctx.retry_config,
+    )
+    position_schema = highlight_axes.build_position_schema()
+    technique_schema = highlight_axes.build_technique_schema()
+    validator_schema = highlight_axes.build_validator_schema()
+
+    # No context_chain in this pipeline (build plan: "pre-roll video replaces
+    # the lossy text context chain") — every highlight is analyzed with a
+    # fresh "Start of the match." narrative context; the SimplifiedTagsTimeAnalyzer
+    # default already covers that when previous_context is None.
+    for highlight in ctx.highlights:
+        # Authoritative bounds (v2): corrected_* (set by the upstream
+        # highlight_critique stage) OVERRIDE the scan's own start_s/end_s for
+        # window math + event clipping — ABSENT (None) whenever that stage
+        # didn't run (the older highlight-scan-analyze pipeline, or a
+        # highlight the critique call failed/skipped/declined to correct),
+        # in which case this falls back to the scan's own bounds, byte-
+        # identical to pre-v2 behavior.
+        authoritative_start = highlight.get("corrected_start_s")
+        if authoritative_start is None:
+            authoritative_start = highlight["start_s"]
+        authoritative_end = highlight.get("corrected_end_s")
+        if authoritative_end is None:
+            authoritative_end = highlight["end_s"]
+
+        # Synthetic-seam clamp (evaluator CHANGES-REQUIRED item 2 fix): a
+        # synthetic edge is a manufactured internal cut point from THIS
+        # pipeline's own max-length split (highlight_scan.repair_highlight_bounds),
+        # not a genuine PASS-1-reported boundary. Extending preroll/postroll
+        # across it would send two sibling calls OVERLAPPING video content
+        # across a seam we created ourselves — clamp to exactly the
+        # highlight's own (authoritative) edge there instead. A genuine
+        # (non-synthetic) edge still gets the full configured preroll/postroll,
+        # clamped only to the requested scope.
+        if highlight.get("start_is_synthetic", False):
+            window_start = authoritative_start
+        else:
+            window_start = max(ctx.start_sec, authoritative_start - cfg.preroll_s)
+        if highlight.get("end_is_synthetic", False):
+            window_end = authoritative_end
+        else:
+            window_end = min(ctx.end_sec, authoritative_end + cfg.postroll_s)
+
+        # Quantize ONCE, here, to millisecond precision (live-bug fix,
+        # 2026-07-18 — real repro: preroll/postroll float subtraction/addition
+        # e.g. 33.3 - 5.0 == 28.299999999999997, a 15-fractional-digit float
+        # that overflows protobuf Duration's 9-digit limit and Gemini 400s).
+        # ``simplified_tags._format_offset_seconds`` already hardens the
+        # actual Gemini call against this independently (defense at the
+        # serialization boundary), but rounding the SAME window_start/
+        # window_end here too means the "highlight_start" scope event, the
+        # inverted-window guard below, the analyze_chunk calls, and
+        # ``_convert_chunk_relative_to_absolute`` all share one clean value
+        # instead of the event/guard seeing raw float noise while only the
+        # Gemini call sees a quantized one. The <1ms rounding delta folded
+        # into the absolute clip times by ``_convert_chunk_relative_to_absolute``
+        # is negligible — far below a video frame (~66ms at 15fps) — and is
+        # intentional, not a bug.
+        window_start = round(window_start, 3)
+        window_end = round(window_end, 3)
+
+        yield {
+            "type": "highlight_start", "highlight_index": highlight["index"],
+            "scope": [window_start, window_end],
+            # "highlight_bounds" keeps its PRE-v2 meaning (the scan's OWN
+            # original bounds) unconditionally — never swapped for the
+            # corrected values, so an existing consumer reading this key sees
+            # byte-identical semantics. "authoritative_bounds" is the NEW,
+            # additive key carrying whichever bounds actually drove the
+            # window/clipping math above (== highlight_bounds when this
+            # highlight was never critiqued/corrected).
+            "highlight_bounds": [highlight["start_s"], highlight["end_s"]],
+            "authoritative_bounds": [authoritative_start, authoritative_end],
+        }
+
+        # Belt-and-suspenders (live-bug fix, 2026-07-18): highlight_scan.py's
+        # scope-clamp (repair_highlight_bounds) is the real fix for a PASS-1
+        # highlight landing outside the requested scope, but this check
+        # guards here too — NEVER send Gemini an inverted or zero-length
+        # native-video offset (observed real repro: scope 40-85s, an
+        # out-of-scope highlight produced window_start=106 > window_end=85,
+        # a genuine Gemini 500 INTERNAL). Skip this highlight entirely
+        # (zero Gemini calls spent on it) rather than sending a malformed
+        # request.
+        if window_start >= window_end:
+            yield {
+                "type": "error", "stage_id": "highlight_analyze",
+                "message": (
+                    f"highlight {highlight['index']}: computed window "
+                    f"[{window_start:.2f}, {window_end:.2f}] is invalid (start >= end) — "
+                    "skipping, never sending an inverted/zero-length offset to Gemini. "
+                    "This highlight's bounds are likely outside the requested scope."
+                ),
+                "highlight_index": highlight["index"],
+            }
+            continue
+
+        status = "analyzed"
+        ditch_reason: Optional[str] = None
+        final_position: Optional[str] = None
+        final_action_class: Optional[str] = None
+        final_outcome: Optional[str] = None
+        last_verdict: Optional[str] = None
+        model_ms_total = 0.0
+        validator_rounds = 0
+        description = highlight.get("description")
+
+        # Position + technique are each called EXACTLY ONCE per highlight
+        # (build plan's own cost model, LeCun: "1 + N(3+L)" — position and
+        # technique contribute a FLAT +2, only the validator (L) loops).
+        # This is deliberately OUTSIDE the validator's bounded `for` below —
+        # only the validator call itself repeats on disagreement, never a
+        # re-ask of position/technique (no feedback-refinement is wired yet
+        # for v2's argue-to-agreement loop; v1 never exercises a second
+        # round at all, since max_validator_iterations defaults to 1).
+        t0 = time.perf_counter()
+        pos_data, pos_err = await _call_axis_json(
+            position_analyzer, ctx.youtube_url, window_start, window_end,
+            response_schema=position_schema, prompt_text=highlight_axes.build_position_prompt(description),
+            fps=cfg.fps, media_resolution=cfg.position.media_resolution,
+        )
+        model_ms_total += (time.perf_counter() - t0) * 1000
+        if pos_err is not None:
+            yield {
+                "type": "error", "stage_id": "highlight_analyze",
+                "message": f"highlight {highlight['index']}: position call: {pos_err}",
+                "highlight_index": highlight["index"],
+            }
+            continue
+
+        t0 = time.perf_counter()
+        tech_data, tech_err = await _call_axis_json(
+            technique_analyzer, ctx.youtube_url, window_start, window_end,
+            response_schema=technique_schema, prompt_text=highlight_axes.build_technique_prompt(description),
+            fps=cfg.fps, media_resolution=cfg.technique.media_resolution,
+        )
+        model_ms_total += (time.perf_counter() - t0) * 1000
+        if tech_err is not None:
+            yield {
+                "type": "error", "stage_id": "highlight_analyze",
+                "message": f"highlight {highlight['index']}: technique call: {tech_err}",
+                "highlight_index": highlight["index"],
+            }
+            continue
+
+        # ONE flat verdict per axis (see docstring) — never a list to merge.
+        position_label = pos_data.get("position") if isinstance(pos_data, dict) else None
+        position_justification = pos_data.get("justification") if isinstance(pos_data, dict) else None
+        technique_label = tech_data.get("action_class") if isinstance(tech_data, dict) else None
+        outcome_label = tech_data.get("outcome") if isinstance(tech_data, dict) else None
+        technique_justification = tech_data.get("justification") if isinstance(tech_data, dict) else None
+
+        validator_transport_error: Optional[str] = None
+        for iteration in range(1, cfg.max_validator_iterations + 1):
+            validator_rounds = iteration
+
+            t0 = time.perf_counter()
+            val_data, val_err = await _call_axis_json(
+                validator_analyzer, ctx.youtube_url, window_start, window_end,
+                response_schema=validator_schema,
+                prompt_text=highlight_axes.build_validator_prompt(
+                    description=description,
+                    position_label=position_label, position_justification=position_justification,
+                    technique_label=technique_label, outcome_label=outcome_label,
+                    technique_justification=technique_justification,
+                ),
+                fps=cfg.fps, media_resolution=cfg.validator.media_resolution,
+            )
+            model_ms_total += (time.perf_counter() - t0) * 1000
+            if val_err is not None:
+                validator_transport_error = val_err
+                break
+
+            verdict = val_data.get("verdict") if isinstance(val_data, dict) else None
+            last_verdict = verdict
+            if verdict == "ditch":
+                status = "ditched"
+                ditch_reason = (
+                    (val_data.get("reason") if isinstance(val_data, dict) else None)
+                    or "validator invoked the strict ditch criterion"
+                )
+                break
+            if verdict == "agree":
+                status = "analyzed"
+                # Both labels survive the adversarial case unchanged —
+                # ORIGINAL analyzer labels ship, never whatever (possibly
+                # null, possibly stray) values the validator put in
+                # final_*. There is nothing to trust from the validator's
+                # echo here; the source of truth is the analyzer's own call.
+                final_position = position_label
+                final_action_class = technique_label
+                final_outcome = outcome_label
+                break
+            if verdict == "disagree":
+                status = "analyzed"
+                # CONTRACT ENFORCEMENT (evaluator MEDIUM, 2026-07-18):
+                # Gracie's prompt names EXACTLY ONE wrong_label — "disagree —
+                # one specific label is wrong; say which one". Trusting all
+                # three final_* fields (as an earlier version of this code
+                # did) let a validator whose adversarial case only doubted
+                # ONE axis silently overwrite the OTHER two too — a live-
+                # demonstrated risk (validator doubts position, sets
+                # wrong_label="action_class", but also returns a changed
+                # final_position). Enforce the single-field-correction
+                # property structurally: change ONLY the field
+                # `wrong_label` names, force the other two back to the
+                # ORIGINAL analyzer labels regardless of what the validator
+                # put in their final_* slots.
+                wrong_label = val_data.get("wrong_label") if isinstance(val_data, dict) else None
+                if wrong_label == "position":
+                    final_position = val_data.get("final_position") or position_label
+                    final_action_class = technique_label
+                    final_outcome = outcome_label
+                elif wrong_label == "action_class":
+                    final_position = position_label
+                    final_action_class = val_data.get("final_action_class") or technique_label
+                    final_outcome = outcome_label
+                elif wrong_label == "outcome":
+                    final_position = position_label
+                    final_action_class = technique_label
+                    final_outcome = val_data.get("final_outcome") or outcome_label
+                else:
+                    # wrong_label null/absent/unrecognized on a "disagree" —
+                    # the validator didn't name which axis it disagrees
+                    # with, so there is nothing safe to correct. Treat as
+                    # NO CHANGE (keep every original label) rather than
+                    # guessing which field to trust; note it for telemetry
+                    # rather than silently corrupting a label.
+                    final_position = position_label
+                    final_action_class = technique_label
+                    final_outcome = outcome_label
+                    logger.warning(
+                        "highlight_analyze: highlight %s validator returned verdict='disagree' "
+                        "with no recognized wrong_label (%r) — keeping original labels unchanged.",
+                        highlight["index"], wrong_label,
+                    )
+                break
+            # verdict missing/unrecognized (schema enum should prevent this
+            # in production — Gemini structured output enforces
+            # agree/disagree/ditch — this branch exists for a malformed/mock
+            # response): unresolved this round. v1
+            # (max_validator_iterations=1) falls through to the for-loop's
+            # own `else` below immediately; v2 (>1) would re-invoke JUST the
+            # validator again here — no feedback-refinement is wired yet
+            # (deferred to v2, per build plan).
+        else:
+            # Bounded-loop exhaustion (NEVER a `while True` — this `for...else`
+            # only fires when every iteration ran to completion without a
+            # `break`, i.e. the validator never reached an agree/disagree/
+            # ditch verdict within `cfg.max_validator_iterations` rounds).
+            # Structurally guaranteed to terminate: a permanently-
+            # unresolved validator ditches here after exactly
+            # `max_validator_iterations` rounds, never hangs.
+            status = "ditched"
+            ditch_reason = f"validator disagreement unresolved after {cfg.max_validator_iterations} iteration(s)"
+
+        if validator_transport_error is not None:
+            yield {
+                "type": "error", "stage_id": "highlight_analyze",
+                "message": f"highlight {highlight['index']}: validator call: {validator_transport_error}",
+                "highlight_index": highlight["index"],
+            }
+            continue
+
+        if status == "ditched":
+            clips: list[dict] = []  # contract: a ditched highlight has zero clips by design
+        else:
+            # ONE synthesized clip spanning the highlight's own AUTHORITATIVE
+            # bounds — neither axis call reports its own timestamps (Gracie's
+            # real prompts: "you do not need to report timestamps"), so there
+            # is nothing to clip/convert here; the window IS the event.
+            clips = [{
+                "start_s": authoritative_start, "end_s": authoritative_end,
+                "position": final_position, "action_class": final_action_class, "outcome": final_outcome,
+            }]
+
+        ctx.raw_results.append({"window": highlight["index"], "frames": [], "analysis": {"clips": clips}})
+        yield {
+            "type": "highlight_result", "highlight_index": highlight["index"], "format": "simplified-tags-time-v1",
+            "clips": clips,
+            # "Ditched" contract (build plan item 6): sibling to "clips" on
+            # THIS event, never nested inside the simplified-tags-time-v1
+            # clip schema itself.
+            "status": status, "ditch_reason": ditch_reason,
+            "validator_rounds": validator_rounds, "verdict": last_verdict,
+            "timing": {"model_ms": round(model_ms_total, 1)},
+            # Per-axis telemetry (additive) — three independent calls replace
+            # the single pre-v2 call, so there is no longer one
+            # prompt_text/raw_response_text/usage_metadata triple; each
+            # axis's own analyzer instance carries its OWN last-call
+            # instrumentation (simplified_tags.SimplifiedTagsTimeAnalyzer),
+            # surfaced here per-axis for debugging/playground display.
+            "axis_calls": {
+                "position": {
+                    "prompt_text": getattr(position_analyzer, "last_prompt_text", None),
+                    "raw_response_text": getattr(position_analyzer, "last_raw_response_text", None),
+                    "usage_metadata": getattr(position_analyzer, "last_usage_metadata", None),
+                },
+                "technique": {
+                    "prompt_text": getattr(technique_analyzer, "last_prompt_text", None),
+                    "raw_response_text": getattr(technique_analyzer, "last_raw_response_text", None),
+                    "usage_metadata": getattr(technique_analyzer, "last_usage_metadata", None),
+                },
+                "validator": {
+                    "prompt_text": getattr(validator_analyzer, "last_prompt_text", None),
+                    "raw_response_text": getattr(validator_analyzer, "last_raw_response_text", None),
+                    "usage_metadata": getattr(validator_analyzer, "last_usage_metadata", None),
+                },
+            },
+        }
+
+    ctx.final_format = "simplified-tags-time-v1"
+    ctx.final_clips = [c for r in ctx.raw_results for c in r["analysis"]["clips"]]
 
 
 # --------------------------------------------------------------------------- #
@@ -748,7 +1583,33 @@ NODE_EXECUTORS = {
     "dedup": dedup_node,
     "chunk_segment": chunk_segment_node,
     "chunk_analyze": chunk_analyze_node,
+    "highlight_scan": highlight_scan_node,
+    "highlight_analyze": highlight_analyze_node,
+    "highlight_critique": highlight_critique_node,
 }
+
+
+def _highlight_per_highlight_call_factor(stage_by_type: dict) -> int:
+    """Real Gemini-call factor per highlight for a ``highlight_scan``-based
+    pipeline's PASS 2+ (build plan v2 item 8 — "budget gate"). The shared
+    ``HighlightAnalyzeConfig`` evolution means every highlight now costs
+    ``2 (position + technique) + max_validator_iterations (validator)``
+    calls, not one; an optional ``highlight_critique`` stage
+    (``highlight-scan-critique-analyze`` only) adds ONE more call per
+    highlight on top of that. Single source of truth for BOTH
+    ``estimate_run_plan``'s pre-flight upper bound AND ``run_pipeline``'s
+    real two-phase post-scan gate — never duplicated (INS-107 discipline).
+    Floors at 1 (never 0) so a pipeline shape this function doesn't
+    recognize can never silently disable the gate (build plan: "do NOT
+    under-count").
+    """
+    factor = 0
+    if "highlight_critique" in stage_by_type:
+        factor += 1
+    if "highlight_analyze" in stage_by_type:
+        ha_cfg = HighlightAnalyzeConfig.model_validate(stage_by_type["highlight_analyze"].config)
+        factor += 2 + ha_cfg.max_validator_iterations
+    return max(1, factor)
 
 
 # --------------------------------------------------------------------------- #
@@ -779,6 +1640,29 @@ def estimate_run_plan(pipeline: PipelineDef, duration_sec: float) -> dict:
             "planned_gemini_calls": 1 + max_chunks,
         }
 
+    if "highlight_scan" in stage_by_type:
+        # Same real-upper-bound discipline as the chunk_segment branch above
+        # (1 rough-scan call + at most one highlight-branch call PER
+        # theoretically-smallest-possible highlight) — highlight_scan has no
+        # worth_analysis prefilter, but PASS 1's own judgment (build plan:
+        # "not a full scene segmentation") means the REAL highlight count is
+        # typically far below this worst case in practice.
+        #
+        # v2 (build plan item 8): the per-highlight factor is no longer a
+        # flat "1" — the shared HighlightAnalyzeConfig evolution (position +
+        # technique + validator-iterations calls) and the optional
+        # highlight_critique stage both add real per-highlight Gemini spend.
+        # See _highlight_per_highlight_call_factor (single source of truth,
+        # shared with run_pipeline's real two-phase gate below).
+        hs_cfg = HighlightScanConfig.model_validate(stage_by_type["highlight_scan"].config)
+        max_highlights = max(1, math.ceil(duration_sec / hs_cfg.min_highlight_s))
+        per_highlight_factor = _highlight_per_highlight_call_factor(stage_by_type)
+        return {
+            "planned_frames": 0,
+            "planned_windows": max_highlights,
+            "planned_gemini_calls": 1 + max_highlights * per_highlight_factor,
+        }
+
     analyze_cfg = AnalyzeConfig.model_validate(stage_by_type["analyze"].config)
     multiplier = 4 if analyze_cfg.agent_mode == "multi" else 1
 
@@ -807,24 +1691,29 @@ async def run_pipeline(
     """``budget_cap`` (optional): the EFFECTIVE cap (``body.budget_cap`` or
     ``DEFAULT_BUDGET_CAP``) computed by the caller (``qa_pipeline.pipeline_run``).
 
-    Only consulted by the ``chunk-segment-tags`` two-phase gate below (Task 1,
-    "durable budget fix"): the pre-stream guard in ``qa_pipeline.py``
-    deliberately does NOT hard-block this pipeline on its pathological
-    worst-case estimate (``1 + ceil(duration/min_chunk_s)`` — e.g. a real
-    ~10min match plans 128 worst-case but spends ~15-25 calls in practice, once
-    the PASS-1 ``worth_analysis`` prefilter runs). Instead, the run is allowed
-    to START and stream the ``chunk_map`` (PASS 1's real output), and THIS loop
-    gates the REAL worthy-chunk count (== the actual planned PASS-2 deep-call
-    count) against ``budget_cap`` immediately after the ``chunk_segment``
-    stage completes — aborting with an ``error`` event BEFORE the sequential
-    ``chunk_analyze`` deep loop spends a single Gemini call if the real number
-    is over cap. Every other pipeline is untouched: they have no
-    ``chunk_segment`` stage, so this branch never fires for them, and their
+    Consulted by TWO two-phase gates below — ``chunk-segment-tags`` (Task 1,
+    "durable budget fix") and ``highlight-scan-analyze`` (same pattern,
+    reapplied verbatim: evaluator CHANGES-REQUIRED item 1, 2026-07-18). Both
+    pipelines' pre-stream guard in ``qa_pipeline.py`` deliberately does NOT
+    hard-block on their pathological worst-case pre-flight estimate
+    (``1 + ceil(duration/min_chunk_s)`` / ``1 + ceil(duration/min_highlight_s)``
+    — e.g. a real ~5min match already worst-cases to 101 planned highlight
+    calls at the default ``min_highlight_s=3.0``, over ``DEFAULT_BUDGET_CAP``
+    of 60, despite spending far fewer calls in practice). Instead, the run is
+    allowed to START and stream PASS 1's real output (``chunk_map`` /
+    ``highlight_map``), and THIS loop gates the REAL PASS-2 call count
+    (worthy-chunk count / highlight count) against ``budget_cap`` immediately
+    after PASS 1 completes — aborting with an ``error`` event BEFORE the
+    sequential PASS-2 deep loop (``chunk_analyze`` / ``highlight_analyze``)
+    spends a single Gemini call if the real number is over cap. Every other
+    pipeline is untouched: they have neither a ``chunk_segment`` nor a
+    ``highlight_scan`` stage, so neither branch ever fires for them, and their
     pre-flight guard in ``qa_pipeline.py`` is unchanged (still hard-blocks
     before streaming starts on the worst-case estimate).
     """
     total_t0 = time.perf_counter()
     ctx.stage_enabled = {s.type: s.enabled for s in pipeline.stages}
+    stage_by_type = {s.type: s for s in pipeline.stages}
 
     yield {
         "type": "run_start", "pipeline_id": pipeline.id,
@@ -868,6 +1757,42 @@ async def run_pipeline(
                 logger.warning(
                     "run_pipeline: chunk-segment-tags aborting before deep loop — "
                     "worthy_count=%d > budget_cap=%d", worthy_count, budget_cap,
+                )
+                return
+
+        if stage.type == "highlight_scan" and budget_cap is not None:
+            # Same two-phase gate as chunk_segment above, reapplied verbatim
+            # for highlight-scan-analyze (evaluator CHANGES-REQUIRED item 1).
+            #
+            # v2 (build plan item 8): highlight_scan has no worth_analysis
+            # prefilter at all — EVERY highlight PASS 1 returns is planned
+            # PASS-2+ spend — but the REAL per-highlight Gemini-call count is
+            # no longer 1 (the shared HighlightAnalyzeConfig evolution +
+            # optional highlight_critique stage — see
+            # _highlight_per_highlight_call_factor, the SAME single source of
+            # truth estimate_run_plan's pre-flight estimate uses). Gating raw
+            # highlight_count against budget_cap (as before) would UNDER-
+            # COUNT the real spend now that each highlight costs `factor`
+            # calls, not 1 — the plan explicitly forbids that.
+            highlight_count = len(ctx.highlights)
+            per_highlight_factor = _highlight_per_highlight_call_factor(stage_by_type)
+            real_call_count = highlight_count * per_highlight_factor
+            if real_call_count > budget_cap:
+                yield {
+                    "type": "error", "stage_id": "highlight_analyze",
+                    "message": (
+                        f"Actual highlight count ({highlight_count}) x per-highlight call factor "
+                        f"({per_highlight_factor}) = {real_call_count} exceeds the budget cap "
+                        f"({budget_cap}) — aborting BEFORE the deep per-highlight analysis loop "
+                        "(zero Gemini calls spent on highlight_critique/highlight_analyze). Raise "
+                        "min_highlight_s (fewer, larger highlights), lower max_validator_iterations, "
+                        "narrow the run scope, or pass a higher Budget cap."
+                    ),
+                }
+                logger.warning(
+                    "run_pipeline: highlight-scan-analyze/highlight-scan-critique-analyze aborting "
+                    "before deep loop — highlight_count=%d x factor=%d = %d > budget_cap=%d",
+                    highlight_count, per_highlight_factor, real_call_count, budget_cap,
                 )
                 return
 

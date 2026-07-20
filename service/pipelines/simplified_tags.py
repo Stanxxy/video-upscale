@@ -85,6 +85,23 @@ def load_default_taxonomy_text() -> str:
 DEFAULT_TAXONOMY_TEXT: str = load_default_taxonomy_text()
 
 
+def extract_usage_metadata(response) -> Optional[dict]:
+    """Plain-dict token accounting from a ``genai`` response's
+    ``usage_metadata`` (ADCC eval dashboard, Task 1 — LeCun's real-cost
+    preference over placeholder rates). Returns ``None`` if the response
+    carries no ``usage_metadata`` at all (e.g. a bare ``SimpleNamespace(text=...)``
+    test double); individual fields are ``None`` if the SDK object itself
+    didn't populate them. Never fabricates a token count."""
+    usage = getattr(response, "usage_metadata", None)
+    if usage is None:
+        return None
+    return {
+        "prompt_token_count": getattr(usage, "prompt_token_count", None),
+        "candidates_token_count": getattr(usage, "candidates_token_count", None),
+        "total_token_count": getattr(usage, "total_token_count", None),
+    }
+
+
 def _strip_markdown_fences(text: str) -> str:
     """Strip ```json ... ``` / ``` ... ``` fences from a Gemini response
     (shared by both ``SimplifiedTagsAnalyzer`` and ``SimplifiedTagsTimeAnalyzer``
@@ -94,6 +111,80 @@ def _strip_markdown_fences(text: str) -> str:
     elif "```" in text:
         text = text.split("```")[1].split("```")[0]
     return text.strip()
+
+
+def _format_offset_seconds(seconds: float) -> str:
+    """Format a seconds value as a protobuf-``Duration``-safe
+    ``video_metadata`` offset string (``start_offset``/``end_offset``).
+
+    **Live-bug fix (2026-07-18):** ``Duration`` accepts AT MOST 9 fractional
+    digits (nanoseconds). ``highlight_analyze_node``/``chunk_analyze_node``
+    compute these offsets via float subtraction/addition (e.g. pre-roll:
+    ``33.3 - 5.0 == 28.299999999999997``, 15 fractional digits;
+    ``2/3 == 0.6666666666666666``, 16 digits) — a raw ``f"{seconds}s"`` on
+    either overflows the 9-digit limit and Gemini rejects the whole request
+    with ``400 INVALID_ARGUMENT ... Field 'start_offset' ... failed to parse
+    nano seconds``. Quantizing to millisecond precision (3 fractional digits)
+    is far finer than a single video frame (~66ms at 15fps, the fastest fps
+    this pipeline uses) — zero analysis-accuracy cost — and guarantees the
+    emitted string is always a valid Duration regardless of upstream float
+    imprecision. This is the ONE place both ``analyze_chunk`` callers
+    (``chunk_analyze_node`` and ``highlight_analyze_node``) route their
+    ``start_offset``/``end_offset`` through, so fixing it here fixes both.
+    """
+    quantized = round(float(seconds), 3)
+    if quantized == 0:
+        quantized = 0.0  # normalize -0.0 -> 0.0, never emit "-0.000s"
+    return f"{quantized:.3f}s"
+
+
+# --------------------------------------------------------------------------- #
+# media_resolution mapping (v2 build plan,
+# 2026-07-18-highlight-scan-critique-analyze-v2-plan.md) — the ONE place a
+# ``ThinkingQualityMixin.media_resolution`` UI value is mapped to a Gemini
+# ``types.MediaResolution`` enum, reused (not duplicated) by every call site
+# that needs it: ``SimplifiedTagsTimeAnalyzer._build_generate_config`` (the
+# shared native-video PASS-2 call — ``chunk_analyze_node``,
+# ``highlight_analyze_node``'s position/technique/validator calls, and
+# ``highlight_critique_node``) AND ``executors.highlight_scan_node``'s own
+# inline rough-scan call, which carries the same ``None`` -> LOW default.
+# --------------------------------------------------------------------------- #
+_MEDIA_RESOLUTION_ENUM: dict[str, "types.MediaResolution"] = {
+    "low": types.MediaResolution.MEDIA_RESOLUTION_LOW,
+    "medium": types.MediaResolution.MEDIA_RESOLUTION_MEDIUM,
+    "high": types.MediaResolution.MEDIA_RESOLUTION_HIGH,
+}
+
+
+def media_resolution_enum(level: Optional[str]) -> "types.MediaResolution":
+    """Map a ``ThinkingQualityMixin.media_resolution`` value (``"low"``/
+    ``"medium"``/``"high"``/``None``) to a Gemini ``types.MediaResolution``.
+
+    ``None`` -> ``MEDIA_RESOLUTION_LOW`` — the existing codebase default for
+    cheap/rough Gemini calls (``chunk_segment_node``/``highlight_scan_node``
+    already hardcode this tier for their own PASS-1 rough scans; this
+    function extends the SAME default to the PASS-2 ``analyze_chunk`` call,
+    which previously set no ``media_resolution`` at all — build plan v2 §2:
+    "map None -> existing default (LOW)... this touches the shared PASS-2
+    call, not each site").
+
+    **Measured cost/behavior-neutral for the accepted ``chunk-segment-tags``
+    pipeline (INS-089 addendum, 2026-07-18):** this function's ``None`` ->
+    LOW default also changes ``chunk_analyze_node``'s PASS-2 call from
+    setting NO ``media_resolution`` at all to explicit LOW. This is a
+    DELIBERATE, measured-neutral change, not an unmeasured side effect on
+    already-accepted/committed code: LOW vs. unset were directly re-measured
+    against the real Gemini API (fixed fps=1 window) and came back
+    IDENTICAL — 4808 tokens both (INS-089's addendum documents this: "LOW/
+    MEDIUM/UNSPECIFIED share the 70-tok/frame tier; only HIGH differs").
+    ``chunk-segment-tags``' existing tests (``tests/test_pipelines_executors.py``
+    /``tests/test_qa_pipeline_routes.py``) all stay green under this change —
+    see ``working_log/knowledge-base/insights/
+    INS-089-gemini-native-video-cost-model-and-25-dollar-anchor-reconciliation.md``.
+    """
+    if level is None:
+        return types.MediaResolution.MEDIA_RESOLUTION_LOW
+    return _MEDIA_RESOLUTION_ENUM[level]
 
 
 def resolve_system_instruction(override: Optional[str]) -> str:
@@ -458,6 +549,18 @@ class SimplifiedTagsTimeAnalyzer:
     still un-converted) — the caller (``executors.chunk_analyze_node``) is
     responsible for adding the real sent ``start_offset`` to produce absolute
     match seconds. This class never sees or fabricates that offset.
+
+    **Additive instrumentation (ADCC eval dashboard, Task 1):** after every
+    ``analyze_chunk`` call (success OR failure), ``self.last_prompt_text`` /
+    ``self.last_raw_response_text`` / ``self.last_usage_metadata`` are set to
+    the exact prompt sent, the raw (pre-fence-strip) response text, and a
+    plain ``{"prompt_token_count","candidates_token_count","total_token_count"}``
+    dict from ``response.usage_metadata`` (``None`` for any field/whole dict
+    the SDK response didn't populate — never fabricated). This is a PURE
+    ADDITION: the method's return value/signature is unchanged, so every
+    existing caller/test that only reads the return string is byte-identical.
+    Callers that don't care about instrumentation never read these attributes
+    and see no behavior change at all.
     """
 
     def __init__(
@@ -476,13 +579,20 @@ class SimplifiedTagsTimeAnalyzer:
         self.thinking_config = thinking_config
         self.system_instruction = resolve_system_instruction(system_instruction)
         self.retry_config = retry_config or gemini_retry.GeminiRetryConfig()
+        # Additive instrumentation slots (Task 1) — see class docstring.
+        self.last_prompt_text: Optional[str] = None
+        self.last_raw_response_text: Optional[str] = None
+        self.last_usage_metadata: Optional[dict] = None
 
-    def _build_generate_config(self, response_schema: types.Schema) -> types.GenerateContentConfig:
+    def _build_generate_config(
+        self, response_schema: types.Schema, media_resolution: Optional[str] = None,
+    ) -> types.GenerateContentConfig:
         kwargs = dict(
             system_instruction=self.system_instruction,
             temperature=self.temperature,
             response_mime_type="application/json",
             response_schema=response_schema,
+            media_resolution=media_resolution_enum(media_resolution),
         )
         if self.thinking_config is not None:
             kwargs["thinking_config"] = self.thinking_config
@@ -490,21 +600,56 @@ class SimplifiedTagsTimeAnalyzer:
 
     async def analyze_chunk(
         self, youtube_url: str, start_sec: float, end_sec: float, previous_context: Optional[str] = None,
-        *, response_schema=None,
+        *, response_schema=None, fps: int = 1, media_resolution: Optional[str] = None,
+        prompt_text: Optional[str] = None,
     ) -> str:
         """Analyze ONE native-video chunk ``[start_sec, end_sec)``.
 
         ``start_sec``/``end_sec`` are the ACTUAL offsets sent to Gemini's
-        ``video_metadata`` (i.e. already include PASS 2's back-overlap) — the
-        response's ``start_s``/``end_s`` are relative to THIS ``start_sec``,
-        which the caller adds back to get absolute match seconds.
+        ``video_metadata`` (i.e. already include PASS 2's back-overlap for
+        ``chunk_analyze_node``, or the pre/post-roll expansion for
+        ``highlight_analyze_node``) — the response's ``start_s``/``end_s``
+        are relative to THIS ``start_sec``, which the caller adds back to get
+        absolute match seconds.
+
+        ``fps`` (additive, ``highlight-scan-analyze`` PASS 2 —
+        ``HighlightAnalyzeConfig.fps``, real Gemini experiment finding: only
+        1 or 10 are supported by that config's allowlist) defaults to 1,
+        preserving ``chunk_analyze_node``'s prior hardcoded behavior
+        byte-for-byte for every existing caller that doesn't pass it.
+
+        ``media_resolution`` (additive, v2 build plan §2 — mirrors exactly
+        how ``fps`` was added above): ``None`` -> ``media_resolution_enum``'s
+        own default (``MEDIA_RESOLUTION_LOW``) for every caller that doesn't
+        pass it.
+
+        ``prompt_text`` (additive, v2 — the ONE shared native-video call this
+        function wraps is reused by ``highlight_critique_node`` and the
+        position/technique/validator calls in ``highlight_analyze_node``,
+        none of which want ``simplified-tags-time-v1``'s own
+        ``build_video_prompt``): ``None`` -> ``build_video_prompt(previous_context)``,
+        preserving every existing caller's prior behavior byte-for-byte; a
+        non-``None`` value is sent VERBATIM (the caller has already built its
+        own final prompt text — this function never re-substitutes or
+        re-wraps it).
         """
         effective_schema = response_schema if response_schema is not None else build_video_response_schema()
-        prompt = build_video_prompt(previous_context)
+        prompt = prompt_text if prompt_text is not None else build_video_prompt(previous_context)
         video_part = types.Part(
             file_data=types.FileData(file_uri=youtube_url),
-            video_metadata=types.VideoMetadata(start_offset=f"{start_sec}s", end_offset=f"{end_sec}s", fps=1),
+            video_metadata=types.VideoMetadata(
+                start_offset=_format_offset_seconds(start_sec),
+                end_offset=_format_offset_seconds(end_sec),
+                fps=fps,
+            ),
         )
+
+        # Additive instrumentation (Task 1) — recorded regardless of outcome;
+        # reset at the top of every call so a prior call's data never leaks
+        # into this one's event.
+        self.last_prompt_text = prompt
+        self.last_raw_response_text = None
+        self.last_usage_metadata = None
 
         try:
             logger.info(
@@ -515,12 +660,14 @@ class SimplifiedTagsTimeAnalyzer:
                 lambda: self.client.aio.models.generate_content(
                     model=self.model_id,
                     contents=[types.Content(role="user", parts=[types.Part(text=prompt), video_part])],
-                    config=self._build_generate_config(effective_schema),
+                    config=self._build_generate_config(effective_schema, media_resolution),
                 ),
                 op_name="simplified-tags-time-v1",
                 retry_config=self.retry_config,
             )
             text = response.text
+            self.last_raw_response_text = text
+            self.last_usage_metadata = extract_usage_metadata(response)
             logger.info(
                 "Gemini simplified-tags-time-v1: received response (%d chars)",
                 len(text) if text else 0,
