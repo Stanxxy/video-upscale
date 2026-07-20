@@ -1904,7 +1904,7 @@ async def test_highlight_scan_node_emits_prompt_and_usage_metadata(monkeypatch):
     )
     events = [e async for e in executors.highlight_scan_node(ctx, HighlightScanConfig().model_dump())]
     highlight_map_event = next(e for e in events if e["type"] == "highlight_map")
-    assert highlight_map_event["prompt_text"].strip().startswith("Scan this BJJ video")
+    assert highlight_map_event["prompt_text"].strip().startswith("Now watch this match from")
     assert "0" in highlight_map_event["prompt_text"] and "10" in highlight_map_event["prompt_text"]
     assert highlight_map_event["usage_metadata"] == {
         "prompt_token_count": 500, "candidates_token_count": 20, "total_token_count": 520,
