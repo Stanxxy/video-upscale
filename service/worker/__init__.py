@@ -10,6 +10,7 @@ from service.worker.callbacks.analysis_checkpoint import _flush_analysis_checkpo
 from service.worker.callbacks.detection import _make_detection_cb
 from service.worker.gpu import _ensure_models_released, _load_partial_tracking_dict
 from service.worker.helpers import _is_cancelled, _make_s3
+from service.worker.highlight_orchestrator import run_highlight_job
 from service.worker.orchestrator import run_job
 from service.worker.progress import (
     LIFECYCLE_HEARTBEAT_INTERVAL,
@@ -35,6 +36,7 @@ from service.worker.stages.upscale import _parse_time_range, _run_upscale_analys
 __all__ = [
     "SNSPublisher",
     "run_job",
+    "run_highlight_job",
     "PARTIAL_UPLOAD_INTERVAL",
     "LIFECYCLE_HEARTBEAT_INTERVAL",
     "_make_s3",
