@@ -56,6 +56,47 @@ async def test_create_lifecycle_propagates_recovery_index_failure():
     assert ok is False
 
 
+# ---------------------------------------------------------------------------
+# S12 Phase 1b — pipeline_kind additive column (item 10). Existing rows
+# (SimpleNamespace fixtures with no pipeline_kind attribute at all) must
+# read back as "tracking" — a job created before this column existed is,
+# definitionally, a tracking job.
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_get_lifecycle_defaults_absent_pipeline_kind_to_tracking():
+    store = JobsStore(FakeKeyspacesClient([], [_lifecycle_row()]))
+
+    lifecycle = await store.get_lifecycle("job-id")
+
+    assert lifecycle["pipeline_kind"] == "tracking"
+
+
+@pytest.mark.asyncio
+async def test_get_lifecycle_preserves_explicit_highlight_v2_pipeline_kind():
+    row = _lifecycle_row()
+    row.pipeline_kind = "highlight_v2"
+    store = JobsStore(FakeKeyspacesClient([], [row]))
+
+    lifecycle = await store.get_lifecycle("job-id")
+
+    assert lifecycle["pipeline_kind"] == "highlight_v2"
+
+
+@pytest.mark.asyncio
+async def test_create_lifecycle_accepts_pipeline_kind_kwarg():
+    """Callers (create_track_job) can pass pipeline_kind="highlight_v2" — the
+    method must accept it without raising (real DDL/param-count coverage is
+    a live-Keyspaces concern; this test only guards the Python call
+    signature against accidental removal)."""
+    store = JobsStore(FakeKeyspacesClient([True, True]))
+
+    ok = await store.create_lifecycle(
+        "job-id", "video-id", "user-id", pipeline_kind="highlight_v2",
+    )
+
+    assert ok is True
+
+
 @pytest.mark.asyncio
 async def test_heartbeat_propagates_recovery_index_failure():
     store = JobsStore(FakeKeyspacesClient([True, False], [_lifecycle_row()]))

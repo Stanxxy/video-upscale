@@ -40,7 +40,14 @@ class LifecycleMixin:
         progress_percent: float = 0.0,
         current_frame: int = 0,
         total_frames: int = 0,
+        pipeline_kind: str | None = None,
     ) -> bool:
+        """``pipeline_kind`` (S12 Phase 1b production wiring, design §6.2):
+        ``"tracking"`` or ``"highlight_v2"``, additive Cassandra column.
+        ``None`` writes an absent/NULL value — ``get_lifecycle`` below
+        treats absent as ``"tracking"`` for back-compat with rows created
+        before this column existed (a job created before this change is,
+        definitionally, a tracking job)."""
         video_id = "" if video_id is None else str(video_id)
         now = datetime.now(timezone.utc)
         q = (
@@ -48,15 +55,15 @@ class LifecycleMixin:
             f"(job_id, video_id, user_id, origin_job_id, parent_job_id, "
             f"replacement_job_id, job_state, stage, "
             f"progress_percent, current_frame, total_frames, stage_message, "
-            f"error_message, owner_instance_id, last_heartbeat_at, started_at, "
+            f"error_message, owner_instance_id, pipeline_kind, last_heartbeat_at, started_at, "
             f"updated_at, completed_at) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         )
         ok = await self._client.execute_write(q, [
             job_id, video_id, user_id, origin_job_id, parent_job_id,
             replacement_job_id, JobState.PENDING.value, "",
             progress_percent, current_frame, total_frames, "",
-            "", owner_instance_id, now, now, now, None,
+            "", owner_instance_id, pipeline_kind, now, now, now, None,
         ])
         if ok:
             return await self.upsert_recovery_index({
@@ -86,6 +93,9 @@ class LifecycleMixin:
             "replacement_job_id": getattr(r, "replacement_job_id", None),
             "job_state": st.value,
             "stage": stg.value if stg else "",
+            # Absent/NULL (rows created before this column existed) ->
+            # "tracking" back-compat default (design §6.2).
+            "pipeline_kind": getattr(r, "pipeline_kind", None) or "tracking",
             "progress_percent": r.progress_percent or 0.0,
             "current_frame": r.current_frame or 0,
             "total_frames": r.total_frames or 0,

@@ -43,6 +43,9 @@ def _ddl_statements(keyspace: str) -> list[str]:
     return [
         f"ALTER TABLE {ks}.job_lifecycle ADD parent_job_id text",
         f"ALTER TABLE {ks}.job_lifecycle ADD replacement_job_id text",
+        # S12 Phase 1b (design §6.2, migrations/003_pipeline_kind.cql):
+        # distinguishes dormant "tracking" jobs from "highlight_v2".
+        f"ALTER TABLE {ks}.job_lifecycle ADD pipeline_kind text",
         (
             f"CREATE TABLE IF NOT EXISTS {ks}.job_recovery_index ("
             "recovery_state text,"

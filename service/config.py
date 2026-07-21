@@ -189,6 +189,36 @@ class ServiceConfig(BaseSettings):
         description="Max NEW analyses admitted per UTC day. In-memory counter; resumes do not count.",
     )
 
+    # S12 Phase 1b production wiring (design §3.1/§8's engine config knobs)
+    # — the v2 highlight-scan-critique-analyze production orchestrator.
+    outer_chunk_scope_sec: int = Field(
+        default=720,
+        gt=0,
+        description=(
+            "Outer-chunk window size (seconds) for run_highlight_job's match-duration loop. "
+            "Independent of chunk_segment.MAX_SCOPE_SEC (a QA-playground sibling-pipeline "
+            "constant) — a first-class production knob, not a borrowed one."
+        ),
+    )
+    highlight_pipeline_budget_cap: int = Field(
+        default=60,
+        gt=0,
+        description=(
+            "Per-chunk Gemini call budget cap passed to executors.run_pipeline's real "
+            "two-phase gate — same DEFAULT_BUDGET_CAP semantics as the QA playground."
+        ),
+    )
+    gemini_upload_poll_interval_sec: float = Field(
+        default=5.0,
+        gt=0,
+        description="Poll interval (seconds) while waiting for a Gemini Files API upload to reach ACTIVE.",
+    )
+    gemini_upload_poll_timeout_sec: float = Field(
+        default=600.0,
+        gt=0,
+        description="Hard timeout (seconds) for the Gemini Files API upload PROCESSING->ACTIVE wait.",
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
