@@ -33,6 +33,13 @@ from google.genai import types
 
 from service.pipelines.simplified_tags import ACTION_CLASS_VALUES, OUTCOME_VALUES, POSITION_VALUES
 
+# Leaf-module import (never `from shared_lib.models import ...`), per the
+# shared_lib import-boundary convention — same discipline as
+# service/taxonomy_mapper.py. AXIS2_ACTOR_SENTINELS is the "no hand-copied
+# vocabulary" source of truth for the neutral/indeterminate actor values
+# (S12 Phase 1b production wiring design §4.3).
+from shared_lib.models.simplified_taxonomy import AXIS2_ACTOR_SENTINELS
+
 # --------------------------------------------------------------------------- #
 # Position axis — independent call #1: WHAT POSITION, and ONLY position.
 # --------------------------------------------------------------------------- #
@@ -176,6 +183,107 @@ def build_technique_prompt(description: Optional[str]) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# Actor axis — independent call #3 (S12 Phase 1b production wiring design
+# §4.1/§4.3): WHICH named athlete (or a contested/unclear sentinel) is the
+# primary actor in this clip. A FOURTH, independent axis call — flat +1 per
+# highlight, never re-invoked by the validator loop (same call-count
+# treatment as position/technique). Reference images are supplied as
+# inline ``Part``s by the caller (``executors.highlight_analyze_node``, via
+# ``SimplifiedTagsTimeAnalyzer.analyze_chunk``'s ``extra_parts`` kwarg) —
+# this module only builds the schema/prompt TEXT, never touches image bytes.
+# --------------------------------------------------------------------------- #
+ACTOR_SYSTEM_PROMPT: str = """
+You are judging ONE axis only: WHO is the primary actor (the athlete initiating or dominating the exchange) in this BJJ clip. Do not think about position, technique, or outcome at all right now — those are separate, independent judgments made by someone else.
+
+You have been given one or more REFERENCE IMAGES, each labeled with an athlete's name and id. Use ONLY visual comparison against those reference images (gi/rashguard color, build, visible features) to decide which labeled athlete is the primary actor in the clip. If reference images are not decisive — occlusion, both athletes visually similar, a genuinely contested/neutral moment, or no reference images were provided at all — use the honest "contested" or "unclear" sentinel rather than guessing. NEVER invent an athlete identity that was not given to you in a reference image; NEVER output a bare positional description (e.g. "top player") as if it were an identity — that is a different, already-separate judgment.
+
+You MUST also report whether you are confident in this identity call (``identity_uncertain``) — this is independent of which value you chose for ``actor``: a model can name a specific athlete AND still flag low confidence (e.g. a good-but-not-certain visual match), or resolve to a sentinel with high confidence (e.g. a clearly contested scramble where neither athlete is dominant).
+
+You MUST justify your call in one sentence citing the SPECIFIC visual cue you used (e.g. "blue gi matches reference image 2's athlete" or "both athletes tangled, neither reference image clearly matches the dominant position").
+""".strip()
+
+_ACTOR_INITIAL_TEMPLATE = Template("""
+Here is the native video clip for this highlight (its own corrected time window — you do not need to report timestamps, only actor identity).
+
+$reference_preamble
+
+Context from the earlier body-movement scan (for orientation only — do not let it bias your identity call): "$description"
+
+Decide the ONE actor value for the primary actor in this clip, per the system instructions.
+
+Return ONLY valid JSON matching this shape — no prose:
+{
+    "actor": "<a labeled player_id, or a contested/unclear sentinel value>",
+    "identity_uncertain": true | false,
+    "justification": "string — one sentence citing the specific visual cue used"
+}
+""".strip())
+
+
+def build_actor_schema(player_choices: list[str]) -> types.Schema:
+    """ONE flat verdict: ``{actor, identity_uncertain, justification}`` — NOT
+    a list, NOT timestamped (see module docstring). The ``actor`` enum is
+    built PER JOB (not a static module constant, unlike ``POSITION_VALUES``/
+    ``ACTION_CLASS_VALUES``) — valid player-identity values are dynamic per
+    match: ``player_choices`` (the job's real ``player_id`` values) plus the
+    always-legal ``AXIS2_ACTOR_SENTINELS``. ``identity_uncertain`` is the
+    model's own honesty channel, independent of whether ``actor`` resolved
+    to a sentinel or a real ``player_id``."""
+    return types.Schema(
+        type=types.Type.OBJECT,
+        required=["actor", "identity_uncertain", "justification"],
+        properties={
+            "actor": types.Schema(
+                type=types.Type.STRING,
+                enum=[*player_choices, *AXIS2_ACTOR_SENTINELS],
+                description=(
+                    "The primary actor's player_id (from the labeled reference images), "
+                    "or a contested/unclear sentinel — exactly one enum value."
+                ),
+            ),
+            "identity_uncertain": types.Schema(
+                type=types.Type.BOOLEAN,
+                description="Honest confidence flag for this identity call, independent of the chosen actor value.",
+            ),
+            "justification": types.Schema(
+                type=types.Type.STRING,
+                description="One sentence citing the specific visual cue used to decide this label.",
+            ),
+        },
+    )
+
+
+def build_actor_prompt(description: Optional[str], player_references: list[dict]) -> str:
+    """``$description``/``$reference_preamble`` substituted
+    (``string.Template.safe_substitute``). ``player_references`` is the
+    job's ``RunContext.player_references`` list (``{"player_id",
+    "player_name", ...}`` dicts, per ``highlight_ingest.py``) — used ONLY to
+    build the labeling preamble text ("Reference image 1 = athlete ... (id
+    ...)"); the actual inline image ``Part``s are attached separately by the
+    caller. An empty list (e.g. the QA playground, which never populates
+    ``player_references``) produces an explicit "no reference images"
+    preamble rather than a silently empty one."""
+    if player_references:
+        lines = [
+            f"Reference image {i + 1} = athlete \"{ref.get('player_name') or ref.get('player_id')}\" "
+            f"(id \"{ref.get('player_id')}\")"
+            for i, ref in enumerate(player_references)
+        ]
+        preamble = (
+            "Reference images (attached below, in this order):\n" + "\n".join(lines)
+        )
+    else:
+        preamble = (
+            "No reference images are available for this job — you cannot resolve a named "
+            "identity; use the contested/unclear sentinel."
+        )
+    return _ACTOR_INITIAL_TEMPLATE.safe_substitute(
+        description=description or "unknown — no description was provided by the scan pass",
+        reference_preamble=preamble,
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Validator — adversarial reconciliation + strict ditch authority.
 # --------------------------------------------------------------------------- #
 _VALIDATOR_SYSTEM_BODY: str = """
@@ -305,12 +413,15 @@ def build_validator_prompt(
 __all__ = [
     "POSITION_SYSTEM_PROMPT",
     "TECHNIQUE_SYSTEM_PROMPT",
+    "ACTOR_SYSTEM_PROMPT",
     "VALIDATOR_SYSTEM_PROMPT",
     "IMPOSSIBLE_COMBOS_TEXT",
     "build_position_schema",
     "build_position_prompt",
     "build_technique_schema",
     "build_technique_prompt",
+    "build_actor_schema",
+    "build_actor_prompt",
     "build_validator_schema",
     "build_validator_prompt",
 ]

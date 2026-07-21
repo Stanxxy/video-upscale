@@ -601,7 +601,8 @@ class SimplifiedTagsTimeAnalyzer:
     async def analyze_chunk(
         self, youtube_url: str, start_sec: float, end_sec: float, previous_context: Optional[str] = None,
         *, response_schema=None, fps: int = 1, media_resolution: Optional[str] = None,
-        prompt_text: Optional[str] = None,
+        prompt_text: Optional[str] = None, mime_type: Optional[str] = None,
+        extra_parts: Optional[list] = None,
     ) -> str:
         """Analyze ONE native-video chunk ``[start_sec, end_sec)``.
 
@@ -632,17 +633,32 @@ class SimplifiedTagsTimeAnalyzer:
         non-``None`` value is sent VERBATIM (the caller has already built its
         own final prompt text — this function never re-substitutes or
         re-wraps it).
+
+        ``mime_type`` (additive, S12 Phase 1b production wiring design §2.1
+        — mirrors exactly how ``fps``/``media_resolution``/``prompt_text``
+        were added above, INS-107 single-formatter discipline): ``None`` ->
+        no ``mime_type`` set on ``FileData`` (byte-identical to every prior
+        caller, all of which pass a YouTube URL that needs none). Production
+        (Gemini Files API URIs) MUST pass a non-``None`` value — Files API
+        ``file_data.mime_type`` is documented "Required" for non-YouTube
+        sources.
+
+        ``extra_parts`` (additive, S12 Phase 1b — the actor axis's inline
+        reference-image ``Part``s): ``None``/empty -> the ``contents=[...]``
+        list is exactly ``[text, video]``, byte-identical to every prior
+        caller. A non-empty list is appended AFTER the video part.
         """
         effective_schema = response_schema if response_schema is not None else build_video_response_schema()
         prompt = prompt_text if prompt_text is not None else build_video_prompt(previous_context)
         video_part = types.Part(
-            file_data=types.FileData(file_uri=youtube_url),
+            file_data=types.FileData(file_uri=youtube_url, mime_type=mime_type),
             video_metadata=types.VideoMetadata(
                 start_offset=_format_offset_seconds(start_sec),
                 end_offset=_format_offset_seconds(end_sec),
                 fps=fps,
             ),
         )
+        parts = [types.Part(text=prompt), video_part, *(extra_parts or [])]
 
         # Additive instrumentation (Task 1) — recorded regardless of outcome;
         # reset at the top of every call so a prior call's data never leaks
@@ -659,7 +675,7 @@ class SimplifiedTagsTimeAnalyzer:
             response = await gemini_retry.call_with_retry(
                 lambda: self.client.aio.models.generate_content(
                     model=self.model_id,
-                    contents=[types.Content(role="user", parts=[types.Part(text=prompt), video_part])],
+                    contents=[types.Content(role="user", parts=parts)],
                     config=self._build_generate_config(effective_schema, media_resolution),
                 ),
                 op_name="simplified-tags-time-v1",
