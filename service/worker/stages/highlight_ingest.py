@@ -163,8 +163,13 @@ async def run_highlight_ingest_stage(
             job_id, gemini_file_name, gemini_file_uri,
         )
 
+    # References are stored in the SAME bucket as the source video — same
+    # established convention as upscale_setup.py:82 (`ref_bucket =
+    # request.bucket  # references stored in same bucket`), NOT
+    # output_bucket (a bucket-split deployment has output_bucket != bucket;
+    # reference crops were never written to output_bucket).
     player_references = await _fetch_player_references(
-        s3, request.output_bucket or request.bucket, request.athlete_bindings, loop,
+        s3, request.bucket, request.athlete_bindings, loop,
     )
 
     await jobs_store.write_checkpoint(

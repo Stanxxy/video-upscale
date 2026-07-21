@@ -29,10 +29,18 @@ class FakeJobsStore:
 
 
 class FakeS3:
-    def __init__(self, objects: dict[str, bytes]):
+    """Objects are keyed on (bucket, key) — NOT key alone — so a
+    bucket-mismatch bug (e.g. reading a reference image from the wrong
+    bucket) raises a KeyError instead of silently succeeding. This is a
+    deliberate hardening (evaluator HIGH finding, PR #13): a fake that
+    ignores its bucket argument is exactly what let the
+    output_bucket-vs-bucket reference-fetch bug through undetected."""
+
+    def __init__(self, objects: dict[tuple[str, str], bytes]):
         self._objects = objects
         self.ensure_bucket_calls: list[str] = []
         self.downloaded: list[tuple] = []
+        self.get_object_calls: list[tuple[str, str]] = []
 
     def ensure_bucket(self, bucket):
         self.ensure_bucket_calls.append(bucket)
@@ -42,7 +50,8 @@ class FakeS3:
         return local_path
 
     def get_object(self, bucket, key):
-        return self._objects[key]
+        self.get_object_calls.append((bucket, key))
+        return self._objects[(bucket, key)]
 
 
 @pytest.fixture(autouse=True)
@@ -167,7 +176,13 @@ async def test_resume_with_expired_checkpoint_reuploads(monkeypatch, tmp_path):
 
 @pytest.mark.asyncio
 async def test_player_references_fetched_from_athlete_bindings(monkeypatch, tmp_path):
-    fake_s3 = FakeS3({"player-references/vid/p1.jpg": b"fake-jpeg-bytes"})
+    """Regression guard (evaluator HIGH finding, PR #13): references are
+    stored in request.bucket ("src-bucket"), NOT request.output_bucket
+    ("out-bucket") — a bucket-split deployment (output_bucket != bucket, a
+    real shape this request constructs below) must read the reference
+    image from the SOURCE bucket, same convention as
+    upscale_setup.py:82 (`ref_bucket = request.bucket`)."""
+    fake_s3 = FakeS3({("src-bucket", "player-references/vid/p1.jpg"): b"fake-jpeg-bytes"})
     monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: fake_s3)
 
     uploaded = SimpleNamespace(name="files/abc")
@@ -199,6 +214,9 @@ async def test_player_references_fetched_from_athlete_bindings(monkeypatch, tmp_
     assert ref["player_name"] == "Alice"
     assert ref["image_bytes"] == b"fake-jpeg-bytes"
     assert ref["mime_type"] == "image/jpeg"
+    # Explicitly pins WHICH bucket was read — must be request.bucket
+    # ("src-bucket"), never request.output_bucket ("out-bucket").
+    assert fake_s3.get_object_calls == [("src-bucket", "player-references/vid/p1.jpg")]
 
 
 @pytest.mark.asyncio
