@@ -132,6 +132,24 @@ class TrackRequest(BaseModel):
     resume_existing_upload_annotated_key: Optional[str] = None
     resume_terminal_publish_done: bool = False
 
+    # S12 pre-analysis AI settings (2026-07-25 spec) — four additive OPTIONAL
+    # fields; absent means "current v2 engine defaults", byte-identical to
+    # today, at every hop (frontend -> annotation-service controller ->
+    # vision_engine_client -> here -> run_highlight_job's pipeline-config
+    # override, see service/pipelines/highlight_settings_override.py). Names
+    # deliberately avoid colliding with the legacy tracking pipeline's
+    # sam2_model/yolo_model above. Loosely typed here (not pydantic Literal)
+    # on purpose: value-set enforcement happens uniformly via
+    # registry.validate_pipeline_def (same allowlist/config-model machinery
+    # as the QA pipeline registry) so an off-allowlist model AND an invalid
+    # enum value both fail the SAME way — an HTTP 400 with a clear message —
+    # rather than splitting into a 422 (pydantic-layer)/400 (route-layer)
+    # hybrid. See service/routes/jobs.py::create_track_job.
+    analysis_model: Optional[str] = None  # e.g. "gemini-3.1-flash-lite" — engine EVENT_MODELS allowlist
+    analysis_media_resolution: Optional[str] = None  # "low" | "medium" | "high"
+    analysis_fps: Optional[int] = None  # 1 | 10 | 15
+    analysis_thinking: Optional[str] = None  # "off" | "low" | "medium" | "high"
+
 
 class ResumeRequest(BaseModel):
     """Request body for POST /jobs/{job_id}/resume — delivers corrected bounding boxes."""

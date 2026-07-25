@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from service.pipelines import simplified_tags
 from service.pipelines.models import (
+    ActorAxisConfig,
     AnalyzeConfig,
     ChunkAnalyzeConfig,
     ChunkSegmentConfig,
@@ -469,6 +470,21 @@ def test_position_technique_validator_axis_configs_default_model_and_mixin_field
     assert tech.thinking is None and tech.media_resolution is None
 
 
+def test_actor_axis_config_default_model_and_mixin_fields():
+    """S12 Phase 1b — the fourth, independent actor axis (design §4.3):
+    same defaults discipline as position/technique, NOT the validator's
+    "high" media_resolution default (identity attribution is not flagged
+    as needing HIGH res)."""
+    actor = ActorAxisConfig()
+    assert actor.model == "gemini-3.1-flash-lite"
+    assert actor.thinking is None and actor.media_resolution is None
+
+
+def test_actor_axis_config_rejects_unknown_key():
+    with pytest.raises(ValidationError):
+        ActorAxisConfig(bogus_field="x")
+
+
 def test_validator_axis_config_media_resolution_defaults_high_unlike_other_axes():
     """LeCun design-pass finding: HIGH media_resolution is the untried lever
     for occlusion-limited techniques — reserved for the validator only."""
@@ -490,6 +506,7 @@ def test_highlight_analyze_config_gains_position_technique_validator_sub_configs
     cfg = HighlightAnalyzeConfig()
     assert isinstance(cfg.position, PositionAxisConfig)
     assert isinstance(cfg.technique, TechniqueAxisConfig)
+    assert isinstance(cfg.actor, ActorAxisConfig)
     assert isinstance(cfg.validator, ValidatorAxisConfig)
     # Retained top-level fields (v2 docstring: deliberately unused by the
     # real per-axis calls now, kept for allowlist/back-compat — see models.py).
@@ -515,12 +532,15 @@ def test_highlight_analyze_config_sub_configs_independently_overridable():
     cfg = HighlightAnalyzeConfig(
         position={"model": "gemini-3.5-flash", "thinking": "high"},
         technique={"media_resolution": "medium"},
+        actor={"model": "gemini-3.5-flash", "media_resolution": "medium"},
         validator={"media_resolution": "low", "thinking": "high"},
         max_validator_iterations=3,
     )
     assert cfg.position.model == "gemini-3.5-flash"
     assert cfg.position.thinking == "high"
     assert cfg.technique.media_resolution == "medium"
+    assert cfg.actor.model == "gemini-3.5-flash"
+    assert cfg.actor.media_resolution == "medium"
     assert cfg.validator.media_resolution == "low"  # override away from the "high" default
     assert cfg.validator.thinking == "high"
     assert cfg.max_validator_iterations == 3
@@ -583,6 +603,19 @@ def test_highlight_analyze_validator_axis_off_allowlist_model_rejected():
     pdef = get_default("highlight-scan-critique-analyze")
     ha_stage = next(s for s in pdef.stages if s.type == "highlight_analyze")
     ha_stage.config["validator"]["model"] = "gemini-1.0-nano-experimental"
+    with pytest.raises(PipelineValidationError, match="Unsupported model"):
+        validate_pipeline_def(pdef)
+
+
+def test_highlight_analyze_actor_axis_off_allowlist_model_rejected():
+    """S12 pre-analysis AI settings — closes a pre-existing gap: the actor
+    axis (S12 Phase 1b design §4.3) is a ThinkingQualityMixin node exactly
+    like position/technique/validator, and now receives the SAME nested
+    model-allowlist check (registry.py's axis loop extended to include
+    'actor')."""
+    pdef = get_default("highlight-scan-critique-analyze")
+    ha_stage = next(s for s in pdef.stages if s.type == "highlight_analyze")
+    ha_stage.config["actor"]["model"] = "gemini-1.0-nano-experimental"
     with pytest.raises(PipelineValidationError, match="Unsupported model"):
         validate_pipeline_def(pdef)
 

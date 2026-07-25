@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from service.analysis_keyspaces_enums import JobState
 from service.checkpoints import build_resume_plan, select_correction_checkpoint
+from service.checkpoints.highlight_resume import build_highlight_resume_plan
 from service.models import TrackRequest
 from service.routes import state as route_state
 from service.routes.resume_job_factory import build_resume_params, create_replacement_job
@@ -162,7 +163,19 @@ async def bootstrap_recovery_on_startup(
 
 
 async def recover_interrupted_job(lifecycle: dict) -> None:
-    """Create and schedule a replacement job for an interrupted worker job."""
+    """Create and schedule a replacement job for an interrupted worker job.
+
+    S12 Phase 1b (design §6.3): branches on ``lifecycle["pipeline_kind"]``.
+    A ``highlight_v2`` job has NO replacement-job chain at all — its
+    checkpoints are chunk-granularity, not per-process-run-shaped (no SAM2
+    state, no active GPU tensors), so resume is simply
+    "re-invoke ``run_highlight_job`` for the SAME ``job_id``, skipping
+    completed chunks" (``build_highlight_resume_plan``). Everything below
+    the branch is the UNCHANGED tracking-pipeline replacement-job flow
+    (``create_replacement_job``, new ``job_id``, CAS ``claim_replacement``,
+    ``origin_job_id``/``parent_job_id`` lineage) — dormant back-compat
+    default for rows without ``pipeline_kind`` set (absent ->
+    ``"tracking"``, per ``jobs_store.get_lifecycle``)."""
     job_id = lifecycle.get("job_id", "")
     try:
         if lifecycle.get("replacement_job_id"):
@@ -173,6 +186,18 @@ async def recover_interrupted_job(lifecycle: dict) -> None:
             raise RuntimeError(
                 f"Original request not found for interrupted job {job_id}",
             )
+
+        if lifecycle.get("pipeline_kind") == "highlight_v2":
+            checkpoints = await route_state._jobs_store.get_all_checkpoints(job_id)
+            resume_plan = build_highlight_resume_plan(checkpoints)
+            request = TrackRequest(**json.loads(request_json))
+            logger.info(
+                "Recovery (highlight_v2): job %s resuming from chunk_index=%d "
+                "(no replacement job — same job_id)",
+                job_id, resume_plan["resume_from_chunk_index"],
+            )
+            routes_pkg._schedule_job(job_id, request)
+            return
 
         resume_params = json.loads(request_json)
         checkpoints = await route_state._jobs_store.get_all_checkpoints(job_id)

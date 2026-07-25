@@ -46,6 +46,15 @@ class PipelineStage(StrEnum):
     UPLOAD = "upload"
     PUBLISH = "publish"
 
+    # S12 Phase 1b production wiring (design §6.1) — the v2
+    # highlight-scan-critique-analyze job lifecycle's own, much shorter
+    # stage set. ADDITIVE ONLY: the seven members above stay meaningful for
+    # the dormant tracking pipeline and its own tests (decision 2,
+    # deprecate-in-place, never delete).
+    HIGHLIGHT_INGEST = "highlight_ingest"   # S3 download + Gemini Files API upload + reference images
+    HIGHLIGHT_CHUNK = "highlight_chunk"     # one checkpoint per completed outer chunk
+    HIGHLIGHT_PUBLISH = "highlight_publish"  # terminal: analysis_complete sent
+
 
 def parse_job_state(raw: str | None) -> JobState:
     if raw is None or raw == "":

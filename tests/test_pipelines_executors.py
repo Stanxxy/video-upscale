@@ -138,12 +138,13 @@ def test_estimate_run_plan_highlight_scan_analyze_is_real_upper_bound():
     pdef = registry.get_default("highlight-scan-analyze")
     planned = estimate_run_plan(pdef, duration_sec=97)
     expected_highlights = math.ceil(97 / 3.0)  # default min_highlight_s=3.0
-    # v2 (build plan item 8): highlight_analyze's shared evolution means each
-    # highlight now costs 2 (position+technique) + max_validator_iterations
-    # (default 1) = 3 calls, not 1 — this pipeline has no highlight_critique
-    # stage, so the factor is exactly 3 (see _highlight_per_highlight_call_factor).
+    # v2 (build plan item 8 + S12 Phase 1b actor axis): highlight_analyze's
+    # shared evolution means each highlight now costs 3
+    # (position+technique+actor) + max_validator_iterations (default 1) = 4
+    # calls, not 1 — this pipeline has no highlight_critique stage, so the
+    # factor is exactly 4 (see _highlight_per_highlight_call_factor).
     assert planned["planned_windows"] == expected_highlights
-    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 3
+    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 4
     assert planned["planned_frames"] == 0
 
 
@@ -152,7 +153,7 @@ def test_estimate_run_plan_highlight_scan_analyze_scales_with_min_highlight_s():
     next(s for s in pdef.stages if s.type == "highlight_scan").config["min_highlight_s"] = 10.0
     planned = estimate_run_plan(pdef, duration_sec=100)
     assert planned["planned_windows"] == 10
-    assert planned["planned_gemini_calls"] == 1 + 10 * 3  # factor=3, see test above
+    assert planned["planned_gemini_calls"] == 1 + 10 * 4  # factor=4, see test above
 
 
 def test_estimate_run_plan_highlight_scan_analyze_factor_scales_with_max_validator_iterations():
@@ -164,8 +165,8 @@ def test_estimate_run_plan_highlight_scan_analyze_factor_scales_with_max_validat
     next(s for s in pdef.stages if s.type == "highlight_analyze").config["max_validator_iterations"] = 3
     planned = estimate_run_plan(pdef, duration_sec=97)
     expected_highlights = math.ceil(97 / 3.0)
-    # factor = 2 (position+technique) + 3 (validator iterations) = 5
-    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 5
+    # factor = 3 (position+technique+actor) + 3 (validator iterations) = 6
+    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 6
 
 
 # --------------------------------------------------------------------------- #
@@ -173,16 +174,16 @@ def test_estimate_run_plan_highlight_scan_analyze_factor_scales_with_max_validat
 # discipline, PLUS the highlight_critique stage's +1 per-highlight factor
 # (build plan item 8).
 # --------------------------------------------------------------------------- #
-def test_estimate_run_plan_highlight_scan_critique_analyze_default_factor_is_four():
+def test_estimate_run_plan_highlight_scan_critique_analyze_default_factor_is_five():
     import math
 
     pdef = registry.get_default("highlight-scan-critique-analyze")
     planned = estimate_run_plan(pdef, duration_sec=97)
     expected_highlights = math.ceil(97 / 3.0)  # default min_highlight_s=3.0
-    # factor = 1 (critique) + 2 (position+technique) + 1 (default validator
-    # iterations) = 4.
+    # factor = 1 (critique) + 3 (position+technique+actor) + 1 (default
+    # validator iterations) = 5.
     assert planned["planned_windows"] == expected_highlights
-    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 4
+    assert planned["planned_gemini_calls"] == 1 + expected_highlights * 5
     assert planned["planned_frames"] == 0
 
 
@@ -2060,17 +2061,24 @@ async def test_highlight_analyze_node_sends_preroll_postroll_expanded_window(mon
     cfg = HighlightAnalyzeConfig(fps=10, preroll_s=5.0, postroll_s=4.0).model_dump()
     events = [e async for e in executors.highlight_analyze_node(ctx, cfg)]
 
-    # position call, technique call, validator call — all 3 with the SAME window/fps.
-    assert captured_windows == [(15.0, 39.0, 10), (15.0, 39.0, 10), (15.0, 39.0, 10)]
+    # position call, technique call, validator call, actor call (S12 Phase
+    # 1b — fires once the validator agrees) — all 4 with the SAME window/fps.
+    assert captured_windows == [(15.0, 39.0, 10)] * 4
     start_event = next(e for e in events if e["type"] == "highlight_start")
     assert start_event["scope"] == [15.0, 39.0]
     assert start_event["highlight_bounds"] == [20.0, 35.0]
     assert start_event["authoritative_bounds"] == [20.0, 35.0]  # no critique -> same as scan bounds
     result_event = next(e for e in events if e["type"] == "highlight_result")
     assert result_event["status"] == "analyzed"
+    # Actor call (call 4) falls through the fake's "else" branch too (same
+    # validator-shaped JSON, no "actor" key) — resolves permissively to
+    # None/None/None/None, same discipline as position/technique's own
+    # possibly-absent fields.
     assert result_event["clips"] == [{
         "start_s": 20.0, "end_s": 35.0,
         "position": "mount", "action_class": "submission_choke", "outcome": "successful",
+        "player_id": None, "player_name": None, "identity_uncertain": None, "actor_sentinel": None,
+        "notes": "j | j | e",
     }]
 
 
@@ -2253,8 +2261,8 @@ async def test_highlight_analyze_node_continues_past_one_highlight_error():
     """v2: highlight 1's FIRST call (position) raises -> the whole highlight
     is skipped with an error event WITHOUT ever attempting the technique
     call (never a wasted Gemini call past the first failure); the loop
-    continues to highlight 2, whose position+technique+validator calls (2,
-    3, 4) all succeed."""
+    continues to highlight 2, whose position+technique+validator+actor
+    calls (2, 3, 4, 5) all succeed."""
     call_count = {"n": 0}
 
     async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
@@ -2265,10 +2273,14 @@ async def test_highlight_analyze_node_continues_past_one_highlight_error():
             return json.dumps({"position": "mount", "justification": "j"})
         if call_count["n"] == 3:  # technique call for highlight 2
             return json.dumps({"action_class": "submission_choke", "outcome": "successful", "justification": "j"})
-        return json.dumps({  # validator call for highlight 2
-            "adversarial_case": "ac", "verdict": "agree",
-            "final_position": None, "final_action_class": None, "final_outcome": None,
-            "wrong_label": None, "reason": None, "evidence": "e",
+        if call_count["n"] == 4:  # validator call for highlight 2
+            return json.dumps({
+                "adversarial_case": "ac", "verdict": "agree",
+                "final_position": None, "final_action_class": None, "final_outcome": None,
+                "wrong_label": None, "reason": None, "evidence": "e",
+            })
+        return json.dumps({  # actor call for highlight 2
+            "actor": "unclear", "identity_uncertain": True, "justification": "j",
         })
 
     ctx = RunContext(
@@ -2285,7 +2297,7 @@ async def test_highlight_analyze_node_continues_past_one_highlight_error():
         mp.setattr(RunContext, "gemini_client", lambda self: MagicMock())
         events = [e async for e in executors.highlight_analyze_node(ctx, HighlightAnalyzeConfig().model_dump())]
 
-    assert call_count["n"] == 4  # highlight 1: 1 call (position, raised); highlight 2: 3 calls
+    assert call_count["n"] == 5  # highlight 1: 1 call (position, raised); highlight 2: 4 calls
     error_events = [e for e in events if e["type"] == "error"]
     assert len(error_events) == 1
     assert "highlight 1" in error_events[0]["message"]

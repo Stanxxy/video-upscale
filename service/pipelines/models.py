@@ -373,6 +373,23 @@ class TechniqueAxisConfig(ThinkingQualityMixin):
     model: str = "gemini-3.1-flash-lite"
 
 
+class ActorAxisConfig(ThinkingQualityMixin):
+    """``HighlightAnalyzeConfig.actor`` sub-config (S12 Phase 1b production
+    wiring design §4.3) — the actor/identity-attribution axis call. A
+    FOURTH, independent axis call alongside position/technique: fires
+    EXACTLY ONCE per highlight (flat, never re-invoked by the validator
+    loop — same call-count treatment as ``PositionAxisConfig``/
+    ``TechniqueAxisConfig``). Judges WHICH named athlete (or a
+    contested/unclear sentinel) is the primary actor, using reference
+    images (``RunContext.player_references``) threaded as inline ``Part``s
+    via ``SimplifiedTagsTimeAnalyzer.analyze_chunk``'s ``extra_parts``
+    kwarg — see ``highlight_axes.build_actor_schema``/``build_actor_prompt``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = "gemini-3.1-flash-lite"
+
+
 class ValidatorAxisConfig(ThinkingQualityMixin):
     """``HighlightAnalyzeConfig.validator`` sub-config — the adversarial
     reconciliation/ditch-authority call. ``media_resolution`` DEFAULTS TO
@@ -465,6 +482,13 @@ class HighlightAnalyzeConfig(BaseModel):
     postroll_s: float = Field(default=4.0, ge=0.0, le=10.0)
     position: PositionAxisConfig = Field(default_factory=PositionAxisConfig)
     technique: TechniqueAxisConfig = Field(default_factory=TechniqueAxisConfig)
+    # S12 Phase 1b: fourth, independent actor/identity-attribution axis —
+    # flat +1 per highlight (see ActorAxisConfig docstring). Only actually
+    # invoked by the production orchestrator (RunContext.player_references
+    # populated); the QA playground never sets player_references, so the
+    # call still fires (flat, unconditional) but resolves to a
+    # sentinel-only enum (no real player_id choices available).
+    actor: ActorAxisConfig = Field(default_factory=ActorAxisConfig)
     validator: ValidatorAxisConfig = Field(default_factory=ValidatorAxisConfig)
     max_validator_iterations: int = Field(default=1, ge=1, le=5)
 

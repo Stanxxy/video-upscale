@@ -7,15 +7,44 @@ from fastapi import HTTPException
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import WorkerStateSnapshot, build_cancellation_checkpoint
 from service.models import TrackRequest, TrackResponse, JobResponse
+from service.pipelines import registry
+from service.pipelines.highlight_settings_override import (
+    PIPELINE_ID as HIGHLIGHT_PIPELINE_ID,
+    apply_analysis_settings_override,
+    has_any_analysis_setting,
+)
 from service.routes import state as route_state
 import service.routes as routes_pkg
 
 logger = logging.getLogger("service.routes")
 
 
+def _validate_analysis_settings(request: TrackRequest) -> None:
+    """S12 pre-analysis AI settings spec §4/§5 AC3 — fail-closed, never a
+    silent default swap (INS-055). Reuses the SAME allowlist +
+    ``registry.validate_pipeline_def`` machinery the QA pipeline registry
+    already uses: build the overridden default pipeline def and run it
+    through the real validator. An off-allowlist ``analysis_model`` or an
+    invalid ``analysis_media_resolution``/``analysis_fps``/
+    ``analysis_thinking`` value both fail the same way — HTTP 400 with a
+    clear message (allowlist echoed for the model case) — no new,
+    parallel validation logic. No-op when all four settings are absent."""
+    if not has_any_analysis_setting(request):
+        return
+    overridden = apply_analysis_settings_override(registry.get_default(HIGHLIGHT_PIPELINE_ID), request)
+    try:
+        registry.validate_pipeline_def(overridden)
+    except registry.PipelineValidationError as e:
+        raise HTTPException(400, str(e)) from e
+
+
 async def create_track_job(request: TrackRequest):
     # G7 cost guardrails: kill switch then daily cap (NEW analyses only).
     route_state._check_kill_switch()
+    # Validate BEFORE consuming a daily-cap admission slot — a request that's
+    # going to 400 on an off-allowlist model/invalid setting shouldn't cost
+    # the caller (or the project) an admission they can't use.
+    _validate_analysis_settings(request)
     route_state._admit_daily()
 
     # Proactively clean up completed tasks before checking capacity
@@ -38,6 +67,11 @@ async def create_track_job(request: TrackRequest):
             request.user_id or "",
             "",
             owner_instance_id=route_state._instance_id,
+            # S12 Phase 1b (design §1.1/§6.2): v2 is THE production path —
+            # every job created via POST /track is a highlight_v2 job.
+            # Existing rows created before this column existed read back as
+            # "tracking" (see jobs_store/lifecycle.py::get_lifecycle).
+            pipeline_kind="highlight_v2",
         ),
         "job lifecycle",
     )

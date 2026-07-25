@@ -264,6 +264,88 @@ def build_verified_boxes_checkpoint(
     )
 
 
+def build_highlight_ingest_completed(
+    *,
+    gemini_file_uri: str,
+    gemini_file_name: str,
+    gemini_file_mime_type: str | None,
+    gemini_file_expiration: str | None,
+    player_references_ready: bool,
+    worker_state: WorkerStateSnapshot,
+) -> dict[str, Any]:
+    """S12 Phase 1b (design §6.1) — terminal checkpoint for the
+    ``HIGHLIGHT_INGEST`` stage: S3 download + Gemini Files API upload +
+    reference-image fetch. ``gemini_file_expiration`` is an ISO-8601 string
+    (never a raw ``datetime`` — ``write_checkpoint`` JSON-serializes
+    ``checkpoint_data`` and datetimes are not JSON-serializable)."""
+    return make_envelope(
+        worker_state=worker_state,
+        artifacts={
+            "gemini_file_uri": gemini_file_uri,
+            "gemini_file_name": gemini_file_name,
+            "gemini_file_mime_type": gemini_file_mime_type,
+            "gemini_file_expiration": gemini_file_expiration,
+        },
+        reason="highlight_ingest_completed",
+        player_references_ready=player_references_ready,
+    )
+
+
+def build_highlight_chunk_completed(
+    *,
+    chunk_index: int,
+    chunks_total: int,
+    highlights_scanned: int,
+    highlights_analyzed: int,
+    highlights_ditched: int,
+    highlights_published: int,
+    gemini_file_uri: str,
+    worker_state: WorkerStateSnapshot,
+) -> dict[str, Any]:
+    """S12 Phase 1b (design §3.4/§6.3) — written after ONE outer chunk's
+    full scan->critique->analyze->publish sequence completes. Chunk-
+    granularity resume identity (``build_highlight_resume_plan`` reads
+    ``chunk_index`` off this checkpoint's own top-level key, not nested
+    under ``artifacts`` — mirrors ``build_track_completed``'s
+    ``start_frame``/``frame_count`` top-level scalars)."""
+    return make_envelope(
+        worker_state=worker_state,
+        artifacts={"gemini_file_uri": gemini_file_uri},
+        reason="highlight_chunk_completed",
+        chunk_index=chunk_index,
+        chunks_total=chunks_total,
+        highlights_scanned=highlights_scanned,
+        highlights_analyzed=highlights_analyzed,
+        highlights_ditched=highlights_ditched,
+        highlights_published=highlights_published,
+    )
+
+
+def build_highlight_publish_completed(
+    *,
+    sns_topic_arn: str,
+    sns_event_count: int,
+    sns_completion_sent: bool,
+    result_s3_uri: str | None,
+    worker_state: WorkerStateSnapshot,
+) -> dict[str, Any]:
+    """S12 Phase 1b (design §5.4) — terminal checkpoint for the
+    ``HIGHLIGHT_PUBLISH`` stage: the final ``analysis_complete`` SNS event
+    has been sent. Mirrors ``build_publish_completed`` (the tracking
+    pipeline's own terminal-publish builder) but has no
+    ``tracking_s3_uri`` — v2 has no tracking artifact at all (decision 3)."""
+    return make_envelope(
+        worker_state=worker_state,
+        artifacts={
+            "sns_topic_arn": sns_topic_arn,
+            "sns_event_count": sns_event_count,
+            "sns_completion_sent": sns_completion_sent,
+            "result_s3_uri": result_s3_uri,
+        },
+        reason="highlight_publish_completed",
+    )
+
+
 def build_cancellation_checkpoint(
     *,
     reason: str,

@@ -685,11 +685,13 @@ async def test_highlight_analyze_node_position_and_technique_called_exactly_once
     position_calls = {"n": 0}
     technique_calls = {"n": 0}
     validator_calls = {"n": 0}
+    actor_calls = {"n": 0}
 
     async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
         # Deterministic call ORDER (position, then technique, then N
-        # validator rounds) — never sniffing prompt text content, which
-        # would make this test fragile against a future prompt wording edit.
+        # validator rounds, then ONE actor call once the validator
+        # resolves) — never sniffing prompt text content, which would make
+        # this test fragile against a future prompt wording edit.
         call_count["n"] += 1
         if call_count["n"] == 1:
             position_calls["n"] += 1
@@ -697,11 +699,14 @@ async def test_highlight_analyze_node_position_and_technique_called_exactly_once
         if call_count["n"] == 2:
             technique_calls["n"] += 1
             return _technique_response()
-        validator_calls["n"] += 1
-        return json.dumps({"adversarial_case": "ac", "verdict": "disagree",
-                            "final_position": "mount", "final_action_class": "submission_choke",
-                            "final_outcome": "successful", "wrong_label": "action_class",
-                            "reason": "r", "evidence": "e"})
+        if call_count["n"] == 3:
+            validator_calls["n"] += 1
+            return json.dumps({"adversarial_case": "ac", "verdict": "disagree",
+                                "final_position": "mount", "final_action_class": "submission_choke",
+                                "final_outcome": "successful", "wrong_label": "action_class",
+                                "reason": "r", "evidence": "e"})
+        actor_calls["n"] += 1
+        return json.dumps({"actor": "unclear", "identity_uncertain": True, "justification": "j"})
 
     ctx = RunContext(youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=100,
                       gemini_api_key="k", request_timeout_ms=1000)
@@ -716,6 +721,7 @@ async def test_highlight_analyze_node_position_and_technique_called_exactly_once
     assert position_calls["n"] == 1
     assert technique_calls["n"] == 1
     assert validator_calls["n"] == 1  # "disagree" resolves on the FIRST round — no need to loop further
+    assert actor_calls["n"] == 1  # flat, once — never re-invoked by the validator loop
     result_event = next(e for e in events if e["type"] == "highlight_result")
     assert result_event["status"] == "analyzed"
     assert result_event["verdict"] == "disagree"
@@ -909,12 +915,14 @@ async def test_highlight_analyze_node_validator_call_transport_error_skips_highl
 # =============================================================================== #
 # Budget-gate factor — the REAL two-phase gate inside run_pipeline (not just
 # estimate_run_plan's pre-flight upper bound — see test_pipelines_executors.py
-# for that half). Factor = 2 (position+technique, fixed) + max_validator_iterations.
+# for that half). Factor = 3 (position+technique+actor, fixed) +
+# max_validator_iterations (S12 Phase 1b: was 2 fixed, now 3 with the actor
+# axis — see _highlight_per_highlight_call_factor).
 # =============================================================================== #
 @pytest.mark.asyncio
 async def test_run_pipeline_real_two_phase_gate_uses_per_highlight_factor(monkeypatch):
-    """2 highlights x factor(2 fixed + 3 validator iterations = 5)
-    = 10 real calls > budget_cap=8 -> must abort BEFORE the deep loop, zero
+    """2 highlights x factor(3 fixed + 3 validator iterations = 6)
+    = 12 real calls > budget_cap=8 -> must abort BEFORE the deep loop, zero
     real Gemini calls spent (build plan item 8: never under-count)."""
     from service.pipelines import registry
 
@@ -946,17 +954,16 @@ async def test_run_pipeline_real_two_phase_gate_uses_per_highlight_factor(monkey
 
     assert analyze_calls["n"] == 0  # aborted before any real PASS-2+ call
     assert events[-1]["type"] == "error"
-    assert "2" in events[-1]["message"] and "5" in events[-1]["message"] and "10" in events[-1]["message"]
+    assert "2" in events[-1]["message"] and "6" in events[-1]["message"] and "12" in events[-1]["message"]
 
 
 @pytest.mark.asyncio
 async def test_run_pipeline_real_two_phase_gate_within_cap_runs_normally(monkeypatch):
-    """Same shape, but budget_cap large enough for the REAL count: 2
-    highlights x 3 calls each (position+technique fixed, validator resolves
-    on round 1 since the fake returns an unresolved verdict every time except
-    it's capped at max_validator_iterations=3 — here we give it an
-    IMMEDIATELY-agreeing validator so the real spend is only 2*3=6, well
-    under cap=10) — must run the deep loop normally through to run_complete."""
+    """Same shape, but budget_cap large enough for the PRE-FLIGHT gate's
+    pessimistic factor (2 highlights x 6 = 12) — the deep loop then runs
+    with an IMMEDIATELY-agreeing validator (round 1), so each highlight's
+    REAL spend is position+technique+validator+actor = 4 calls (actor fires
+    because the highlight is not ditched), 8 total — well under cap=12."""
     from service.pipelines import registry
 
     pdef = registry.get_default("highlight-scan-analyze")
@@ -977,21 +984,26 @@ async def test_run_pipeline_real_two_phase_gate_within_cap_runs_normally(monkeyp
     async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
         analyze_calls["n"] += 1
         n = analyze_calls["n"]
-        # Per highlight: call 1 = position, call 2 = technique, call 3 = validator (agrees immediately).
-        if n % 3 == 1:
+        # Per highlight: call 1 = position, call 2 = technique, call 3 =
+        # validator (agrees immediately), call 4 = actor (any valid JSON —
+        # the actor mapping is permissive about a missing "actor" key).
+        slot = n % 4
+        if slot == 1:
             return _position_response()
-        if n % 3 == 2:
+        if slot == 2:
             return _technique_response()
-        return _agree_response()
+        if slot == 3:
+            return _agree_response()
+        return json.dumps({"actor": "unclear", "identity_uncertain": True, "justification": "j"})
 
     monkeypatch.setattr(simplified_tags.SimplifiedTagsTimeAnalyzer, "analyze_chunk", _fake_analyze_chunk)
 
     ctx = RunContext(youtube_id="x", youtube_url="https://youtube.com/watch?v=x",
                       start_sec=0, end_sec=90, gemini_api_key="fake-key", request_timeout_ms=60_000)
     planned = estimate_run_plan(pdef, duration_sec=90)
-    events = [e async for e in run_pipeline(pdef, ctx, planned, budget_cap=10)]
+    events = [e async for e in run_pipeline(pdef, ctx, planned, budget_cap=12)]
 
     types_seen = [e["type"] for e in events]
     assert types_seen[-1] == "run_complete"
     assert "error" not in types_seen
-    assert analyze_calls["n"] == 6  # 2 highlights x 3 (position+technique+validator, resolved on round 1)
+    assert analyze_calls["n"] == 8  # 2 highlights x 4 (position+technique+validator+actor)

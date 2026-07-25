@@ -30,6 +30,12 @@ class FakeJobsStore:
         self.lifecycles = {candidate["job_id"]: dict(candidate) for candidate in candidates}
         self.claimed = []
         self.states = []
+        # S12 Phase 1b (item 17) — additive, only used by the
+        # recover_interrupted_job integration test below; every existing
+        # test in this file uses a plain `recover_job` callback stub and
+        # never touches these.
+        self.requests: dict[str, str] = {}
+        self.checkpoints_by_job: dict[str, list[dict]] = {}
 
     async def list_stale_recovery_candidates(self, heartbeat_buckets, stale_before):
         return [
@@ -63,6 +69,13 @@ class FakeJobsStore:
         self.states.append((job_id, state, error_message))
         self.lifecycles[job_id]["job_state"] = state.value
         return True
+
+    # --- additive, item 17's real recover_interrupted_job integration only ---
+    async def get_request(self, job_id):
+        return self.requests.get(job_id)
+
+    async def get_all_checkpoints(self, job_id):
+        return self.checkpoints_by_job.get(job_id, [])
 
 
 @pytest.mark.asyncio
@@ -166,6 +179,74 @@ async def test_reconcile_once_recovers_interrupted_job_without_replacement():
     )]
     assert store.states == []
     assert recovered == ["interrupted-job"]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_once_dispatches_real_recover_interrupted_job_highlight_v2_same_job_id(
+    monkeypatch,
+):
+    """S12 Phase 1b (design §6.3, item 17) — end-to-end through
+    RecoveryManager.reconcile_once(), using the REAL
+    service.routes.recovery.recover_interrupted_job (not a dummy callback)
+    as the recover_job dispatch target. A pipeline_kind="highlight_v2"
+    interrupted job must resume the SAME job_id (build_highlight_resume_plan
+    branch) — no create_replacement_job call, no new job_id, no
+    replacement_job_id written on the row.
+
+    Wired via routes.state._jobs_store / routes._schedule_job monkeypatches
+    since recover_interrupted_job reads module-level route_state, not the
+    jobs_store instance RecoveryManager itself was constructed with — the
+    SAME FakeJobsStore instance backs both."""
+    from service.routes import recover_interrupted_job
+    from service.routes import state as route_state
+    import service.routes as routes_pkg
+
+    now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
+    stale_heartbeat = now - timedelta(minutes=3)
+    store = FakeJobsStore([
+        {
+            "job_id": "v2-job",
+            "job_state": JobState.INTERRUPTED.value,
+            "owner_instance_id": "old-worker",
+            "replacement_job_id": "",
+            "last_heartbeat_at": stale_heartbeat,
+            "heartbeat_bucket": "2026042619",
+            "pipeline_kind": "highlight_v2",
+        }
+    ])
+    store.requests["v2-job"] = (
+        '{"bucket": "b", "key": "folder/v.mp4", "output_bucket": null}'
+    )
+    store.checkpoints_by_job["v2-job"] = [
+        {
+            "stage_name": "highlight_chunk",
+            "completed": True,
+            "checkpoint_data": {"chunk_index": 1, "chunks_total": 3},
+        },
+    ]
+
+    monkeypatch.setattr(route_state, "_jobs_store", store)
+    scheduled: list[str] = []
+    monkeypatch.setattr(routes_pkg, "_schedule_job", lambda job_id, request: scheduled.append(job_id))
+
+    manager = RecoveryManager(
+        store,
+        "new-worker",
+        recover_job=recover_interrupted_job,
+        stale_after=90.0,
+        now_fn=lambda: now,
+    )
+
+    await manager.reconcile_once()
+
+    assert store.claimed == [(
+        "v2-job", "new-worker", "old-worker", JobState.INTERRUPTED, stale_heartbeat,
+    )]
+    # SAME job_id rescheduled — no replacement-job chain.
+    assert scheduled == ["v2-job"]
+    assert not store.lifecycles["v2-job"].get("replacement_job_id")
+    # No new lifecycle row was created for a replacement job.
+    assert set(store.lifecycles) == {"v2-job"}
 
 
 @pytest.mark.asyncio

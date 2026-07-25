@@ -19,6 +19,18 @@ def frame_to_timestamp(frame_idx: int, fps: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
+def seconds_to_timestamp(seconds: float) -> str:
+    """Convert an ALREADY match-absolute seconds value to HH:MM:SS — the v2
+    (S12 Phase 1b) sibling of ``frame_to_timestamp`` above: v2 highlight
+    clips carry ``start_s``/``end_s`` directly (no frame index / fps to
+    divide), so this is a trivial format, never a frame-based conversion."""
+    total_seconds = max(0, int(seconds or 0))
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    secs = total_seconds % 60
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
 def _bindings_by_player_id(athlete_bindings) -> dict:
     """Index athlete_bindings by player_id for O(1) track_id/name resolution."""
     out = {}
@@ -116,6 +128,37 @@ def clip_to_event(
     )
 
 
+# --------------------------------------------------------------------------- #
+# S12 Phase 1b — axis-only path (item 12, design §5). NEW, parallel to
+# clip_to_event/publish_events above — NEVER calls dual_emit_legacy_fields.
+# BLOCKED on shared_lib's relaxed VideoEventCandidate (§5.1/§8.1): do not
+# merge/deploy this path to production until that ships — see
+# taxonomy_mapper.build_axis_only_candidate's own gating test.
+# --------------------------------------------------------------------------- #
+def clip_to_axis_only_event(clip: dict, video_id: UUID, *, candidate_cls=None) -> VideoEventWithCandidates:
+    """Transform ONE ``executors.highlight_analyze_node`` synthesized clip
+    dict into a ``schema_version=3`` ``VideoEventWithCandidates`` — the v2
+    terminal shape (design §5.2). ``start_time``/``end_time`` derive from
+    the clip's OWN ``start_s``/``end_s`` (already the highlight's
+    authoritative, match-absolute bounds — see ``highlight_analyze_node``'s
+    docstring), never re-derived here.
+
+    ``candidate_cls`` (testability seam, forwarded verbatim to
+    ``taxonomy_mapper.build_axis_only_candidate`` — see that function's own
+    docstring for why: shared_lib 1.2.0's ``VideoEventCandidate`` still
+    requires ``action``/``confidence``, so tests inject a duck-typed stand-in
+    to exercise this mapping without the pending shared_lib 1.3.0 relaxation)."""
+    candidate = taxonomy_mapper.build_axis_only_candidate(
+        clip, str(video_id), candidate_cls=candidate_cls,
+    )
+    return VideoEventWithCandidates(
+        video_id=video_id,
+        start_time=seconds_to_timestamp(clip.get("start_s", 0.0)),
+        end_time=seconds_to_timestamp(clip.get("end_s", 0.0)),
+        event_candidates=[candidate],
+    )
+
+
 class SNSPublisher:
     def __init__(
         self,
@@ -201,3 +244,57 @@ class SNSPublisher:
         )
 
         return count
+
+    # ----------------------------------------------------------------- #
+    # S12 Phase 1b — v2 per-highlight publish (design §5.3). Publishes
+    # INCREMENTALLY as each highlight is analyzed (one call per highlight),
+    # NOT batched at end-of-job like publish_events above — lower latency
+    # to the analyzer's first pending candidate, smaller blast radius on a
+    # mid-job crash. Reuses the SAME boto3 client/topic_arn this instance
+    # was constructed with.
+    # ----------------------------------------------------------------- #
+    def publish_axis_only_event(self, event: "VideoEventWithCandidates", *, event_index: int = 1) -> None:
+        message = event.model_dump(mode="json")
+        self.client.publish(
+            TopicArn=self.topic_arn,
+            Message=json.dumps(message, default=str),
+            MessageAttributes={
+                "event_type": {
+                    "DataType": "String",
+                    "StringValue": "bjj_event_detected",
+                },
+                "event_index": {
+                    "DataType": "Number",
+                    "StringValue": str(event_index),
+                },
+            },
+        )
+
+    def publish_analysis_complete(
+        self,
+        video_id: UUID,
+        job_id: str,
+        total_event_count: int,
+        result_s3_uri: str | None = None,
+    ) -> None:
+        """Terminal ``analysis_complete`` for a v2 job — ``result_s3_uri``
+        only (decision 3: v2 has no tracking artifact; ``tracking_s3_uri``
+        is never populated, unlike ``publish_events``'s own terminal
+        event above)."""
+        completion = AnalysisCompleteEvent(
+            video_id=video_id,
+            job_id=job_id,
+            total_event_count=total_event_count,
+            result_s3_uri=result_s3_uri or None,
+            tracking_s3_uri=None,
+        )
+        self.client.publish(
+            TopicArn=self.topic_arn,
+            Message=json.dumps(completion.model_dump(mode="json"), default=str),
+            MessageAttributes={
+                "event_type": {
+                    "DataType": "String",
+                    "StringValue": "analysis_complete",
+                },
+            },
+        )

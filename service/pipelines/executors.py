@@ -43,6 +43,7 @@ from google.genai import types
 from PIL import Image
 
 from analyzer import BJJMultiAgentAnalyzer, BJJTechniqueAnalyzer
+from shared_lib.models.simplified_taxonomy import AXIS2_ACTOR_SENTINELS
 from pipeline import deduplicate_clips
 from service.pipelines import (
     chunk_segment,
@@ -154,6 +155,22 @@ class RunContext:
     dedup_skip_reason: Optional[str] = None
 
     stage_enabled: dict = field(default_factory=dict)  # node type -> enabled
+
+    # S12 Phase 1b production wiring design §2.1: populated ONLY by the
+    # production orchestrator (service/worker/highlight_ingest.py) when
+    # ``youtube_url`` actually holds a Gemini Files API URI (``files/xxxx``)
+    # instead of a YouTube URL — Files API's ``file_data.mime_type`` is
+    # documented "Required" for non-YouTube sources. ``None`` for every
+    # QA-playground caller (byte-identical prior behavior — YouTube URLs
+    # need no mime_type).
+    video_mime_type: Optional[str] = None
+
+    # S12 Phase 1b production wiring design §4.2: populated ONCE during the
+    # HIGHLIGHT_INGEST stage from ``TrackRequest.athlete_bindings[].s3_key``
+    # — each entry ``{"player_id", "player_name", "image_bytes", "mime_type"}``.
+    # Empty list for every QA-playground caller (the actor axis then degrades
+    # to a sentinel-only enum — see highlight_axes.build_actor_schema).
+    player_references: list = field(default_factory=list)
 
     def gemini_client(self) -> genai.Client:
         return genai.Client(
@@ -724,7 +741,7 @@ async def highlight_scan_node(ctx: RunContext, config: dict) -> AsyncIterator[di
     thinking_cfg = thinking_config_for(cfg.model, cfg.thinking)
 
     video_part = types.Part(
-        file_data=types.FileData(file_uri=ctx.youtube_url),
+        file_data=types.FileData(file_uri=ctx.youtube_url, mime_type=ctx.video_mime_type),
         video_metadata=types.VideoMetadata(
             start_offset=f"{ctx.start_sec}s", end_offset=f"{ctx.end_sec}s", fps=cfg.rough_fps,
         ),
@@ -1030,18 +1047,23 @@ async def _call_axis_json(
     analyzer: "simplified_tags.SimplifiedTagsTimeAnalyzer", youtube_url: str,
     window_start: float, window_end: float, *,
     response_schema, prompt_text: str, fps: int, media_resolution: Optional[str],
+    extra_parts: Optional[list] = None,
 ) -> tuple[Optional[dict], Optional[str]]:
-    """Shared call+parse+error-check for the position/technique/validator
-    axis calls in ``highlight_analyze_node`` — DRYs up the exact
+    """Shared call+parse+error-check for the position/technique/actor/
+    validator axis calls in ``highlight_analyze_node`` — DRYs up the exact
     transport-exception / non-JSON / swallowed-``{"error": ...}`` pattern
     already used by every other Gemini-calling node in this module (never a
     fourth hand-copy of the same three checks). Returns ``(data, None)`` on
-    success or ``(None, error_message)`` — never raises."""
+    success or ``(None, error_message)`` — never raises.
+
+    ``extra_parts`` (additive, S12 Phase 1b — the actor axis's inline
+    reference-image ``Part``s): ``None`` for position/technique/validator
+    (byte-identical prior behavior)."""
     try:
         result_str = await analyzer.analyze_chunk(
             youtube_url, window_start, window_end, None,
             response_schema=response_schema, prompt_text=prompt_text,
-            fps=fps, media_resolution=media_resolution,
+            fps=fps, media_resolution=media_resolution, extra_parts=extra_parts,
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error, no fabrication
         return None, str(e)
@@ -1154,7 +1176,7 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
         ctx.final_clips = []
         return
 
-    # Three independent analyzers, one per axis — each with its OWN
+    # Four independent analyzers, one per axis — each with its OWN
     # thinking/media_resolution/model (mixin sub-configs). Built ONCE, reused
     # across every highlight/iteration (same discipline as the single
     # `analyzer` instance the pre-v2 version of this function built once).
@@ -1168,6 +1190,13 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
         thinking_config=thinking_config_for(cfg.technique.model, cfg.technique.thinking),
         system_instruction=highlight_axes.TECHNIQUE_SYSTEM_PROMPT, retry_config=ctx.retry_config,
     )
+    # S12 Phase 1b (design §4.1/§4.3): fourth, independent actor axis — a
+    # non-looped call, same construction pattern as position/technique.
+    actor_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+        ctx.gemini_client(), model_id=cfg.actor.model,
+        thinking_config=thinking_config_for(cfg.actor.model, cfg.actor.thinking),
+        system_instruction=highlight_axes.ACTOR_SYSTEM_PROMPT, retry_config=ctx.retry_config,
+    )
     validator_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
         ctx.gemini_client(), model_id=cfg.validator.model,
         thinking_config=thinking_config_for(cfg.validator.model, cfg.validator.thinking),
@@ -1175,6 +1204,23 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
     )
     position_schema = highlight_axes.build_position_schema()
     technique_schema = highlight_axes.build_technique_schema()
+    # Dynamic per-job enum (design §4.3) — built ONCE per node call from
+    # ctx.player_references, which is constant across the whole job (every
+    # chunk's highlight_analyze_node invocation shares the same job-level
+    # RunContext.player_references).
+    actor_player_choices = [
+        p.get("player_id") for p in ctx.player_references if p.get("player_id")
+    ]
+    actor_schema = highlight_axes.build_actor_schema(actor_player_choices)
+    actor_reference_parts = [
+        types.Part(
+            inline_data=types.Blob(
+                data=p["image_bytes"], mime_type=p.get("mime_type") or "image/jpeg",
+            ),
+        )
+        for p in ctx.player_references
+        if p.get("image_bytes")
+    ]
     validator_schema = highlight_axes.build_validator_schema()
 
     # No context_chain in this pipeline (build plan: "pre-roll video replaces
@@ -1438,6 +1484,78 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
         if status == "ditched":
             clips: list[dict] = []  # contract: a ditched highlight has zero clips by design
         else:
+            # S12 Phase 1b (design §4.1/§4.4): actor axis call — flat, once
+            # per highlight, ONLY spent for highlights the validator did not
+            # ditch (a ditched highlight emits zero clips, so attributing an
+            # actor to it would be a wasted Gemini call — see
+            # _highlight_per_highlight_call_factor's docstring for why the
+            # budget ESTIMATE still pessimistically assumes it always fires).
+            t0 = time.perf_counter()
+            actor_data, actor_err = await _call_axis_json(
+                actor_analyzer, ctx.youtube_url, window_start, window_end,
+                response_schema=actor_schema,
+                prompt_text=highlight_axes.build_actor_prompt(description, ctx.player_references),
+                fps=cfg.fps, media_resolution=cfg.actor.media_resolution,
+                extra_parts=actor_reference_parts,
+            )
+            model_ms_total += (time.perf_counter() - t0) * 1000
+            if actor_err is not None:
+                # No fallback identity — same treatment as a position/
+                # technique call failure: skip this highlight entirely, zero
+                # clip emitted (design §4.4).
+                yield {
+                    "type": "error", "stage_id": "highlight_analyze",
+                    "message": f"highlight {highlight['index']}: actor call: {actor_err}",
+                    "highlight_index": highlight["index"],
+                }
+                continue
+
+            actor_value = actor_data.get("actor") if isinstance(actor_data, dict) else None
+            identity_uncertain_raw = (
+                actor_data.get("identity_uncertain") if isinstance(actor_data, dict) else None
+            )
+            player_lookup = {
+                p.get("player_id"): p.get("player_name")
+                for p in ctx.player_references if p.get("player_id")
+            }
+
+            if actor_value in AXIS2_ACTOR_SENTINELS:
+                # A sentinel IS an uncertainty signal by definition (design
+                # §4.4) — forced True regardless of the model's own flag.
+                resolved_player_id = None
+                resolved_player_name = None
+                resolved_identity_uncertain = True
+                resolved_actor_sentinel = actor_value
+            elif actor_value in player_lookup:
+                resolved_player_id = actor_value
+                resolved_player_name = player_lookup[actor_value]
+                resolved_identity_uncertain = (
+                    bool(identity_uncertain_raw) if identity_uncertain_raw is not None else None
+                )
+                resolved_actor_sentinel = None
+            else:
+                # Missing/unrecognized actor value — the schema enum
+                # prevents this for a real Gemini structured-output call;
+                # this branch exists for a malformed/mock response. No
+                # fallback identity (never "assume top player" / "assume
+                # last-seen identity") — flows through as None, same
+                # permissive "unset stays unset" treatment already given to
+                # position/technique's own possibly-absent fields.
+                resolved_player_id = None
+                resolved_player_name = None
+                resolved_identity_uncertain = (
+                    bool(identity_uncertain_raw) if identity_uncertain_raw is not None else None
+                )
+                resolved_actor_sentinel = None
+
+            # Notes: validator's evidence/justification text, concatenated
+            # (S12 Phase 1b design §5.2) — free text, no schema risk.
+            validator_evidence = val_data.get("evidence") if isinstance(val_data, dict) else None
+            notes = " | ".join(
+                bit for bit in (position_justification, technique_justification, validator_evidence)
+                if bit
+            )
+
             # ONE synthesized clip spanning the highlight's own AUTHORITATIVE
             # bounds — neither axis call reports its own timestamps (Gracie's
             # real prompts: "you do not need to report timestamps"), so there
@@ -1445,6 +1563,9 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
             clips = [{
                 "start_s": authoritative_start, "end_s": authoritative_end,
                 "position": final_position, "action_class": final_action_class, "outcome": final_outcome,
+                "player_id": resolved_player_id, "player_name": resolved_player_name,
+                "identity_uncertain": resolved_identity_uncertain, "actor_sentinel": resolved_actor_sentinel,
+                "notes": notes,
             }]
 
         ctx.raw_results.append({"window": highlight["index"], "frames": [], "analysis": {"clips": clips}})
@@ -1473,6 +1594,11 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
                     "prompt_text": getattr(technique_analyzer, "last_prompt_text", None),
                     "raw_response_text": getattr(technique_analyzer, "last_raw_response_text", None),
                     "usage_metadata": getattr(technique_analyzer, "last_usage_metadata", None),
+                },
+                "actor": {
+                    "prompt_text": getattr(actor_analyzer, "last_prompt_text", None),
+                    "raw_response_text": getattr(actor_analyzer, "last_raw_response_text", None),
+                    "usage_metadata": getattr(actor_analyzer, "last_usage_metadata", None),
                 },
                 "validator": {
                     "prompt_text": getattr(validator_analyzer, "last_prompt_text", None),
@@ -1591,24 +1717,31 @@ NODE_EXECUTORS = {
 
 def _highlight_per_highlight_call_factor(stage_by_type: dict) -> int:
     """Real Gemini-call factor per highlight for a ``highlight_scan``-based
-    pipeline's PASS 2+ (build plan v2 item 8 — "budget gate"). The shared
-    ``HighlightAnalyzeConfig`` evolution means every highlight now costs
-    ``2 (position + technique) + max_validator_iterations (validator)``
-    calls, not one; an optional ``highlight_critique`` stage
+    pipeline's PASS 2+ (build plan v2 item 8 — "budget gate"; S12 Phase 1b
+    production wiring design §4.1 extends this for the actor axis). The
+    shared ``HighlightAnalyzeConfig`` evolution means every highlight now
+    costs ``3 (position + technique + actor) + max_validator_iterations
+    (validator)`` calls, not one; an optional ``highlight_critique`` stage
     (``highlight-scan-critique-analyze`` only) adds ONE more call per
     highlight on top of that. Single source of truth for BOTH
     ``estimate_run_plan``'s pre-flight upper bound AND ``run_pipeline``'s
     real two-phase post-scan gate — never duplicated (INS-107 discipline).
-    Floors at 1 (never 0) so a pipeline shape this function doesn't
-    recognize can never silently disable the gate (build plan: "do NOT
-    under-count").
+    This is a PESSIMISTIC upper bound: at runtime, the actor call is only
+    actually spent for highlights the validator does NOT ditch (see
+    ``highlight_analyze_node`` — a ditched highlight emits zero clips, so
+    attributing an actor to it would be a wasted call); the estimate here
+    intentionally does not model that reduction, same "estimate is an
+    upper bound, real spend can be lower" precedent already established by
+    ``chunk_segment``'s ``worth_analysis`` prefilter. Floors at 1 (never 0)
+    so a pipeline shape this function doesn't recognize can never silently
+    disable the gate (build plan: "do NOT under-count").
     """
     factor = 0
     if "highlight_critique" in stage_by_type:
         factor += 1
     if "highlight_analyze" in stage_by_type:
         ha_cfg = HighlightAnalyzeConfig.model_validate(stage_by_type["highlight_analyze"].config)
-        factor += 2 + ha_cfg.max_validator_iterations
+        factor += 3 + ha_cfg.max_validator_iterations
     return max(1, factor)
 
 

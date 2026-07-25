@@ -40,7 +40,14 @@ class LifecycleMixin:
         progress_percent: float = 0.0,
         current_frame: int = 0,
         total_frames: int = 0,
+        pipeline_kind: str | None = None,
     ) -> bool:
+        """``pipeline_kind`` (S12 Phase 1b production wiring, design §6.2):
+        ``"tracking"`` or ``"highlight_v2"``, additive Cassandra column.
+        ``None`` writes an absent/NULL value — ``get_lifecycle`` below
+        treats absent as ``"tracking"`` for back-compat with rows created
+        before this column existed (a job created before this change is,
+        definitionally, a tracking job)."""
         video_id = "" if video_id is None else str(video_id)
         now = datetime.now(timezone.utc)
         q = (
@@ -48,15 +55,15 @@ class LifecycleMixin:
             f"(job_id, video_id, user_id, origin_job_id, parent_job_id, "
             f"replacement_job_id, job_state, stage, "
             f"progress_percent, current_frame, total_frames, stage_message, "
-            f"error_message, owner_instance_id, last_heartbeat_at, started_at, "
+            f"error_message, owner_instance_id, pipeline_kind, last_heartbeat_at, started_at, "
             f"updated_at, completed_at) "
-            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
+            f"VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"
         )
         ok = await self._client.execute_write(q, [
             job_id, video_id, user_id, origin_job_id, parent_job_id,
             replacement_job_id, JobState.PENDING.value, "",
             progress_percent, current_frame, total_frames, "",
-            "", owner_instance_id, now, now, now, None,
+            "", owner_instance_id, pipeline_kind, now, now, now, None,
         ])
         if ok:
             return await self.upsert_recovery_index({
@@ -86,6 +93,17 @@ class LifecycleMixin:
             "replacement_job_id": getattr(r, "replacement_job_id", None),
             "job_state": st.value,
             "stage": stg.value if stg else "",
+            # Absent/NULL (rows created before this column existed) ->
+            # "tracking" back-compat default (design §6.2).
+            "pipeline_kind": getattr(r, "pipeline_kind", None) or "tracking",
+            # S12 Phase 1b (design §1.2/item 11.5) — additive, only ever
+            # populated by run_highlight_job; None for every tracking job
+            # (same "stays null for v2-only concepts" symmetry as
+            # current_frame/total_frames for a v2 job).
+            "chunk_index": getattr(r, "chunk_index", None),
+            "chunks_total": getattr(r, "chunks_total", None),
+            "highlights_found_so_far": getattr(r, "highlights_found_so_far", None),
+            "attribution_metrics_json": getattr(r, "attribution_metrics_json", None),
             "progress_percent": r.progress_percent or 0.0,
             "current_frame": r.current_frame or 0,
             "total_frames": r.total_frames or 0,
@@ -118,6 +136,40 @@ class LifecycleMixin:
         return await self._client.execute_write(q, [
             stage.value, progress_percent,
             current_frame, total_frames, stage_message,
+            now, now, job_id,
+        ])
+
+    async def update_highlight_chunk_progress(
+        self,
+        job_id: str,
+        stage: PipelineStage,
+        progress_percent: float,
+        *,
+        chunk_index: int | None = None,
+        chunks_total: int | None = None,
+        highlights_found_so_far: int | None = None,
+        attribution_metrics_json: str | None = None,
+        stage_message: str = "",
+    ) -> bool:
+        """S12 Phase 1b (design §1.2, item 11.5) — v2-only progress write.
+        A DEDICATED method (not an extension of ``update_progress`` above)
+        so the dormant tracking pipeline's own UPDATE statement/call sites
+        are byte-untouched. ``current_frame``/``total_frames`` are never
+        touched here — v2 has no frame-counting concept (they stay at
+        whatever ``create_lifecycle`` seeded, i.e. 0)."""
+        now = datetime.now(timezone.utc)
+        q = (
+            f"UPDATE {self._ks}.job_lifecycle SET "
+            f"stage = %s, progress_percent = %s, stage_message = %s, "
+            f"chunk_index = %s, chunks_total = %s, highlights_found_so_far = %s, "
+            f"attribution_metrics_json = %s, "
+            f"last_heartbeat_at = %s, updated_at = %s "
+            f"WHERE job_id = %s"
+        )
+        return await self._client.execute_write(q, [
+            stage.value, progress_percent, stage_message,
+            chunk_index, chunks_total, highlights_found_so_far,
+            attribution_metrics_json,
             now, now, job_id,
         ])
 
