@@ -35,6 +35,7 @@ from service.job_store import InMemoryJobStore
 from service.jobs_store import JobsStore
 from service.models import JobStatus, TrackRequest
 from service.pipelines import executors, gemini_retry, gemini_upload
+from service.pipelines.highlight_settings_override import apply_analysis_settings_override
 from service.pipelines.registry import get_default
 from service.sns import SNSPublisher, clip_to_axis_only_event
 from service.worker.helpers import _is_cancelled, _make_s3
@@ -120,7 +121,13 @@ async def run_highlight_job(
             )
 
         retry_config = gemini_retry.GeminiRetryConfig.from_service_config(config)
-        pipeline = get_default(PIPELINE_ID)
+        # S12 pre-analysis AI settings spec §4: GLOBAL model/quality/fps/
+        # thinking override, applied once for the whole job (locked in at
+        # submit time, per spec §6 non-goals — no per-chunk re-evaluation).
+        # No-op (returns get_default(PIPELINE_ID) untouched) when all four
+        # TrackRequest fields are absent — byte-identical to the pre-this-
+        # change unconditional get_default() call.
+        pipeline = apply_analysis_settings_override(get_default(PIPELINE_ID), request)
 
         topic_arn = request.sns_topic_arn or config.sns_topic_arn
         sns: Optional[SNSPublisher] = None

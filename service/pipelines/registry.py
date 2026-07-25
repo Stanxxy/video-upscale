@@ -466,13 +466,16 @@ def validate_pipeline_def(pipeline: PipelineDef) -> PipelineDef:
                 f"(type={stage.type!r}); must be one of {allowlist}."
             )
 
-        # v2: highlight_analyze's position/technique/validator sub-configs
-        # each carry their OWN `model` field (ThinkingQualityMixin subclasses)
-        # — same no-silent-swap discipline as every top-level `model` field
-        # above, extended here since these are nested, not reachable by the
-        # generic top-level check.
+        # v2: highlight_analyze's position/technique/actor/validator
+        # sub-configs each carry their OWN `model` field (ThinkingQualityMixin
+        # subclasses) — same no-silent-swap discipline as every top-level
+        # `model` field above, extended here since these are nested, not
+        # reachable by the generic top-level check. `actor` (S12 Phase 1b
+        # design §4.3, the fourth independent identity-attribution axis)
+        # added alongside position/technique/validator — same allowlist
+        # treatment, no exception for the newest axis.
         if stage.type == "highlight_analyze":
-            for axis_name in ("position", "technique", "validator"):
+            for axis_name in ("position", "technique", "actor", "validator"):
                 axis_cfg = getattr(validated_config, axis_name)
                 if axis_cfg.model not in EVENT_MODELS:
                     raise PipelineValidationError(

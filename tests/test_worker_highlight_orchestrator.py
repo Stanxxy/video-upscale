@@ -339,6 +339,69 @@ async def test_ingest_failure_marks_job_failed_never_swallowed(monkeypatch, _moc
 
 
 @pytest.mark.asyncio
+async def test_analysis_settings_override_reaches_run_pipeline_call(monkeypatch, _mock_boundaries):
+    """S12 pre-analysis AI settings spec §4 — when the request carries any of
+    the four settings, the pipeline def actually dispatched to
+    ``executors.run_pipeline`` reflects the GLOBAL override (not just the
+    default ``get_default(PIPELINE_ID)``)."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))  # 1 chunk
+
+    captured_pipelines = []
+
+    async def _fake_run_pipeline(pipeline, ctx, planned, budget_cap=None):
+        captured_pipelines.append(pipeline)
+        yield {"type": "highlight_map", "highlights": []}
+        yield {"type": "stage_complete", "stage_type": "highlight_scan"}
+
+    monkeypatch.setattr(highlight_orchestrator.executors, "run_pipeline", _fake_run_pipeline)
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    request = _request(analysis_fps=15, analysis_model="gemini-3.1-pro-preview")
+    job = await job_store.create_job(request)
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, request, _config(), job_store, jobs_store)
+
+    assert len(captured_pipelines) == 1
+    pipeline = captured_pipelines[0]
+    ha_stage = next(s for s in pipeline.stages if s.type == "highlight_analyze")
+    assert ha_stage.config["fps"] == 15
+    assert ha_stage.config["position"]["model"] == "gemini-3.1-pro-preview"
+    assert ha_stage.config["validator"]["model"] == "gemini-3.1-pro-preview"
+    scan_stage = next(s for s in pipeline.stages if s.type == "highlight_scan")
+    assert scan_stage.config["model"] == "gemini-3.1-pro-preview"
+
+
+@pytest.mark.asyncio
+async def test_absent_analysis_settings_dispatches_byte_identical_default_pipeline(monkeypatch, _mock_boundaries):
+    """AC1, at the orchestrator boundary: no analysis_* fields set -> the
+    dispatched pipeline def equals today's unconditional
+    ``get_default(PIPELINE_ID)`` exactly."""
+    from service.pipelines.registry import get_default
+    from service.worker.highlight_orchestrator import PIPELINE_ID
+
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))
+
+    captured_pipelines = []
+
+    async def _fake_run_pipeline(pipeline, ctx, planned, budget_cap=None):
+        captured_pipelines.append(pipeline)
+        yield {"type": "highlight_map", "highlights": []}
+        yield {"type": "stage_complete", "stage_type": "highlight_scan"}
+
+    monkeypatch.setattr(highlight_orchestrator.executors, "run_pipeline", _fake_run_pipeline)
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    request = _request()  # no analysis_* fields
+    job = await job_store.create_job(request)
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, request, _config(), job_store, jobs_store)
+
+    assert captured_pipelines[0].model_dump() == get_default(PIPELINE_ID).model_dump()
+
+
+@pytest.mark.asyncio
 async def test_gemini_file_cleanup_called_in_finally(monkeypatch, _mock_boundaries):
     _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))
     _patch_run_pipeline(monkeypatch, [[]])

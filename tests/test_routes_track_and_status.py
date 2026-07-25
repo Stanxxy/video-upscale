@@ -79,6 +79,122 @@ async def test_post_track_creates_lifecycle_and_schedules_worker(
 
 
 @pytest.mark.asyncio
+async def test_post_track_off_allowlist_analysis_model_returns_400(
+    service_client, service_components, scheduled_jobs,
+):
+    """S12 pre-analysis AI settings spec §4/§5 AC3 — an off-allowlist
+    ``analysis_model`` is a 400 with the allowlist echoed, never a silent
+    fallback and never a 500. Reachable only via direct API call (not the
+    UI's own picker, per AC3's framing)."""
+    payload = {
+        "bucket": "test-bucket",
+        "key": "videos/match.mp4",
+        "analysis_model": "gemini-1.0-nano-experimental",
+    }
+
+    resp = await service_client.post("/track", json=payload)
+
+    assert resp.status_code == 400
+    body = resp.text
+    assert "gemini-1.0-nano-experimental" in body
+    # Allowlist echoed in the error body.
+    assert "gemini-3.1-flash-lite" in body
+    assert len(scheduled_jobs) == 0  # never dispatched
+
+
+@pytest.mark.asyncio
+async def test_post_track_invalid_analysis_fps_returns_400(
+    service_client, service_components, scheduled_jobs,
+):
+    payload = {
+        "bucket": "test-bucket",
+        "key": "videos/match.mp4",
+        "analysis_fps": 7,  # not in {1, 10, 15}
+    }
+
+    resp = await service_client.post("/track", json=payload)
+
+    assert resp.status_code == 400
+    assert len(scheduled_jobs) == 0
+
+
+@pytest.mark.asyncio
+async def test_post_track_invalid_analysis_media_resolution_returns_400(
+    service_client, service_components, scheduled_jobs,
+):
+    payload = {
+        "bucket": "test-bucket",
+        "key": "videos/match.mp4",
+        "analysis_media_resolution": "ultra",  # not in {low, medium, high}
+    }
+
+    resp = await service_client.post("/track", json=payload)
+
+    assert resp.status_code == 400
+    assert len(scheduled_jobs) == 0
+
+
+@pytest.mark.asyncio
+async def test_post_track_invalid_analysis_thinking_returns_400(
+    service_client, service_components, scheduled_jobs,
+):
+    payload = {
+        "bucket": "test-bucket",
+        "key": "videos/match.mp4",
+        "analysis_thinking": "extreme",  # not in {off, low, medium, high}
+    }
+
+    resp = await service_client.post("/track", json=payload)
+
+    assert resp.status_code == 400
+    assert len(scheduled_jobs) == 0
+
+
+@pytest.mark.asyncio
+async def test_post_track_valid_analysis_settings_pass_through_and_schedule(
+    service_client, service_components, scheduled_jobs,
+):
+    """A valid, fully-specified settings combination admits normally — fail-
+    closed validation never rejects a legal request."""
+    payload = {
+        "bucket": "test-bucket",
+        "key": "videos/match.mp4",
+        "analysis_model": "gemini-3.1-pro-preview",
+        "analysis_media_resolution": "medium",
+        "analysis_fps": 15,
+        "analysis_thinking": "high",
+    }
+
+    resp = await service_client.post("/track", json=payload)
+
+    assert resp.status_code == 200
+    assert len(scheduled_jobs) == 1
+    scheduled_request = scheduled_jobs[0][1]
+    assert scheduled_request.analysis_model == "gemini-3.1-pro-preview"
+    assert scheduled_request.analysis_media_resolution == "medium"
+    assert scheduled_request.analysis_fps == 15
+    assert scheduled_request.analysis_thinking == "high"
+
+
+@pytest.mark.asyncio
+async def test_post_track_absent_analysis_settings_default_to_none(
+    service_client, service_components, scheduled_jobs,
+):
+    """AC1 default-user-flow — panel never opened, no analysis_* keys in the
+    request body at all -> every field lands as None (absent)."""
+    payload = {"bucket": "test-bucket", "key": "videos/match.mp4"}
+
+    resp = await service_client.post("/track", json=payload)
+
+    assert resp.status_code == 200
+    scheduled_request = scheduled_jobs[0][1]
+    assert scheduled_request.analysis_model is None
+    assert scheduled_request.analysis_media_resolution is None
+    assert scheduled_request.analysis_fps is None
+    assert scheduled_request.analysis_thinking is None
+
+
+@pytest.mark.asyncio
 async def test_run_with_semaphore_dispatches_to_run_highlight_job(monkeypatch, service_components):
     """S12 Phase 1b (design §1.1, item 15): the single call-site swap —
     _run_with_semaphore must dispatch to run_highlight_job, never the

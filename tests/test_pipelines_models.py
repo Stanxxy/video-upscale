@@ -607,6 +607,19 @@ def test_highlight_analyze_validator_axis_off_allowlist_model_rejected():
         validate_pipeline_def(pdef)
 
 
+def test_highlight_analyze_actor_axis_off_allowlist_model_rejected():
+    """S12 pre-analysis AI settings — closes a pre-existing gap: the actor
+    axis (S12 Phase 1b design §4.3) is a ThinkingQualityMixin node exactly
+    like position/technique/validator, and now receives the SAME nested
+    model-allowlist check (registry.py's axis loop extended to include
+    'actor')."""
+    pdef = get_default("highlight-scan-critique-analyze")
+    ha_stage = next(s for s in pdef.stages if s.type == "highlight_analyze")
+    ha_stage.config["actor"]["model"] = "gemini-1.0-nano-experimental"
+    with pytest.raises(PipelineValidationError, match="Unsupported model"):
+        validate_pipeline_def(pdef)
+
+
 def test_highlight_critique_unknown_config_key_rejected():
     pdef = get_default("highlight-scan-critique-analyze")
     next(s for s in pdef.stages if s.type == "highlight_critique").config["not_a_real_key"] = 123
