@@ -242,9 +242,10 @@ def _highlight_scan_analyze() -> PipelineDef:
     highlight, each sent as
     ``[start_s - preroll_s, end_s + postroll_s]`` (clamped to the requested
     scope) at a selectable ``fps`` (1, 10, or 15 only — see
-    ``HighlightAnalyzeConfig.fps`` for why fps=5 stays excluded). Tags with
-    the SAME
-    time-keyed ``simplified-tags-time-v1`` format as ``chunk_analyze``.
+    ``HighlightAnalyzeConfig.fps`` for why fps=5 stays excluded). ONE
+    taxonomy call per highlight (position + action_class + outcome, a single
+    flat verdict — see ``HighlightAnalyzeConfig``'s single-call-cutover
+    docstring) plus one independent actor/identity call.
 
     NO ``context_chain``, NO ``dedup`` stage — pre-roll video replaces the
     lossy text context chain. Event clipping (every emitted event is clipped
@@ -305,11 +306,10 @@ def _highlight_scan_critique_analyze() -> PipelineDef:
 
     ``highlight_analyze``: reads ``corrected_start_s``/``corrected_end_s``
     (falling back to the scan's own ``start_s``/``end_s`` when absent) as the
-    AUTHORITATIVE bounds, then runs independent position + technique calls
-    (Gracie: orthogonal axes, each returns ONE flat verdict, both always
-    fire) reconciled by a bounded validator pass with strict ditch authority
-    (see ``HighlightAnalyzeConfig``'s v2 docstring /
-    ``executors.highlight_analyze_node``). This SAME executor/config also
+    AUTHORITATIVE bounds, then runs ONE taxonomy call (position + action_class
+    + outcome, a single flat verdict — see ``HighlightAnalyzeConfig``'s
+    single-call-cutover docstring / ``executors.highlight_analyze_node``)
+    plus one independent actor/identity call. This SAME executor/config also
     serves ``highlight-scan-analyze`` (no ``highlight_critique`` stage there
     — ``corrected_*`` stays absent, so behavior falls back to the scan's own
     bounds unchanged).
@@ -320,9 +320,9 @@ def _highlight_scan_critique_analyze() -> PipelineDef:
         description=(
             "v2: YouTube-native three-pass pipeline — a cheap Gemini scan finds highlight "
             "spans (with a body-movement description + reasoning), a per-highlight backward-"
-            "padded critique call corrects long-video timestamp drift, then independent "
-            "position + technique verdicts reconciled by a bounded, ditch-capable validator "
-            "pass tag each highlight. No context-chain, no dedup stage — pre-roll "
+            "padded critique call corrects long-video timestamp drift, then a single flat "
+            "taxonomy verdict (position + action_class + outcome) plus an independent actor/"
+            "identity call tag each highlight. No context-chain, no dedup stage — pre-roll "
             "video + event clipping (against the critique-corrected bounds) replace them."
         ),
         stages=[
@@ -466,19 +466,19 @@ def validate_pipeline_def(pipeline: PipelineDef) -> PipelineDef:
                 f"(type={stage.type!r}); must be one of {allowlist}."
             )
 
-        # v2: highlight_analyze's position/technique/validator sub-configs
-        # each carry their OWN `model` field (ThinkingQualityMixin subclasses)
-        # — same no-silent-swap discipline as every top-level `model` field
-        # above, extended here since these are nested, not reachable by the
-        # generic top-level check.
+        # highlight_analyze's `actor` sub-config carries its OWN `model` field
+        # (ThinkingQualityMixin subclass) — same no-silent-swap discipline as
+        # every top-level `model` field above, extended here since it's
+        # nested, not reachable by the generic top-level check. (Position/
+        # technique/validator sub-configs were deleted in the 2026-07-26
+        # single-call re-scope — see HighlightAnalyzeConfig's docstring.)
         if stage.type == "highlight_analyze":
-            for axis_name in ("position", "technique", "validator"):
-                axis_cfg = getattr(validated_config, axis_name)
-                if axis_cfg.model not in EVENT_MODELS:
-                    raise PipelineValidationError(
-                        f"Unsupported model {axis_cfg.model!r} for stage {stage.id!r} "
-                        f"(type={stage.type!r}, axis={axis_name!r}); must be one of {EVENT_MODELS}."
-                    )
+            axis_cfg = validated_config.actor
+            if axis_cfg.model not in EVENT_MODELS:
+                raise PipelineValidationError(
+                    f"Unsupported model {axis_cfg.model!r} for stage {stage.id!r} "
+                    f"(type={stage.type!r}, axis='actor'); must be one of {EVENT_MODELS}."
+                )
 
         if stage.type in STRUCTURAL_NODE_TYPES and not stage.enabled:
             raise PipelineValidationError(

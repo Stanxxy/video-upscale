@@ -131,9 +131,8 @@ def clip_to_event(
 # --------------------------------------------------------------------------- #
 # S12 Phase 1b — axis-only path (item 12, design §5). NEW, parallel to
 # clip_to_event/publish_events above — NEVER calls dual_emit_legacy_fields.
-# BLOCKED on shared_lib's relaxed VideoEventCandidate (§5.1/§8.1): do not
-# merge/deploy this path to production until that ships — see
-# taxonomy_mapper.build_axis_only_candidate's own gating test.
+# shared_lib 1.3.0 (installed) shipped VideoEventCandidate's axis-only
+# relaxation (§5.1/§8.1) — this path is unblocked for production.
 # --------------------------------------------------------------------------- #
 def clip_to_axis_only_event(clip: dict, video_id: UUID, *, candidate_cls=None) -> VideoEventWithCandidates:
     """Transform ONE ``executors.highlight_analyze_node`` synthesized clip
@@ -145,9 +144,10 @@ def clip_to_axis_only_event(clip: dict, video_id: UUID, *, candidate_cls=None) -
 
     ``candidate_cls`` (testability seam, forwarded verbatim to
     ``taxonomy_mapper.build_axis_only_candidate`` — see that function's own
-    docstring for why: shared_lib 1.2.0's ``VideoEventCandidate`` still
-    requires ``action``/``confidence``, so tests inject a duck-typed stand-in
-    to exercise this mapping without the pending shared_lib 1.3.0 relaxation)."""
+    docstring): defaults to the REAL shared_lib 1.3.0 ``VideoEventCandidate``,
+    which already constructs successfully with axis-only ``None`` legacy
+    values; tests may still inject a duck-typed stand-in to exercise the
+    MAPPING logic independently of the real model's own field constraints."""
     candidate = taxonomy_mapper.build_axis_only_candidate(
         clip, str(video_id), candidate_cls=candidate_cls,
     )

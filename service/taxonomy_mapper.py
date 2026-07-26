@@ -569,15 +569,25 @@ def build_axis_only_candidate(clip: Dict[str, Any], video_id: str, *, candidate_
     data would only invite the two to drift).
 
     ``candidate_cls`` (testability seam, default ``None`` -> the REAL
-    ``shared_lib.models.sns_event_models.VideoEventCandidate``): the
-    installed shared_lib (1.2.0 as of this stream) still declares
-    ``action``/``confidence`` as REQUIRED, non-``None`` fields, so
-    constructing the real model with this function's ``None`` legacy values
-    raises a ``ValidationError`` until shared_lib ships the relaxed schema
-    (§8.1). Tests inject a duck-typed stand-in class here to verify the
-    MAPPING logic (which fields derive from which inputs) independently of
-    that pending shared_lib release — never by fudging/omitting the ``None``
-    legacy values to make the OLD schema accept them.
+    ``shared_lib.models.sns_event_models.VideoEventCandidate``): shared_lib
+    1.3.0 (installed) relaxed ``action``/``technique``/``result``/
+    ``confidence`` to ``Optional`` for a ``schema_version=3`` candidate, so
+    the real class now constructs successfully with this function's ``None``
+    legacy values — see ``tests/test_taxonomy_mapper_axis_only.py``'s
+    ``test_real_shared_lib_construction_succeeds`` for the end-to-end proof.
+    Tests still ALSO inject a duck-typed stand-in class to verify the
+    MAPPING logic (which clip field derives which kwarg) independently of
+    the real model's own field constraints.
+
+    **2026-07-26 single-call cutover:** this function's own mapping logic is
+    UNCHANGED and call-count-agnostic — it reads ``clip.get("position")``/
+    ``"action_class"``/``"outcome"``/... off a plain dict and does not care
+    whether one Gemini call produced them (the current shape) or the deleted
+    two-call+validator design did. See
+    ``tests/test_taxonomy_mapper_axis_only.py``'s
+    ``test_maps_the_single_call_executor_output_shape`` for a pinned
+    regression against the REAL shape ``executors.highlight_analyze_node``
+    emits post-cutover.
     """
     from shared_lib.models.sns_event_models import VideoEventCandidate as _RealVideoEventCandidate
 

@@ -1,11 +1,9 @@
 """S12 Phase 1b — service/sns.py axis-only path (item 12, design §5).
 
-BLOCKED on shared_lib's relaxed VideoEventCandidate (§5.1/§8.1) — the
-installed shared_lib (1.2.0) still requires action/confidence, so
-end-to-end construction through the REAL model is proven to raise (never
-silently bypassed), and the publish-layer methods are tested independently
-of that pending release (they never validate the ``event``/``clip`` shape
-themselves — pure serialize-and-publish).
+shared_lib 1.3.0 (installed) shipped the relaxed VideoEventCandidate
+(§5.1/§8.1) — end-to-end construction through the REAL model now succeeds.
+The publish-layer methods are ALSO tested independently of that (they never
+validate the ``event``/``clip`` shape themselves — pure serialize-and-publish).
 """
 from __future__ import annotations
 
@@ -86,38 +84,53 @@ def test_seconds_to_timestamp_none_defaults_to_zero():
 
 
 # --------------------------------------------------------------------------- #
-# clip_to_axis_only_event — mapping logic. Unlike build_axis_only_candidate,
-# this function's OUTER model (VideoEventWithCandidates.event_candidates:
-# List[VideoEventCandidate]) is ALSO strictly typed against the real shared_lib
-# class — a duck-typed candidate_cls is rejected at the outer model boundary
-# too (pydantic model_type check), so this function's start_time/end_time
-# mapping can only be proven end-to-end once shared_lib 1.3.0 ships. The
+# clip_to_axis_only_event — mapping logic (real shared_lib 1.3.0 class).
 # UNDERLYING logic (seconds_to_timestamp, build_axis_only_candidate's own
 # field mapping) is independently covered above / in
 # tests/test_taxonomy_mapper_axis_only.py.
 # --------------------------------------------------------------------------- #
-def test_clip_to_axis_only_event_real_shared_lib_1_2_0_rejects_axis_only_shape():
-    """Proves the hard sequencing constraint end-to-end: real construction
-    through the installed (1.2.0) VideoEventCandidate raises."""
-    with pytest.raises(ValidationError):
-        clip_to_axis_only_event(_clip(), uuid4())
-
-
-def test_clip_to_axis_only_event_duck_candidate_also_rejected_by_outer_model():
-    """Documents WHY the duck-typed seam doesn't help here (unlike
-    build_axis_only_candidate alone): VideoEventWithCandidates.event_candidates
-    is itself strictly typed against the real VideoEventCandidate class."""
+def test_clip_to_axis_only_event_duck_candidate_rejected_by_outer_model():
+    """VideoEventWithCandidates.event_candidates: List[VideoEventCandidate]
+    is strictly typed against the real shared_lib class — a duck-typed
+    candidate_cls is rejected at the OUTER model boundary too (pydantic
+    model_type check), independent of shared_lib's axis-only relaxation."""
     with pytest.raises(ValidationError, match="VideoEventCandidate"):
         clip_to_axis_only_event(_clip(), uuid4(), candidate_cls=_DuckCandidate)
 
 
-@pytest.mark.skip(reason="requires shared_lib>=1.3.0 axis-only relaxation, PR pending")
-def test_clip_to_axis_only_event_real_construction_succeeds_after_relaxation():
+def test_clip_to_axis_only_event_real_construction_succeeds():
     event = clip_to_axis_only_event(_clip(), uuid4())
     assert event.start_time == "00:01:05"
     assert event.end_time == "00:02:10"
     assert event.event_candidates[0].schema_version == 3
     assert event.event_candidates[0].action is None
+
+
+# --------------------------------------------------------------------------- #
+# 2026-07-26 single-call cutover (AC2/AC3) — zero dual-emit, schema_version=3
+# axis-only for every event on the single-call path: no `action`/`technique`/
+# `result`/`confidence` legacy keys anywhere in the outgoing SNS payload.
+# --------------------------------------------------------------------------- #
+def test_clip_to_axis_only_event_publish_payload_has_no_legacy_keys():
+    """Real end-to-end shape check: build the event from a single-call-shaped
+    clip dict, dump it exactly as SNSPublisher.publish_axis_only_event would
+    serialize it, and confirm no `action`/`technique`/`result`/`confidence`
+    key carries a non-None/legacy value anywhere in the candidate payload."""
+    event = clip_to_axis_only_event(_clip(), uuid4())
+    message = event.model_dump(mode="json")
+
+    assert message["event_candidates"][0]["schema_version"] == 3
+    for legacy_key in ("action", "technique", "result", "confidence"):
+        assert message["event_candidates"][0][legacy_key] is None
+
+    # Round-trips through the EXACT publisher serialization path too (never
+    # a second, divergent serializer for the real vs. test-inspected shape).
+    publisher = _make_publisher()
+    publisher.publish_axis_only_event(event, event_index=1)
+    published_message = json.loads(publisher.client.published[0]["Message"])
+    assert published_message["event_candidates"][0]["schema_version"] == 3
+    for legacy_key in ("action", "technique", "result", "confidence"):
+        assert published_message["event_candidates"][0][legacy_key] is None
 
 
 # --------------------------------------------------------------------------- #

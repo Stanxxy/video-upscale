@@ -1,20 +1,18 @@
 """S12 Phase 1b — service/taxonomy_mapper.py::build_axis_only_candidate
 (item 13, design §5.2/§5.5).
 
-The installed shared_lib (1.2.0 as of this stream) still declares
-``VideoEventCandidate.action``/``.confidence`` as REQUIRED, non-``None``
-fields — the axis-only mapping LOGIC is unit-tested here via a duck-typed
+The axis-only mapping LOGIC is unit-tested here via a duck-typed
 ``candidate_cls`` seam (never by fudging the ``None`` legacy values to make
-the OLD schema accept them). The tests that require the REAL relaxed model
-to actually construct are marked skip, pending the shared_lib 1.3.0 PR.
+a stricter schema accept them) — this keeps the mapping tests independent of
+shared_lib's exact installed version. shared_lib 1.3.0 (installed) relaxed
+``VideoEventCandidate.action``/``.confidence``/etc. to ``Optional`` for
+``schema_version=3``, so the REAL class also constructs successfully now —
+see ``test_real_shared_lib_construction_succeeds`` below.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import List, Optional
-
-import pytest
-from pydantic import ValidationError
 
 from service import taxonomy_mapper
 
@@ -147,22 +145,49 @@ def test_never_calls_dual_emit_legacy_fields(monkeypatch):
 
 
 # --------------------------------------------------------------------------- #
-# Real shared_lib construction — BLOCKED on the 1.3.0 relaxation (§8.1).
+# Real shared_lib construction — shared_lib 1.3.0 (installed) relaxed
+# action/technique/result/confidence to Optional for schema_version=3.
 # --------------------------------------------------------------------------- #
-def test_real_shared_lib_1_2_0_rejects_none_action_and_confidence():
-    """Proves the hard sequencing constraint is REAL, not silently bypassed:
-    the installed shared_lib (1.2.0) still requires action/confidence, so
-    calling this function with the REAL VideoEventCandidate class raises."""
-    with pytest.raises(ValidationError):
-        taxonomy_mapper.build_axis_only_candidate(_clip(), "vid-1")
-
-
-@pytest.mark.skip(reason="requires shared_lib>=1.3.0 axis-only relaxation, PR pending")
-def test_real_shared_lib_construction_succeeds_after_relaxation():
-    """Once shared_lib ships the relaxed VideoEventCandidate (action/
-    technique/result/confidence -> Optional, schema_version==3 documented
-    legal), this must construct successfully with the default (real) class."""
+def test_real_shared_lib_construction_succeeds():
+    """The REAL (default, non-duck-typed) VideoEventCandidate class now
+    constructs successfully with this function's None legacy values —
+    shared_lib 1.3.0's axis-only relaxation (§8.1) has landed."""
     cand = taxonomy_mapper.build_axis_only_candidate(_clip(), "vid-1")
     assert cand.schema_version == 3
     assert cand.action is None
+    assert cand.confidence is None
+
+
+# --------------------------------------------------------------------------- #
+# 2026-07-26 single-call cutover (AC2) — pinned regression against the REAL
+# clip dict shape executors.highlight_analyze_node now emits (ONE taxonomy
+# call producing position/action_class/outcome + the unchanged actor axis
+# resolving player_id/player_name/identity_uncertain/actor_sentinel), not
+# the deleted two-call+validator design's shape. build_axis_only_candidate's
+# own mapping logic is unchanged (call-count-agnostic — see its docstring);
+# this test proves that claim against the shape that's ACTUALLY produced now.
+# --------------------------------------------------------------------------- #
+def test_maps_the_single_call_executor_output_shape():
+    single_call_clip = {
+        "start_s": 15.0, "end_s": 32.0,
+        "position": "side_control", "action_class": "submission_arm_lock", "outcome": "successful",
+        "player_id": "p1", "player_name": "Alice",
+        "identity_uncertain": False, "actor_sentinel": None,
+        # Notes format post-cutover: "<taxonomy justification> | <actor justification>"
+        # — two segments, not the old three (position | technique | validator evidence).
+        "notes": "arm trapped, hips elevated | blue gi matches reference image 1",
+    }
+    cand = taxonomy_mapper.build_axis_only_candidate(single_call_clip, "vid-1", candidate_cls=_DuckCandidate)
+    assert cand.schema_version == 3
+    assert cand.axis1_position == ["side_control"]
+    assert cand.axis3_action == ["submission_arm_lock"]
+    assert cand.axis4_outcome == "successful"
+    assert cand.player_id == "p1"
+    assert cand.player_name == "Alice"
+    assert cand.identity_uncertain is False
+    assert cand.actor_sentinel is None
+    assert cand.notes == "arm trapped, hips elevated | blue gi matches reference image 1"
+    assert cand.action is None
+    assert cand.technique is None
+    assert cand.result is None
     assert cand.confidence is None
