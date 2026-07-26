@@ -37,7 +37,6 @@ import logging
 import math
 import os
 import shutil
-from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -116,85 +115,85 @@ def _chunk_progress_pct(position: int, chunks_total: int) -> float:
     return round(100.0 * min(position, chunks_total) / chunks_total, 1)
 
 
-def _checkpoint_sort_key(cp: dict) -> tuple[float, int]:
-    """Rows without a real ``updated_at`` sort first (so an explicit
-    timestamp always wins when both exist), ``id(cp)`` breaks ties without
-    ever comparing two ``None``s directly (which would raise) — mirrors
-    ``service/checkpoints/query.py::_checkpoint_ts``'s own tie-break
-    discipline exactly; duplicated intentionally rather than importing a
-    private helper across a module-privacy boundary."""
-    ts = cp.get("updated_at")
-    if isinstance(ts, datetime):
-        return (ts.timestamp(), id(cp))
-    return (0.0, id(cp))
+# --------------------------------------------------------------------------- #
+# Checkpoint read/merge helpers — CORRECTED 2026-07-26 (Evaluator REJECT on
+# the first version of this batched-publish redesign). ``job_stage_checkpoints``
+# has ``PRIMARY KEY (job_id, stage_name)`` (``bjj-vision-backend/infrastructure/
+# keyspaces/migrations/005_job_stage_checkpoints.cql``) — an INSERT there is
+# an UPSERT, so AT MOST ONE ROW SURVIVES per ``(job_id, stage_name)``. Every
+# helper below reads that SINGLE latest row (via ``jobs_store.get_checkpoint``,
+# never ``get_all_checkpoints`` + a multi-row scan — there is only ever one
+# row to find) and every WRITE in ``run_highlight_job`` below follows the
+# documented convention for this table (``working_log/knowledge-base/
+# references/2026-05-02-checkpoint-artifacts-v1-addendum.md``):
+# read-latest-then-merge-cumulative-write, never "append a new row."
+#
+# **Single-writer-per-job invariant (why read-modify-write is safe here,
+# with no read-then-write race):** ``service/routes/scheduling.py::
+# _schedule_job`` creates exactly one ``asyncio.Task`` per ``job_id``
+# (``_active_tasks[job_id] = task``); ``recover_interrupted_job``
+# (``service/routes/recovery.py``) only re-invokes ``run_highlight_job`` for
+# a job whose heartbeat has gone stale (the ORIGINAL worker process is
+# presumed dead, per the heartbeat/recovery manager's own staleness check)
+# — the project has never run two live ``run_highlight_job`` invocations for
+# the same ``job_id`` concurrently, and this fix does not introduce that
+# assumption; it is the SAME precondition the pre-existing chunk-checkpoint
+# write pattern already silently depended on (see the KB reference above,
+# written for this table before this PR existed).
+# --------------------------------------------------------------------------- #
+def _clips_by_chunk_from_checkpoint(chunk_checkpoint: Optional[dict], chunks_total: int) -> list[list[dict]]:
+    """Reconstructs every chunk's OWN collected clip list from the SINGLE
+    latest ``HIGHLIGHT_CHUNK`` checkpoint row's cumulative
+    ``artifacts.clips_by_chunk`` map (``build_highlight_chunk_completed``).
+    ``chunk_checkpoint`` is ``None`` for a brand-new job (no chunk has
+    completed yet) or an OLDER-format row written before this field existed
+    — both contribute an empty list for every chunk, additive-only, never a
+    crash, never fabricated clips."""
+    data = (chunk_checkpoint or {}).get("checkpoint_data") or {}
+    clips_by_chunk_map = (data.get("artifacts") or {}).get("clips_by_chunk") or {}
+    return [clips_by_chunk_map.get(str(i), []) for i in range(chunks_total)]
 
 
-def _clips_by_chunk_from_checkpoints(checkpoints: list[dict], chunks_total: int) -> list[list[dict]]:
-    """2026-07-26 CEO batched-publish re-scope (AC8-11) — reconstructs every
-    chunk's OWN collected clip list from its durable ``HIGHLIGHT_CHUNK``
-    checkpoint (``build_highlight_chunk_completed``'s additive ``clips``
-    field). The single source of truth for the match's full candidate set
-    at finalize time, regardless of whether a given chunk was freshly
-    re-analyzed THIS run or its clips are being recovered from an earlier,
-    resumed-past run's completed checkpoint — this function never
-    distinguishes the two, by design (see ``run_highlight_job``).
-
-    An OLDER-format ``HIGHLIGHT_CHUNK`` checkpoint written before the
-    ``clips`` field existed (or an in-flight job crossing this exact
-    deploy boundary) contributes an empty list for that chunk — additive-
-    only, never a crash, never fabricated clips. Multiple rows for the
-    SAME ``chunk_index`` (should not normally happen — resume skips
-    already-completed chunks — but the schema permits it) resolve to the
-    LATEST write by ``updated_at``, same "last INSERT wins" convention as
-    ``build_highlight_resume_plan``'s own ingest-checkpoint handling."""
-    by_chunk: dict[int, list[dict]] = {}
-    for cp in sorted(checkpoints, key=_checkpoint_sort_key):
-        if cp.get("stage_name") != PipelineStage.HIGHLIGHT_CHUNK.value:
-            continue
-        if not cp.get("completed"):
-            continue
-        data = cp.get("checkpoint_data") or {}
-        idx = data.get("chunk_index")
-        if not isinstance(idx, int):
-            continue
-        clips = (data.get("artifacts") or {}).get("clips") or []
-        by_chunk[idx] = clips
-    return [by_chunk.get(i, []) for i in range(chunks_total)]
+def _highlights_collected_total(chunk_checkpoint: Optional[dict]) -> int:
+    """Sum of every chunk's OWN ``highlights_collected_by_chunk`` entry —
+    an INDEPENDENT integrity signal, never derived from
+    ``clips_by_chunk`` itself, so Phase 2 can detect "reconstruction lost
+    data relative to what was actually analyzed" (an older-format
+    checkpoint, a partial write, etc.) rather than silently trusting its
+    own input as ground truth."""
+    data = (chunk_checkpoint or {}).get("checkpoint_data") or {}
+    counts_map = (data.get("artifacts") or {}).get("highlights_collected_by_chunk") or {}
+    return sum(int(v) for v in counts_map.values() if isinstance(v, int))
 
 
-def _published_candidate_keys_from_checkpoints(checkpoints: list[dict]) -> frozenset[str]:
-    """Every ``candidate_key`` already recorded as published by a
-    ``build_highlight_publish_progress`` row from a PRIOR run — the
-    resumable-finalize-loop's own "already sent, never re-send" set
-    (Brooks's named new requirement, §2a)."""
-    keys: set[str] = set()
-    for cp in checkpoints:
-        if cp.get("stage_name") != PipelineStage.HIGHLIGHT_PUBLISH.value:
-            continue
-        data = cp.get("checkpoint_data") or {}
-        if data.get("reason") != "highlight_publish_candidate":
-            continue
-        candidate_key = (data.get("artifacts") or {}).get("candidate_key")
-        if candidate_key:
-            keys.add(candidate_key)
+def _published_candidate_keys_from_checkpoint(publish_checkpoint: Optional[dict]) -> frozenset[str]:
+    """Every ``candidate_key`` already recorded as published, from the
+    SINGLE latest ``HIGHLIGHT_PUBLISH`` progress row's cumulative
+    ``artifacts.published_candidate_keys`` list — the resumable-finalize-
+    loop's own "already sent, never re-send" set (Brooks's named new
+    requirement, §2a). ``None``/a non-progress row (e.g. the terminal
+    completion row, handled separately by ``_publish_terminal_done``)
+    yields an empty set."""
+    data = (publish_checkpoint or {}).get("checkpoint_data") or {}
+    if data.get("reason") != "highlight_publish_candidate":
+        return frozenset()
+    keys = (data.get("artifacts") or {}).get("published_candidate_keys") or []
     return frozenset(keys)
 
 
-def _publish_terminal_done(checkpoints: list[dict]) -> bool:
+def _publish_terminal_done(publish_checkpoint: Optional[dict]) -> bool:
     """Whether the terminal ``HIGHLIGHT_PUBLISH`` checkpoint
-    (``build_highlight_publish_completed``, ``completed=True``) was already
-    written by a prior run — mirrors the tracking pipeline's own established
-    "resume skips a fully-completed terminal-publish stage" convention
-    (``worker/orchestrator.py``'s analogous resume-terminal-publish check)."""
-    for cp in checkpoints:
-        if cp.get("stage_name") != PipelineStage.HIGHLIGHT_PUBLISH.value:
-            continue
-        if not cp.get("completed"):
-            continue
-        data = cp.get("checkpoint_data") or {}
-        if data.get("reason") == "highlight_publish_completed":
-            return True
-    return False
+    (``build_highlight_publish_completed``, ``completed=True``) is the
+    CURRENT latest row for this job — mirrors the tracking pipeline's own
+    established "resume skips a fully-completed terminal-publish stage"
+    convention. Since the terminal write OVERWRITES the last progress row
+    (same UPSERT semantics as everything else on this table), finding it
+    as the latest row unambiguously means every candidate already
+    published — there is no earlier progress row left to also check."""
+    if publish_checkpoint is None or not publish_checkpoint.get("completed"):
+        return False
+    data = publish_checkpoint.get("checkpoint_data") or {}
+    return data.get("reason") == "highlight_publish_completed"
 
 
 async def run_highlight_job(
@@ -362,6 +361,22 @@ async def run_highlight_job(
                     job_id, chunk_index, chunk_error_count,
                 )
 
+            # Read-latest-then-merge-cumulative-write (job_stage_checkpoints
+            # PRIMARY KEY (job_id, stage_name) — an INSERT here is an
+            # UPSERT; see the module-level checkpoint-helpers comment block
+            # above for the full explanation and the KB reference). Merge
+            # THIS chunk's own clips/counts into the CURRENT latest row's
+            # cumulative maps before writing the full merged state back —
+            # never write just this chunk's own slice alone, or every
+            # earlier chunk's data is silently lost on the next write.
+            existing_chunk_cp = await jobs_store.get_checkpoint(job_id, PipelineStage.HIGHLIGHT_CHUNK)
+            existing_chunk_data = (existing_chunk_cp or {}).get("checkpoint_data") or {}
+            existing_chunk_artifacts = existing_chunk_data.get("artifacts") or {}
+            clips_by_chunk_map = dict(existing_chunk_artifacts.get("clips_by_chunk") or {})
+            clips_by_chunk_map[str(chunk_index)] = this_chunk_clips
+            highlights_collected_by_chunk_map = dict(existing_chunk_artifacts.get("highlights_collected_by_chunk") or {})
+            highlights_collected_by_chunk_map[str(chunk_index)] = len(this_chunk_clips)
+
             await jobs_store.write_checkpoint(
                 job_id, PipelineStage.HIGHLIGHT_CHUNK, True,
                 build_highlight_chunk_completed(
@@ -377,17 +392,37 @@ async def run_highlight_job(
                         progress_percent=_chunk_progress_pct(chunk_index + 1, chunks_total),
                         stage_progress_fraction=1.0,
                     ),
-                    clips=this_chunk_clips,
+                    clips_by_chunk=clips_by_chunk_map,
+                    highlights_collected_by_chunk=highlights_collected_by_chunk_map,
                 ),
             )
 
         # ------------------------------------------------------------- #
-        # Phase 2 — reconstruct the FULL match's clip set from durable
-        # checkpoints (works identically for chunks freshly analyzed this
-        # run and chunks recovered from an earlier, resumed-past run).
+        # Phase 2 — reconstruct the FULL match's clip set from the SINGLE
+        # latest HIGHLIGHT_CHUNK checkpoint row's cumulative maps (works
+        # identically for chunks freshly analyzed this run and chunks
+        # recovered from an earlier, resumed-past run — both live in the
+        # SAME merged row by construction).
         # ------------------------------------------------------------- #
-        checkpoints_after_chunks = await jobs_store.get_all_checkpoints(job_id)
-        clips_by_chunk = _clips_by_chunk_from_checkpoints(checkpoints_after_chunks, chunks_total)
+        chunk_checkpoint = await jobs_store.get_checkpoint(job_id, PipelineStage.HIGHLIGHT_CHUNK)
+        clips_by_chunk = _clips_by_chunk_from_checkpoint(chunk_checkpoint, chunks_total)
+
+        # Evaluator MEDIUM item: an independent integrity signal — if
+        # reconstruction sees FEWER clips than were actually collected
+        # (highlights_collected_by_chunk, a separate cumulative counter —
+        # see its own docstring for why it's never derived from
+        # clips_by_chunk itself), an older-format checkpoint or a partial
+        # write silently lost candidates. Loud, not silent.
+        raw_clip_count = sum(len(c) for c in clips_by_chunk)
+        expected_collected_total = _highlights_collected_total(chunk_checkpoint)
+        if raw_clip_count < expected_collected_total:
+            logger.warning(
+                "Job %s: Phase 2 reconstruction found only %d clip(s) but "
+                "highlights_collected_by_chunk records %d collected this job — "
+                "some candidates may be silently missing from publish (older-format "
+                "checkpoint or a partial write?)",
+                job_id, raw_clip_count, expected_collected_total,
+            )
 
         # Phase 3 — whole-match seam dedup (AC6; service/worker/seam_dedup.py).
         deduped_clips, seam_duplicates_dropped = seam_dedup.dedup_match_clips(clips_by_chunk, chunks)
@@ -424,8 +459,9 @@ async def run_highlight_job(
         # requirement, §2a) — a candidate already recorded as published by
         # an earlier, crashed-mid-batch run is never re-sent.
         # ------------------------------------------------------------- #
-        already_published_keys = _published_candidate_keys_from_checkpoints(checkpoints_after_chunks)
-        publish_terminal_done = _publish_terminal_done(checkpoints_after_chunks)
+        publish_checkpoint = await jobs_store.get_checkpoint(job_id, PipelineStage.HIGHLIGHT_PUBLISH)
+        already_published_keys = set(_published_candidate_keys_from_checkpoint(publish_checkpoint))
+        publish_terminal_done = _publish_terminal_done(publish_checkpoint)
         if publish_terminal_done:
             logger.info(
                 "Job %s: HIGHLIGHT_PUBLISH already terminal on a prior run — rebuilding the "
@@ -469,10 +505,19 @@ async def run_highlight_job(
 
             published_events.append(candidate_event.model_dump(mode="json"))
             if candidate_key:
+                # Read-latest-then-merge-cumulative-write (same discipline
+                # as Phase 1's HIGHLIGHT_CHUNK write — see the module-level
+                # checkpoint-helpers comment block). already_published_keys
+                # is updated in-memory as we go, so this loop never needs to
+                # re-fetch from the store on every iteration; it is still
+                # the FULL, correct cumulative set at every write because
+                # this process is the sole writer for this job_id.
+                already_published_keys.add(candidate_key)
                 await jobs_store.write_checkpoint(
                     job_id, PipelineStage.HIGHLIGHT_PUBLISH, False,
                     build_highlight_publish_progress(
                         candidate_key=candidate_key, event_index=event_idx,
+                        published_candidate_keys=sorted(already_published_keys),
                         worker_state=_make_worker_state(
                             progress_percent=_chunk_progress_pct(event_idx, total_candidates),
                             stage_progress_fraction=(event_idx / total_candidates) if total_candidates else 1.0,

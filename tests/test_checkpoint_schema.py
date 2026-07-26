@@ -702,38 +702,54 @@ def test_highlight_publish_completed_envelope_shape_has_no_tracking_uri():
 # 2026-07-26 CEO batched-publish re-scope (AC8-11) — additive clips field on
 # HIGHLIGHT_CHUNK, and the new per-candidate HIGHLIGHT_PUBLISH progress row.
 # ---------------------------------------------------------------------------
-def test_highlight_chunk_completed_clips_field_defaults_to_empty_list():
-    """Additive-only: a caller that doesn't pass `clips` at all (an OLDER
-    call site, or a legitimate zero-highlight chunk) gets [], never a
+def test_highlight_chunk_completed_clips_by_chunk_field_defaults_to_empty_map():
+    """Additive-only: a caller that doesn't pass `clips_by_chunk` at all (an
+    OLDER call site, or a legitimate zero-highlight chunk) gets {}, never a
     missing key or a crash."""
     cp = build_highlight_chunk_completed(
         chunk_index=0, chunks_total=1, highlights_scanned=0,
         highlights_analyzed=0, highlights_ditched=0, highlights_published=0,
         gemini_file_uri="files/abc", worker_state=_ws(progress_percent=100.0),
     )
-    assert cp["artifacts"]["clips"] == []
+    assert cp["artifacts"]["clips_by_chunk"] == {}
+    assert cp["artifacts"]["highlights_collected_by_chunk"] == {}
 
 
-def test_highlight_chunk_completed_clips_field_carries_collected_clips():
-    clips = [{"start_s": 10.0, "end_s": 20.0, "action_class": "guard_pass", "_candidate_key": "0:1"}]
+def test_highlight_chunk_completed_clips_by_chunk_field_carries_the_full_cumulative_map():
+    """2026-07-26 Evaluator REJECT fix: this field is the FULL, merged
+    cumulative map across every chunk completed so far (real
+    job_stage_checkpoints PRIMARY KEY (job_id, stage_name) — an INSERT is
+    an UPSERT, so the caller must pass the complete merged state on every
+    write, never just this one chunk's own slice)."""
+    clips_by_chunk = {
+        "0": [{"start_s": 10.0, "end_s": 20.0, "action_class": "guard_pass", "_candidate_key": "0:1"}],
+        "1": [{"start_s": 800.0, "end_s": 810.0, "action_class": "sweep", "_candidate_key": "1:1"}],
+    }
+    highlights_collected_by_chunk = {"0": 1, "1": 1}
     cp = build_highlight_chunk_completed(
-        chunk_index=0, chunks_total=1, highlights_scanned=1,
+        chunk_index=1, chunks_total=2, highlights_scanned=1,
         highlights_analyzed=1, highlights_ditched=0, highlights_published=0,
         gemini_file_uri="files/abc", worker_state=_ws(progress_percent=100.0),
-        clips=clips,
+        clips_by_chunk=clips_by_chunk, highlights_collected_by_chunk=highlights_collected_by_chunk,
     )
-    assert cp["artifacts"]["clips"] == clips
+    assert cp["artifacts"]["clips_by_chunk"] == clips_by_chunk
+    assert cp["artifacts"]["highlights_collected_by_chunk"] == highlights_collected_by_chunk
 
 
 def test_highlight_publish_progress_envelope_shape():
     cp = build_highlight_publish_progress(
-        candidate_key="2:3", event_index=17,
+        candidate_key="2:3", event_index=17, published_candidate_keys=["0:1", "1:1", "2:3"],
         worker_state=_ws(progress_percent=34.0, stage_progress_fraction=0.34),
     )
     _assert_envelope(cp)
     assert cp["reason"] == "highlight_publish_candidate"
     assert cp["artifacts"]["candidate_key"] == "2:3"
     assert cp["artifacts"]["event_index"] == 17
+    # 2026-07-26 Evaluator REJECT fix: the FULL cumulative list, not just
+    # this one candidate — real job_stage_checkpoints UPSERT semantics mean
+    # a resume can only ever see the LATEST row, so it must carry every
+    # candidate published so far, not just the most recent one.
+    assert cp["artifacts"]["published_candidate_keys"] == ["0:1", "1:1", "2:3"]
     # Never the terminal-checkpoint shape — caller writes this with
     # completed=False, and this builder never claims otherwise itself
     # (completed is the write_checkpoint caller's own argument, not part
