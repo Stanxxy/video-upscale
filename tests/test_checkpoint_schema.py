@@ -36,6 +36,7 @@ from service.checkpoints import (
     build_highlight_ingest_completed,
     build_highlight_chunk_completed,
     build_highlight_publish_completed,
+    build_highlight_publish_progress,
     build_resume_overrides,
     build_resume_plan,
     resume_plan_to_request_fields,
@@ -695,6 +696,49 @@ def test_highlight_publish_completed_envelope_shape_has_no_tracking_uri():
     assert cp["artifacts"]["sns_event_count"] == 7
     assert cp["artifacts"]["result_s3_uri"] == "s3://bucket/base_key_v2_events.json"
     assert "tracking_s3_uri" not in cp["artifacts"]  # decision 3 — no tracking artifact in v2
+
+
+# ---------------------------------------------------------------------------
+# 2026-07-26 CEO batched-publish re-scope (AC8-11) — additive clips field on
+# HIGHLIGHT_CHUNK, and the new per-candidate HIGHLIGHT_PUBLISH progress row.
+# ---------------------------------------------------------------------------
+def test_highlight_chunk_completed_clips_field_defaults_to_empty_list():
+    """Additive-only: a caller that doesn't pass `clips` at all (an OLDER
+    call site, or a legitimate zero-highlight chunk) gets [], never a
+    missing key or a crash."""
+    cp = build_highlight_chunk_completed(
+        chunk_index=0, chunks_total=1, highlights_scanned=0,
+        highlights_analyzed=0, highlights_ditched=0, highlights_published=0,
+        gemini_file_uri="files/abc", worker_state=_ws(progress_percent=100.0),
+    )
+    assert cp["artifacts"]["clips"] == []
+
+
+def test_highlight_chunk_completed_clips_field_carries_collected_clips():
+    clips = [{"start_s": 10.0, "end_s": 20.0, "action_class": "guard_pass", "_candidate_key": "0:1"}]
+    cp = build_highlight_chunk_completed(
+        chunk_index=0, chunks_total=1, highlights_scanned=1,
+        highlights_analyzed=1, highlights_ditched=0, highlights_published=0,
+        gemini_file_uri="files/abc", worker_state=_ws(progress_percent=100.0),
+        clips=clips,
+    )
+    assert cp["artifacts"]["clips"] == clips
+
+
+def test_highlight_publish_progress_envelope_shape():
+    cp = build_highlight_publish_progress(
+        candidate_key="2:3", event_index=17,
+        worker_state=_ws(progress_percent=34.0, stage_progress_fraction=0.34),
+    )
+    _assert_envelope(cp)
+    assert cp["reason"] == "highlight_publish_candidate"
+    assert cp["artifacts"]["candidate_key"] == "2:3"
+    assert cp["artifacts"]["event_index"] == 17
+    # Never the terminal-checkpoint shape — caller writes this with
+    # completed=False, and this builder never claims otherwise itself
+    # (completed is the write_checkpoint caller's own argument, not part
+    # of the envelope this builder returns).
+    assert cp["reason"] != "highlight_publish_completed"
 
 
 # ---------------------------------------------------------------------------

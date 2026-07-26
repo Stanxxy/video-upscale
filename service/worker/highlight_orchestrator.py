@@ -12,6 +12,22 @@ chunk loop over match duration, reusing ``executors.run_pipeline`` byte-for-
 byte (the same function the QA playground drives via
 ``routes/qa_pipeline.py``) — the budget-cap gate, offset-quantization,
 synthetic-seam preroll/postroll clamping, etc. all apply for free.
+
+**Batched publish (2026-07-26 CEO re-scope, AC8-11; Brooks's architecture
+ruling §2a, correcting his own original §2):** SNS publish is NO LONGER
+per-highlight-incremental. The per-chunk loop below only ANALYZES and
+COLLECTS each highlight's clip (persisted onto that chunk's own
+``HIGHLIGHT_CHUNK`` checkpoint). After the full loop completes, the whole
+match's clips are reconstructed from checkpoints (works identically
+whether a chunk was freshly analyzed this run or resumed past), seam-
+deduped (``service/worker/seam_dedup.py``), majority-vote reconciled
+(``service/worker/majority_vote.py`` — the founder-approved per-match actor
+consensus), and ONLY THEN published, once, in a single finalize loop that
+is itself resumable at candidate granularity (the ``HIGHLIGHT_PUBLISH``
+checkpoint stage now carries real per-candidate progress rows, not just a
+terminal marker). SSE progress (``service/routes/events.py``) is untouched
+— it stays streaming, per-chunk, for job-progress UI visibility; only the
+SNS/``VideoEventCandidate`` delivery path moved.
 """
 from __future__ import annotations
 
@@ -21,6 +37,7 @@ import logging
 import math
 import os
 import shutil
+from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -28,7 +45,11 @@ from google import genai
 from google.genai import types
 
 from service.analysis_keyspaces_enums import JobState, PipelineStage
-from service.checkpoints import build_highlight_chunk_completed, build_highlight_publish_completed
+from service.checkpoints import (
+    build_highlight_chunk_completed,
+    build_highlight_publish_completed,
+    build_highlight_publish_progress,
+)
 from service.checkpoints.highlight_resume import build_highlight_resume_plan
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
@@ -37,7 +58,7 @@ from service.models import JobStatus, TrackRequest
 from service.pipelines import executors, gemini_retry, gemini_upload
 from service.pipelines.registry import get_default
 from service.sns import SNSPublisher, clip_to_axis_only_event
-from service.worker import seam_dedup
+from service.worker import majority_vote, seam_dedup
 from service.worker.helpers import _is_cancelled, _make_s3
 from service.worker.progress import _make_worker_state
 from service.worker.stages.highlight_ingest import run_highlight_ingest_stage
@@ -95,6 +116,87 @@ def _chunk_progress_pct(position: int, chunks_total: int) -> float:
     return round(100.0 * min(position, chunks_total) / chunks_total, 1)
 
 
+def _checkpoint_sort_key(cp: dict) -> tuple[float, int]:
+    """Rows without a real ``updated_at`` sort first (so an explicit
+    timestamp always wins when both exist), ``id(cp)`` breaks ties without
+    ever comparing two ``None``s directly (which would raise) — mirrors
+    ``service/checkpoints/query.py::_checkpoint_ts``'s own tie-break
+    discipline exactly; duplicated intentionally rather than importing a
+    private helper across a module-privacy boundary."""
+    ts = cp.get("updated_at")
+    if isinstance(ts, datetime):
+        return (ts.timestamp(), id(cp))
+    return (0.0, id(cp))
+
+
+def _clips_by_chunk_from_checkpoints(checkpoints: list[dict], chunks_total: int) -> list[list[dict]]:
+    """2026-07-26 CEO batched-publish re-scope (AC8-11) — reconstructs every
+    chunk's OWN collected clip list from its durable ``HIGHLIGHT_CHUNK``
+    checkpoint (``build_highlight_chunk_completed``'s additive ``clips``
+    field). The single source of truth for the match's full candidate set
+    at finalize time, regardless of whether a given chunk was freshly
+    re-analyzed THIS run or its clips are being recovered from an earlier,
+    resumed-past run's completed checkpoint — this function never
+    distinguishes the two, by design (see ``run_highlight_job``).
+
+    An OLDER-format ``HIGHLIGHT_CHUNK`` checkpoint written before the
+    ``clips`` field existed (or an in-flight job crossing this exact
+    deploy boundary) contributes an empty list for that chunk — additive-
+    only, never a crash, never fabricated clips. Multiple rows for the
+    SAME ``chunk_index`` (should not normally happen — resume skips
+    already-completed chunks — but the schema permits it) resolve to the
+    LATEST write by ``updated_at``, same "last INSERT wins" convention as
+    ``build_highlight_resume_plan``'s own ingest-checkpoint handling."""
+    by_chunk: dict[int, list[dict]] = {}
+    for cp in sorted(checkpoints, key=_checkpoint_sort_key):
+        if cp.get("stage_name") != PipelineStage.HIGHLIGHT_CHUNK.value:
+            continue
+        if not cp.get("completed"):
+            continue
+        data = cp.get("checkpoint_data") or {}
+        idx = data.get("chunk_index")
+        if not isinstance(idx, int):
+            continue
+        clips = (data.get("artifacts") or {}).get("clips") or []
+        by_chunk[idx] = clips
+    return [by_chunk.get(i, []) for i in range(chunks_total)]
+
+
+def _published_candidate_keys_from_checkpoints(checkpoints: list[dict]) -> frozenset[str]:
+    """Every ``candidate_key`` already recorded as published by a
+    ``build_highlight_publish_progress`` row from a PRIOR run — the
+    resumable-finalize-loop's own "already sent, never re-send" set
+    (Brooks's named new requirement, §2a)."""
+    keys: set[str] = set()
+    for cp in checkpoints:
+        if cp.get("stage_name") != PipelineStage.HIGHLIGHT_PUBLISH.value:
+            continue
+        data = cp.get("checkpoint_data") or {}
+        if data.get("reason") != "highlight_publish_candidate":
+            continue
+        candidate_key = (data.get("artifacts") or {}).get("candidate_key")
+        if candidate_key:
+            keys.add(candidate_key)
+    return frozenset(keys)
+
+
+def _publish_terminal_done(checkpoints: list[dict]) -> bool:
+    """Whether the terminal ``HIGHLIGHT_PUBLISH`` checkpoint
+    (``build_highlight_publish_completed``, ``completed=True``) was already
+    written by a prior run — mirrors the tracking pipeline's own established
+    "resume skips a fully-completed terminal-publish stage" convention
+    (``worker/orchestrator.py``'s analogous resume-terminal-publish check)."""
+    for cp in checkpoints:
+        if cp.get("stage_name") != PipelineStage.HIGHLIGHT_PUBLISH.value:
+            continue
+        if not cp.get("completed"):
+            continue
+        data = cp.get("checkpoint_data") or {}
+        if data.get("reason") == "highlight_publish_completed":
+            return True
+    return False
+
+
 async def run_highlight_job(
     job_id: str,
     request: TrackRequest,
@@ -103,8 +205,10 @@ async def run_highlight_job(
     jobs_store: JobsStore,
 ) -> None:
     """Run the v2 highlight job: HIGHLIGHT_INGEST -> outer chunk loop
-    (``executors.run_pipeline`` per chunk, per-highlight SNS publish,
-    ``HIGHLIGHT_CHUNK`` checkpoint) -> HIGHLIGHT_PUBLISH -> COMPLETED.
+    (``executors.run_pipeline`` per chunk, collect-only, ``HIGHLIGHT_CHUNK``
+    checkpoint) -> seam dedup + majority-vote reconciliation -> finalize
+    publish loop (resumable at candidate granularity) -> HIGHLIGHT_PUBLISH
+    -> COMPLETED.
 
     Same top-level try/except/finally SHAPE as ``worker/orchestrator.py::
     run_job`` (cancellation -> CANCELLED, uncaught exception -> FAILED,
@@ -165,24 +269,15 @@ async def run_highlight_job(
         output_bucket = request.output_bucket or request.bucket
         base_key = os.path.splitext(request.key)[0]
 
-        published_events: list[dict] = []
         highlights_found_total = 0
-        event_index = 0
-        # Item 11.5 — pure measurement plumbing. No behavior branches on
-        # these numbers anywhere in this function or downstream.
-        player_id_counts: dict[str, int] = {}
-        sentinel_count = 0
-        identity_uncertain_count = 0
-        # AC6 seam dedup (see service/worker/seam_dedup.py): the PREVIOUS
-        # chunk's own trailing-seam-band clips (already published), carried
-        # forward one chunk at a time so the CURRENT chunk can check its own
-        # leading-seam-band highlights against them. Empty at job start and
-        # after a resume (chunk_index < resume_from_chunk_index chunks are
-        # never reprocessed) — a documented, narrow limitation: a resumed
-        # job's first processed chunk has no seam-dedup context against the
-        # chunk immediately before the resume point.
-        prior_seam_clips: list[dict] = []
 
+        # ------------------------------------------------------------- #
+        # Phase 1 — per-chunk analyze loop: ANALYZE + COLLECT only. No
+        # publish, no dedup, no attribution counting here anymore (2026-
+        # 07-26 CEO batched-publish re-scope) — every one of those is now a
+        # match-scope concern computed once, after this loop, over the
+        # complete, checkpoint-reconstructed clip set (Phase 2 onward).
+        # ------------------------------------------------------------- #
         for chunk_index, (chunk_start, chunk_end) in enumerate(chunks):
             if chunk_index < resume_from_chunk_index:
                 continue
@@ -204,11 +299,8 @@ async def run_highlight_job(
             highlights_scanned = 0
             highlights_analyzed = 0
             highlights_ditched = 0
-            highlights_published = 0
             chunk_error_count = 0
-            # This chunk's own clips landing in the seam band it shares with
-            # the NEXT chunk — becomes that chunk's `prior_seam_clips`.
-            this_chunk_trailing_seam_clips: list[dict] = []
+            this_chunk_clips: list[dict] = []
 
             async for event in executors.run_pipeline(
                 pipeline, ctx, planned, budget_cap=config.highlight_pipeline_budget_cap,
@@ -243,70 +335,16 @@ async def run_highlight_job(
                     clips = event.get("clips") or []
                     if not clips:
                         continue
-                    clip = clips[0]
-                    clip_start = clip.get("start_s")
-                    clip_end = clip.get("end_s")
-
-                    # AC6 seam dedup: if this highlight lands in the LEADING
-                    # overlap band shared with the PREVIOUS chunk, check
-                    # whether that chunk already published the same real
-                    # event (temporal-proximity + class-compatible, actor
-                    # NEVER consulted — seam_dedup.py). The already-published
-                    # record is never touched/rewritten; this candidate is
-                    # simply never published (AC6: "not re-published").
-                    is_seam_duplicate = False
-                    if (
-                        chunk_index > 0 and clip_start is not None and clip_end is not None
-                        and seam_dedup.in_seam_band(clip_start, clip_end, chunk_start, chunks[chunk_index - 1][1])
-                    ):
-                        match = seam_dedup.find_seam_duplicate(clip, prior_seam_clips)
-                        if match is not None:
-                            is_seam_duplicate = True
-                            logger.info(
-                                "Job %s: chunk %d: highlight %s [%.2f-%.2f] suppressed as a seam "
-                                "duplicate of a highlight already published by chunk %d",
-                                job_id, chunk_index, event.get("highlight_index"),
-                                clip_start, clip_end, chunk_index - 1,
-                            )
-
-                    # Track this chunk's own trailing-seam-band clips
-                    # regardless of the dedup outcome above — chunk k+1 needs
-                    # the REAL published record to check against, and a
-                    # highlight THIS chunk itself just suppressed as a
-                    # duplicate is never a valid anchor (it was never
-                    # published).
-                    if (
-                        not is_seam_duplicate and chunk_index + 1 < chunks_total
-                        and clip_start is not None and clip_end is not None
-                        and seam_dedup.in_seam_band(clip_start, clip_end, chunks[chunk_index + 1][0], chunk_end)
-                    ):
-                        this_chunk_trailing_seam_clips.append(clip)
-
-                    if is_seam_duplicate:
-                        continue
-
-                    pid = clip.get("player_id")
-                    if pid:
-                        player_id_counts[pid] = player_id_counts.get(pid, 0) + 1
-                    elif clip.get("actor_sentinel"):
-                        sentinel_count += 1
-                    if clip.get("identity_uncertain"):
-                        identity_uncertain_count += 1
-
-                    if sns is None:
-                        continue
-
-                    try:
-                        candidate_event = clip_to_axis_only_event(clip, video_id)
-                        event_index += 1
-                        sns.publish_axis_only_event(candidate_event, event_index=event_index)
-                        highlights_published += 1
-                        published_events.append(candidate_event.model_dump(mode="json"))
-                    except Exception as e:  # noqa: BLE001 — real publish failure, logged, non-fatal
-                        logger.error(
-                            "Job %s: chunk %d: publish failed for highlight %s: %s",
-                            job_id, chunk_index, event.get("highlight_index"), e,
-                        )
+                    # Stable per-candidate identity (survives a resume —
+                    # derived from data persisted on THIS chunk's own
+                    # checkpoint, never from in-memory-only run state) —
+                    # see build_highlight_publish_progress's docstring.
+                    highlight_index = event.get("highlight_index")
+                    clip = dict(clips[0])
+                    clip["_chunk_index"] = chunk_index
+                    clip["_highlight_index"] = highlight_index
+                    clip["_candidate_key"] = f"{chunk_index}:{highlight_index}"
+                    this_chunk_clips.append(clip)
 
                 elif etype == "error":
                     # design §1.4: one bad Gemini call degrades, never
@@ -331,67 +369,189 @@ async def run_highlight_job(
                     highlights_scanned=highlights_scanned,
                     highlights_analyzed=highlights_analyzed,
                     highlights_ditched=highlights_ditched,
-                    highlights_published=highlights_published,
+                    # Publish no longer happens per-chunk at all — see
+                    # build_highlight_chunk_completed's own docstring.
+                    highlights_published=0,
                     gemini_file_uri=ingest.gemini_file_uri,
                     worker_state=_make_worker_state(
                         progress_percent=_chunk_progress_pct(chunk_index + 1, chunks_total),
                         stage_progress_fraction=1.0,
                     ),
+                    clips=this_chunk_clips,
                 ),
             )
-            # AC6: hand this chunk's own trailing-seam-band clips to the NEXT
-            # chunk's dedup check (see the `prior_seam_clips` docstring above).
-            prior_seam_clips = this_chunk_trailing_seam_clips
+
+        # ------------------------------------------------------------- #
+        # Phase 2 — reconstruct the FULL match's clip set from durable
+        # checkpoints (works identically for chunks freshly analyzed this
+        # run and chunks recovered from an earlier, resumed-past run).
+        # ------------------------------------------------------------- #
+        checkpoints_after_chunks = await jobs_store.get_all_checkpoints(job_id)
+        clips_by_chunk = _clips_by_chunk_from_checkpoints(checkpoints_after_chunks, chunks_total)
+
+        # Phase 3 — whole-match seam dedup (AC6; service/worker/seam_dedup.py).
+        deduped_clips, seam_duplicates_dropped = seam_dedup.dedup_match_clips(clips_by_chunk, chunks)
+        if seam_duplicates_dropped:
+            logger.info(
+                "Job %s: seam dedup dropped %d duplicate highlight(s) across outer-chunk boundaries",
+                job_id, seam_duplicates_dropped,
+            )
+
+        # Phase 4 — per-match majority-vote actor reconciliation (AC8-11;
+        # service/worker/majority_vote.py) — overwrites player_id/
+        # player_name/identity_uncertain/actor_sentinel on every clip.
+        reconciled_clips, flip_count = majority_vote.reconcile_match_actors(deduped_clips)
+        cross_highlight_flip_rate = (flip_count / len(reconciled_clips)) if reconciled_clips else 0.0
+
+        # Phase 5 — attribution metrics, computed ONCE over the final
+        # (deduped + reconciled) clip set — never double-counted against a
+        # seam duplicate, never measuring pre-reconciliation identities.
+        player_id_counts: dict[str, int] = {}
+        sentinel_count = 0
+        identity_uncertain_count = 0
+        for clip in reconciled_clips:
+            pid = clip.get("player_id")
+            if pid:
+                player_id_counts[pid] = player_id_counts.get(pid, 0) + 1
+            elif clip.get("actor_sentinel"):
+                sentinel_count += 1
+            if clip.get("identity_uncertain"):
+                identity_uncertain_count += 1
+
+        # ------------------------------------------------------------- #
+        # Phase 6 — finalize publish: ONE pass over the reconciled clips,
+        # resumable at candidate granularity (Brooks's named new
+        # requirement, §2a) — a candidate already recorded as published by
+        # an earlier, crashed-mid-batch run is never re-sent.
+        # ------------------------------------------------------------- #
+        already_published_keys = _published_candidate_keys_from_checkpoints(checkpoints_after_chunks)
+        publish_terminal_done = _publish_terminal_done(checkpoints_after_chunks)
+        if publish_terminal_done:
+            logger.info(
+                "Job %s: HIGHLIGHT_PUBLISH already terminal on a prior run — rebuilding the "
+                "audit view only, no new SNS calls", job_id,
+            )
+        elif already_published_keys:
+            logger.info(
+                "Job %s: resuming finalize publish — %d candidate(s) already published on a "
+                "prior run, skipping those, publishing the remainder", job_id, len(already_published_keys),
+            )
+
+        published_events: list[dict] = []
+        total_candidates = len(reconciled_clips)
+        for event_idx, clip in enumerate(reconciled_clips, start=1):
+            candidate_key = clip.get("_candidate_key")
+            try:
+                candidate_event = clip_to_axis_only_event(clip, video_id)
+            except Exception as e:  # noqa: BLE001 — real mapping failure, logged, non-fatal
+                logger.error(
+                    "Job %s: failed to build candidate event for %s: %s", job_id, candidate_key, e,
+                )
+                continue
+
+            if publish_terminal_done or candidate_key in already_published_keys:
+                # Already sent on an earlier run (or the whole stage is
+                # already terminal) — NEVER re-publish; just fold it into
+                # this run's audit view.
+                published_events.append(candidate_event.model_dump(mode="json"))
+                continue
+
+            if sns is None:
+                continue  # no topic configured — analyzed but never published, same as before
+
+            try:
+                sns.publish_axis_only_event(candidate_event, event_index=event_idx)
+            except Exception as e:  # noqa: BLE001 — real publish failure, logged, non-fatal
+                logger.error(
+                    "Job %s: publish failed for candidate %s: %s", job_id, candidate_key, e,
+                )
+                continue
+
+            published_events.append(candidate_event.model_dump(mode="json"))
+            if candidate_key:
+                await jobs_store.write_checkpoint(
+                    job_id, PipelineStage.HIGHLIGHT_PUBLISH, False,
+                    build_highlight_publish_progress(
+                        candidate_key=candidate_key, event_index=event_idx,
+                        worker_state=_make_worker_state(
+                            progress_percent=_chunk_progress_pct(event_idx, total_candidates),
+                            stage_progress_fraction=(event_idx / total_candidates) if total_candidates else 1.0,
+                        ),
+                    ),
+                )
 
         attribution_metrics = {
             "player_id_counts": player_id_counts,
             "sentinel_count": sentinel_count,
             "identity_uncertain_count": identity_uncertain_count,
             "total_published": len(published_events),
+            # Additive telemetry (AC10/Gate 4) — audit/SSE-only, never
+            # coach-facing (OQ3): fraction of the match's highlights whose
+            # own raw attribution disagreed with the match's majority-vote
+            # winner. A tied/no-majority match counts as 100% (see
+            # majority_vote.reconcile_match_actors's own docstring).
+            "cross_highlight_flip_rate": round(cross_highlight_flip_rate, 4),
+            "seam_duplicates_dropped": seam_duplicates_dropped,
         }
 
-        # design §5.4: ONE consolidated audit JSON of every published event —
-        # not load-bearing for the backend (already delivered live via SNS),
-        # operational hygiene only.
         s3 = _make_s3(config)
         events_key = f"{base_key}_v2_events.json"
         result_s3_uri: Optional[str] = None
-        try:
-            loop = asyncio.get_event_loop()
-            result_s3_uri = await loop.run_in_executor(
-                None, s3.upload_json,
-                {
-                    "video_id": str(video_id),
-                    "job_id": job_id,
-                    "events": published_events,
-                    "attribution_metrics": attribution_metrics,
-                },
-                output_bucket, events_key,
-            )
-        except Exception as e:  # noqa: BLE001 — audit artifact is hygiene, never blocks completion
-            logger.warning("Job %s: failed to write consolidated audit JSON: %s", job_id, e)
-
         sns_completion_sent = False
-        if sns is not None:
-            try:
-                sns.publish_analysis_complete(
-                    video_id, job_id, total_event_count=len(published_events),
-                    result_s3_uri=result_s3_uri,
-                )
-                sns_completion_sent = True
-            except Exception as e:  # noqa: BLE001 — real publish failure, logged, non-fatal
-                logger.error("Job %s: analysis_complete publish failed: %s", job_id, e)
 
-        await jobs_store.write_checkpoint(
-            job_id, PipelineStage.HIGHLIGHT_PUBLISH, True,
-            build_highlight_publish_completed(
-                sns_topic_arn=topic_arn or "",
-                sns_event_count=len(published_events),
-                sns_completion_sent=sns_completion_sent,
-                result_s3_uri=result_s3_uri,
-                worker_state=_make_worker_state(progress_percent=100.0, stage_progress_fraction=1.0),
-            ),
-        )
+        if publish_terminal_done:
+            # Both the consolidated audit JSON and the analysis_complete
+            # notification were already sent on the run that wrote the
+            # terminal checkpoint — resending analysis_complete here would
+            # duplicate the completion email (product memory: "users are
+            # notified by email at completion" — Brooks §2a); resending the
+            # audit JSON is harmless but pointless. Skip both, matching the
+            # tracking pipeline's own established "resume skips a fully-
+            # completed terminal-publish stage" convention.
+            logger.info(
+                "Job %s: skipping consolidated audit re-upload and analysis_complete re-publish "
+                "(already sent on a prior run)", job_id,
+            )
+        else:
+            # design §5.4: ONE consolidated audit JSON of every published
+            # event — not load-bearing for the backend (already delivered
+            # via SNS), operational hygiene only.
+            try:
+                loop = asyncio.get_event_loop()
+                result_s3_uri = await loop.run_in_executor(
+                    None, s3.upload_json,
+                    {
+                        "video_id": str(video_id),
+                        "job_id": job_id,
+                        "events": published_events,
+                        "attribution_metrics": attribution_metrics,
+                    },
+                    output_bucket, events_key,
+                )
+            except Exception as e:  # noqa: BLE001 — audit artifact is hygiene, never blocks completion
+                logger.warning("Job %s: failed to write consolidated audit JSON: %s", job_id, e)
+
+            if sns is not None:
+                try:
+                    sns.publish_analysis_complete(
+                        video_id, job_id, total_event_count=len(published_events),
+                        result_s3_uri=result_s3_uri,
+                    )
+                    sns_completion_sent = True
+                except Exception as e:  # noqa: BLE001 — real publish failure, logged, non-fatal
+                    logger.error("Job %s: analysis_complete publish failed: %s", job_id, e)
+
+            await jobs_store.write_checkpoint(
+                job_id, PipelineStage.HIGHLIGHT_PUBLISH, True,
+                build_highlight_publish_completed(
+                    sns_topic_arn=topic_arn or "",
+                    sns_event_count=len(published_events),
+                    sns_completion_sent=sns_completion_sent,
+                    result_s3_uri=result_s3_uri,
+                    worker_state=_make_worker_state(progress_percent=100.0, stage_progress_fraction=1.0),
+                ),
+            )
+
         await jobs_store.update_highlight_chunk_progress(
             job_id, PipelineStage.HIGHLIGHT_PUBLISH, 100.0,
             chunk_index=chunks_total, chunks_total=chunks_total,

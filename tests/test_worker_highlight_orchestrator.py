@@ -164,11 +164,18 @@ async def test_multi_chunk_job_completes_with_per_chunk_checkpoints_in_order(mon
     ]
     assert [cp["checkpoint_data"]["chunk_index"] for cp in chunk_checkpoints] == [0, 1, 2]
     assert all(cp["completed"] for cp in chunk_checkpoints)
+    # 2026-07-26 batched-publish re-scope: HIGHLIGHT_PUBLISH now carries a
+    # per-candidate progress row (completed=False) per published candidate,
+    # PLUS the one terminal row (completed=True) — not just the terminal
+    # marker alone.
     publish_checkpoints = [
         w for w in jobs_store.written if w["stage_name"] == PipelineStage.HIGHLIGHT_PUBLISH.value
     ]
-    assert len(publish_checkpoints) == 1
-    assert publish_checkpoints[0]["checkpoint_data"]["artifacts"]["sns_event_count"] == 2
+    progress_rows = [cp for cp in publish_checkpoints if not cp["completed"]]
+    terminal_rows = [cp for cp in publish_checkpoints if cp["completed"]]
+    assert len(progress_rows) == 2  # one per published candidate (p1's + p2's highlight)
+    assert len(terminal_rows) == 1
+    assert terminal_rows[0]["checkpoint_data"]["artifacts"]["sns_event_count"] == 2
 
     final_job = await job_store.get_job(job.job_id)
     assert final_job.status.value == "completed"
@@ -195,7 +202,12 @@ async def test_ditched_highlight_never_published(monkeypatch, _mock_boundaries):
     chunk_cp = next(w for w in jobs_store.written if w["stage_name"] == PipelineStage.HIGHLIGHT_CHUNK.value)
     assert chunk_cp["checkpoint_data"]["highlights_ditched"] == 1
     assert chunk_cp["checkpoint_data"]["highlights_analyzed"] == 1
-    assert chunk_cp["checkpoint_data"]["highlights_published"] == 1
+    # 2026-07-26 batched-publish re-scope: publish no longer happens per-
+    # chunk at all — highlights_published is always 0 at chunk-checkpoint
+    # time now (see build_highlight_chunk_completed's own docstring); the
+    # real publish count lives on the TERMINAL HIGHLIGHT_PUBLISH checkpoint.
+    assert chunk_cp["checkpoint_data"]["highlights_published"] == 0
+    assert chunk_cp["checkpoint_data"]["artifacts"]["clips"][0]["_highlight_index"] == 2
 
 
 @pytest.mark.asyncio
@@ -276,7 +288,12 @@ async def test_analysis_complete_published_once_after_last_chunk(monkeypatch, _m
 
 
 @pytest.mark.asyncio
-async def test_attribution_metrics_accumulate_player_id_and_sentinel_counts(monkeypatch, _mock_boundaries):
+async def test_attribution_metrics_reflect_majority_vote_reconciled_counts(monkeypatch, _mock_boundaries):
+    """2026-07-26 CEO batched-publish re-scope: attribution_metrics now
+    counts the RECONCILED identity, not the raw per-highlight guess —
+    p1 is the match's only real vote (2/2), so majority vote applies it to
+    EVERY clip, including the one that raw-resolved to a sentinel (Brooks
+    §2a: "make per-player stats reflect the reconciled player")."""
     _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))
     _patch_run_pipeline(monkeypatch, [
         [{"type": "highlight_map", "highlights": [{"index": 1}, {"index": 2}, {"index": 3}]},
@@ -296,9 +313,11 @@ async def test_attribution_metrics_accumulate_player_id_and_sentinel_counts(monk
     metrics_json = final_progress[2]["attribution_metrics_json"]
     import json
     metrics = json.loads(metrics_json)
-    assert metrics["player_id_counts"] == {"p1": 2}
-    assert metrics["sentinel_count"] == 1
+    assert metrics["player_id_counts"] == {"p1": 3}  # reconciled — the sentinel clip flipped to p1
+    assert metrics["sentinel_count"] == 0
     assert metrics["total_published"] == 3
+    assert metrics["cross_highlight_flip_rate"] == round(1 / 3, 4)  # 1 of 3 clips disagreed with the winner
+    assert metrics["seam_duplicates_dropped"] == 0
 
 
 @pytest.mark.asyncio
@@ -422,10 +441,11 @@ async def test_seam_duplicate_highlight_suppressed_not_republished(monkeypatch, 
     await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
 
     assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 1  # chunk 1's duplicate suppressed
-    publish_checkpoints = [
-        w for w in jobs_store.written if w["stage_name"] == PipelineStage.HIGHLIGHT_PUBLISH.value
-    ]
-    assert publish_checkpoints[0]["checkpoint_data"]["artifacts"]["sns_event_count"] == 1
+    terminal_publish_cp = next(
+        w for w in jobs_store.written
+        if w["stage_name"] == PipelineStage.HIGHLIGHT_PUBLISH.value and w["completed"]
+    )
+    assert terminal_publish_cp["checkpoint_data"]["artifacts"]["sns_event_count"] == 1
 
 
 @pytest.mark.asyncio
@@ -507,3 +527,274 @@ async def test_seam_duplicate_excluded_from_attribution_metrics(monkeypatch, _mo
     metrics = json.loads(jobs_store.progress_writes[-1][2]["attribution_metrics_json"])
     assert metrics["player_id_counts"] == {"p1": 1}  # not 2 — the duplicate never counted
     assert metrics["total_published"] == 1
+
+
+# =============================================================================== #
+# Evaluator condition (2026-07-26, PASS-WITH-CONDITIONS on commits 1-3):
+# regression-pin the resume x seam-dedup interaction against the NEW
+# (whole-match, checkpoint-reconstructed) dedup shape landed by the
+# 2026-07-26 CEO batched-publish re-scope. Under the OLD streaming design
+# (99d1a1a), `prior_seam_clips` reset to `[]` on every resume — a duplicate
+# straddling the resume boundary would NOT have been caught (documented,
+# accepted limitation at the time). The batched-publish redesign CLOSES
+# this gap as a side effect: dedup now runs ONCE, post-hoc, over clips
+# reconstructed from EVERY completed HIGHLIGHT_CHUNK checkpoint (including
+# ones from before this resume) — so seam-dedup correctness no longer
+# depends on which chunks THIS process happened to re-run.
+# =============================================================================== #
+def _checkpointed_chunk0_with_trailing_seam_clip(action_class: str) -> dict:
+    return {
+        "stage_name": PipelineStage.HIGHLIGHT_CHUNK.value,
+        "completed": True,
+        "checkpoint_data": {
+            "chunk_index": 0, "chunks_total": 3,
+            "artifacts": {
+                "clips": [{
+                    "start_s": 700.0, "end_s": 715.0, "action_class": action_class,
+                    "position": "mount", "outcome": "successful",
+                    "player_id": None, "player_name": None,
+                    "identity_uncertain": None, "actor_sentinel": None, "notes": "n",
+                    "_chunk_index": 0, "_highlight_index": 1, "_candidate_key": "0:1",
+                }],
+            },
+        },
+    }
+
+
+@pytest.mark.asyncio
+async def test_resume_seam_dedup_correctly_suppresses_duplicate_using_checkpointed_prior_chunk_clips(
+    monkeypatch, _mock_boundaries,
+):
+    """Resuming from chunk_index=1 (chunk 0 already completed on a PRIOR
+    run, never re-analyzed THIS run) with a genuine seam duplicate in the
+    resumed chunk's leading band must still correctly suppress it — the
+    gap the old streaming design had (prior_seam_clips empty post-resume)
+    is closed because dedup now reads chunk 0's clips back from its own
+    durable checkpoint, not from this run's in-memory state."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=1500.0))
+    _patch_run_pipeline(monkeypatch, [
+        # First call THIS run corresponds to chunk 1 (chunk 0 skipped via resume).
+        [{"type": "highlight_map", "highlights": [{"index": 1}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(start_s=703.0, end_s=716.0, action_class="submission_arm_lock")],
+        [{"type": "highlight_map", "highlights": []},
+         {"type": "stage_complete", "stage_type": "highlight_scan"}],
+    ])
+
+    jobs_store = FakeJobsStore(checkpoints=[_checkpointed_chunk0_with_trailing_seam_clip("submission_choke")])
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    # Only chunk 0's checkpointed clip is published — chunk 1's rediscovery
+    # is correctly suppressed as a seam duplicate, even though THIS process
+    # never re-processed chunk 0 at all.
+    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_resume_seam_dedup_correctly_publishes_non_duplicate_across_resume_boundary(
+    monkeypatch, _mock_boundaries,
+):
+    """Same resume shape, but chunk 1's leading-seam highlight is NOT a
+    duplicate (class-incompatible) — both chunk 0's (checkpointed, prior
+    run) and chunk 1's (this run) highlights must publish; the resume
+    boundary must never cause an over-eager false-positive suppression
+    either."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=1500.0))
+    _patch_run_pipeline(monkeypatch, [
+        [{"type": "highlight_map", "highlights": [{"index": 1}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(start_s=703.0, end_s=716.0, action_class="takedown_attempt")],
+        [{"type": "highlight_map", "highlights": []},
+         {"type": "stage_complete", "stage_type": "highlight_scan"}],
+    ])
+
+    jobs_store = FakeJobsStore(checkpoints=[_checkpointed_chunk0_with_trailing_seam_clip("submission_choke")])
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 2
+
+
+# =============================================================================== #
+# 2026-07-26 CEO batched-publish re-scope (AC8-11) — publish-batching tests:
+# nothing published mid-run, everything published at finalize, a crash-mid-
+# finalize resume publishes only the remainder.
+# =============================================================================== #
+@pytest.mark.asyncio
+async def test_nothing_published_during_the_per_chunk_loop_only_at_finalize(monkeypatch, _mock_boundaries):
+    """Direct proof of the batched-publish redesign: publish_axis_only_event
+    is NEVER called while a chunk's own run_pipeline is still streaming
+    events — only after the full per-chunk analyze loop completes."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))
+
+    call_count = {"n": 0}
+
+    async def _fake_run_pipeline(pipeline, ctx, planned, budget_cap=None):
+        yield {"type": "highlight_map", "highlights": [{"index": 1}]}
+        yield {"type": "stage_complete", "stage_type": "highlight_scan"}
+        assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 0
+        yield _analyzed_event(player_id="p1")
+        # Still not published — this highlight_result was JUST yielded; the
+        # orchestrator only COLLECTS it now (Phase 1), publish is Phase 6.
+        assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 0
+        call_count["n"] += 1
+
+    monkeypatch.setattr(highlight_orchestrator.executors, "run_pipeline", _fake_run_pipeline)
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    assert call_count["n"] == 1
+    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 1  # published only at finalize
+
+
+@pytest.mark.asyncio
+async def test_all_candidates_published_exactly_once_at_finalize_on_a_full_run(monkeypatch, _mock_boundaries):
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))
+    _patch_run_pipeline(monkeypatch, [
+        [{"type": "highlight_map", "highlights": [{"index": 1}, {"index": 2}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(highlight_index=1, start_s=10.0, end_s=20.0, player_id="p1"),
+         _analyzed_event(highlight_index=2, start_s=100.0, end_s=110.0, player_id="p1")],
+    ])
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 2
+    progress_rows = [
+        w for w in jobs_store.written
+        if w["stage_name"] == PipelineStage.HIGHLIGHT_PUBLISH.value and not w["completed"]
+    ]
+    assert {r["checkpoint_data"]["artifacts"]["candidate_key"] for r in progress_rows} == {"0:1", "0:2"}
+
+
+@pytest.mark.asyncio
+async def test_resume_mid_finalize_publishes_only_the_remainder(monkeypatch, _mock_boundaries):
+    """Brooks's named new requirement (§2a): a crash mid-finalize-batch
+    (e.g. after 1 of 2 candidates published) must resume publishing ONLY
+    the remaining candidate(s) — zero double-sends."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))
+    # All chunks already complete — the per-chunk loop is a no-op this run.
+    checkpoints = [
+        {
+            "stage_name": PipelineStage.HIGHLIGHT_CHUNK.value,
+            "completed": True,
+            "checkpoint_data": {
+                "chunk_index": 0, "chunks_total": 1,
+                "artifacts": {"clips": [
+                    {
+                        "start_s": 10.0, "end_s": 20.0, "action_class": "guard_pass",
+                        "position": "mount", "outcome": "successful",
+                        "player_id": "p1", "player_name": "Alice",
+                        "identity_uncertain": False, "actor_sentinel": None, "notes": "n",
+                        "_chunk_index": 0, "_highlight_index": 1, "_candidate_key": "0:1",
+                    },
+                    {
+                        "start_s": 100.0, "end_s": 110.0, "action_class": "sweep",
+                        "position": "half_guard", "outcome": "successful",
+                        "player_id": "p1", "player_name": "Alice",
+                        "identity_uncertain": False, "actor_sentinel": None, "notes": "n",
+                        "_chunk_index": 0, "_highlight_index": 2, "_candidate_key": "0:2",
+                    },
+                ]},
+            },
+        },
+        # Candidate 0:1 already published on a PRIOR (crashed-mid-finalize) run.
+        {
+            "stage_name": PipelineStage.HIGHLIGHT_PUBLISH.value,
+            "completed": False,
+            "checkpoint_data": {
+                "reason": "highlight_publish_candidate",
+                "artifacts": {"candidate_key": "0:1", "event_index": 1},
+            },
+        },
+    ]
+    _patch_run_pipeline(monkeypatch, [])  # resume_from_chunk_index == chunks_total -> loop never runs
+
+    jobs_store = FakeJobsStore(checkpoints=checkpoints)
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    # Only candidate 0:2 gets a real SNS call this run — 0:1 is skipped
+    # (already published on the prior run), never double-sent.
+    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 1
+    terminal_cp = next(
+        w for w in jobs_store.written
+        if w["stage_name"] == PipelineStage.HIGHLIGHT_PUBLISH.value and w["completed"]
+    )
+    # The audit view (sns_event_count) still counts BOTH candidates — the
+    # already-published one is rebuilt into the audit record, just never
+    # re-sent over the wire.
+    assert terminal_cp["checkpoint_data"]["artifacts"]["sns_event_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_resume_after_publish_terminal_already_done_never_resends_analysis_complete(
+    monkeypatch, _mock_boundaries,
+):
+    """A resume that lands after the terminal HIGHLIGHT_PUBLISH checkpoint
+    was already written (a narrow crash window between that write and the
+    job being marked COMPLETED) must never re-publish ANY candidate and
+    must never resend the analysis_complete notification (product memory:
+    users get a completion email — a duplicate would be a real bug)."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))
+    checkpoints = [
+        {
+            "stage_name": PipelineStage.HIGHLIGHT_CHUNK.value,
+            "completed": True,
+            "checkpoint_data": {
+                "chunk_index": 0, "chunks_total": 1,
+                "artifacts": {"clips": [{
+                    "start_s": 10.0, "end_s": 20.0, "action_class": "guard_pass",
+                    "position": "mount", "outcome": "successful",
+                    "player_id": "p1", "player_name": "Alice",
+                    "identity_uncertain": False, "actor_sentinel": None, "notes": "n",
+                    "_chunk_index": 0, "_highlight_index": 1, "_candidate_key": "0:1",
+                }]},
+            },
+        },
+        {
+            "stage_name": PipelineStage.HIGHLIGHT_PUBLISH.value,
+            "completed": True,
+            "checkpoint_data": {
+                "reason": "highlight_publish_completed",
+                "artifacts": {
+                    "sns_topic_arn": "arn:aws:sns:x", "sns_event_count": 1,
+                    "sns_completion_sent": True, "result_s3_uri": "s3://out-bucket/videos/match_v2_events.json",
+                },
+            },
+        },
+    ]
+    _patch_run_pipeline(monkeypatch, [])
+
+    jobs_store = FakeJobsStore(checkpoints=checkpoints)
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    _mock_boundaries["sns"].publish_axis_only_event.assert_not_called()
+    _mock_boundaries["sns"].publish_analysis_complete.assert_not_called()
+    _mock_boundaries["s3"].upload_json.assert_not_called()
+    # No NEW terminal HIGHLIGHT_PUBLISH checkpoint written this run either.
+    new_terminal_rows = [
+        w for w in jobs_store.written
+        if w["stage_name"] == PipelineStage.HIGHLIGHT_PUBLISH.value and w["completed"]
+    ]
+    assert new_terminal_rows == []
+    final_job = await job_store.get_job(job.job_id)
+    assert final_job.status.value == "completed"
