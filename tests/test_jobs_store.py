@@ -56,6 +56,91 @@ async def test_create_lifecycle_propagates_recovery_index_failure():
     assert ok is False
 
 
+# ---------------------------------------------------------------------------
+# S12 Phase 1b — pipeline_kind additive column (item 10). Existing rows
+# (SimpleNamespace fixtures with no pipeline_kind attribute at all) must
+# read back as "tracking" — a job created before this column existed is,
+# definitionally, a tracking job.
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_get_lifecycle_defaults_absent_pipeline_kind_to_tracking():
+    store = JobsStore(FakeKeyspacesClient([], [_lifecycle_row()]))
+
+    lifecycle = await store.get_lifecycle("job-id")
+
+    assert lifecycle["pipeline_kind"] == "tracking"
+
+
+@pytest.mark.asyncio
+async def test_get_lifecycle_preserves_explicit_highlight_v2_pipeline_kind():
+    row = _lifecycle_row()
+    row.pipeline_kind = "highlight_v2"
+    store = JobsStore(FakeKeyspacesClient([], [row]))
+
+    lifecycle = await store.get_lifecycle("job-id")
+
+    assert lifecycle["pipeline_kind"] == "highlight_v2"
+
+
+@pytest.mark.asyncio
+async def test_update_highlight_chunk_progress_writes_v2_fields():
+    from service.analysis_keyspaces_enums import PipelineStage
+
+    store = JobsStore(FakeKeyspacesClient([True]))
+
+    ok = await store.update_highlight_chunk_progress(
+        "job-id", PipelineStage.HIGHLIGHT_CHUNK,
+        55.0, chunk_index=2, chunks_total=5, highlights_found_so_far=9,
+        attribution_metrics_json='{"p1": 3}',
+    )
+
+    assert ok is True
+
+
+@pytest.mark.asyncio
+async def test_get_lifecycle_defaults_v2_progress_fields_to_none_when_absent():
+    store = JobsStore(FakeKeyspacesClient([], [_lifecycle_row()]))
+
+    lifecycle = await store.get_lifecycle("job-id")
+
+    assert lifecycle["chunk_index"] is None
+    assert lifecycle["chunks_total"] is None
+    assert lifecycle["highlights_found_so_far"] is None
+    assert lifecycle["attribution_metrics_json"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_lifecycle_reads_back_v2_progress_fields_when_set():
+    row = _lifecycle_row()
+    row.chunk_index = 3
+    row.chunks_total = 6
+    row.highlights_found_so_far = 12
+    row.attribution_metrics_json = '{"p1": 3}'
+    store = JobsStore(FakeKeyspacesClient([], [row]))
+
+    lifecycle = await store.get_lifecycle("job-id")
+
+    assert lifecycle["chunk_index"] == 3
+    assert lifecycle["chunks_total"] == 6
+    assert lifecycle["highlights_found_so_far"] == 12
+    assert lifecycle["attribution_metrics_json"] == '{"p1": 3}'
+
+
+@pytest.mark.asyncio
+async def test_create_lifecycle_accepts_pipeline_kind_kwarg():
+    """Callers (create_track_job) can pass pipeline_kind="highlight_v2" — the
+    method must accept it without raising (real DDL/param-count coverage is
+    a live-Keyspaces concern; this test only guards the Python call
+    signature against accidental removal)."""
+    store = JobsStore(FakeKeyspacesClient([True, True]))
+
+    ok = await store.create_lifecycle(
+        "job-id", "video-id", "user-id", pipeline_kind="highlight_v2",
+    )
+
+    assert ok is True
+
+
 @pytest.mark.asyncio
 async def test_heartbeat_propagates_recovery_index_failure():
     store = JobsStore(FakeKeyspacesClient([True, False], [_lifecycle_row()]))

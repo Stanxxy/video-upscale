@@ -65,9 +65,8 @@ class ThinkingQualityMixin(BaseModel):
     ``2026-07-18-highlight-scan-critique-analyze-v2-plan.md``): Gemini
     ``thinking`` level + native ``media_resolution``. Reused (not
     redefined) across every v2 sub-config (``HighlightCritiqueConfig``,
-    ``PositionAxisConfig``, ``TechniqueAxisConfig``, ``ValidatorAxisConfig``)
-    so a future per-node-thinking/quality UI control is one mixin, not N
-    hand-duplicated field pairs (Brooks design-pass finding).
+    ``ActorAxisConfig``) so a future per-node-thinking/quality UI control is
+    one mixin, not N hand-duplicated field pairs (Brooks design-pass finding).
 
     Both default ``None`` (task/model default — see each call site's own
     "None means X" mapping, e.g. ``simplified_tags.media_resolution_enum``).
@@ -351,41 +350,24 @@ class HighlightCritiqueConfig(ThinkingQualityMixin):
     critique_backpad_s: float = Field(default=6.0, ge=0, le=30)
 
 
-class PositionAxisConfig(ThinkingQualityMixin):
-    """``HighlightAnalyzeConfig.position`` sub-config — the position-axis
-    call (Gracie: orthogonal to technique, e.g. "ends in side control").
-    Own ``model``/``thinking``/``media_resolution`` (mixin); the shared
-    top-level ``HighlightAnalyzeConfig.fps``/``preroll_s``/``postroll_s``
-    still govern the window sent to this call (no per-axis fps — build plan
-    v2 keeps a single fps knob across position/technique/validator)."""
+class ActorAxisConfig(ThinkingQualityMixin):
+    """``HighlightAnalyzeConfig.actor`` sub-config (S12 Phase 1b production
+    wiring design §4.3) — the actor/identity-attribution axis call. A
+    SECOND, independent axis call alongside the single taxonomy call: fires
+    EXACTLY ONCE per highlight (flat). Judges WHICH named athlete (or a
+    contested/unclear sentinel) is the primary actor, using reference
+    images (``RunContext.player_references``) threaded as inline ``Part``s
+    via ``SimplifiedTagsTimeAnalyzer.analyze_chunk``'s ``extra_parts``
+    kwarg — see ``highlight_axes.build_actor_schema``/``build_actor_prompt``.
+
+    ``media_resolution`` defaults ``None`` (mixin default -> LOW), same
+    discipline as every other axis config in this module — no axis carries a
+    non-``None`` default (2026-07-26 re-scope AC4: the removed validator's
+    HIGH default is moot by deletion, and is deliberately NOT copy-pasted
+    onto any surviving config here or on ``HighlightAnalyzeConfig`` below)."""
 
     model_config = ConfigDict(extra="forbid")
     model: str = "gemini-3.1-flash-lite"
-
-
-class TechniqueAxisConfig(ThinkingQualityMixin):
-    """``HighlightAnalyzeConfig.technique`` sub-config — the technique-axis
-    call (actor/action_class/outcome/specific_technique_guess). Independent
-    of, and complementary to, ``PositionAxisConfig`` — both calls fire for
-    every highlight (Gracie: NOT either/or)."""
-
-    model_config = ConfigDict(extra="forbid")
-    model: str = "gemini-3.1-flash-lite"
-
-
-class ValidatorAxisConfig(ThinkingQualityMixin):
-    """``HighlightAnalyzeConfig.validator`` sub-config — the adversarial
-    reconciliation/ditch-authority call. ``media_resolution`` DEFAULTS TO
-    ``"high"`` (unlike every other mixin user, which defaults ``None``) per
-    LeCun's design-pass finding: HIGH resolution is the untried lever for
-    occlusion-limited techniques, worth reserving for the one call whose job
-    is specifically to catch what the analyzer calls missed — never
-    defaulted on the (cheaper, higher-volume) position/technique calls
-    themselves."""
-
-    model_config = ConfigDict(extra="forbid")
-    model: str = "gemini-3.1-flash-lite"
-    media_resolution: Optional[Literal["low", "medium", "high"]] = "high"
 
 
 class HighlightAnalyzeConfig(BaseModel):
@@ -428,45 +410,50 @@ class HighlightAnalyzeConfig(BaseModel):
     ``registry.validate_pipeline_def`` time — same no-silent-swap discipline
     as ``chunk_analyze``/``analyze``.
 
-    **v2 evolution (this node's executor is SHARED by both
-    ``highlight-scan-analyze`` and ``highlight-scan-critique-analyze`` — the
-    restructure below applies to BOTH pipelines' real Gemini-call count, an
-    intentional, spec-directed consequence, not scope creep):**
-    ``executors.highlight_analyze_node`` no longer sends ONE
-    ``simplified-tags-time-v1`` call per highlight. It now runs an
-    INDEPENDENT ``position`` call (``PositionAxisConfig``) and ``technique``
-    call (``TechniqueAxisConfig``) — complementary, both always fire EXACTLY
-    ONCE per highlight, per Gracie's "position and technique are orthogonal"
-    finding (each returns a single flat verdict — no timestamps, no list to
-    merge; see ``service/pipelines/highlight_axes.py``) — then runs a bounded
-    ``for _ in range(max_validator_iterations)`` ``validator`` pass
-    (``ValidatorAxisConfig``, re-invoked on disagreement — position/technique
-    are NOT re-asked) that can ditch the highlight. ``model``/``thinking``
-    above are RETAINED but now UNUSED by the real per-axis calls (each axis
-    owns its own ``model``/``thinking`` via the mixin) — kept only so
-    ``registry.validate_pipeline_def``'s
-    existing top-level allowlist check and pre-existing tests asserting
-    these fields' presence/defaults stay green without a special case;
-    documented here as a deliberate, minor redundancy rather than silently
-    repurposed. ``fps``/``preroll_s``/``postroll_s`` ARE still real and used
-    (identically to before) for all three axis calls' shared window.
+    **Single-call cutover (2026-07-26-engine13-rescope-single-call-cutover.md
+    AC1/AC4, OQ1) — the position/technique/validator triple is DELETED, not
+    reconfigured.** LeCun's 5 cutover gates (``VERDICTS_V2.md``) ran the
+    two-call+validator design against a single flat taxonomy call TWICE, at
+    two model tiers, and the two-call design lost by a WIDER margin at the
+    stronger, qualified model (hit_T-hit_S: -1 -> -5) while the validator's
+    HIGH ``media_resolution`` default actively regressed a correct answer
+    (Gate 2, net_delta=-1). ``executors.highlight_analyze_node`` now sends
+    ONE taxonomy call per highlight (``highlight_axes.build_single_call_schema``
+    /``build_single_call_prompt`` — position + action_class + outcome
+    together, a single flat verdict, no timestamps) using this config's own
+    ``model``/``thinking``/``media_resolution``/``fps`` fields directly (no
+    more per-axis sub-configs for the taxonomy call — there is only one call
+    now). There is no more validator/ditch authority: every highlight that
+    reaches a synthesized clip is ``status="analyzed"`` (the field is kept,
+    constant, for wire-contract stability with
+    ``service/worker/highlight_orchestrator.py``'s existing
+    ``status == "ditched"`` branch, which now simply never fires).
 
-    v1 ships ``max_validator_iterations`` default **1** (single pass, per
-    founder decision) — the LOOP (>1 iteration) is v2, gated on v1
-    measurement; the field exists now (``ge=1, le=5``) so v2 is a default
-    change, never a restructure.
+    ``actor`` (``ActorAxisConfig``, S12 Phase 1b) is UNCHANGED — a second,
+    independent identity-attribution call, flat +1 per highlight, fired for
+    every highlight the taxonomy call didn't error on (Gate 1/2 did not touch
+    this axis; it is a *consumer* of the taxonomy call's clip, not part of
+    what was replaced).
     """
 
     model_config = ConfigDict(extra="forbid")
     model: str = "gemini-3.1-flash-lite"
     fps: Literal[1, 10, 15] = 1
     thinking: Optional[Literal["off", "low", "medium", "high"]] = None
+    # Deliberately None -> LOW default (media_resolution_enum), never the
+    # deleted validator's HIGH default — Gate 2 measured HIGH as an active
+    # regression, and there is no second, adversarial call left to reserve a
+    # heavier resolution tier for anyway (2026-07-26 re-scope AC4).
+    media_resolution: Optional[Literal["low", "medium", "high"]] = None
     preroll_s: float = Field(default=5.0, ge=0.0, le=15.0)
     postroll_s: float = Field(default=4.0, ge=0.0, le=10.0)
-    position: PositionAxisConfig = Field(default_factory=PositionAxisConfig)
-    technique: TechniqueAxisConfig = Field(default_factory=TechniqueAxisConfig)
-    validator: ValidatorAxisConfig = Field(default_factory=ValidatorAxisConfig)
-    max_validator_iterations: int = Field(default=1, ge=1, le=5)
+    # S12 Phase 1b: second, independent actor/identity-attribution axis —
+    # flat +1 per highlight (see ActorAxisConfig docstring). Only actually
+    # invoked by the production orchestrator (RunContext.player_references
+    # populated); the QA playground never sets player_references, so the
+    # call still fires (flat, unconditional) but resolves to a
+    # sentinel-only enum (no real player_id choices available).
+    actor: ActorAxisConfig = Field(default_factory=ActorAxisConfig)
 
 
 NODE_CONFIG_MODELS: dict[str, type[BaseModel]] = {

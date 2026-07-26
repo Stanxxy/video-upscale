@@ -434,6 +434,90 @@ def test_format_offset_seconds_adversarial_floats_produce_expected_strings():
     assert simplified_tags._format_offset_seconds(12.5) == "12.500s"
 
 
+# --------------------------------------------------------------------------- #
+# `mime_type`/`extra_parts` kwargs (S12 Phase 1b production wiring, item 4) —
+# additive, `None`/empty preserves every existing caller byte-identical
+# (INS-107 single-formatter discipline, mirrors `fps`/`media_resolution`).
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_analyze_chunk_mime_type_none_omits_field_from_file_data(monkeypatch):
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["contents"] = contents
+        return SimpleNamespace(text=json.dumps({"clips": []}))
+
+    client = MagicMock()
+    client.aio.models.generate_content = _fake_generate
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(client, model_id="gemini-3.1-flash-lite")
+
+    await analyzer.analyze_chunk("https://y", 0.0, 10.0, None)
+
+    video_part = captured["contents"][0].parts[1]
+    assert video_part.file_data.mime_type is None
+
+
+@pytest.mark.asyncio
+async def test_analyze_chunk_mime_type_lands_in_file_data_when_set(monkeypatch):
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["contents"] = contents
+        return SimpleNamespace(text=json.dumps({"clips": []}))
+
+    client = MagicMock()
+    client.aio.models.generate_content = _fake_generate
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(client, model_id="gemini-3.1-flash-lite")
+
+    await analyzer.analyze_chunk(
+        "files/abc123", 0.0, 10.0, None, mime_type="video/mp4",
+    )
+
+    video_part = captured["contents"][0].parts[1]
+    assert video_part.file_data.mime_type == "video/mp4"
+    assert video_part.file_data.file_uri == "files/abc123"
+
+
+@pytest.mark.asyncio
+async def test_analyze_chunk_extra_parts_none_leaves_contents_as_text_and_video_only(monkeypatch):
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["contents"] = contents
+        return SimpleNamespace(text=json.dumps({"clips": []}))
+
+    client = MagicMock()
+    client.aio.models.generate_content = _fake_generate
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(client, model_id="gemini-3.1-flash-lite")
+
+    await analyzer.analyze_chunk("https://y", 0.0, 10.0, None)
+
+    parts = captured["contents"][0].parts
+    assert len(parts) == 2  # text, video — no extra_parts appended
+
+
+@pytest.mark.asyncio
+async def test_analyze_chunk_extra_parts_appended_after_video_part(monkeypatch):
+    from google.genai import types as genai_types
+
+    captured = {}
+
+    async def _fake_generate(*, model, contents, config):
+        captured["contents"] = contents
+        return SimpleNamespace(text=json.dumps({"clips": []}))
+
+    client = MagicMock()
+    client.aio.models.generate_content = _fake_generate
+    analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(client, model_id="gemini-3.1-flash-lite")
+
+    ref_part = genai_types.Part(inline_data=genai_types.Blob(data=b"fake-jpeg-bytes", mime_type="image/jpeg"))
+    await analyzer.analyze_chunk("https://y", 0.0, 10.0, None, extra_parts=[ref_part])
+
+    parts = captured["contents"][0].parts
+    assert len(parts) == 3
+    assert parts[2] is ref_part
+
+
 @pytest.mark.asyncio
 async def test_time_analyzer_strips_markdown_fences():
     async def _fake_generate(*, model, contents, config):

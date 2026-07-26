@@ -51,6 +51,7 @@ def make_mock_jobs_store() -> MagicMock:
         progress_percent=0.0,
         current_frame=0,
         total_frames=0,
+        pipeline_kind=None,
     ):
         _lifecycles[job_id] = {
             "job_id": job_id,
@@ -67,6 +68,9 @@ def make_mock_jobs_store() -> MagicMock:
             "stage_message": "",
             "error_message": "",
             "owner_instance_id": owner_instance_id,
+            # S12 Phase 1b (design §6.2) — absent/None back-compats to
+            # "tracking", same convention as the real JobsStore.get_lifecycle.
+            "pipeline_kind": pipeline_kind or "tracking",
         }
         return True
 

@@ -12,7 +12,21 @@ left over from the pre-4-axis pipeline's ``STANDUP_GAME``/``GUARD_PLAY``/
 ``DEFENSE_ESCAPES`` category system, which ``bjj_analysis_taxonomy.md``
 already told callers never to use).
 
-This module now has two jobs:
+**S12 Phase 1b addendum (2026-07-20) — this module now serves TWO callers
+with TWO different output shapes.** ``clip_to_event``/``dual_emit_legacy_fields``
+below remain the DUAL-EMIT path (``schema_version=2``) for the dormant
+tracking pipeline's ``sns.py::clip_to_event`` — untouched, still load-bearing
+for that (dormant-but-functional) code path. ``build_axis_only_candidate``
+(new, bottom of this module) is the AXIS-ONLY path (``schema_version=3``)
+for the v2 ``highlight-scan-critique-analyze`` production orchestrator's
+``sns.py::clip_to_axis_only_event`` — it NEVER calls ``dual_emit_legacy_fields``
+or any of the ``*_TO_LEGACY_*`` tables; ``action``/``technique``/``result``/
+``confidence`` are left ``None`` (requires shared_lib's relaxed
+``VideoEventCandidate`` schema — see the S12 Phase 1b production wiring
+design doc §5.1/§8.1 for the hard cross-repo sequencing constraint). A future
+maintainer should not assume the whole module is one code path.
+
+This module now has three jobs:
 
 1. **Axis vocabulary, sourced directly from shared_lib** (item 1; revised
    2026-07-12 by CEO ruling on Evaluator pass 1 MEDIUM-1). ``shared_lib`` is
@@ -49,12 +63,16 @@ This module now has two jobs:
    risk #2): every new-taxonomy write must ALSO populate legacy
    ``action``/``technique``/``result`` with values recognized by
    ``event_filter_utils.py``'s search validators, or search 422s instantly.
+
+3. **Axis-only candidate construction** (S12 Phase 1b, ``build_axis_only_candidate``).
+   The v2 pipeline's terminal shape — no dual-emit, no legacy fields — see
+   the addendum above.
 """
 from __future__ import annotations
 
 import logging
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
 # Leaf-module import (never `from shared_lib.models import ...`), per the
 # shared_lib import-boundary convention (AGENTS.md). These names are
@@ -529,3 +547,90 @@ def dual_emit_legacy_fields(
         "technique": technique_shortlist_to_legacy_technique(technique_shortlist),
         "result": axis4_to_legacy_result(axis4_outcome),
     }
+
+
+# ---------------------------------------------------------------------------
+# S12 Phase 1b — axis-only candidate construction (item 13, design §5.2/§5.5).
+# The v2 highlight-scan-critique-analyze pipeline's terminal shape:
+# schema_version=3, legacy action/technique/result/confidence left None
+# (never fabricated — requires shared_lib's relaxed VideoEventCandidate,
+# §8.1's hard cross-repo sequencing constraint). NEVER touches
+# dual_emit_legacy_fields/ACTION_CLASS_TO_LEGACY_ACTION/etc. above.
+# ---------------------------------------------------------------------------
+def build_axis_only_candidate(clip: Dict[str, Any], video_id: str, *, candidate_cls: Optional[Type] = None):
+    """Build a ``schema_version=3`` (axis-only) ``VideoEventCandidate`` from
+    one ``executors.highlight_analyze_node`` synthesized clip dict.
+
+    ``clip`` is expected to already carry the actor axis's resolved fields
+    (``player_id``/``player_name``/``identity_uncertain``/``actor_sentinel``)
+    — folded in at the executor level (design §4.4/item 5), NOT re-derived
+    here, so there is exactly one place this mapping logic lives (single
+    source of truth; a second ``actor_result`` argument duplicating the same
+    data would only invite the two to drift).
+
+    ``candidate_cls`` (testability seam, default ``None`` -> the REAL
+    ``shared_lib.models.sns_event_models.VideoEventCandidate``): shared_lib
+    1.3.0 (installed) relaxed ``action``/``technique``/``result``/
+    ``confidence`` to ``Optional`` for a ``schema_version=3`` candidate, so
+    the real class now constructs successfully with this function's ``None``
+    legacy values — see ``tests/test_taxonomy_mapper_axis_only.py``'s
+    ``test_real_shared_lib_construction_succeeds`` for the end-to-end proof.
+    Tests still ALSO inject a duck-typed stand-in class to verify the
+    MAPPING logic (which clip field derives which kwarg) independently of
+    the real model's own field constraints.
+
+    **2026-07-26 single-call cutover:** this function's own mapping logic is
+    UNCHANGED and call-count-agnostic — it reads ``clip.get("position")``/
+    ``"action_class"``/``"outcome"``/... off a plain dict and does not care
+    whether one Gemini call produced them (the current shape) or the deleted
+    two-call+validator design did. See
+    ``tests/test_taxonomy_mapper_axis_only.py``'s
+    ``test_maps_the_single_call_executor_output_shape`` for a pinned
+    regression against the REAL shape ``executors.highlight_analyze_node``
+    emits post-cutover.
+    """
+    from shared_lib.models.sns_event_models import VideoEventCandidate as _RealVideoEventCandidate
+
+    cls = candidate_cls or _RealVideoEventCandidate
+
+    player_id = clip.get("player_id")
+    player_name = clip.get("player_name")
+    actor_sentinel = clip.get("actor_sentinel")
+    identity_uncertain = clip.get("identity_uncertain")
+    # role stays a human-readable descriptor (never a new identity source,
+    # design §5.2) — same "Unknown" capital-U fallback convention as
+    # clip_to_event's role_descriptor above, for the rare case none of
+    # player_name/player_id/actor_sentinel resolved.
+    role = player_name or player_id or actor_sentinel or "Unknown"
+
+    position = clip.get("position")
+    action_class = clip.get("action_class")
+    outcome = clip.get("outcome")
+
+    axis1_position = sanitize_axis1_position([position] if position else [])
+    axis3_action = sanitize_axis3_action([action_class] if action_class else [])
+    axis4_outcome = sanitize_axis4_outcome(outcome)
+
+    notes = clip.get("notes") or ""
+
+    return cls(
+        role=role,
+        player_name=player_name,
+        player_id=player_id,
+        track_id=None,  # always None for v2 — no tracking exists (design §4.4)
+        identity_uncertain=identity_uncertain,
+        action=None,
+        technique=None,
+        result=None,
+        confidence=None,
+        notes=notes,
+        schema_version=3,
+        axis1_position=axis1_position,
+        axis3_action=axis3_action,
+        axis4_outcome=axis4_outcome,
+        actor_sentinel=actor_sentinel,
+        # v2's technique call does not produce sub-technique granularity yet
+        # — an honest scope gap (design §5.2), not a fabricated guess.
+        technique_shortlist=None,
+        technique_guess=None,
+    )

@@ -46,6 +46,7 @@ async def awaiting_job(service_components):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_resume_threads_player_mapping_into_replacement_request(
     service_client, awaiting_job, service_components,
 ):
@@ -69,6 +70,7 @@ async def test_resume_threads_player_mapping_into_replacement_request(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_resume_without_player_mapping_leaves_field_none(
     service_client, awaiting_job, service_components,
 ):

@@ -55,6 +55,7 @@ async def awaiting_job(service_components):
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_detection_response_creates_resume_job(
     service_client, awaiting_job, service_components,
 ):
@@ -87,6 +88,7 @@ async def test_detection_response_creates_resume_job(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_detection_response_rejects_duplicate_resume(
     service_client, awaiting_job, service_components,
 ):
@@ -104,6 +106,7 @@ async def test_detection_response_rejects_duplicate_resume(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_detection_response_rejects_lost_replacement_claim(
     service_client, awaiting_job, service_components,
 ):
@@ -121,6 +124,7 @@ async def test_detection_response_rejects_lost_replacement_claim(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_detection_response_uses_track_resume_cursor(
     service_client, awaiting_job, service_components,
 ):
@@ -154,6 +158,7 @@ async def test_detection_response_uses_track_resume_cursor(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_resume_delegates_to_detection_response(service_client, awaiting_job):
     """POST /jobs/{id}/resume delegates to detection_response logic."""
     job_id = awaiting_job
@@ -174,6 +179,7 @@ async def test_resume_delegates_to_detection_response(service_client, awaiting_j
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_detection_response_writes_replaced_by_new_job_on_old(
     service_client, awaiting_job, service_components,
 ):
@@ -214,6 +220,7 @@ async def test_detection_response_writes_replaced_by_new_job_on_old(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_detection_response_forwards_upscale_artifacts_via_overrides(
     service_client, service_components,
 ):
@@ -267,6 +274,7 @@ async def test_detection_response_forwards_upscale_artifacts_via_overrides(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_resume_seeds_new_lifecycle_progress_from_old_worker_state(
     service_client, awaiting_job, service_components,
 ):
@@ -390,6 +398,7 @@ async def test_recover_interrupted_job_writes_replaced_row_and_forwards_artifact
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_detection_response_not_found(service_client):
     """404 when job_id does not exist in Keyspaces."""
     resp = await service_client.post(
@@ -442,6 +451,88 @@ async def test_recover_interrupted_job_skips_spawn_when_pipeline_terminal(
 
 
 @pytest.mark.asyncio
+async def test_recover_interrupted_job_highlight_v2_resumes_same_job_id_no_replacement(
+    service_components, monkeypatch,
+):
+    """S12 Phase 1b (design §6.3, item 17): a pipeline_kind="highlight_v2"
+    interrupted job resumes the SAME job_id — no create_replacement_job
+    call, no new job_id, no replacement_job_id written on the old row."""
+    from service.routes import recover_interrupted_job
+
+    _, job_store, jobs_store = service_components
+    req = TrackRequest(bucket="b", key="folder/v.mp4")
+    job = await job_store.create_job(req)
+    await jobs_store.create_lifecycle(job.job_id, "vid-v2", "u", pipeline_kind="highlight_v2")
+    await jobs_store.save_request(job.job_id, req.model_dump_json())
+    await jobs_store.set_state(job.job_id, JobState.INTERRUPTED)
+    await jobs_store.write_checkpoint(
+        job.job_id, PipelineStage.HIGHLIGHT_CHUNK, True,
+        {
+            "schema_version": 1, "pending_detection": None,
+            "artifacts": {"gemini_file_uri": "files/abc"},
+            "chunk_index": 1, "chunks_total": 3,
+            "worker_state": {
+                "progress_percent": 33.0, "current_frame": 0,
+                "total_frames": 0, "stage_progress_fraction": 1.0,
+            },
+        },
+    )
+
+    scheduled = []
+    monkeypatch.setattr(routes_mod, "_schedule_job", lambda job_id, request: scheduled.append(job_id))
+
+    lifecycle = await jobs_store.get_lifecycle(job.job_id)
+    assert lifecycle["pipeline_kind"] == "highlight_v2"
+    await recover_interrupted_job(lifecycle)
+
+    assert scheduled == [job.job_id]  # SAME job_id, no replacement
+
+    lc_after = await jobs_store.get_lifecycle(job.job_id)
+    assert not lc_after.get("replacement_job_id")  # no replacement-job chain
+    assert lc_after["job_state"] == JobState.INTERRUPTED.value  # unchanged — resume owns the transition
+
+
+@pytest.mark.asyncio
+async def test_recover_interrupted_job_absent_pipeline_kind_uses_tracking_replacement_flow(
+    service_components, monkeypatch,
+):
+    """Back-compat: a row created before pipeline_kind existed (absent ->
+    "tracking" per jobs_store.get_lifecycle) takes the OLD replacement-job
+    path, unchanged."""
+    from service.routes import recover_interrupted_job
+
+    _, job_store, jobs_store = service_components
+    req = TrackRequest(bucket="b", key="folder/v.mp4")
+    job = await job_store.create_job(req)
+    await jobs_store.create_lifecycle(job.job_id, "vid-tracking", "u")  # no pipeline_kind kwarg
+    await jobs_store.save_request(job.job_id, req.model_dump_json())
+    await jobs_store.set_state(job.job_id, JobState.INTERRUPTED)
+    await jobs_store.write_checkpoint(
+        job.job_id, PipelineStage.TRACK, False,
+        {
+            "schema_version": 1, "pending_detection": None,
+            "artifacts": {"tracking_s3_key": "checkpoints/orig/tracking.json"},
+            "worker_state": {
+                "progress_percent": 55.0, "current_frame": 21600,
+                "total_frames": 21600, "stage_progress_fraction": 1.0,
+            },
+        },
+    )
+
+    scheduled = []
+    monkeypatch.setattr(routes_mod, "_schedule_job", lambda job_id, request: scheduled.append(job_id))
+
+    lifecycle = await jobs_store.get_lifecycle(job.job_id)
+    assert lifecycle["pipeline_kind"] == "tracking"
+    await recover_interrupted_job(lifecycle)
+
+    new_job_id = (await jobs_store.get_lifecycle(job.job_id))["replacement_job_id"]
+    assert new_job_id and new_job_id != job.job_id  # REPLACEMENT job chain, unchanged tracking behavior
+    assert scheduled == [new_job_id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.skip(reason="S12 Phase 1b decision 2: human_loop.py routes unregistered from the production app surface (item 16) — this test hits the HTTP route and now 404s. Quarantined, not deleted; re-registering the routes and un-skipping this test is one clean pair of actions if the dormant path is ever revived.")
 async def test_detection_response_wrong_state(service_client, service_components):
     """409 when job is not in AWAITING_CORRECTION state."""
     _, job_store, jobs_store = service_components

@@ -64,6 +64,34 @@ async def job_events_sse(job_id: str):
                             "frame_idx": lifecycle.get("current_frame", 0),
                             "total_frames": lifecycle.get("total_frames", 0),
                         }
+                        # S12 Phase 1b (design §1.2): additive, v2-only keys
+                        # — only present once run_highlight_job has actually
+                        # written them (chunk_index/chunks_total/
+                        # highlights_found_so_far). A dormant tracking job's
+                        # lifecycle row never has these columns set, so this
+                        # branch is a no-op for it — byte-identical prior
+                        # payload shape for any consumer that only reads
+                        # state/percent/frame_idx/total_frames.
+                        chunk_index = lifecycle.get("chunk_index")
+                        if chunk_index is not None:
+                            progress["chunk_index"] = chunk_index
+                        chunks_total = lifecycle.get("chunks_total")
+                        if chunks_total is not None:
+                            progress["chunks_total"] = chunks_total
+                        highlights_found_so_far = lifecycle.get("highlights_found_so_far")
+                        if highlights_found_so_far is not None:
+                            progress["highlights_found_so_far"] = highlights_found_so_far
+                        # Item 11.5 — additive per-job attribution metrics,
+                        # written once (the job's final progress write,
+                        # before terminal state) as a JSON blob.
+                        attribution_metrics_json = lifecycle.get("attribution_metrics_json")
+                        if attribution_metrics_json:
+                            try:
+                                progress["attribution_metrics"] = json.loads(attribution_metrics_json)
+                            except (ValueError, TypeError):
+                                logger.warning(
+                                    "SSE: unparseable attribution_metrics_json for job %s", job_id,
+                                )
                         yield f"event: progress\ndata: {json.dumps(progress)}\n\n"
 
             except Exception as e:
