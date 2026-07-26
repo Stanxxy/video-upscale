@@ -26,22 +26,20 @@ is a structural, production-side PORT of ``stitch.py``'s temporal-proximity
 + class-compatibility approach — ``actor``/``player_id`` is NEVER consulted
 in the merge key — not a call into ``time_dedup.py``.
 
-**Structurally simpler than ``stitch.py`` by design:** ``stitch.py`` MERGES
-two seam halves (span-widening, "keep the higher-confidence non-span
-fields") because its caller (the eval harness) collects an entire match's
-clips before "publishing" anything. Production publishes per-highlight,
-INCREMENTALLY, as each highlight is analyzed (Brooks's ruling §2 — SNS is an
-immutable, append-only, one-highlight-at-a-time record, NEVER rewritten once
-published). By the time chunk k+1's leading highlight is analyzed, chunk
-k's trailing highlight (if it is the same real event) has ALREADY been
-published — there is nothing to merge INTO. This module's only job is
-deciding whether to SKIP publishing chunk k+1's highlight because it is a
-seam-duplicate of something chunk k already published; the original,
-already-published record is never touched, corrected, or widened. The
-single-call taxonomy verdict also carries no ``confidence`` field (unlike
-``stitch.py``'s eval-only schema), so there is no higher-confidence
-tie-break to make in the first place — the earlier chunk's already-published
-version simply stands.
+**Structurally simpler than ``stitch.py`` by design, for a different reason
+than originally shipped (2026-07-26 CEO batched-publish re-scope, Brooks's
+§2a re-ruling):** SNS publish now happens ONCE, in a finalize pass AFTER
+the full per-chunk analyze loop and majority-vote reconciliation complete —
+never per-highlight-incrementally. ``dedup_match_clips`` below is therefore
+a genuine SELECTION pass over the WHOLE match's collected-but-not-yet-
+published clips (grouped by chunk, in chunk order) — not a "check against
+what's already on the wire" decision the way it was under the prior
+streaming-publish design. It is still not a MERGE the way ``stitch.py`` is:
+a matched duplicate is simply DROPPED (never span-widened, never blended)
+— the surviving half is picked deterministically (the EARLIER chunk's
+clip always wins; see ``dedup_match_clips``'s own docstring for why), never
+by a confidence tie-break the single-call taxonomy verdict has no field
+for in the first place.
 """
 from __future__ import annotations
 
@@ -123,6 +121,77 @@ def find_seam_duplicate(
     return None
 
 
+def _clip_in_band(clip: dict, seam_start: float, seam_end: float) -> bool:
+    try:
+        start = float(clip["start_s"])
+        end = float(clip["end_s"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return in_seam_band(start, end, seam_start, seam_end)
+
+
+def dedup_match_clips(
+    clips_by_chunk: list[list[dict]], chunks: list[tuple[float, float]],
+    *, proximity_window_s: float = DEFAULT_PROXIMITY_WINDOW_S,
+) -> tuple[list[dict], int]:
+    """Whole-match seam dedup (2026-07-26 CEO batched-publish re-scope,
+    item 6) — a post-hoc pass over EVERY outer chunk's collected clips,
+    reconstructed from durable ``HIGHLIGHT_CHUNK`` checkpoints. Works
+    identically whether a chunk's clips came from THIS run's own fresh
+    analysis or were recovered from an earlier, resumed-past run's
+    completed checkpoint (see
+    ``worker/highlight_orchestrator.py::run_highlight_job``) — this
+    function only ever sees plain clip dicts + the chunk boundary list, no
+    in-memory "what did I just publish" state to lose across a resume.
+
+    For each adjacent chunk pair ``(k, k+1)``, a clip from chunk ``k+1``
+    whose bounds land in the seam band it shares with chunk ``k`` is
+    checked (``find_seam_duplicate``, temporal-proximity + class-
+    compatible, ``actor``/``player_id`` NEVER consulted) against chunk
+    ``k``'s OWN seam-band clips. A match is DROPPED — chunk ``k``'s
+    EARLIER-discovered highlight always survives, chunk ``k+1``'s
+    rediscovery does not. This is a deterministic, order-based selection
+    (never a merge/span-widening/confidence tie-break — see module
+    docstring) chosen for a concrete reason: chunk ``k``'s highlight_scan
+    ran first in wall-clock/chunk order, so preferring it needs no
+    additional signal to break the tie with.
+
+    Clips keep their ORIGINAL per-chunk order in the returned list (chunk
+    0's surviving clips first, then chunk 1's, etc.) — never resorted by
+    time — so downstream consumers (majority vote, publish numbering) see
+    a stable, deterministic order run-to-run.
+
+    Returns ``(surviving_clips, duplicates_dropped_count)``.
+    """
+    survivors_by_chunk: list[list[dict]] = [list(clips) for clips in clips_by_chunk]
+    dropped = 0
+
+    for chunk_index in range(1, len(survivors_by_chunk)):
+        if chunk_index - 1 >= len(chunks) or chunk_index >= len(chunks):
+            continue  # defensive: clips_by_chunk longer than the real chunk-boundary list
+        seam_start = chunks[chunk_index][0]
+        seam_end = chunks[chunk_index - 1][1]
+
+        prior_seam_clips = [
+            c for c in survivors_by_chunk[chunk_index - 1] if _clip_in_band(c, seam_start, seam_end)
+        ]
+        if not prior_seam_clips:
+            continue
+
+        kept: list[dict] = []
+        for clip in survivors_by_chunk[chunk_index]:
+            if _clip_in_band(clip, seam_start, seam_end) and find_seam_duplicate(
+                clip, prior_seam_clips, proximity_window_s=proximity_window_s,
+            ) is not None:
+                dropped += 1
+                continue
+            kept.append(clip)
+        survivors_by_chunk[chunk_index] = kept
+
+    all_survivors = [clip for chunk_clips in survivors_by_chunk for clip in chunk_clips]
+    return all_survivors, dropped
+
+
 __all__ = [
     "SUBMISSION_FAMILY_CLASSES",
     "DEFAULT_PROXIMITY_WINDOW_S",
@@ -130,4 +199,5 @@ __all__ = [
     "spans_close",
     "in_seam_band",
     "find_seam_duplicate",
+    "dedup_match_clips",
 ]

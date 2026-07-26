@@ -301,16 +301,37 @@ def build_highlight_chunk_completed(
     highlights_published: int,
     gemini_file_uri: str,
     worker_state: WorkerStateSnapshot,
+    clips: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """S12 Phase 1b (design §3.4/§6.3) — written after ONE outer chunk's
-    full scan->critique->analyze->publish sequence completes. Chunk-
-    granularity resume identity (``build_highlight_resume_plan`` reads
-    ``chunk_index`` off this checkpoint's own top-level key, not nested
-    under ``artifacts`` — mirrors ``build_track_completed``'s
-    ``start_frame``/``frame_count`` top-level scalars)."""
+    full scan->critique->analyze sequence completes. Chunk-granularity
+    resume identity (``build_highlight_resume_plan`` reads ``chunk_index``
+    off this checkpoint's own top-level key, not nested under
+    ``artifacts`` — mirrors ``build_track_completed``'s
+    ``start_frame``/``frame_count`` top-level scalars).
+
+    ``highlights_published`` is now ALWAYS 0 (2026-07-26 CEO batched-publish
+    re-scope, AC8-11): publish moved out of the per-chunk loop entirely, to
+    one finalize pass after majority-vote reconciliation (see
+    ``worker/highlight_orchestrator.py::run_highlight_job``) — nothing is
+    ever published at chunk-completion time anymore. The field is kept
+    (never removed — additive-only checkpoint-schema discipline; an old
+    consumer reading this key sees an honest 0, not a missing key) rather
+    than repurposed to mean something else under the same name.
+
+    ``clips`` (additive, AC8-11): this chunk's own collected-and-seam-
+    deduped-eligible clip dicts (raw actor-axis output included, BEFORE
+    match-wide majority-vote reconciliation) — the durable, checkpoint-
+    backed source of truth the finalize step reconstructs the FULL match's
+    candidate set from, regardless of whether a given chunk was freshly
+    analyzed this run or its clips are being recovered from an earlier,
+    resumed-past run's completed checkpoint. ``None``/omitted (an
+    OLDER-format checkpoint written before this field existed) is treated
+    as an empty list downstream — additive-only, never a crash, never
+    fabricated clips."""
     return make_envelope(
         worker_state=worker_state,
-        artifacts={"gemini_file_uri": gemini_file_uri},
+        artifacts={"gemini_file_uri": gemini_file_uri, "clips": clips or []},
         reason="highlight_chunk_completed",
         chunk_index=chunk_index,
         chunks_total=chunks_total,
@@ -343,6 +364,44 @@ def build_highlight_publish_completed(
             "result_s3_uri": result_s3_uri,
         },
         reason="highlight_publish_completed",
+    )
+
+
+def build_highlight_publish_progress(
+    *,
+    candidate_key: str,
+    event_index: int,
+    worker_state: WorkerStateSnapshot,
+) -> dict[str, Any]:
+    """2026-07-26 CEO batched-publish re-scope (AC8-11) — Brooks's named new
+    requirement: written ONCE per candidate successfully published during
+    the finalize-publish loop, so a crash mid-batch (e.g. after 30 of 50)
+    can resume publishing only the remaining candidates, never double-sends.
+
+    ``completed=False`` on EVERY row this builder produces (passed by the
+    caller to ``jobs_store.write_checkpoint`` — never ``True``) — this is
+    deliberately NOT the terminal ``HIGHLIGHT_PUBLISH`` checkpoint
+    (``build_highlight_publish_completed``, unchanged, still written exactly
+    once, with ``completed=True``, after every candidate has published).
+    Multiple rows accumulate under the SAME ``HIGHLIGHT_PUBLISH`` stage name
+    (the schema already supports this — ``HIGHLIGHT_CHUNK`` does the exact
+    same one-row-per-chunk-index thing); a resume reads ALL of them and
+    treats every row's own ``candidate_key`` as "already published,"
+    regardless of the ``completed`` flag, while the terminal row (a
+    different ``reason``, no ``candidate_key`` field at all) never collides
+    with this shape.
+
+    ``candidate_key`` (additive, new field, no collision with anything
+    existing): a stable per-highlight identity — see
+    ``worker/highlight_orchestrator.py``'s own construction
+    (``f"{chunk_index}:{highlight_index}"``) — deterministic across a
+    resume because it is derived from data already persisted on the
+    ``HIGHLIGHT_CHUNK`` checkpoint, never re-derived from in-memory-only
+    state that a resume wouldn't have."""
+    return make_envelope(
+        worker_state=worker_state,
+        artifacts={"candidate_key": candidate_key, "event_index": event_index},
+        reason="highlight_publish_candidate",
     )
 
 
