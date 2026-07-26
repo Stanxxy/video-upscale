@@ -207,6 +207,103 @@ async def test_highlight_critique_node_sends_backward_padded_window_only(monkeyp
     assert result_event["highlight_index"] == 1
 
 
+# --------------------------------------------------------------------------- #
+# INS-140 regression (2026-07-26 re-scope AC12/AC13): `mime_type` MUST reach
+# `FileData` on every ingest-path `analyze_chunk` call — confirmed missing at
+# highlight_critique_node (this call site) and highlight_analyze_node's axis
+# call(s) before this fix. `highlight_scan_node` already did this correctly
+# (not regression-tested here — that path was never broken).
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_highlight_critique_node_forwards_video_mime_type_to_gemini(monkeypatch):
+    """INS-140: `ctx.video_mime_type` (set by the production ingest stage for
+    a Gemini Files API URI) MUST reach `analyze_chunk`'s `mime_type=` kwarg —
+    SimplifiedTagsTimeAnalyzer.analyze_chunk's own docstring says this "MUST"
+    be non-None for Files API URIs, or Gemini silently 500s."""
+    captured_kwargs = []
+
+    async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
+        captured_kwargs.append(kw)
+        return json.dumps({"movement_confirmed": True, "corrected_start_s": 15.0, "corrected_end_s": 28.0, "note": "n"})
+
+    monkeypatch.setattr(simplified_tags.SimplifiedTagsTimeAnalyzer, "analyze_chunk", _fake_analyze_chunk)
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: MagicMock())
+
+    ctx = RunContext(
+        youtube_id="x", youtube_url="files/abc123", start_sec=0, end_sec=100,
+        gemini_api_key="k", request_timeout_ms=1000, video_mime_type="video/mp4",
+    )
+    ctx.highlights = [{"index": 1, "start_s": 20.0, "end_s": 30.0, "adjustment": None}]
+    cfg = HighlightCritiqueConfig(critique_backpad_s=6.0).model_dump()
+
+    [e async for e in executors.highlight_critique_node(ctx, cfg)]
+
+    assert len(captured_kwargs) == 1
+    assert captured_kwargs[0]["mime_type"] == "video/mp4"
+
+
+@pytest.mark.asyncio
+async def test_highlight_critique_node_qa_playground_mime_type_stays_none(monkeypatch):
+    """QA playground (no ingest stage, ctx.video_mime_type never set) —
+    byte-identical prior behavior: mime_type stays None, never fabricated."""
+    captured_kwargs = []
+
+    async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
+        captured_kwargs.append(kw)
+        return json.dumps({"movement_confirmed": True, "corrected_start_s": 15.0, "corrected_end_s": 28.0, "note": "n"})
+
+    monkeypatch.setattr(simplified_tags.SimplifiedTagsTimeAnalyzer, "analyze_chunk", _fake_analyze_chunk)
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: MagicMock())
+
+    ctx = RunContext(youtube_id="x", youtube_url="https://y", start_sec=0, end_sec=100,
+                      gemini_api_key="k", request_timeout_ms=1000)  # video_mime_type defaults None
+    ctx.highlights = [{"index": 1, "start_s": 20.0, "end_s": 30.0, "adjustment": None}]
+    cfg = HighlightCritiqueConfig(critique_backpad_s=6.0).model_dump()
+
+    [e async for e in executors.highlight_critique_node(ctx, cfg)]
+
+    assert captured_kwargs[0]["mime_type"] is None
+
+
+@pytest.mark.asyncio
+async def test_highlight_critique_node_offsets_are_file_relative_not_rebased_per_chunk(monkeypatch):
+    """AC13 / INS-140 finding (c): a real production job re-uses the SAME
+    uploaded whole-match Gemini file across every outer chunk (see
+    ``highlight_orchestrator._outer_chunks`` — one job, one Files API upload,
+    N chunks of the SAME file) — every ``video_metadata`` offset sent for
+    chunk k>0 MUST stay absolute (file-relative), never re-based to that
+    chunk's own local 0:00. Simulated here via a RunContext representing the
+    SECOND outer chunk of a job (start_sec=720, matching a 720s
+    outer_chunk_scope_sec grid) — the sent offsets must land inside
+    [720, ...], never [0, ...] (which would silently target the WRONG span of
+    the single uploaded file — INS-140's exact "500 INTERNAL" failure mode)."""
+    captured = []
+
+    async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):
+        captured.append((youtube_url, start_sec, end_sec))
+        return json.dumps({"movement_confirmed": True, "corrected_start_s": 740.0, "corrected_end_s": 750.0, "note": "n"})
+
+    monkeypatch.setattr(simplified_tags.SimplifiedTagsTimeAnalyzer, "analyze_chunk", _fake_analyze_chunk)
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: MagicMock())
+
+    # Chunk index 1 of a 720s-grid job — the SAME gemini_file_uri as chunk 0,
+    # scoped [720, 1440] on the file's own absolute clock.
+    ctx = RunContext(
+        youtube_id="x", youtube_url="files/whole-match-upload", start_sec=720, end_sec=1440,
+        gemini_api_key="k", request_timeout_ms=1000, video_mime_type="video/mp4",
+    )
+    ctx.highlights = [{"index": 1, "start_s": 740.0, "end_s": 750.0, "adjustment": None}]
+    cfg = HighlightCritiqueConfig(critique_backpad_s=6.0).model_dump()
+
+    [e async for e in executors.highlight_critique_node(ctx, cfg)]
+
+    assert len(captured) == 1
+    youtube_url, start_sec, end_sec = captured[0]
+    assert youtube_url == "files/whole-match-upload"  # same file, never re-uploaded/re-split per chunk
+    assert start_sec >= 720.0  # never rebased to this chunk's own local 0:00
+    assert end_sec <= 1440.0
+
+
 @pytest.mark.asyncio
 async def test_highlight_critique_node_clamps_backpad_to_scope_start(monkeypatch):
     async def _fake_analyze_chunk(self, youtube_url, start_sec, end_sec, previous_context=None, **kw):

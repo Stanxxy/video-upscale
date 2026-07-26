@@ -883,6 +883,12 @@ async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterato
                     description=highlight.get("description"),
                 ),
                 fps=1, media_resolution=cfg.media_resolution,
+                # INS-140 fix: Files API requires `file_data.mime_type` for a
+                # non-YouTube (production ingest) URI — was silently omitted
+                # here (only highlight_scan_node set it correctly before this
+                # fix). `None` for the QA playground (byte-identical, a
+                # YouTube URL needs none).
+                mime_type=ctx.video_mime_type,
             )
         except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error, no fabrication
             yield {
@@ -1047,23 +1053,29 @@ async def _call_axis_json(
     analyzer: "simplified_tags.SimplifiedTagsTimeAnalyzer", youtube_url: str,
     window_start: float, window_end: float, *,
     response_schema, prompt_text: str, fps: int, media_resolution: Optional[str],
-    extra_parts: Optional[list] = None,
+    mime_type: Optional[str] = None, extra_parts: Optional[list] = None,
 ) -> tuple[Optional[dict], Optional[str]]:
-    """Shared call+parse+error-check for the position/technique/actor/
-    validator axis calls in ``highlight_analyze_node`` — DRYs up the exact
-    transport-exception / non-JSON / swallowed-``{"error": ...}`` pattern
-    already used by every other Gemini-calling node in this module (never a
-    fourth hand-copy of the same three checks). Returns ``(data, None)`` on
-    success or ``(None, error_message)`` — never raises.
+    """Shared call+parse+error-check for the taxonomy/actor axis calls in
+    ``highlight_analyze_node`` — DRYs up the exact transport-exception /
+    non-JSON / swallowed-``{"error": ...}`` pattern already used by every
+    other Gemini-calling node in this module (never a hand-copy of the same
+    three checks). Returns ``(data, None)`` on success or
+    ``(None, error_message)`` — never raises.
+
+    ``mime_type`` (INS-140 fix, S12 Phase 1b production wiring design §2.1):
+    forwarded to ``analyze_chunk`` unconditionally — ``None`` for the QA
+    playground (byte-identical prior behavior, no mime_type needed for a
+    YouTube URL), ``ctx.video_mime_type`` for the production ingest path
+    (Files API URIs, where ``file_data.mime_type`` is documented "Required").
 
     ``extra_parts`` (additive, S12 Phase 1b — the actor axis's inline
-    reference-image ``Part``s): ``None`` for position/technique/validator
-    (byte-identical prior behavior)."""
+    reference-image ``Part``s): ``None`` for the taxonomy call (byte-identical
+    prior behavior)."""
     try:
         result_str = await analyzer.analyze_chunk(
             youtube_url, window_start, window_end, None,
             response_schema=response_schema, prompt_text=prompt_text,
-            fps=fps, media_resolution=media_resolution, extra_parts=extra_parts,
+            fps=fps, media_resolution=media_resolution, mime_type=mime_type, extra_parts=extra_parts,
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error, no fabrication
         return None, str(e)
@@ -1496,6 +1508,8 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
                 response_schema=actor_schema,
                 prompt_text=highlight_axes.build_actor_prompt(description, ctx.player_references),
                 fps=cfg.fps, media_resolution=cfg.actor.media_resolution,
+                # INS-140 fix — see _call_axis_json's mime_type docstring.
+                mime_type=ctx.video_mime_type,
                 extra_parts=actor_reference_parts,
             )
             model_ms_total += (time.perf_counter() - t0) * 1000
