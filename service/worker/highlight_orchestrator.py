@@ -37,6 +37,7 @@ from service.models import JobStatus, TrackRequest
 from service.pipelines import executors, gemini_retry, gemini_upload
 from service.pipelines.registry import get_default
 from service.sns import SNSPublisher, clip_to_axis_only_event
+from service.worker import seam_dedup
 from service.worker.helpers import _is_cancelled, _make_s3
 from service.worker.progress import _make_worker_state
 from service.worker.stages.highlight_ingest import run_highlight_ingest_stage
@@ -48,18 +49,44 @@ logger = logging.getLogger("service.worker")
 # two callers (QA playground, this production orchestrator).
 PIPELINE_ID = "highlight-scan-critique-analyze"
 
+# 2026-07-26-engine13-rescope-single-call-cutover.md AC5 / Gate 5
+# (VERDICTS_V2.md) — BACKWARD-ONLY overlap at every outer-chunk seam, sized
+# as the derivation the founder-approved spec specifies:
+# critique_backpad_s's own max (30s) + preroll_s's own max (15s) = 45s. This
+# is NOT a measured-optimal value — Gate 5's own accuracy addendum was ruled
+# "too noise-dominated to support a confident directional claim" across two
+# model generations (VERDICTS_V2.md §1) — it ships on first-principles
+# chunking-boundary grounds: production's real 720s zero-overlap grid can
+# genuinely lose setup evidence across a seam, independent of any model.
+HIGHLIGHT_OUTER_CHUNK_OVERLAP_S: float = 45.0
 
-def _outer_chunks(duration_sec: float, outer_chunk_scope_sec: int) -> list[tuple[float, float]]:
-    """Contiguous, zero-overlap outer chunks (design §3.2) — same discipline
-    as ``HIGHLIGHT_SPLIT_OVERLAP_S: float = 0.0`` (no dedup stage exists in
-    this pipeline; any overlap risks double-reporting one real action)."""
+
+def _outer_chunks(
+    duration_sec: float, outer_chunk_scope_sec: int, overlap_s: float = HIGHLIGHT_OUTER_CHUNK_OVERLAP_S,
+) -> list[tuple[float, float]]:
+    """Outer chunks on a contiguous grid, with a BACKWARD-ONLY ``overlap_s``
+    read at every seam after the first (2026-07-26 re-scope AC5 — see
+    ``HIGHLIGHT_OUTER_CHUNK_OVERLAP_S``). Each chunk's END stays exactly at
+    the nominal grid boundary (no forward overlap — none was measured or
+    directed, OQ5); each chunk's START (after the first) is pulled
+    ``overlap_s`` EARLIER than its nominal grid position, clamped to never go
+    below 0. This means adjacent chunks' sent video windows now genuinely
+    overlap by up to ``overlap_s`` at every seam — this is a DELIBERATE
+    change from the prior zero-overlap grid, and is exactly why
+    ``run_highlight_job`` now runs ``seam_dedup`` (AC6) over the highlights
+    that land in that overlap band: a real event sitting there can be
+    independently discovered and reported by both the trailing highlight_scan
+    of chunk k and the leading highlight_scan of chunk k+1."""
     if duration_sec <= 0 or outer_chunk_scope_sec <= 0:
         return []
     n = math.ceil(duration_sec / outer_chunk_scope_sec)
-    return [
-        (float(i * outer_chunk_scope_sec), float(min((i + 1) * outer_chunk_scope_sec, duration_sec)))
-        for i in range(n)
-    ]
+    chunks: list[tuple[float, float]] = []
+    for i in range(n):
+        nominal_start = float(i * outer_chunk_scope_sec)
+        end = float(min((i + 1) * outer_chunk_scope_sec, duration_sec))
+        start = max(0.0, nominal_start - overlap_s) if i > 0 else nominal_start
+        chunks.append((start, end))
+    return chunks
 
 
 def _chunk_progress_pct(position: int, chunks_total: int) -> float:
@@ -146,6 +173,15 @@ async def run_highlight_job(
         player_id_counts: dict[str, int] = {}
         sentinel_count = 0
         identity_uncertain_count = 0
+        # AC6 seam dedup (see service/worker/seam_dedup.py): the PREVIOUS
+        # chunk's own trailing-seam-band clips (already published), carried
+        # forward one chunk at a time so the CURRENT chunk can check its own
+        # leading-seam-band highlights against them. Empty at job start and
+        # after a resume (chunk_index < resume_from_chunk_index chunks are
+        # never reprocessed) — a documented, narrow limitation: a resumed
+        # job's first processed chunk has no seam-dedup context against the
+        # chunk immediately before the resume point.
+        prior_seam_clips: list[dict] = []
 
         for chunk_index, (chunk_start, chunk_end) in enumerate(chunks):
             if chunk_index < resume_from_chunk_index:
@@ -170,6 +206,9 @@ async def run_highlight_job(
             highlights_ditched = 0
             highlights_published = 0
             chunk_error_count = 0
+            # This chunk's own clips landing in the seam band it shares with
+            # the NEXT chunk — becomes that chunk's `prior_seam_clips`.
+            this_chunk_trailing_seam_clips: list[dict] = []
 
             async for event in executors.run_pipeline(
                 pipeline, ctx, planned, budget_cap=config.highlight_pipeline_budget_cap,
@@ -191,7 +230,13 @@ async def run_highlight_job(
                 elif etype == "highlight_result":
                     status = event.get("status")
                     if status == "ditched":
-                        # decision 3: a ditched highlight is NEVER published.
+                        # Legacy branch — the 2026-07-26 single-call cutover
+                        # removed the validator/ditch authority entirely
+                        # (executors.highlight_analyze_node's own docstring),
+                        # so this never fires in production anymore; kept for
+                        # wire-contract stability (a "status" key consumer
+                        # should not need a special case if a future analyze
+                        # node ever reintroduces a ditch verdict).
                         highlights_ditched += 1
                         continue
                     highlights_analyzed += 1
@@ -199,6 +244,46 @@ async def run_highlight_job(
                     if not clips:
                         continue
                     clip = clips[0]
+                    clip_start = clip.get("start_s")
+                    clip_end = clip.get("end_s")
+
+                    # AC6 seam dedup: if this highlight lands in the LEADING
+                    # overlap band shared with the PREVIOUS chunk, check
+                    # whether that chunk already published the same real
+                    # event (temporal-proximity + class-compatible, actor
+                    # NEVER consulted — seam_dedup.py). The already-published
+                    # record is never touched/rewritten; this candidate is
+                    # simply never published (AC6: "not re-published").
+                    is_seam_duplicate = False
+                    if (
+                        chunk_index > 0 and clip_start is not None and clip_end is not None
+                        and seam_dedup.in_seam_band(clip_start, clip_end, chunk_start, chunks[chunk_index - 1][1])
+                    ):
+                        match = seam_dedup.find_seam_duplicate(clip, prior_seam_clips)
+                        if match is not None:
+                            is_seam_duplicate = True
+                            logger.info(
+                                "Job %s: chunk %d: highlight %s [%.2f-%.2f] suppressed as a seam "
+                                "duplicate of a highlight already published by chunk %d",
+                                job_id, chunk_index, event.get("highlight_index"),
+                                clip_start, clip_end, chunk_index - 1,
+                            )
+
+                    # Track this chunk's own trailing-seam-band clips
+                    # regardless of the dedup outcome above — chunk k+1 needs
+                    # the REAL published record to check against, and a
+                    # highlight THIS chunk itself just suppressed as a
+                    # duplicate is never a valid anchor (it was never
+                    # published).
+                    if (
+                        not is_seam_duplicate and chunk_index + 1 < chunks_total
+                        and clip_start is not None and clip_end is not None
+                        and seam_dedup.in_seam_band(clip_start, clip_end, chunks[chunk_index + 1][0], chunk_end)
+                    ):
+                        this_chunk_trailing_seam_clips.append(clip)
+
+                    if is_seam_duplicate:
+                        continue
 
                     pid = clip.get("player_id")
                     if pid:
@@ -254,6 +339,9 @@ async def run_highlight_job(
                     ),
                 ),
             )
+            # AC6: hand this chunk's own trailing-seam-band clips to the NEXT
+            # chunk's dedup check (see the `prior_seam_clips` docstring above).
+            prior_seam_clips = this_chunk_trailing_seam_clips
 
         attribution_metrics = {
             "player_id_counts": player_id_counts,

@@ -70,13 +70,16 @@ def _request(**kwargs):
     return TrackRequest(bucket="src-bucket", key="videos/match.mp4", output_bucket="out-bucket", **kwargs)
 
 
-def _analyzed_event(highlight_index=1, player_id=None, actor_sentinel=None):
+def _analyzed_event(
+    highlight_index=1, player_id=None, actor_sentinel=None,
+    start_s=10.0, end_s=20.0, action_class="submission_arm_lock",
+):
     return {
         "type": "highlight_result", "highlight_index": highlight_index,
         "status": "analyzed", "ditch_reason": None,
         "clips": [{
-            "start_s": 10.0, "end_s": 20.0,
-            "position": "mount", "action_class": "submission_arm_lock", "outcome": "successful",
+            "start_s": start_s, "end_s": end_s,
+            "position": "mount", "action_class": action_class, "outcome": "successful",
             "player_id": player_id, "player_name": "Alice" if player_id else None,
             "identity_uncertain": False, "actor_sentinel": actor_sentinel,
             "notes": "n",
@@ -350,3 +353,157 @@ async def test_gemini_file_cleanup_called_in_finally(monkeypatch, _mock_boundari
     await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
 
     highlight_orchestrator.gemini_upload.delete_gemini_file.assert_awaited_once()
+
+
+# =============================================================================== #
+# 2026-07-26 re-scope AC5 — _outer_chunks 45s backward-only overlap.
+# =============================================================================== #
+def test_outer_chunks_backward_only_45s_overlap_after_first_chunk():
+    # 1500s / 720s -> 3 chunks: [0,720), [675,1440) (720-45), [1395,1500) (1440-45).
+    chunks = highlight_orchestrator._outer_chunks(1500.0, 720)
+    assert chunks == [(0.0, 720.0), (675.0, 1440.0), (1395.0, 1500.0)]
+
+
+def test_outer_chunks_first_chunk_never_extends_before_zero():
+    """The first chunk has no predecessor to overlap into — its start stays
+    exactly at 0, never negative."""
+    chunks = highlight_orchestrator._outer_chunks(100.0, 720)
+    assert chunks == [(0.0, 100.0)]
+
+
+def test_outer_chunks_second_chunk_clamps_overlap_to_zero_floor():
+    """A chunk grid small enough that nominal_start - overlap_s would go
+    negative must clamp to 0, never a negative offset."""
+    chunks = highlight_orchestrator._outer_chunks(50.0, 20, overlap_s=45.0)
+    # nominal boundaries: [0,20), [20,40), [40,50) -> overlapped starts:
+    # chunk1: max(0, 20-45)=0; chunk2: max(0, 40-45)=0.
+    assert chunks == [(0.0, 20.0), (0.0, 40.0), (0.0, 50.0)]
+
+
+def test_outer_chunks_ends_stay_at_nominal_grid_boundary_no_forward_overlap():
+    """OQ5: backward-only — every chunk's END is exactly the nominal grid
+    boundary, never extended forward."""
+    chunks = highlight_orchestrator._outer_chunks(2160.0, 720)
+    assert [end for _, end in chunks] == [720.0, 1440.0, 2160.0]
+
+
+def test_outer_chunks_overlap_s_is_configurable_not_hardcoded():
+    chunks = highlight_orchestrator._outer_chunks(200.0, 100, overlap_s=10.0)
+    assert chunks == [(0.0, 100.0), (90.0, 200.0)]
+
+
+# =============================================================================== #
+# 2026-07-26 re-scope AC6 — seam dedup wired into run_highlight_job: a
+# highlight already published by chunk k-1 near the seam is NOT re-published
+# when chunk k's 45s backward-extended read re-discovers it.
+# =============================================================================== #
+@pytest.mark.asyncio
+async def test_seam_duplicate_highlight_suppressed_not_republished(monkeypatch, _mock_boundaries):
+    """1500s job -> chunks (0,720),(675,1440),(1395,1500) — seam band with
+    chunk 0 is [675,720]. Chunk 0's trailing highlight [700,715] and chunk
+    1's leading highlight [703,716] are class-compatible (submission family)
+    and temporally close -> chunk 1's copy must be suppressed."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=1500.0))
+    _patch_run_pipeline(monkeypatch, [
+        [{"type": "highlight_map", "highlights": [{"index": 1}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(start_s=700.0, end_s=715.0, action_class="submission_choke")],
+        [{"type": "highlight_map", "highlights": [{"index": 1}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(start_s=703.0, end_s=716.0, action_class="submission_arm_lock")],
+        [{"type": "highlight_map", "highlights": []},
+         {"type": "stage_complete", "stage_type": "highlight_scan"}],
+    ])
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 1  # chunk 1's duplicate suppressed
+    publish_checkpoints = [
+        w for w in jobs_store.written if w["stage_name"] == PipelineStage.HIGHLIGHT_PUBLISH.value
+    ]
+    assert publish_checkpoints[0]["checkpoint_data"]["artifacts"]["sns_event_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_seam_highlights_outside_class_compat_both_publish(monkeypatch, _mock_boundaries):
+    """Same seam-band positions, but the action classes are NOT compatible
+    (not exact match, not both in the submission family) -> both must
+    publish — never merged/suppressed just for being temporally close."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=1500.0))
+    _patch_run_pipeline(monkeypatch, [
+        [{"type": "highlight_map", "highlights": [{"index": 1}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(start_s=700.0, end_s=715.0, action_class="guard_pass")],
+        [{"type": "highlight_map", "highlights": [{"index": 1}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(start_s=703.0, end_s=716.0, action_class="takedown_attempt")],
+        [{"type": "highlight_map", "highlights": []},
+         {"type": "stage_complete", "stage_type": "highlight_scan"}],
+    ])
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_seam_highlights_outside_the_band_both_publish_no_false_positive_dedup(monkeypatch, _mock_boundaries):
+    """Two class-compatible, temporally-close-to-EACH-OTHER highlights that
+    are NOT near the chunk seam (both deep inside chunk 0's own [0,720)
+    interior) must never be cross-chunk-deduped — the seam-band pre-filter
+    means dedup is never even attempted outside the overlap zone."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=1500.0))
+    _patch_run_pipeline(monkeypatch, [
+        [{"type": "highlight_map", "highlights": [{"index": 1}, {"index": 2}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(highlight_index=1, start_s=100.0, end_s=115.0, action_class="submission_choke"),
+         _analyzed_event(highlight_index=2, start_s=103.0, end_s=116.0, action_class="submission_choke")],
+        [{"type": "highlight_map", "highlights": []},
+         {"type": "stage_complete", "stage_type": "highlight_scan"}],
+        [{"type": "highlight_map", "highlights": []},
+         {"type": "stage_complete", "stage_type": "highlight_scan"}],
+    ])
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_seam_duplicate_excluded_from_attribution_metrics(monkeypatch, _mock_boundaries):
+    """A suppressed seam duplicate must not double-count attribution metrics
+    for what is really ONE event."""
+    _patch_ingest(monkeypatch, _ingest_result(duration_sec=1500.0))
+    _patch_run_pipeline(monkeypatch, [
+        [{"type": "highlight_map", "highlights": [{"index": 1}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(start_s=700.0, end_s=715.0, action_class="submission_choke", player_id="p1")],
+        [{"type": "highlight_map", "highlights": [{"index": 1}]},
+         {"type": "stage_complete", "stage_type": "highlight_scan"},
+         _analyzed_event(start_s=703.0, end_s=716.0, action_class="submission_arm_lock", player_id="p1")],
+        [{"type": "highlight_map", "highlights": []},
+         {"type": "stage_complete", "stage_type": "highlight_scan"}],
+    ])
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
+
+    import json
+    metrics = json.loads(jobs_store.progress_writes[-1][2]["attribution_metrics_json"])
+    assert metrics["player_id_counts"] == {"p1": 1}  # not 2 — the duplicate never counted
+    assert metrics["total_published"] == 1
