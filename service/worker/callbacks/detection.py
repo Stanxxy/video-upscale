@@ -35,7 +35,7 @@ def _make_detection_cb(
     """
     Create a sync detection_callback for run_tracking's detection_callback parameter.
 
-    Instead of blocking on a WebSocket response, this writes a checkpoint to
+    Instead of blocking on a client connection, this writes a checkpoint to
     Keyspaces and returns None, which signals the tracking loop to stop.
     The job will be resumed later via /resume with corrected bounding boxes.
     """

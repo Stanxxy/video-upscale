@@ -60,6 +60,15 @@ from service.pipelines.registry import get_default
 from service.sns import SNSPublisher, clip_to_axis_only_event
 from service.worker import majority_vote, seam_dedup
 from service.worker.helpers import _is_cancelled, _make_s3
+from service.worker.highlight_progress import (
+    DETECTING,
+    FINALIZING,
+    FINALIZING_END,
+    PREPARING,
+    HighlightProgressWriter,
+    detecting_percent,
+    finalizing_percent,
+)
 from service.worker.progress import _make_worker_state
 from service.worker.stages.highlight_ingest import run_highlight_ingest_stage
 
@@ -110,10 +119,13 @@ def _outer_chunks(
     return chunks
 
 
-def _chunk_progress_pct(position: int, chunks_total: int) -> float:
-    if chunks_total <= 0:
-        return 100.0
-    return round(100.0 * min(position, chunks_total) / chunks_total, 1)
+def _unique_detection_count(
+    clips_by_chunk: list[list[dict]],
+    chunks: list[tuple[float, float]],
+) -> int:
+    """Return the seam-deduplicated count for completed outer chunks."""
+    deduped, _ = seam_dedup.dedup_match_clips(clips_by_chunk, chunks)
+    return len(deduped)
 
 
 # --------------------------------------------------------------------------- #
@@ -219,6 +231,9 @@ async def run_highlight_job(
     os.makedirs(work_dir, exist_ok=True)
     gemini_client: Optional[genai.Client] = None
     gemini_file_name: Optional[str] = None
+    progress = HighlightProgressWriter(job_id, jobs_store)
+    current_stage = PipelineStage.HIGHLIGHT_INGEST
+    highlights_found_total = 0
 
     logger.info(
         "Job %s: highlight_job starting work_dir=%s input=s3://%s/%s",
@@ -227,6 +242,11 @@ async def run_highlight_job(
 
     try:
         await jobs_store.set_state(job_id, JobState.RUNNING)
+        await progress.write(
+            PipelineStage.HIGHLIGHT_INGEST,
+            0.0,
+            phase=PREPARING,
+        )
 
         gemini_client = genai.Client(
             api_key=config.gemini_api_key,
@@ -235,6 +255,7 @@ async def run_highlight_job(
 
         ingest = await run_highlight_ingest_stage(
             job_id, request, config, jobs_store, work_dir, gemini_client,
+            progress_writer=progress,
         )
         gemini_file_name = ingest.gemini_file_name
 
@@ -272,7 +293,16 @@ async def run_highlight_job(
         output_bucket = request.output_bucket or request.bucket
         base_key = os.path.splitext(request.key)[0]
 
-        highlights_found_total = 0
+        existing_chunk_checkpoint = await jobs_store.get_checkpoint(
+            job_id, PipelineStage.HIGHLIGHT_CHUNK,
+        )
+        existing_chunk_clips = _clips_by_chunk_from_checkpoint(
+            existing_chunk_checkpoint, chunks_total,
+        )
+        highlights_found_total = _unique_detection_count(
+            existing_chunk_clips[:resume_from_chunk_index],
+            chunks[:resume_from_chunk_index],
+        )
 
         # ------------------------------------------------------------- #
         # Phase 1 — per-chunk analyze loop: ANALYZE + COLLECT only. No
@@ -287,6 +317,16 @@ async def run_highlight_job(
             if _is_cancelled(job_id, job_store):
                 return
 
+            current_stage = PipelineStage.HIGHLIGHT_CHUNK
+            await progress.write(
+                PipelineStage.HIGHLIGHT_CHUNK,
+                detecting_percent(chunk_index, chunks_total, 0.0),
+                phase=DETECTING,
+                chunk_index=chunk_index,
+                chunks_total=chunks_total,
+                highlights_found_so_far=highlights_found_total,
+            )
+
             ctx = executors.RunContext(
                 youtube_id=job_id,
                 youtube_url=ingest.gemini_file_uri,
@@ -300,8 +340,8 @@ async def run_highlight_job(
             planned = executors.estimate_run_plan(pipeline, duration_sec=chunk_end - chunk_start)
 
             highlights_scanned = 0
+            highlights_processed = 0
             highlights_analyzed = 0
-            highlights_ditched = 0
             chunk_error_count = 0
             this_chunk_clips: list[dict] = []
 
@@ -314,26 +354,29 @@ async def run_highlight_job(
                     highlights_scanned = len(event.get("highlights") or [])
 
                 elif etype == "stage_complete" and event.get("stage_type") == "highlight_scan":
-                    highlights_found_total += highlights_scanned
-                    await jobs_store.update_highlight_chunk_progress(
-                        job_id, PipelineStage.HIGHLIGHT_CHUNK,
-                        _chunk_progress_pct(chunk_index, chunks_total),
-                        chunk_index=chunk_index, chunks_total=chunks_total,
+                    await progress.write(
+                        PipelineStage.HIGHLIGHT_CHUNK,
+                        detecting_percent(chunk_index, chunks_total, 0.0),
+                        phase=DETECTING,
+                        chunk_index=chunk_index,
+                        chunks_total=chunks_total,
                         highlights_found_so_far=highlights_found_total,
                     )
 
                 elif etype == "highlight_result":
-                    status = event.get("status")
-                    if status == "ditched":
-                        # Legacy branch — the 2026-07-26 single-call cutover
-                        # removed the validator/ditch authority entirely
-                        # (executors.highlight_analyze_node's own docstring),
-                        # so this never fires in production anymore; kept for
-                        # wire-contract stability (a "status" key consumer
-                        # should not need a special case if a future analyze
-                        # node ever reintroduces a ditch verdict).
-                        highlights_ditched += 1
-                        continue
+                    highlights_processed += 1
+                    await progress.write(
+                        PipelineStage.HIGHLIGHT_CHUNK,
+                        detecting_percent(
+                            chunk_index,
+                            chunks_total,
+                            highlights_processed / max(highlights_scanned, 1),
+                        ),
+                        phase=DETECTING,
+                        chunk_index=chunk_index,
+                        chunks_total=chunks_total,
+                        highlights_found_so_far=highlights_found_total,
+                    )
                     highlights_analyzed += 1
                     clips = event.get("clips") or []
                     if not clips:
@@ -381,19 +424,40 @@ async def run_highlight_job(
             highlights_collected_by_chunk_map = dict(existing_chunk_artifacts.get("highlights_collected_by_chunk") or {})
             highlights_collected_by_chunk_map[str(chunk_index)] = len(this_chunk_clips)
 
+            completed_clips_by_chunk = [
+                clips_by_chunk_map.get(str(i), [])
+                for i in range(chunk_index + 1)
+            ]
+            highlights_found_total = max(
+                highlights_found_total,
+                _unique_detection_count(
+                    completed_clips_by_chunk,
+                    chunks[:chunk_index + 1],
+                ),
+            )
+
+            await progress.write(
+                PipelineStage.HIGHLIGHT_CHUNK,
+                detecting_percent(chunk_index, chunks_total, 1.0),
+                phase=DETECTING,
+                chunk_index=chunk_index,
+                chunks_total=chunks_total,
+                highlights_found_so_far=highlights_found_total,
+            )
+
             await jobs_store.write_checkpoint(
                 job_id, PipelineStage.HIGHLIGHT_CHUNK, True,
                 build_highlight_chunk_completed(
                     chunk_index=chunk_index, chunks_total=chunks_total,
                     highlights_scanned=highlights_scanned,
                     highlights_analyzed=highlights_analyzed,
-                    highlights_ditched=highlights_ditched,
+                    highlights_ditched=0,
                     # Publish no longer happens per-chunk at all — see
                     # build_highlight_chunk_completed's own docstring.
                     highlights_published=0,
                     gemini_file_uri=ingest.gemini_file_uri,
                     worker_state=_make_worker_state(
-                        progress_percent=_chunk_progress_pct(chunk_index + 1, chunks_total),
+                        progress_percent=detecting_percent(chunk_index, chunks_total, 1.0),
                         stage_progress_fraction=1.0,
                     ),
                     clips_by_chunk=clips_by_chunk_map,
@@ -429,7 +493,15 @@ async def run_highlight_job(
             )
 
         # Phase 3 — whole-match seam dedup (AC6; service/worker/seam_dedup.py).
+        current_stage = PipelineStage.HIGHLIGHT_PUBLISH
         deduped_clips, seam_duplicates_dropped = seam_dedup.dedup_match_clips(clips_by_chunk, chunks)
+        highlights_found_total = max(highlights_found_total, len(deduped_clips))
+        await progress.write(
+            PipelineStage.HIGHLIGHT_PUBLISH,
+            90.0,
+            phase=FINALIZING,
+            highlights_found_so_far=highlights_found_total,
+        )
         if seam_duplicates_dropped:
             logger.info(
                 "Job %s: seam dedup dropped %d duplicate highlight(s) across outer-chunk boundaries",
@@ -479,6 +551,16 @@ async def run_highlight_job(
 
         published_events: list[dict] = []
         total_candidates = len(reconciled_clips)
+        processed_candidates = 0
+
+        async def _write_finalize_progress() -> None:
+            await progress.write(
+                PipelineStage.HIGHLIGHT_PUBLISH,
+                finalizing_percent(processed_candidates, total_candidates),
+                phase=FINALIZING,
+                highlights_found_so_far=highlights_found_total,
+            )
+
         for event_idx, clip in enumerate(reconciled_clips, start=1):
             candidate_key = clip.get("_candidate_key")
             try:
@@ -487,6 +569,8 @@ async def run_highlight_job(
                 logger.error(
                     "Job %s: failed to build candidate event for %s: %s", job_id, candidate_key, e,
                 )
+                processed_candidates += 1
+                await _write_finalize_progress()
                 continue
 
             if publish_terminal_done or candidate_key in already_published_keys:
@@ -494,9 +578,13 @@ async def run_highlight_job(
                 # already terminal) — NEVER re-publish; just fold it into
                 # this run's audit view.
                 published_events.append(candidate_event.model_dump(mode="json"))
+                processed_candidates += 1
+                await _write_finalize_progress()
                 continue
 
             if sns is None:
+                processed_candidates += 1
+                await _write_finalize_progress()
                 continue  # no topic configured — analyzed but never published, same as before
 
             try:
@@ -505,9 +593,13 @@ async def run_highlight_job(
                 logger.error(
                     "Job %s: publish failed for candidate %s: %s", job_id, candidate_key, e,
                 )
+                processed_candidates += 1
+                await _write_finalize_progress()
                 continue
 
             published_events.append(candidate_event.model_dump(mode="json"))
+            processed_candidates += 1
+            await _write_finalize_progress()
             if candidate_key:
                 # Read-latest-then-merge-cumulative-write (same discipline
                 # as Phase 1's HIGHLIGHT_CHUNK write — see the module-level
@@ -523,7 +615,7 @@ async def run_highlight_job(
                         candidate_key=candidate_key, event_index=event_idx,
                         published_candidate_keys=sorted(already_published_keys),
                         worker_state=_make_worker_state(
-                            progress_percent=_chunk_progress_pct(event_idx, total_candidates),
+                            progress_percent=finalizing_percent(event_idx, total_candidates),
                             stage_progress_fraction=(event_idx / total_candidates) if total_candidates else 1.0,
                         ),
                     ),
@@ -542,6 +634,14 @@ async def run_highlight_job(
             "cross_highlight_flip_rate": round(cross_highlight_flip_rate, 4),
             "seam_duplicates_dropped": seam_duplicates_dropped,
         }
+
+        await progress.write(
+            PipelineStage.HIGHLIGHT_PUBLISH,
+            FINALIZING_END,
+            phase=FINALIZING,
+            highlights_found_so_far=highlights_found_total,
+            attribution_metrics_json=json.dumps(attribution_metrics),
+        )
 
         s3 = _make_s3(config)
         events_key = f"{base_key}_v2_events.json"
@@ -601,9 +701,8 @@ async def run_highlight_job(
                 ),
             )
 
-        await jobs_store.update_highlight_chunk_progress(
-            job_id, PipelineStage.HIGHLIGHT_PUBLISH, 100.0,
-            chunk_index=chunks_total, chunks_total=chunks_total,
+        await progress.complete(
+            PipelineStage.HIGHLIGHT_PUBLISH,
             highlights_found_so_far=highlights_found_total,
             attribution_metrics_json=json.dumps(attribution_metrics),
         )
@@ -612,7 +711,6 @@ async def run_highlight_job(
             job_id, status=JobStatus.COMPLETED, progress_percent=100.0,
             result_bucket=output_bucket, result_key=events_key,
         )
-        await jobs_store.set_state(job_id, JobState.COMPLETED)
         logger.info(
             "Job %s: highlight_job completed (%d event(s) published across %d chunk(s))",
             job_id, len(published_events), chunks_total,
@@ -625,8 +723,12 @@ async def run_highlight_job(
 
     except Exception as e:
         logger.exception("Job %s highlight_job failed", job_id)
+        await progress.fail(
+            current_stage,
+            str(e),
+            highlights_found_so_far=highlights_found_total,
+        )
         await job_store.update_job(job_id, status=JobStatus.FAILED, error_message=str(e))
-        await jobs_store.set_state(job_id, JobState.FAILED, error_message=str(e))
 
     finally:
         if gemini_client is not None and gemini_file_name:

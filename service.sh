@@ -179,7 +179,8 @@ cmd_start() {
         set +a
     fi
 
-    # Single worker required: WebSocket + in-memory state don't survive forking
+    # Single worker required: the service keeps job state in-process and uses
+    # Keyspaces-backed lifecycle/SSE projections for client updates.
     local -a uvicorn_cmd=(
         "$venv_python" -m uvicorn "$APP_MODULE"
         --host "$HOST"

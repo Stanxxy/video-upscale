@@ -92,7 +92,8 @@ async def create_track_job(request: TrackRequest):
             "latest job",
         )
 
-    # Start the job immediately (no WS handshake needed)
+    # Start the job immediately; clients receive lifecycle updates through
+    # the Keyspaces-backed SSE projection.
     routes_pkg._schedule_job(job_id, admitted_request)
 
     return TrackResponse(job_id=job_id, status="pending")

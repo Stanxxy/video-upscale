@@ -19,12 +19,20 @@ class FakeJobsStore:
     def __init__(self, checkpoints=None):
         self._checkpoints = checkpoints or []
         self.written: list[tuple] = []
+        self.lifecycle = {"progress_percent": 0.0}
 
     async def get_all_checkpoints(self, job_id):
         return self._checkpoints
 
     async def write_checkpoint(self, job_id, stage_name, completed, data):
         self.written.append((job_id, stage_name, completed, data))
+        return True
+
+    async def get_lifecycle(self, job_id):
+        return dict(self.lifecycle)
+
+    async def update_highlight_progress(self, job_id, stage, percent, **kwargs):
+        self.lifecycle.update({"progress_percent": percent, **kwargs})
         return True
 
 

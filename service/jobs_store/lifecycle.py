@@ -139,7 +139,7 @@ class LifecycleMixin:
             now, now, job_id,
         ])
 
-    async def update_highlight_chunk_progress(
+    async def update_highlight_progress(
         self,
         job_id: str,
         stage: PipelineStage,
@@ -151,12 +151,16 @@ class LifecycleMixin:
         attribution_metrics_json: str | None = None,
         stage_message: str = "",
     ) -> bool:
-        """S12 Phase 1b (design §1.2, item 11.5) — v2-only progress write.
+        """Persist one v2 progress snapshot supplied by the engine writer.
+
+        S12 Phase 1b (design §1.2, item 11.5) — v2-only progress write.
         A DEDICATED method (not an extension of ``update_progress`` above)
         so the dormant tracking pipeline's own UPDATE statement/call sites
         are byte-untouched. ``current_frame``/``total_frames`` are never
         touched here — v2 has no frame-counting concept (they stay at
-        whatever ``create_lifecycle`` seeded, i.e. 0)."""
+        whatever ``create_lifecycle`` seeded, i.e. 0). The engine's
+        ``HighlightProgressWriter`` owns validation and monotonic floors;
+        this method is intentionally a thin persistence boundary."""
         now = datetime.now(timezone.utc)
         q = (
             f"UPDATE {self._ks}.job_lifecycle SET "
@@ -172,6 +176,106 @@ class LifecycleMixin:
             attribution_metrics_json,
             now, now, job_id,
         ])
+
+    async def _sync_lifecycle_after_write(
+        self,
+        job_id: str,
+        state: JobState,
+    ) -> bool:
+        """Refresh recovery/latest projections after a lifecycle UPDATE."""
+        lifecycle = await self.get_lifecycle(job_id)
+        if not lifecycle:
+            return True
+        if not await self.upsert_recovery_index(lifecycle):
+            return False
+        if state in states_that_sync_latest_job_row() and lifecycle.get("video_id"):
+            return await self.set_latest(lifecycle["video_id"], job_id, state)
+        return True
+
+    async def _write_highlight_terminal(
+        self,
+        job_id: str,
+        state: JobState,
+        stage: PipelineStage,
+        progress_percent: float,
+        stage_message: str,
+        *,
+        error_message: str = "",
+        highlights_found_so_far: int | None = None,
+        attribution_metrics_json: str | None = None,
+    ) -> bool:
+        """Atomically publish one terminal highlight lifecycle snapshot."""
+        now = datetime.now(timezone.utc)
+        q = (
+            f"UPDATE {self._ks}.job_lifecycle SET "
+            f"job_state = %s, stage = %s, progress_percent = %s, "
+            f"current_frame = %s, total_frames = %s, stage_message = %s, "
+            f"chunk_index = %s, chunks_total = %s, "
+            f"highlights_found_so_far = %s, attribution_metrics_json = %s, "
+            f"error_message = %s, last_heartbeat_at = %s, updated_at = %s, "
+            f"completed_at = %s WHERE job_id = %s"
+        )
+        ok = await self._client.execute_write(q, [
+            state.value,
+            stage.value,
+            progress_percent,
+            0,
+            0,
+            stage_message,
+            None,
+            None,
+            highlights_found_so_far,
+            attribution_metrics_json,
+            error_message,
+            now,
+            now,
+            now,
+            job_id,
+        ])
+        if not ok:
+            return False
+        return await self._sync_lifecycle_after_write(job_id, state)
+
+    async def complete_highlight(
+        self,
+        job_id: str,
+        stage: PipelineStage,
+        *,
+        highlights_found_so_far: int | None = None,
+        attribution_metrics_json: str | None = None,
+    ) -> bool:
+        """Atomically publish ``COMPLETED`` at 100% for a highlight job."""
+        return await self._write_highlight_terminal(
+            job_id,
+            JobState.COMPLETED,
+            stage,
+            100.0,
+            "completed",
+            highlights_found_so_far=highlights_found_so_far,
+            attribution_metrics_json=attribution_metrics_json,
+        )
+
+    async def fail_highlight(
+        self,
+        job_id: str,
+        stage: PipelineStage,
+        *,
+        progress_percent: float,
+        error_message: str,
+        highlights_found_so_far: int | None = None,
+        attribution_metrics_json: str | None = None,
+    ) -> bool:
+        """Atomically publish ``FAILED`` with the current progress floor."""
+        return await self._write_highlight_terminal(
+            job_id,
+            JobState.FAILED,
+            stage,
+            progress_percent,
+            "error",
+            error_message=error_message,
+            highlights_found_so_far=highlights_found_so_far,
+            attribution_metrics_json=attribution_metrics_json,
+        )
 
     async def set_state(
         self,

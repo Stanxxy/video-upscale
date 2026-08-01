@@ -1105,11 +1105,9 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
     — position + action_class + outcome together, ONE flat verdict, no
     timestamps) plus the UNCHANGED, independent actor/identity call (Gate 1/2
     did not touch this axis). There is no more adversarial reconciliation
-    pass and no more ditch authority — every highlight whose taxonomy call
-    succeeds reaches a synthesized clip; ``status`` is kept on the emitted
-    event, constant at ``"analyzed"``, purely for wire-contract stability
-    with ``service/worker/highlight_orchestrator.py``'s existing
-    ``status == "ditched"`` branch (which simply never fires anymore).
+    pass — every highlight whose taxonomy call succeeds reaches a synthesized
+    clip; ``status`` remains constant at ``"analyzed"`` for wire-contract
+    stability.
 
     A synthesized highlight's ``clips`` list contains exactly ONE clip
     spanning the highlight's own AUTHORITATIVE bounds
@@ -1337,8 +1335,7 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
         taxonomy_justification = tax_data.get("justification") if isinstance(tax_data, dict) else None
 
         # S12 Phase 1b (design §4.1/§4.4): actor axis call — flat, once per
-        # highlight (every highlight the taxonomy call succeeded on — there
-        # is no more validator/ditch authority to gate this on).
+        # highlight (every highlight the taxonomy call succeeded on).
         t0 = time.perf_counter()
         actor_data, actor_err = await _call_axis_json(
             actor_analyzer, ctx.youtube_url, window_start, window_end,
@@ -1419,11 +1416,8 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
         yield {
             "type": "highlight_result", "highlight_index": highlight["index"], "format": "simplified-tags-time-v1",
             "clips": clips,
-            # "status" is kept, constant at "analyzed", purely for wire-
-            # contract stability — there is no more validator/ditch
-            # authority (see this function's docstring). A future consumer
-            # relying on this key unconditionally being present is
-            # unaffected by the removal.
+            # Status remains constant at "analyzed" for wire-contract
+            # stability. Consumers may rely on this key being present.
             "status": "analyzed",
             "timing": {"model_ms": round(model_ms_total, 1)},
             # Per-axis telemetry (additive) — two independent calls now,

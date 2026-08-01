@@ -423,11 +423,8 @@ class HighlightAnalyzeConfig(BaseModel):
     together, a single flat verdict, no timestamps) using this config's own
     ``model``/``thinking``/``media_resolution``/``fps`` fields directly (no
     more per-axis sub-configs for the taxonomy call — there is only one call
-    now). There is no more validator/ditch authority: every highlight that
-    reaches a synthesized clip is ``status="analyzed"`` (the field is kept,
-    constant, for wire-contract stability with
-    ``service/worker/highlight_orchestrator.py``'s existing
-    ``status == "ditched"`` branch, which now simply never fires).
+    now). Every highlight that reaches a synthesized clip has
+    ``status="analyzed"`` for wire-contract stability.
 
     ``actor`` (``ActorAxisConfig``, S12 Phase 1b) is UNCHANGED — a second,
     independent identity-attribution call, flat +1 per highlight, fired for

@@ -7,7 +7,7 @@ import pytest
 
 from service import routes as routes_mod
 from service.analysis_keyspaces_enums import JobState
-from service.models import TrackRequest
+from service.models import TrackRequest, TrackResponse
 from service.routes import scheduling as scheduling_mod
 
 
@@ -76,6 +76,12 @@ async def test_post_track_creates_lifecycle_and_schedules_worker(
     assert jobs_store._latest[video_id]["job_id"] == job_id
     assert len(scheduled_jobs) == 1
     assert scheduled_jobs[0][0] == job_id
+
+
+def test_track_response_uses_rest_ack_without_websocket_url():
+    response = TrackResponse(job_id="job-1")
+
+    assert response.model_dump() == {"job_id": "job-1", "status": "pending"}
 
 
 @pytest.mark.asyncio
