@@ -81,6 +81,7 @@ def make_mock_jobs_store() -> MagicMock:
         if job_id in _lifecycles:
             sv = state.value if hasattr(state, "value") else state
             _lifecycles[job_id]["job_state"] = sv
+            _lifecycles[job_id]["error_message"] = error_message
             if (
                 sync_latest
                 and sv in {

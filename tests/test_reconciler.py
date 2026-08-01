@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from service.analysis_keyspaces_enums import JobState
+from service.analysis_settings import resolve_analysis_settings
+from service.models import TrackRequest
 from service.reconciler import RecoveryManager
 
 
@@ -214,9 +216,9 @@ async def test_reconcile_once_dispatches_real_recover_interrupted_job_highlight_
             "pipeline_kind": "highlight_v2",
         }
     ])
-    store.requests["v2-job"] = (
-        '{"bucket": "b", "key": "folder/v.mp4", "output_bucket": null}'
-    )
+    store.requests["v2-job"] = resolve_analysis_settings(
+        TrackRequest(bucket="b", key="folder/v.mp4", output_bucket=None),
+    ).model_dump_json()
     store.checkpoints_by_job["v2-job"] = [
         {
             "stage_name": "highlight_chunk",

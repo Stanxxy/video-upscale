@@ -43,6 +43,7 @@ from uuid import UUID, uuid4
 from google import genai
 from google.genai import types
 
+from service.analysis_settings import apply_effective_analysis_config
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import (
     build_highlight_chunk_completed,
@@ -53,7 +54,7 @@ from service.checkpoints.highlight_resume import build_highlight_resume_plan
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.jobs_store import JobsStore
-from service.models import JobStatus, TrackRequest
+from service.models import AdmittedTrackRequest, JobStatus
 from service.pipelines import executors, gemini_retry, gemini_upload
 from service.pipelines.registry import get_default
 from service.sns import SNSPublisher, clip_to_axis_only_event
@@ -198,7 +199,7 @@ def _publish_terminal_done(publish_checkpoint: Optional[dict]) -> bool:
 
 async def run_highlight_job(
     job_id: str,
-    request: TrackRequest,
+    request: AdmittedTrackRequest,
     config: ServiceConfig,
     job_store: InMemoryJobStore,
     jobs_store: JobsStore,
@@ -250,7 +251,10 @@ async def run_highlight_job(
             )
 
         retry_config = gemini_retry.GeminiRetryConfig.from_service_config(config)
-        pipeline = get_default(PIPELINE_ID)
+        pipeline = apply_effective_analysis_config(
+            get_default(PIPELINE_ID),
+            request.effective_analysis_config,
+        )
 
         topic_arn = request.sns_topic_arn or config.sns_topic_arn
         sns: Optional[SNSPublisher] = None
