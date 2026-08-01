@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from service.analysis_keyspaces_enums import JobState, PipelineStage
+from service.analysis_settings import resolve_analysis_settings
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.models import TrackRequest
@@ -93,7 +94,9 @@ def _config():
 
 
 def _request(**kwargs):
-    return TrackRequest(bucket="src-bucket", key="videos/match.mp4", output_bucket="out-bucket", **kwargs)
+    return resolve_analysis_settings(
+        TrackRequest(bucket="src-bucket", key="videos/match.mp4", output_bucket="out-bucket", **kwargs),
+    )
 
 
 def _analyzed_event(

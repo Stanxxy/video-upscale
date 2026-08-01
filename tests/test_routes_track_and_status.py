@@ -111,6 +111,79 @@ async def test_get_job_reads_keyspaces_lifecycle(service_client, service_compone
 
 
 @pytest.mark.asyncio
+async def test_get_job_exposes_only_the_persisted_analysis_settings_envelope(
+    service_client,
+    service_components,
+):
+    from service.analysis_settings import resolve_analysis_settings
+
+    _, _, jobs_store = service_components
+    await jobs_store.create_lifecycle("job-r4", "vid", "user")
+    admitted = resolve_analysis_settings(
+        TrackRequest(
+            bucket="private-bucket",
+            key="private-key.mp4",
+            analysis_media_resolution="medium",
+        ),
+    )
+    await jobs_store.save_request("job-r4", admitted.model_dump_json())
+
+    response = await service_client.get("/job/job-r4")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["capability_schema_version"] == 1
+    assert body["requested_analysis_settings"] == {
+        "analysis_media_resolution": "medium",
+    }
+    assert body["effective_analysis_config"]["scan"]["media_resolution"] == "medium"
+    assert "bucket" not in body
+    assert "key" not in body
+
+
+@pytest.mark.asyncio
+async def test_get_job_returns_null_diagnostics_for_historical_pre_r4_request(
+    service_client,
+    service_components,
+):
+    _, _, jobs_store = service_components
+    await jobs_store.create_lifecycle("job-pre-r4", "vid", "user")
+    await jobs_store.save_request(
+        "job-pre-r4",
+        TrackRequest(bucket="historic-bucket", key="historic.mp4").model_dump_json(),
+    )
+
+    response = await service_client.get("/job/job-pre-r4")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["capability_schema_version"] is None
+    assert body["requested_analysis_settings"] is None
+    assert body["effective_analysis_config"] is None
+    assert "bucket" not in body
+    assert "key" not in body
+
+
+@pytest.mark.asyncio
+async def test_get_job_fails_visibly_for_partial_r4_analysis_settings_envelope(
+    service_client,
+    service_components,
+):
+    _, _, jobs_store = service_components
+    await jobs_store.create_lifecycle("job-partial-r4", "vid", "user")
+    await jobs_store.save_request(
+        "job-partial-r4",
+        '{"bucket":"private-bucket","key":"private.mp4",'
+        '"capability_schema_version":1}',
+    )
+
+    response = await service_client.get("/job/job-partial-r4")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Persisted analysis settings snapshot is invalid"
+
+
+@pytest.mark.asyncio
 async def test_get_health_returns_ok(service_client):
     resp = await service_client.get("/health")
     assert resp.status_code == 200

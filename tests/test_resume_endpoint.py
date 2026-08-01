@@ -17,6 +17,7 @@ import pytest_asyncio
 
 from service import routes as routes_mod
 from service.analysis_keyspaces_enums import JobState, PipelineStage
+from service.analysis_settings import resolve_analysis_settings
 from service.models import TrackRequest
 
 
@@ -460,7 +461,7 @@ async def test_recover_interrupted_job_highlight_v2_resumes_same_job_id_no_repla
     from service.routes import recover_interrupted_job
 
     _, job_store, jobs_store = service_components
-    req = TrackRequest(bucket="b", key="folder/v.mp4")
+    req = resolve_analysis_settings(TrackRequest(bucket="b", key="folder/v.mp4"))
     job = await job_store.create_job(req)
     await jobs_store.create_lifecycle(job.job_id, "vid-v2", "u", pipeline_kind="highlight_v2")
     await jobs_store.save_request(job.job_id, req.model_dump_json())

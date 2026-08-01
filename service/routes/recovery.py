@@ -7,12 +7,24 @@ from datetime import datetime, timezone
 from service.analysis_keyspaces_enums import JobState
 from service.checkpoints import build_resume_plan, select_correction_checkpoint
 from service.checkpoints.highlight_resume import build_highlight_resume_plan
-from service.models import TrackRequest
+from service.models import AdmittedTrackRequest
 from service.routes import state as route_state
 from service.routes.resume_job_factory import build_resume_params, create_replacement_job
 import service.routes as routes_pkg
 
 logger = logging.getLogger("service.routes")
+
+
+async def _mark_unrecoverable_highlight_request(job_id: str, message: str) -> None:
+    """Make an exact-replay contract failure terminal and user-visible."""
+    route_state._require_write(
+        await route_state._jobs_store.set_state(
+            job_id,
+            JobState.FAILED,
+            error_message=message,
+        ),
+        "invalid recovered highlight request state",
+    )
 
 
 async def drain_orphan_pending_jobs_on_startup(
@@ -26,7 +38,7 @@ async def drain_orphan_pending_jobs_on_startup(
     Resume/detection handoff creates a replacement row in ``PENDING`` and then calls
     ``_schedule_job``; if the process exits before ``run_job`` flips the row to
     ``RUNNING``, no asyncio task survives restart — this drain reloads the saved
-    ``TrackRequest`` and schedules work again.
+    admitted request with its effective analysis snapshot and schedules it again.
 
     Uses a lightweight CAS on ``(job_state, owner_instance_id)`` so two instances
     cannot both take the same pending row.
@@ -86,12 +98,24 @@ async def drain_orphan_pending_jobs_on_startup(
             continue
 
         try:
-            request = TrackRequest(**json.loads(request_json))
+            request = AdmittedTrackRequest(**json.loads(request_json))
         except Exception as e:
+            error_message = (
+                "Pending job cannot resume without a valid effective analysis "
+                f"settings snapshot: {e}"
+            )
             logger.error(
                 "Startup pending drain: invalid request JSON for job %s: %s",
                 job_id,
                 e,
+            )
+            route_state._require_write(
+                await route_state._jobs_store.set_state(
+                    job_id,
+                    JobState.FAILED,
+                    error_message=error_message,
+                ),
+                "invalid pending request state",
             )
             continue
 
@@ -183,14 +207,23 @@ async def recover_interrupted_job(lifecycle: dict) -> None:
 
         request_json = await route_state._jobs_store.get_request(job_id)
         if not request_json:
-            raise RuntimeError(
-                f"Original request not found for interrupted job {job_id}",
-            )
+            message = f"Original request not found for interrupted job {job_id}"
+            if lifecycle.get("pipeline_kind") == "highlight_v2":
+                await _mark_unrecoverable_highlight_request(job_id, message)
+            raise RuntimeError(message)
 
         if lifecycle.get("pipeline_kind") == "highlight_v2":
             checkpoints = await route_state._jobs_store.get_all_checkpoints(job_id)
             resume_plan = build_highlight_resume_plan(checkpoints)
-            request = TrackRequest(**json.loads(request_json))
+            try:
+                request = AdmittedTrackRequest(**json.loads(request_json))
+            except Exception as exc:
+                message = (
+                    "Interrupted job cannot resume without a valid effective "
+                    f"analysis settings snapshot: {exc}"
+                )
+                await _mark_unrecoverable_highlight_request(job_id, message)
+                raise RuntimeError(message) from exc
             logger.info(
                 "Recovery (highlight_v2): job %s resuming from chunk_index=%d "
                 "(no replacement job — same job_id)",

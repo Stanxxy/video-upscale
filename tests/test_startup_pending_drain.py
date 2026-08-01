@@ -8,11 +8,19 @@ import pytest
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.models import TrackRequest
+from service.analysis_settings import resolve_analysis_settings
+from service.analysis_keyspaces_enums import JobState
 from service import routes as routes_mod
 
 
 def _minimal_track_request() -> dict:
     return {"bucket": "b", "key": "k.mp4"}
+
+
+def _admitted_track_request() -> dict:
+    return resolve_analysis_settings(
+        TrackRequest(**_minimal_track_request()),
+    ).model_dump(mode="json")
 
 
 @pytest.mark.asyncio
@@ -45,7 +53,7 @@ async def test_drain_schedules_pending_after_claim(monkeypatch):
         },
     )
     jobs_store.get_request = AsyncMock(
-        return_value=json.dumps(_minimal_track_request()),
+        return_value=json.dumps(_admitted_track_request()),
     )
     jobs_store.claim_pending_job_takeover = AsyncMock(return_value=True)
 
@@ -119,7 +127,7 @@ async def test_drain_skips_when_claim_lost(monkeypatch):
             "replacement_job_id": None,
         },
     )
-    jobs_store.get_request = AsyncMock(return_value=json.dumps(_minimal_track_request()))
+    jobs_store.get_request = AsyncMock(return_value=json.dumps(_admitted_track_request()))
     jobs_store.claim_pending_job_takeover = AsyncMock(return_value=False)
 
     scheduled: list[str] = []
@@ -137,3 +145,34 @@ async def test_drain_skips_when_claim_lost(monkeypatch):
     await routes_mod.drain_orphan_pending_jobs_on_startup("srv")
 
     assert scheduled == []
+
+
+@pytest.mark.asyncio
+async def test_drain_marks_pre_r4_request_failed_after_claim(monkeypatch):
+    job_store = InMemoryJobStore()
+    jobs_store = AsyncMock()
+    jobs_store.list_active_recovery_index_rows_newest_first = AsyncMock(
+        return_value=[{"job_id": "old-job"}],
+    )
+    jobs_store.get_lifecycle = AsyncMock(
+        return_value={
+            "job_id": "old-job",
+            "job_state": "PENDING",
+            "owner_instance_id": "old-owner",
+            "replacement_job_id": None,
+        },
+    )
+    jobs_store.get_request = AsyncMock(return_value=json.dumps(_minimal_track_request()))
+    jobs_store.claim_pending_job_takeover = AsyncMock(return_value=True)
+    jobs_store.set_state = AsyncMock(return_value=True)
+    routes_mod.init_routes(ServiceConfig(), job_store, jobs_store, instance_id="new-owner")
+    scheduled = []
+    monkeypatch.setattr(routes_mod, "_schedule_job", lambda *args: scheduled.append(args))
+
+    await routes_mod.drain_orphan_pending_jobs_on_startup("new-owner")
+
+    assert scheduled == []
+    jobs_store.set_state.assert_awaited_once()
+    args = jobs_store.set_state.await_args
+    assert args.args[:2] == ("old-job", JobState.FAILED)
+    assert "effective analysis settings snapshot" in args.kwargs["error_message"]

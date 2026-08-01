@@ -1,19 +1,53 @@
 """Track job CRUD endpoints."""
 
+import json
 import logging
 
 from fastapi import HTTPException
 
+from service.analysis_settings import AnalysisSettingsValidationError, resolve_analysis_settings
 from service.analysis_keyspaces_enums import JobState, PipelineStage
 from service.checkpoints import WorkerStateSnapshot, build_cancellation_checkpoint
-from service.models import TrackRequest, TrackResponse, JobResponse
+from service.models import AdmittedTrackRequest, TrackRequest, TrackResponse, JobResponse
 from service.routes import state as route_state
 import service.routes as routes_pkg
 
 logger = logging.getLogger("service.routes")
 
 
+async def _analysis_settings_diagnostics(job_id: str) -> dict:
+    """Expose only the persisted R4 audit envelope, never storage credentials."""
+    request_json = await route_state._jobs_store.get_request(job_id)
+    if not request_json:
+        return {}
+    payload = json.loads(request_json)
+    required = {
+        "capability_schema_version",
+        "requested_analysis_settings",
+        "effective_analysis_config",
+    }
+    if not required.intersection(payload):
+        return {}  # Historic pre-R4 completed job; no snapshot was recorded.
+    try:
+        admitted = AdmittedTrackRequest.model_validate(payload)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Persisted analysis settings snapshot is invalid",
+        ) from exc
+    return {
+        "capability_schema_version": admitted.capability_schema_version,
+        "requested_analysis_settings": admitted.requested_analysis_settings,
+        "effective_analysis_config": admitted.effective_analysis_config,
+    }
+
+
 async def create_track_job(request: TrackRequest):
+    try:
+        admitted_request = resolve_analysis_settings(request)
+    except AnalysisSettingsValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     # G7 cost guardrails: kill switch then daily cap (NEW analyses only).
     route_state._check_kill_switch()
     route_state._admit_daily()
@@ -24,7 +58,7 @@ async def create_track_job(request: TrackRequest):
     if routes_pkg._job_semaphore.locked():
         raise HTTPException(429, "Server is at capacity. Try again later.")
 
-    job = await route_state._job_store.create_job(request)
+    job = await route_state._job_store.create_job(admitted_request)
     job_id = job.job_id
 
     # Persist to Keyspaces (user_id="" for engine-direct jobs; the analysis
@@ -34,8 +68,8 @@ async def create_track_job(request: TrackRequest):
     route_state._require_write(
         await route_state._jobs_store.create_lifecycle(
             job_id,
-            request.video_id,
-            request.user_id or "",
+            admitted_request.video_id,
+            admitted_request.user_id or "",
             "",
             owner_instance_id=route_state._instance_id,
             # S12 Phase 1b (design §1.1/§6.2): v2 is THE production path —
@@ -47,24 +81,25 @@ async def create_track_job(request: TrackRequest):
         "job lifecycle",
     )
     route_state._require_write(
-        await route_state._jobs_store.save_request(job_id, request.model_dump_json()),
+        await route_state._jobs_store.save_request(job_id, admitted_request.model_dump_json()),
         "job request",
     )
-    if request.video_id:
+    if admitted_request.video_id:
         route_state._require_write(
             await route_state._jobs_store.set_latest(
-                str(request.video_id), job_id, JobState.PENDING,
+                str(admitted_request.video_id), job_id, JobState.PENDING,
             ),
             "latest job",
         )
 
     # Start the job immediately (no WS handshake needed)
-    routes_pkg._schedule_job(job_id, request)
+    routes_pkg._schedule_job(job_id, admitted_request)
 
     return TrackResponse(job_id=job_id, status="pending")
 
 
 async def get_job(job_id: str):
+    diagnostics = await _analysis_settings_diagnostics(job_id)
     # Try Keyspaces first
     lifecycle = await route_state._jobs_store.get_lifecycle(job_id)
     if lifecycle:
@@ -75,6 +110,7 @@ async def get_job(job_id: str):
             current_frame=lifecycle.get("current_frame"),
             total_frames=lifecycle.get("total_frames"),
             error_message=lifecycle.get("error_message"),
+            **diagnostics,
             created_at=str(lifecycle.get("started_at", "")),
             updated_at=str(lifecycle.get("updated_at", "")),
         )
@@ -82,7 +118,7 @@ async def get_job(job_id: str):
     job = await route_state._job_store.get_job(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")
-    return job
+    return JobResponse(**job.model_dump(), **diagnostics)
 
 
 async def cancel_job(job_id: str):

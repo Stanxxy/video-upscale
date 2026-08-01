@@ -3,14 +3,14 @@
 import asyncio
 import logging
 
-from service.models import TrackRequest
+from service.models import AdmittedTrackRequest
 from service.worker import run_highlight_job
 from service.routes import state as route_state
 
 logger = logging.getLogger("service.routes")
 
 
-async def _run_with_semaphore(job_id: str, request: TrackRequest):
+async def _run_with_semaphore(job_id: str, request: AdmittedTrackRequest):
     """Dispatch to ``run_highlight_job`` — the v2 highlight-scan-critique-
     analyze production path (S12 Phase 1b design §1.1). This is a SINGLE
     call-site swap, not a runtime feature flag: v2 is THE production path
@@ -43,7 +43,7 @@ async def _cleanup_orphaned_tasks():
             route_state._active_tasks.pop(jid, None)
 
 
-def _schedule_job(job_id: str, request: TrackRequest) -> None:
+def _schedule_job(job_id: str, request: AdmittedTrackRequest) -> None:
     task = asyncio.create_task(_run_with_semaphore(job_id, request))
     route_state._active_tasks[job_id] = task
 

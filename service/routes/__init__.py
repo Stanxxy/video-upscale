@@ -2,9 +2,10 @@
 
 from fastapi import APIRouter
 
-from service.models import TrackResponse, JobResponse
+from service.models import AnalysisSettingsCapabilities, TrackResponse, JobResponse
 from service.routes.health import debug_memory, health, qa_client
 from service.routes.jobs import cancel_job, create_track_job, get_job
+from service.routes.analysis_settings import get_analysis_settings
 from service.routes.active_jobs import get_active_jobs, ActiveJobsResponse
 from service.routes.events import job_events_sse
 # S12 Phase 1b (design §6.4, item 16): human_loop.py's three routes are
@@ -33,6 +34,10 @@ router.get("/", include_in_schema=False)(qa_client)
 router.post("/track", response_model=TrackResponse)(create_track_job)
 router.get("/job/{job_id}", response_model=JobResponse)(get_job)
 router.delete("/job/{job_id}")(cancel_job)
+router.get(
+    "/analysis-settings/capabilities",
+    response_model=AnalysisSettingsCapabilities,
+)(get_analysis_settings)
 
 # Active jobs list — read-only, used by the release GPU-guard
 router.get("/jobs/active", response_model=ActiveJobsResponse)(get_active_jobs)
