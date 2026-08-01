@@ -23,6 +23,10 @@ from service.jobs_store import JobsStore
 from service.models import TrackRequest
 from service.pipelines import gemini_upload
 from service.worker.helpers import _make_s3
+from service.worker.highlight_progress import (
+    PREPARING,
+    HighlightProgressWriter,
+)
 from service.worker.progress import _make_worker_state
 
 logger = logging.getLogger("service.worker")
@@ -104,6 +108,8 @@ async def run_highlight_ingest_stage(
     jobs_store: JobsStore,
     work_dir: str,
     gemini_client: genai.Client,
+    *,
+    progress_writer: HighlightProgressWriter | None = None,
 ) -> HighlightIngestResult:
     """S3 download -> Gemini Files API upload/poll (or reuse a non-expired
     upload from a prior HIGHLIGHT_INGEST checkpoint on resume) -> reference-
@@ -113,6 +119,9 @@ async def run_highlight_ingest_stage(
     poll_until_active``) — never proceeds with a fabricated "ready" state.
     """
     loop = asyncio.get_event_loop()
+    progress = progress_writer or HighlightProgressWriter(job_id, jobs_store)
+    await progress.write(PipelineStage.HIGHLIGHT_INGEST, 1.0, phase=PREPARING)
+
     s3 = _make_s3(config)
     s3.ensure_bucket(request.bucket)
 
@@ -125,6 +134,7 @@ async def run_highlight_ingest_stage(
         "Job %s: highlight_ingest downloaded video_path=%s duration_sec=%.1f",
         job_id, video_path, duration_sec,
     )
+    await progress.write(PipelineStage.HIGHLIGHT_INGEST, 4.0, phase=PREPARING)
 
     checkpoints = await jobs_store.get_all_checkpoints(job_id)
     resume_plan = build_highlight_resume_plan(checkpoints)
@@ -162,6 +172,7 @@ async def run_highlight_ingest_stage(
             "Job %s: highlight_ingest uploaded video to Gemini Files API name=%s uri=%s",
             job_id, gemini_file_name, gemini_file_uri,
         )
+    await progress.write(PipelineStage.HIGHLIGHT_INGEST, 7.0, phase=PREPARING)
 
     # References are stored in the SAME bucket as the source video — same
     # established convention as upscale_setup.py:82 (`ref_bucket =
@@ -171,6 +182,7 @@ async def run_highlight_ingest_stage(
     player_references = await _fetch_player_references(
         s3, request.bucket, request.athlete_bindings, loop,
     )
+    await progress.write(PipelineStage.HIGHLIGHT_INGEST, 10.0, phase=PREPARING)
 
     await jobs_store.write_checkpoint(
         job_id, PipelineStage.HIGHLIGHT_INGEST, True,
@@ -183,7 +195,7 @@ async def run_highlight_ingest_stage(
             ),
             player_references_ready=True,
             worker_state=_make_worker_state(
-                progress_percent=5.0, stage_progress_fraction=1.0,
+                progress_percent=10.0, stage_progress_fraction=1.0,
             ),
         ),
     )

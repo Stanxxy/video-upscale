@@ -1,6 +1,7 @@
 """Job lifecycle Keyspaces operations."""
 
 from datetime import datetime, timezone
+import math
 from typing import Any
 
 from service.analysis_keyspaces_enums import (
@@ -139,7 +140,7 @@ class LifecycleMixin:
             now, now, job_id,
         ])
 
-    async def update_highlight_chunk_progress(
+    async def update_highlight_progress(
         self,
         job_id: str,
         stage: PipelineStage,
@@ -151,12 +152,41 @@ class LifecycleMixin:
         attribution_metrics_json: str | None = None,
         stage_message: str = "",
     ) -> bool:
-        """S12 Phase 1b (design §1.2, item 11.5) — v2-only progress write.
+        """Persist one monotonic v2 progress snapshot.
+
+        S12 Phase 1b (design §1.2, item 11.5) — v2-only progress write.
         A DEDICATED method (not an extension of ``update_progress`` above)
         so the dormant tracking pipeline's own UPDATE statement/call sites
         are byte-untouched. ``current_frame``/``total_frames`` are never
         touched here — v2 has no frame-counting concept (they stay at
         whatever ``create_lifecycle`` seeded, i.e. 0)."""
+        requested_percent = float(progress_percent)
+        if not math.isfinite(requested_percent):
+            raise ValueError(
+                f"highlight progress_percent must be finite, got {requested_percent!r}",
+            )
+        requested_percent = round(min(100.0, max(0.0, requested_percent)), 1)
+
+        # This worker is the sole writer for a job.  Reading the durable row
+        # before the UPDATE gives resumed workers the persisted floor and
+        # prevents a stale in-memory percentage from moving Keyspaces
+        # backwards after recovery.
+        lifecycle = await self.get_lifecycle(job_id)
+        prior_percent = 0.0
+        if lifecycle is not None:
+            prior_percent = float(lifecycle.get("progress_percent", 0.0) or 0.0)
+            if not math.isfinite(prior_percent):
+                raise ValueError(
+                    f"stored highlight progress_percent must be finite, got {prior_percent!r}",
+                )
+        progress_percent = round(max(prior_percent, requested_percent), 1)
+        if lifecycle is not None and highlights_found_so_far is not None:
+            prior_count = lifecycle.get("highlights_found_so_far")
+            if prior_count is not None:
+                highlights_found_so_far = max(
+                    int(prior_count), int(highlights_found_so_far),
+                )
+
         now = datetime.now(timezone.utc)
         q = (
             f"UPDATE {self._ks}.job_lifecycle SET "
@@ -172,6 +202,35 @@ class LifecycleMixin:
             attribution_metrics_json,
             now, now, job_id,
         ])
+
+    async def update_highlight_chunk_progress(
+        self,
+        job_id: str,
+        stage: PipelineStage,
+        progress_percent: float,
+        *,
+        chunk_index: int | None = None,
+        chunks_total: int | None = None,
+        highlights_found_so_far: int | None = None,
+        attribution_metrics_json: str | None = None,
+        stage_message: str = "",
+    ) -> bool:
+        """Backward-compatible name for the highlight progress writer.
+
+        Existing v2 call sites use this name; keeping it as a thin alias
+        makes the monotonic contract apply to every caller without changing
+        the dormant tracking pipeline's ``update_progress`` method.
+        """
+        return await self.update_highlight_progress(
+            job_id,
+            stage,
+            progress_percent,
+            chunk_index=chunk_index,
+            chunks_total=chunks_total,
+            highlights_found_so_far=highlights_found_so_far,
+            attribution_metrics_json=attribution_metrics_json,
+            stage_message=stage_message,
+        )
 
     async def set_state(
         self,

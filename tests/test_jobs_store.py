@@ -15,8 +15,10 @@ class FakeKeyspacesClient:
     def __init__(self, write_results, rows=None):
         self.write_results = list(write_results)
         self.rows = rows or []
+        self.write_calls = []
 
     async def execute_write(self, query, params=None):
+        self.write_calls.append((query, params))
         return self.write_results.pop(0)
 
     async def execute(self, query, params=None):
@@ -124,6 +126,30 @@ async def test_get_lifecycle_reads_back_v2_progress_fields_when_set():
     assert lifecycle["chunks_total"] == 6
     assert lifecycle["highlights_found_so_far"] == 12
     assert lifecycle["attribution_metrics_json"] == '{"p1": 3}'
+
+
+@pytest.mark.asyncio
+async def test_update_highlight_progress_keeps_durable_percent_and_count_monotonic():
+    from service.analysis_keyspaces_enums import PipelineStage
+
+    row = _lifecycle_row()
+    row.progress_percent = 64.0
+    row.highlights_found_so_far = 7
+    client = FakeKeyspacesClient([True], [row])
+    store = JobsStore(client)
+
+    ok = await store.update_highlight_progress(
+        "job-id",
+        PipelineStage.HIGHLIGHT_CHUNK,
+        20.0,
+        highlights_found_so_far=3,
+        stage_message="detecting",
+    )
+
+    assert ok is True
+    params = client.write_calls[-1][1]
+    assert params[1] == 64.0
+    assert params[5] == 7
 
 
 @pytest.mark.asyncio
