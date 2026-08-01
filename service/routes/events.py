@@ -64,6 +64,9 @@ async def job_events_sse(job_id: str):
                             "frame_idx": lifecycle.get("current_frame", 0),
                             "total_frames": lifecycle.get("total_frames", 0),
                         }
+                        phase = lifecycle.get("stage_message")
+                        if lifecycle.get("pipeline_kind") == "highlight_v2" and phase:
+                            progress["phase"] = phase
                         # S12 Phase 1b (design §1.2): additive, v2-only keys
                         # — only present once run_highlight_job has actually
                         # written them (chunk_index/chunks_total/

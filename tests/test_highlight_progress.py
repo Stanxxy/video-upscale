@@ -48,9 +48,17 @@ class _FakeJobsStore:
     async def get_lifecycle(self, job_id: str):
         return dict(self.lifecycle)
 
-    async def update_highlight_chunk_progress(self, job_id, stage, percent, **kwargs):
+    async def update_highlight_progress(self, job_id, stage, percent, **kwargs):
         self.lifecycle["progress_percent"] = percent
         self.writes.append({"stage": stage, "percent": percent, **kwargs})
+        return True
+
+    async def complete_highlight(self, job_id, stage, **kwargs):
+        self.writes.append({"terminal": "completed", "stage": stage, **kwargs})
+        return True
+
+    async def fail_highlight(self, job_id, stage, **kwargs):
+        self.writes.append({"terminal": "failed", "stage": stage, **kwargs})
         return True
 
 
@@ -120,6 +128,8 @@ async def test_writer_rejects_unknown_durable_phase():
             PipelineStage.HIGHLIGHT_CHUNK,
             50.0,
             phase="detecting",
+            chunk_index=0,
+            chunks_total=1,
         )
 
 
@@ -132,7 +142,126 @@ async def test_writer_allows_same_rank_phase_update():
         PipelineStage.HIGHLIGHT_CHUNK,
         35.0,
         phase="detecting",
+        chunk_index=0,
+        chunks_total=1,
     )
 
     assert store.writes[-1]["stage_message"] == "detecting"
     assert store.writes[-1]["percent"] == 35.0
+
+
+@pytest.mark.asyncio
+async def test_writer_does_not_reopen_a_terminal_durable_phase():
+    store = _FakeJobsStore(percent=100.0, phase="completed")
+    writer = HighlightProgressWriter("job-1", store)
+
+    actual = await writer.write(
+        PipelineStage.HIGHLIGHT_CHUNK,
+        50.0,
+        phase="detecting",
+        chunk_index=0,
+        chunks_total=1,
+    )
+
+    assert actual == 100.0
+    assert store.writes == []
+
+
+@pytest.mark.asyncio
+async def test_writer_enforces_phase_bands_and_phase_specific_fields():
+    store = _FakeJobsStore()
+    writer = HighlightProgressWriter("job-1", store)
+
+    await writer.write(PipelineStage.HIGHLIGHT_INGEST, 50.0, phase="preparing")
+    await writer.write(
+        PipelineStage.HIGHLIGHT_CHUNK,
+        0.0,
+        phase="detecting",
+        chunk_index=0,
+        chunks_total=2,
+        highlights_found_so_far=0,
+    )
+    await writer.write(
+        PipelineStage.HIGHLIGHT_PUBLISH,
+        100.0,
+        phase="finalizing",
+        highlights_found_so_far=3,
+    )
+
+    assert [write["percent"] for write in store.writes] == [10.0, 10.0, 99.0]
+    assert store.writes[0]["chunk_index"] is None
+    assert store.writes[1]["chunk_index"] == 0
+    assert store.writes[1]["chunks_total"] == 2
+    assert store.writes[2]["chunk_index"] is None
+    assert store.writes[2]["chunks_total"] is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("phase", "stage", "kwargs"),
+    [
+        ("preparing", PipelineStage.HIGHLIGHT_INGEST, {"chunk_index": 0}),
+        ("detecting", PipelineStage.HIGHLIGHT_CHUNK, {"chunks_total": 2}),
+        ("finalizing", PipelineStage.HIGHLIGHT_PUBLISH, {"chunk_index": 0}),
+    ],
+)
+async def test_writer_rejects_phase_specific_field_mismatches(phase, stage, kwargs):
+    store = _FakeJobsStore()
+    writer = HighlightProgressWriter("job-1", store)
+
+    with pytest.raises(ValueError, match="phase-specific"):
+        await writer.write(stage, 10.0, phase=phase, **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_writer_complete_uses_atomic_terminal_store_operation():
+    store = _FakeJobsStore(percent=98.0, phase="finalizing")
+    writer = HighlightProgressWriter("job-1", store)
+
+    await writer.complete(
+        PipelineStage.HIGHLIGHT_PUBLISH,
+        highlights_found_so_far=4,
+        attribution_metrics_json='{"total_published": 4}',
+    )
+
+    assert store.writes[-1] == {
+        "terminal": "completed",
+        "stage": PipelineStage.HIGHLIGHT_PUBLISH,
+        "highlights_found_so_far": 4,
+        "attribution_metrics_json": '{"total_published": 4}',
+    }
+
+
+@pytest.mark.asyncio
+async def test_writer_fail_uses_atomic_terminal_store_operation():
+    store = _FakeJobsStore(percent=47.0, phase="detecting")
+    writer = HighlightProgressWriter("job-1", store)
+
+    await writer.fail(
+        PipelineStage.HIGHLIGHT_CHUNK,
+        "Gemini unavailable",
+        highlights_found_so_far=2,
+    )
+
+    assert store.writes[-1] == {
+        "terminal": "failed",
+        "stage": PipelineStage.HIGHLIGHT_CHUNK,
+        "error_message": "Gemini unavailable",
+        "progress_percent": 47.0,
+        "highlights_found_so_far": 2,
+        "attribution_metrics_json": None,
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase, percent", [("completed", 100.0), ("error", 47.0)])
+async def test_writer_terminal_methods_do_not_reopen_terminal_snapshot(phase, percent):
+    store = _FakeJobsStore(percent=percent, phase=phase)
+    writer = HighlightProgressWriter("job-1", store)
+
+    complete_percent = await writer.complete(PipelineStage.HIGHLIGHT_PUBLISH)
+    fail_percent = await writer.fail(PipelineStage.HIGHLIGHT_PUBLISH, "late error")
+
+    assert complete_percent == percent
+    assert fail_percent == percent
+    assert store.writes == []

@@ -61,9 +61,7 @@ from service.sns import SNSPublisher, clip_to_axis_only_event
 from service.worker import majority_vote, seam_dedup
 from service.worker.helpers import _is_cancelled, _make_s3
 from service.worker.highlight_progress import (
-    COMPLETED,
     DETECTING,
-    ERROR,
     FINALIZING,
     FINALIZING_END,
     PREPARING,
@@ -235,6 +233,7 @@ async def run_highlight_job(
     gemini_file_name: Optional[str] = None
     progress = HighlightProgressWriter(job_id, jobs_store)
     current_stage = PipelineStage.HIGHLIGHT_INGEST
+    highlights_found_total = 0
 
     logger.info(
         "Job %s: highlight_job starting work_dir=%s input=s3://%s/%s",
@@ -343,7 +342,6 @@ async def run_highlight_job(
             highlights_scanned = 0
             highlights_processed = 0
             highlights_analyzed = 0
-            highlights_ditched = 0
             chunk_error_count = 0
             this_chunk_clips: list[dict] = []
 
@@ -379,17 +377,6 @@ async def run_highlight_job(
                         chunks_total=chunks_total,
                         highlights_found_so_far=highlights_found_total,
                     )
-                    status = event.get("status")
-                    if status == "ditched":
-                        # Legacy branch — the 2026-07-26 single-call cutover
-                        # removed the validator/ditch authority entirely
-                        # (executors.highlight_analyze_node's own docstring),
-                        # so this never fires in production anymore; kept for
-                        # wire-contract stability (a "status" key consumer
-                        # should not need a special case if a future analyze
-                        # node ever reintroduces a ditch verdict).
-                        highlights_ditched += 1
-                        continue
                     highlights_analyzed += 1
                     clips = event.get("clips") or []
                     if not clips:
@@ -464,7 +451,7 @@ async def run_highlight_job(
                     chunk_index=chunk_index, chunks_total=chunks_total,
                     highlights_scanned=highlights_scanned,
                     highlights_analyzed=highlights_analyzed,
-                    highlights_ditched=highlights_ditched,
+                    highlights_ditched=0,
                     # Publish no longer happens per-chunk at all — see
                     # build_highlight_chunk_completed's own docstring.
                     highlights_published=0,
@@ -714,10 +701,8 @@ async def run_highlight_job(
                 ),
             )
 
-        await progress.write(
+        await progress.complete(
             PipelineStage.HIGHLIGHT_PUBLISH,
-            100.0,
-            phase=COMPLETED,
             highlights_found_so_far=highlights_found_total,
             attribution_metrics_json=json.dumps(attribution_metrics),
         )
@@ -726,7 +711,6 @@ async def run_highlight_job(
             job_id, status=JobStatus.COMPLETED, progress_percent=100.0,
             result_bucket=output_bucket, result_key=events_key,
         )
-        await jobs_store.set_state(job_id, JobState.COMPLETED)
         logger.info(
             "Job %s: highlight_job completed (%d event(s) published across %d chunk(s))",
             job_id, len(published_events), chunks_total,
@@ -739,12 +723,12 @@ async def run_highlight_job(
 
     except Exception as e:
         logger.exception("Job %s highlight_job failed", job_id)
-        try:
-            await progress.write(current_stage, 0.0, phase=ERROR)
-        except Exception:  # noqa: BLE001 — preserve the original job failure
-            logger.exception("Job %s failed to persist terminal error progress", job_id)
+        await progress.fail(
+            current_stage,
+            str(e),
+            highlights_found_so_far=highlights_found_total,
+        )
         await job_store.update_job(job_id, status=JobStatus.FAILED, error_message=str(e))
-        await jobs_store.set_state(job_id, JobState.FAILED, error_message=str(e))
 
     finally:
         if gemini_client is not None and gemini_file_name:

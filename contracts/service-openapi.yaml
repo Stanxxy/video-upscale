@@ -130,13 +130,15 @@ paths:
       tags: [Streaming]
       summary: Subscribe to job events (SSE)
       description: |
-        **Server-Sent Events** stream polling Keyspaces `job_lifecycle` approximately every second.
+        **Server-Sent Events** stream reading the durable Keyspaces `job_lifecycle`
+        projection approximately every second. Workers write lifecycle progress;
+        clients never connect to the engine over WebSocket or poll for progress.
 
         Event types (JSON in `data:` unless noted):
 
         | `event` | When |
         |--------|------|
-        | `progress` | State or progress changed (`percent` delta ≥ 0.5 or lifecycle state changed). Payload includes `type`, `state` (pipeline stage), `percent`, `frame_idx`, `total_frames`. |
+        | `progress` | State or progress changed (`percent` delta ≥ 0.5 or lifecycle state changed). Payload includes `type`, `state` (pipeline stage), `phase` (`stage_message`), `percent`, `frame_idx`, and `total_frames`; highlight-v2 rows add chunk/count/attribution fields when present. |
         | `detection_needed` | Job state is `AWAITING_CORRECTION` and a checkpoint has `pending_detection`. |
         | `completed` | Job reached `COMPLETED`. Stream ends. |
         | `job_error` | Job `FAILED` / `CANCELLED`, job not found, or repeated internal errors. Stream ends. |
@@ -446,10 +448,6 @@ components:
       properties:
         job_id:
           type: string
-        ws_url:
-          type: string
-          default: ""
-          description: Deprecated — SSE replaces WebSocket for progress
         status:
           type: string
           example: pending

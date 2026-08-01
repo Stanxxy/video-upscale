@@ -1,234 +1,121 @@
-# BJJ Tracking Service — API Contract
+# Vision Engine REST API
 
-This document describes the REST + WebSocket API exposed by the tracking service (`service/app.py`). It is intended for external AI agents or human developers building clients.
+This document describes the REST and Server-Sent Events contract exposed by
+the vision engine. Jobs begin when `POST /track` is accepted; there is no
+WebSocket handshake.
 
-## Quick Start
+## Quick start
 
 ```bash
-# Start the service
 uvicorn service.app:app --host 0.0.0.0 --port 8000
-
-# Or run directly
-python -m service.app
 ```
 
-## Configuration (Environment Variables)
+The video must already exist at the requested S3/LocalStack bucket and key.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SERVICE_HOST` | `0.0.0.0` | Host to bind |
-| `SERVICE_PORT` | `8000` | Port to bind |
-| `S3_ENDPOINT_URL` | _(unset)_ | Optional custom S3 endpoint (leave empty for AWS production) |
-| `DETECTION_TIMEOUT` | `300.0` | Seconds to wait for manual detection response |
-| `AWS_ACCESS_KEY_ID` | `test` | S3 credentials |
-| `AWS_SECRET_ACCESS_KEY` | `test` | S3 credentials |
+## `POST /track`
 
-## REST Endpoints
+Submit a new highlight-v2 analysis job. The response is an immediate REST
+acknowledgement; the worker is scheduled by the service.
 
-### `GET /health`
-
-Health check.
-
-**Response** `200`:
-```json
-{"status": "healthy", "timestamp": "2025-01-15T12:00:00"}
-```
-
----
-
-### `POST /track`
-
-Submit a new tracking job. The video must already be in S3.
-
-**Request body** (`application/json`):
 ```json
 {
-  "bucket": "my-bucket",
+  "bucket": "bjj-video-analysis",
   "key": "videos/match1.mp4",
-  "output_bucket": null,
-  "sam2_model": "facebook/sam2.1-hiera-base-plus"
+  "output_bucket": "bjj-video-analysis"
 }
 ```
 
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `bucket` | yes | — | S3 bucket containing the input video |
-| `key` | yes | — | S3 object key of the input video |
-| `output_bucket` | no | same as `bucket` | Bucket for result upload |
-| `sam2_model` | no | `facebook/sam2.1-hiera-base-plus` | SAM2 model identifier |
+Response:
 
-**Response** `200`:
 ```json
 {
   "job_id": "550e8400-e29b-41d4-a716-446655440000",
-  "ws_url": "ws://localhost:8000/ws/550e8400-e29b-41d4-a716-446655440000",
   "status": "pending"
 }
 ```
 
-After receiving the response, the client **must** connect to `ws_url` to start processing. The tracking job only begins when the WebSocket connects.
+Persisted analysis settings are resolved at admission and stored with the
+request. The engine owns the analysis lifecycle and writes progress to the
+Keyspaces `job_lifecycle` row.
 
----
+## `GET /job/{job_id}`
 
-### `GET /job/{job_id}`
+Read the current durable job snapshot. This endpoint is useful for a direct
+status inspection; it is not a browser progress fallback for the SSE stream.
 
-Poll job status.
-
-**Response** `200`:
 ```json
 {
-  "job_id": "550e8400-...",
-  "status": "processing",
-  "progress_percent": 42.5,
-  "current_frame": 850,
-  "total_frames": 2000,
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "running",
+  "progress_percent": 46.0,
+  "current_frame": 0,
+  "total_frames": 0,
   "result_bucket": null,
   "result_key": null,
   "error_message": null
 }
 ```
 
-**Status values**: `pending`, `downloading`, `processing`, `waiting_for_detection`, `uploading`, `completed`, `failed`, `cancelled`.
+## `GET /jobs/{job_id}/events`
 
----
+Subscribe to the durable Keyspaces lifecycle projection over native
+Server-Sent Events (`text/event-stream`). The annotation backend may authorize
+and transport this projection to the browser; the browser never connects to
+Keyspaces directly and never switches to REST polling when SSE reconnects.
 
-### `DELETE /job/{job_id}`
+Progress payloads for highlight-v2 use coach-facing phases:
 
-Cancel a running job and clean up temporary files.
-
-**Response** `200`:
-```json
-{"status": "cancelled", "job_id": "550e8400-..."}
-```
-
----
-
-## WebSocket Protocol
-
-### Endpoint: `ws://{host}:{port}/ws/{job_id}`
-
-Bidirectional JSON messages over WebSocket. Connect after `POST /track`.
-
-### Server → Client Messages
-
-#### `progress`
-Sent periodically during tracking.
 ```json
 {
   "type": "progress",
-  "frame_idx": 150,
-  "total_frames": 2000,
-  "state": "tracking",
-  "percent": 7.5
+  "phase": "detecting",
+  "percent": 46.0,
+  "chunk_index": 1,
+  "chunks_total": 4,
+  "highlights_found_so_far": 7
 }
 ```
 
-#### `manual_detection_required`
-Sent when the tracker needs human/agent input to identify athletes in a frame.
+The engine writes these durable fields:
+
+- `stage`: internal engine stage (`highlight_ingest`, `highlight_chunk`, or
+  `highlight_publish`)
+- `stage_message`: `preparing`, `detecting`, `finalizing`, `completed`, or
+  `error`
+- `progress_percent`: monotonic whole-job percentage (`0–10`, `10–90`,
+  `90–99`, then `100`)
+- `chunk_index`, `chunks_total`: present while detecting
+- `highlights_found_so_far`: unique detections after incremental seam dedup
+
+The stream ends with `completed` or `job_error`. A dropped connection should
+reconnect while preserving the last durable snapshot in the consumer UI.
+
+## `DELETE /job/{job_id}`
+
+Cancel an active job:
+
 ```json
-{
-  "type": "manual_detection_required",
-  "frame_idx": 0,
-  "frame_base64": "<base64-encoded JPEG>",
-  "reason": "initial"
-}
+{"status": "cancelled", "job_id": "550e8400-e29b-41d4-a716-446655440000"}
 ```
 
-`reason` values: `"initial"` (first frame), `"transition"` (scene change), `"tracking_lost"` (tracker lost both athletes).
+If the lifecycle has a replacement job, cancel the latest replacement instead.
 
-The client **must** respond with either `detection_response` or `detection_cancelled` within the configured timeout (default 5 minutes).
+## Human-in-the-loop resume
 
-#### `completed`
-Sent when the job finishes successfully.
-```json
-{
-  "type": "completed",
-  "result_bucket": "my-bucket",
-  "result_key": "videos/match1_tracked.json"
-}
-```
+Use the REST endpoints below when a dormant tracking job enters a correction
+state. They create a replacement lifecycle row and schedule the replacement;
+no WebSocket client is involved.
 
-#### `error`
-Sent on failure.
-```json
-{
-  "type": "error",
-  "message": "Tracking failed - no result produced"
-}
-```
+- `POST /jobs/{job_id}/detection_response`
+- `POST /jobs/{job_id}/resume`
 
-### Client → Server Messages
+## Local configuration
 
-#### `detection_response`
-Reply to `manual_detection_required`. Each box is `[x1, y1, x2, y2]` in pixel coordinates.
-```json
-{
-  "type": "detection_response",
-  "box_a": [100, 200, 300, 500],
-  "box_b": [400, 180, 600, 520]
-}
-```
-
-#### `detection_cancelled`
-Cancel the detection request (tracker will use fallback or fail).
-```json
-{"type": "detection_cancelled"}
-```
-
-#### `ping`
-Keepalive. Server responds with `{"type": "pong"}`.
-```json
-{"type": "ping"}
-```
-
-## Job Lifecycle
-
-```
-POST /track          →  job created (pending)
-WS connect           →  tracking starts
-                         ├── downloading
-                         ├── processing
-                         │     ├── progress messages
-                         │     └── manual_detection_required (0..N times)
-                         ├── uploading
-                         └── completed / failed
-WS disconnect
-GET /job/{id}        →  poll final status + result location
-```
-
-## S3 Layout
-
-- **Input**: `s3://{bucket}/{key}` — MP4 video
-- **Output**: `s3://{bucket}/{base}_tracked.json` — JSON tracking result
-
-When `S3_ENDPOINT_URL` is set (local emulators), the service can auto-create missing buckets.
-In AWS production, buckets should be pre-provisioned and `S3_ENDPOINT_URL` should remain unset.
-
-## Python Client SDK
-
-A ready-made client is available in `service_client/`:
-
-```python
-from service_client import TrackingClient
-
-client = TrackingClient("http://localhost:8000")
-
-# Check health
-print(client.health())
-
-# Submit job
-job = client.submit("my-bucket", "videos/match.mp4")
-
-# Run with WebSocket (blocks until done)
-def handle_detection(msg):
-    # msg["frame_base64"] contains the JPEG frame
-    # Return bounding boxes or None to cancel
-    return {"box_a": [100, 200, 300, 500], "box_b": [400, 180, 600, 520]}
-
-result = client.run_job(
-    job["ws_url"],
-    on_detection=handle_detection,
-    on_progress=lambda m: print(f"{m['percent']}%"),
-)
-print(f"Result at s3://{result['result_bucket']}/{result['result_key']}")
-```
+| Variable | Default | Description |
+| --- | --- | --- |
+| `SERVICE_HOST` | `0.0.0.0` | Bind address |
+| `SERVICE_PORT` | `8000` | Port |
+| `S3_ENDPOINT_URL` | unset | LocalStack endpoint when testing locally |
+| `AWS_ACCESS_KEY_ID` | `test` | Local AWS-compatible credential |
+| `AWS_SECRET_ACCESS_KEY` | `test` | Local AWS-compatible credential |
+| `GEMINI_API_KEY` | unset | Gemini API key for real analysis |

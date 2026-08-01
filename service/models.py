@@ -227,7 +227,6 @@ class ResumeRequest(BaseModel):
 class TrackResponse(BaseModel):
     """Response for POST /track."""
     job_id: str
-    ws_url: str = ""  # TODO: deprecated — kept for backward compat; SSE is the new transport
     status: str = "pending"
 
 

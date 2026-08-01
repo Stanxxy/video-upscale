@@ -85,12 +85,12 @@ async def test_get_lifecycle_preserves_explicit_highlight_v2_pipeline_kind():
 
 
 @pytest.mark.asyncio
-async def test_update_highlight_chunk_progress_writes_v2_fields():
+async def test_update_highlight_progress_writes_v2_fields():
     from service.analysis_keyspaces_enums import PipelineStage
 
     store = JobsStore(FakeKeyspacesClient([True]))
 
-    ok = await store.update_highlight_chunk_progress(
+    ok = await store.update_highlight_progress(
         "job-id", PipelineStage.HIGHLIGHT_CHUNK,
         55.0, chunk_index=2, chunks_total=5, highlights_found_so_far=9,
         attribution_metrics_json='{"p1": 3}',
@@ -129,7 +129,7 @@ async def test_get_lifecycle_reads_back_v2_progress_fields_when_set():
 
 
 @pytest.mark.asyncio
-async def test_update_highlight_progress_keeps_durable_percent_and_count_monotonic():
+async def test_update_highlight_progress_is_a_thin_raw_persistence_boundary():
     from service.analysis_keyspaces_enums import PipelineStage
 
     row = _lifecycle_row()
@@ -148,8 +148,75 @@ async def test_update_highlight_progress_keeps_durable_percent_and_count_monoton
 
     assert ok is True
     params = client.write_calls[-1][1]
-    assert params[1] == 64.0
-    assert params[5] == 7
+    assert params[1] == 20.0
+    assert params[5] == 3
+
+
+@pytest.mark.asyncio
+async def test_complete_highlight_publishes_terminal_snapshot_in_one_lifecycle_update():
+    from service.analysis_keyspaces_enums import PipelineStage
+
+    row = _lifecycle_row(JobState.COMPLETED.value)
+    row.progress_percent = 100.0
+    row.stage = PipelineStage.HIGHLIGHT_PUBLISH.value
+    row.stage_message = "completed"
+    client = FakeKeyspacesClient([True, True, True], [row])
+    store = JobsStore(client)
+
+    assert await store.complete_highlight(
+        "job-id",
+        PipelineStage.HIGHLIGHT_PUBLISH,
+        highlights_found_so_far=4,
+        attribution_metrics_json='{"total_published": 4}',
+    )
+
+    query, params = client.write_calls[0]
+    assert "job_state = %s" in query
+    assert "stage = %s" in query
+    assert "progress_percent = %s" in query
+    assert params[:6] == [
+        JobState.COMPLETED.value,
+        PipelineStage.HIGHLIGHT_PUBLISH.value,
+        100.0,
+        0,
+        0,
+        "completed",
+    ]
+    assert params[8] == 4
+    assert params[9] == '{"total_published": 4}'
+
+
+@pytest.mark.asyncio
+async def test_fail_highlight_publishes_error_snapshot_in_one_lifecycle_update():
+    from service.analysis_keyspaces_enums import PipelineStage
+
+    row = _lifecycle_row(JobState.FAILED.value)
+    row.progress_percent = 47.0
+    row.stage = PipelineStage.HIGHLIGHT_CHUNK.value
+    row.stage_message = "error"
+    client = FakeKeyspacesClient([True, True, True], [row])
+    store = JobsStore(client)
+
+    assert await store.fail_highlight(
+        "job-id",
+        PipelineStage.HIGHLIGHT_CHUNK,
+        progress_percent=47.0,
+        error_message="Gemini unavailable",
+        highlights_found_so_far=2,
+    )
+
+    query, params = client.write_calls[0]
+    assert "job_state = %s" in query
+    assert params[:6] == [
+        JobState.FAILED.value,
+        PipelineStage.HIGHLIGHT_CHUNK.value,
+        47.0,
+        0,
+        0,
+        "error",
+    ]
+    assert params[9] is None
+    assert params[10] == "Gemini unavailable"
 
 
 @pytest.mark.asyncio

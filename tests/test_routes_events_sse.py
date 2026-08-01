@@ -62,6 +62,23 @@ async def test_progress_event_includes_chunk_index_and_highlights_found_so_far(s
 
 
 @pytest.mark.asyncio
+async def test_progress_event_includes_coach_facing_phase_when_persisted(service_components):
+    _, _, jobs_store = service_components
+    await jobs_store.create_lifecycle("job-1", "vid", "user", pipeline_kind="highlight_v2")
+    await jobs_store.set_state("job-1", JobState.RUNNING)
+    jobs_store._lifecycles["job-1"].update({
+        "progress_percent": 42.0,
+        "stage_message": "detecting",
+    })
+
+    response = await job_events_sse("job-1")
+    event_name, data = _parse_sse(await _first_event(response))
+
+    assert event_name == "progress"
+    assert data["phase"] == "detecting"
+
+
+@pytest.mark.asyncio
 async def test_progress_event_includes_attribution_metrics_when_present(service_components):
     _, _, jobs_store = service_components
     await jobs_store.create_lifecycle("job-1", "vid", "user", pipeline_kind="highlight_v2")

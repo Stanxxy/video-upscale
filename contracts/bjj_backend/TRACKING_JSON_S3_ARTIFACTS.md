@@ -377,7 +377,7 @@ def resolve_tracking_s3_key(checkpoints: list[dict]) -> tuple[str | None, str | 
 |----------|----------------|----------|
 | Analysis output | `{base_key}_analysis.json` | `clips[]` with technique labels, `confidence` per clip — not per-frame pose |
 | Annotated video | `{base_key}_annotated.mp4` | Rendered overlays |
-| Job ACK | N/A (HTTP response) | `{ "job_id", "status", "ws_url" }` only |
+| Job ACK | N/A (HTTP response) | `{ "job_id", "status" }`; subscribe to the Keyspaces-backed SSE stream for progress |
 | Pre-track detections | local / checkpoint-adjacent | `detections.json`, `verified_boxes.json` |
 | Checkpoint envelope | Keyspaces JSON | Wraps `artifacts.*`; not the tracking body itself |
 

@@ -453,8 +453,8 @@ async def test_highlight_critique_node_movement_not_confirmed_without_note_gets_
 # executors.highlight_analyze_node — 2026-07-26 single-call cutover:
 # authoritative corrected bounds, ONE flat taxonomy verdict (position +
 # action_class + outcome) replacing the deleted position/technique/validator
-# triple, plus the unchanged independent actor axis. No more ditch/validator
-# authority — every highlight whose taxonomy call succeeds is synthesized.
+# triple, plus the unchanged independent actor axis. Every successful
+# taxonomy call produces a synthesized highlight.
 # =============================================================================== #
 def _taxonomy_response(position="mount", action_class="submission_choke", outcome="successful", justification="j"):
     return json.dumps({
@@ -578,7 +578,7 @@ async def test_highlight_analyze_node_synthesizes_clip_from_single_taxonomy_verd
     assert clip["player_id"] == "p1"
     assert clip["player_name"] == "Alice"
     assert clip["identity_uncertain"] is False
-    # No more "ditched" contract — status is always "analyzed" on success.
+    # Successful taxonomy calls always emit an analyzed result.
     assert "ditch_reason" not in result_event
     assert "verdict" not in result_event
     assert "validator_rounds" not in result_event

@@ -4,7 +4,7 @@
 Every Gemini/S3/SNS boundary is mocked at this level — the pipeline's OWN
 Gemini-calling logic is already covered by test_pipelines_executors.py/
 test_pipelines_highlight_v2.py; this file only proves the ADAPTER (outer
-chunk loop, checkpointing, resume, publish/ditch/error dispatch).
+chunk loop, checkpointing, resume, publish/error dispatch).
 """
 from __future__ import annotations
 
@@ -73,9 +73,33 @@ class FakeJobsStore:
         self.written.append(record)
         return True
 
-    async def update_highlight_chunk_progress(self, job_id, stage, pct, **kwargs):
+    async def update_highlight_progress(self, job_id, stage, pct, **kwargs):
         self.lifecycle.update({"progress_percent": pct, "stage": stage.value, **kwargs})
         self.progress_writes.append((stage, pct, kwargs))
+        return True
+
+    async def complete_highlight(self, job_id, stage, **kwargs):
+        self.lifecycle.update({
+            "progress_percent": 100.0,
+            "stage": stage.value,
+            "stage_message": "completed",
+            **kwargs,
+        })
+        self.progress_writes.append((stage, 100.0, {
+            "stage_message": "completed",
+            **kwargs,
+        }))
+        self.states.append((JobState.COMPLETED, ""))
+        return True
+
+    async def fail_highlight(self, job_id, stage, **kwargs):
+        self.lifecycle.update({
+            "progress_percent": kwargs["progress_percent"],
+            "stage": stage.value,
+            "stage_message": "error",
+            **kwargs,
+        })
+        self.states.append((JobState.FAILED, kwargs["error_message"]))
         return True
 
 
@@ -110,7 +134,7 @@ def _analyzed_event(
 ):
     return {
         "type": "highlight_result", "highlight_index": highlight_index,
-        "status": "analyzed", "ditch_reason": None,
+        "status": "analyzed",
         "clips": [{
             "start_s": start_s, "end_s": end_s,
             "position": "mount", "action_class": action_class, "outcome": "successful",
@@ -118,13 +142,6 @@ def _analyzed_event(
             "identity_uncertain": False, "actor_sentinel": actor_sentinel,
             "notes": "n",
         }],
-    }
-
-
-def _ditched_event(highlight_index=1):
-    return {
-        "type": "highlight_result", "highlight_index": highlight_index,
-        "status": "ditched", "ditch_reason": "nothing happened", "clips": [],
     }
 
 
@@ -239,34 +256,6 @@ async def test_multi_chunk_job_completes_with_per_chunk_checkpoints_in_order(mon
     assert "finalizing" in progress_phases
     assert progress_phases[-1] == "completed"
     assert progress_percentages == sorted(progress_percentages)
-
-
-@pytest.mark.asyncio
-async def test_ditched_highlight_never_published(monkeypatch, _mock_boundaries):
-    _patch_ingest(monkeypatch, _ingest_result(duration_sec=600.0))  # 1 chunk
-    _patch_run_pipeline(monkeypatch, [
-        [{"type": "highlight_map", "highlights": [{"index": 1}, {"index": 2}]},
-         {"type": "stage_complete", "stage_type": "highlight_scan"},
-         _ditched_event(highlight_index=1),
-         _analyzed_event(highlight_index=2, player_id="p1")],
-    ])
-
-    jobs_store = FakeJobsStore()
-    job_store = InMemoryJobStore()
-    job = await job_store.create_job(_request())
-
-    await highlight_orchestrator.run_highlight_job(job.job_id, _request(), _config(), job_store, jobs_store)
-
-    assert _mock_boundaries["sns"].publish_axis_only_event.call_count == 1
-    chunk_cp = next(w for w in jobs_store.written if w["stage_name"] == PipelineStage.HIGHLIGHT_CHUNK.value)
-    assert chunk_cp["checkpoint_data"]["highlights_ditched"] == 1
-    assert chunk_cp["checkpoint_data"]["highlights_analyzed"] == 1
-    # 2026-07-26 batched-publish re-scope: publish no longer happens per-
-    # chunk at all — highlights_published is always 0 at chunk-checkpoint
-    # time now (see build_highlight_chunk_completed's own docstring); the
-    # real publish count lives on the TERMINAL HIGHLIGHT_PUBLISH checkpoint.
-    assert chunk_cp["checkpoint_data"]["highlights_published"] == 0
-    assert chunk_cp["checkpoint_data"]["artifacts"]["clips_by_chunk"]["0"][0]["_highlight_index"] == 2
 
 
 @pytest.mark.asyncio

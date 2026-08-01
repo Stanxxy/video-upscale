@@ -31,7 +31,7 @@ class FakeJobsStore:
     async def get_lifecycle(self, job_id):
         return dict(self.lifecycle)
 
-    async def update_highlight_chunk_progress(self, job_id, stage, percent, **kwargs):
+    async def update_highlight_progress(self, job_id, stage, percent, **kwargs):
         self.lifecycle.update({"progress_percent": percent, **kwargs})
         return True
 
