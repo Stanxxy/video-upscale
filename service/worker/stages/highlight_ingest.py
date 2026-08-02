@@ -1,7 +1,9 @@
-"""HIGHLIGHT_INGEST stage (S12 Phase 1b production wiring design §1.3/§2.3):
-S3 download + Gemini Files API upload/poll + reference-image fetch — one
-cohesive "ingest" stage, not three separate worker-stage files, per the
-design's own reasoning (three sequential I/O steps that always run together).
+"""HIGHLIGHT_INGEST source preparation and Gemini completion phases.
+
+The source boundary is deliberately separate from Files API upload/poll so
+storage failures can become durable preparation failures without constructing
+or calling the Gemini client. ``run_highlight_ingest_stage`` remains as a
+compatibility wrapper for direct callers.
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ from service.config import ServiceConfig
 from service.jobs_store import JobsStore
 from service.models import TrackRequest
 from service.pipelines import gemini_upload
+from service.s3 import S3Client
 from service.worker.helpers import _make_s3
 from service.worker.highlight_progress import (
     PREPARING,
@@ -36,6 +39,17 @@ logger = logging.getLogger("service.worker")
 # left before the server's 48h TTL, so an in-flight resumed run never races
 # expiration mid-job.
 _REUSE_SAFETY_MARGIN = timedelta(minutes=10)
+VIDEO_PREPARATION_ERROR = "Video preparation failed"
+
+
+class HighlightSourcePreparationError(RuntimeError):
+    """A source object could not be prepared for highlight analysis.
+
+    The original exception is chained for server-side diagnostics, while the
+    orchestrator exposes only ``VIDEO_PREPARATION_ERROR`` to callers.
+    """
+
+    public_message = VIDEO_PREPARATION_ERROR
 
 
 @dataclass
@@ -47,6 +61,15 @@ class HighlightIngestResult:
     gemini_file_expiration: Optional[datetime]
     video_duration_sec: float
     player_references: list = field(default_factory=list)
+
+
+@dataclass
+class HighlightSourcePreparation:
+    """The Gemini-independent output of the first ingest phase."""
+
+    video_path: str
+    video_duration_sec: float
+    s3: S3Client | None = None
 
 
 def _probe_duration_sec(video_path: str) -> float:
@@ -101,40 +124,74 @@ async def _fetch_player_references(s3, bucket: str, athlete_bindings, loop) -> l
     return refs
 
 
-async def run_highlight_ingest_stage(
+async def prepare_highlight_source(
     job_id: str,
     request: TrackRequest,
     config: ServiceConfig,
     jobs_store: JobsStore,
     work_dir: str,
-    gemini_client: genai.Client,
     *,
     progress_writer: HighlightProgressWriter | None = None,
-) -> HighlightIngestResult:
-    """S3 download -> Gemini Files API upload/poll (or reuse a non-expired
-    upload from a prior HIGHLIGHT_INGEST checkpoint on resume) -> reference-
-    image fetch -> writes the HIGHLIGHT_INGEST checkpoint.
+) -> HighlightSourcePreparation:
+    """Prepare the source object without touching the Gemini SDK.
 
-    Non-ACTIVE Files-API terminal states RAISE (via ``gemini_upload.
-    poll_until_active``) — never proceeds with a fabricated "ready" state.
+    S3 bucket validation, source download, and duration probing intentionally
+    form a separate phase so a missing source can fail durably before the
+    orchestrator constructs a Gemini client or reaches any provider API.
     """
     loop = asyncio.get_event_loop()
     progress = progress_writer or HighlightProgressWriter(job_id, jobs_store)
     await progress.write(PipelineStage.HIGHLIGHT_INGEST, 1.0, phase=PREPARING)
 
     s3 = _make_s3(config)
-    s3.ensure_bucket(request.bucket)
+    try:
+        s3.ensure_bucket(request.bucket)
+        video_path = await loop.run_in_executor(
+            None, s3.download_file, request.bucket, request.key,
+            os.path.join(work_dir, "video.mp4"),
+        )
+        duration_sec = await loop.run_in_executor(None, _probe_duration_sec, video_path)
+    except Exception as exc:  # noqa: BLE001 — source boundary must be sanitized publicly
+        logger.exception(
+            "Job %s: highlight source preparation failed for s3://%s/%s: %s",
+            job_id, request.bucket, request.key, exc,
+        )
+        raise HighlightSourcePreparationError(VIDEO_PREPARATION_ERROR) from exc
 
-    video_path = await loop.run_in_executor(
-        None, s3.download_file, request.bucket, request.key,
-        os.path.join(work_dir, "video.mp4"),
-    )
-    duration_sec = await loop.run_in_executor(None, _probe_duration_sec, video_path)
     logger.info(
         "Job %s: highlight_ingest downloaded video_path=%s duration_sec=%.1f",
         job_id, video_path, duration_sec,
     )
     await progress.write(PipelineStage.HIGHLIGHT_INGEST, 4.0, phase=PREPARING)
+    return HighlightSourcePreparation(
+        video_path=video_path,
+        video_duration_sec=duration_sec,
+        s3=s3,
+    )
+
+
+async def complete_highlight_ingest_stage(
+    job_id: str,
+    request: TrackRequest,
+    config: ServiceConfig,
+    jobs_store: JobsStore,
+    work_dir: str,
+    source: HighlightSourcePreparation,
+    gemini_client: genai.Client,
+    *,
+    progress_writer: HighlightProgressWriter | None = None,
+) -> HighlightIngestResult:
+    """Complete ingest after source preparation and a Gemini client exist.
+
+    This phase preserves the existing Files API reuse/upload, reference-image
+    fetch, and HIGHLIGHT_INGEST checkpoint behavior without repeating source
+    download or duration probing.
+
+    Non-ACTIVE Files-API terminal states RAISE (via ``gemini_upload.
+    poll_until_active``) — never proceeds with a fabricated "ready" state.
+    """
+    loop = asyncio.get_event_loop()
+    progress = progress_writer or HighlightProgressWriter(job_id, jobs_store)
 
     checkpoints = await jobs_store.get_all_checkpoints(job_id)
     resume_plan = build_highlight_resume_plan(checkpoints)
@@ -158,7 +215,7 @@ async def run_highlight_ingest_stage(
             job_id, gemini_file_name, gemini_file_expiration.isoformat(),
         )
     else:
-        uploaded = await gemini_upload.upload_video_to_gemini(gemini_client, video_path)
+        uploaded = await gemini_upload.upload_video_to_gemini(gemini_client, source.video_path)
         active = await gemini_upload.poll_until_active(
             gemini_client, uploaded.name,
             poll_interval_sec=config.gemini_upload_poll_interval_sec,
@@ -179,8 +236,9 @@ async def run_highlight_ingest_stage(
     # request.bucket  # references stored in same bucket`), NOT
     # output_bucket (a bucket-split deployment has output_bucket != bucket;
     # reference crops were never written to output_bucket).
+    reference_s3 = source.s3 if source.s3 is not None else _make_s3(config)
     player_references = await _fetch_player_references(
-        s3, request.bucket, request.athlete_bindings, loop,
+        reference_s3, request.bucket, request.athlete_bindings, loop,
     )
     await progress.write(PipelineStage.HIGHLIGHT_INGEST, 10.0, phase=PREPARING)
 
@@ -201,11 +259,36 @@ async def run_highlight_ingest_stage(
     )
 
     return HighlightIngestResult(
-        video_path=video_path,
+        video_path=source.video_path,
         gemini_file_uri=gemini_file_uri,
         gemini_file_name=gemini_file_name,
         gemini_file_mime_type=gemini_file_mime_type,
         gemini_file_expiration=gemini_file_expiration,
-        video_duration_sec=duration_sec,
+        video_duration_sec=source.video_duration_sec,
         player_references=player_references,
+    )
+
+
+async def run_highlight_ingest_stage(
+    job_id: str,
+    request: TrackRequest,
+    config: ServiceConfig,
+    jobs_store: JobsStore,
+    work_dir: str,
+    gemini_client: genai.Client,
+    *,
+    progress_writer: HighlightProgressWriter | None = None,
+) -> HighlightIngestResult:
+    """Compatibility wrapper for callers that still invoke one ingest stage.
+
+    Production orchestration uses the explicit two-phase API above so it can
+    construct the Gemini client only after source preparation succeeds.
+    """
+    source = await prepare_highlight_source(
+        job_id, request, config, jobs_store, work_dir,
+        progress_writer=progress_writer,
+    )
+    return await complete_highlight_ingest_stage(
+        job_id, request, config, jobs_store, work_dir, source, gemini_client,
+        progress_writer=progress_writer,
     )

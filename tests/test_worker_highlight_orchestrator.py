@@ -20,7 +20,10 @@ from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.models import TrackRequest
 from service.worker import highlight_orchestrator
-from service.worker.stages.highlight_ingest import HighlightIngestResult
+from service.worker.stages.highlight_ingest import (
+    HighlightIngestResult,
+    HighlightSourcePreparation,
+)
 
 
 class FakeJobsStore:
@@ -115,6 +118,13 @@ def _ingest_result(duration_sec=1500.0) -> HighlightIngestResult:
     )
 
 
+def _source_preparation(duration_sec=1500.0) -> HighlightSourcePreparation:
+    return HighlightSourcePreparation(
+        video_path="/tmp/video.mp4",
+        video_duration_sec=duration_sec,
+    )
+
+
 def _config():
     return ServiceConfig(
         outer_chunk_scope_sec=720, highlight_pipeline_budget_cap=60,
@@ -168,7 +178,16 @@ def _mock_boundaries(monkeypatch):
 
 
 def _patch_ingest(monkeypatch, result: HighlightIngestResult):
-    monkeypatch.setattr(highlight_orchestrator, "run_highlight_ingest_stage", AsyncMock(return_value=result))
+    monkeypatch.setattr(
+        highlight_orchestrator,
+        "prepare_highlight_source",
+        AsyncMock(return_value=_source_preparation(result.video_duration_sec)),
+    )
+    monkeypatch.setattr(
+        highlight_orchestrator,
+        "complete_highlight_ingest_stage",
+        AsyncMock(return_value=result),
+    )
 
 
 def _patch_run_pipeline(monkeypatch, events_per_chunk: list[list[dict]]):
@@ -392,7 +411,13 @@ async def test_no_sns_topic_configured_analyzes_but_does_not_publish(monkeypatch
 @pytest.mark.asyncio
 async def test_ingest_failure_marks_job_failed_never_swallowed(monkeypatch, _mock_boundaries):
     monkeypatch.setattr(
-        highlight_orchestrator, "run_highlight_ingest_stage",
+        highlight_orchestrator,
+        "prepare_highlight_source",
+        AsyncMock(return_value=_source_preparation(duration_sec=600.0)),
+    )
+    monkeypatch.setattr(
+        highlight_orchestrator,
+        "complete_highlight_ingest_stage",
         AsyncMock(side_effect=RuntimeError("Gemini Files API upload failed: state=FAILED")),
     )
 
@@ -406,6 +431,57 @@ async def test_ingest_failure_marks_job_failed_never_swallowed(monkeypatch, _moc
     assert final_job.status.value == "failed"
     assert "FAILED" in final_job.error_message
     assert jobs_store.states[-1][0] == JobState.FAILED
+
+
+@pytest.mark.asyncio
+async def test_source_preparation_failure_is_sanitized_before_gemini_client(monkeypatch, _mock_boundaries, caplog):
+    """A missing source must fail at HIGHLIGHT_INGEST before Gemini exists.
+
+    This deliberately drives the real ingest-stage source boundary with a
+    source S3 double instead of replacing ``run_highlight_ingest_stage``.
+    The production bug constructs ``genai.Client`` before that boundary, so
+    this test must fail until ingest is split into source preparation and
+    Gemini-dependent completion phases.
+    """
+    client_ctor = MagicMock(side_effect=AssertionError("Gemini client must not be constructed"))
+    highlight_orchestrator.genai.Client = client_ctor
+
+    missing_source_s3 = MagicMock()
+    missing_source_s3.download_file.side_effect = FileNotFoundError(
+        "NoSuchKey: videos/missing.mp4",
+    )
+    monkeypatch.setattr(
+        "service.worker.stages.highlight_ingest._make_s3",
+        lambda config: missing_source_s3,
+    )
+
+    upload_mock = AsyncMock()
+    monkeypatch.setattr(highlight_orchestrator.gemini_upload, "upload_video_to_gemini", upload_mock)
+    poll_mock = AsyncMock()
+    monkeypatch.setattr(highlight_orchestrator.gemini_upload, "poll_until_active", poll_mock)
+
+    jobs_store = FakeJobsStore()
+    job_store = InMemoryJobStore()
+    job = await job_store.create_job(_request())
+
+    await highlight_orchestrator.run_highlight_job(
+        job.job_id, _request(), _config(), job_store, jobs_store,
+    )
+
+    final_job = await job_store.get_job(job.job_id)
+    assert final_job.status.value == "failed"
+    assert final_job.error_message == "Video preparation failed"
+    assert jobs_store.states[-1] == (JobState.FAILED, "Video preparation failed")
+    assert jobs_store.lifecycle["stage"] == PipelineStage.HIGHLIGHT_INGEST.value
+    assert jobs_store.lifecycle["stage_message"] == "error"
+    assert jobs_store.lifecycle["error_message"] == "Video preparation failed"
+    assert jobs_store.written == []
+    client_ctor.assert_not_called()
+    upload_mock.assert_not_awaited()
+    poll_mock.assert_not_awaited()
+    missing_source_s3.ensure_bucket.assert_called_once_with("src-bucket")
+    missing_source_s3.download_file.assert_called_once()
+    assert any("NoSuchKey: videos/missing.mp4" in record.message for record in caplog.records)
 
 
 @pytest.mark.asyncio

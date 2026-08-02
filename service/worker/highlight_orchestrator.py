@@ -71,7 +71,11 @@ from service.worker.highlight_progress import (
     finalizing_percent,
 )
 from service.worker.progress import _make_worker_state
-from service.worker.stages.highlight_ingest import run_highlight_ingest_stage
+from service.worker.stages.highlight_ingest import (
+    HighlightSourcePreparationError,
+    complete_highlight_ingest_stage,
+    prepare_highlight_source,
+)
 
 logger = logging.getLogger("service.worker")
 
@@ -249,13 +253,18 @@ async def run_highlight_job(
             phase=PREPARING,
         )
 
+        source = await prepare_highlight_source(
+            job_id, request, config, jobs_store, work_dir,
+            progress_writer=progress,
+        )
+
         gemini_client = genai.Client(
             api_key=config.gemini_api_key,
             http_options=types.HttpOptions(timeout=config.gemini_request_timeout_ms),
         )
 
-        ingest = await run_highlight_ingest_stage(
-            job_id, request, config, jobs_store, work_dir, gemini_client,
+        ingest = await complete_highlight_ingest_stage(
+            job_id, request, config, jobs_store, work_dir, source, gemini_client,
             progress_writer=progress,
         )
         gemini_file_name = ingest.gemini_file_name
@@ -721,6 +730,16 @@ async def run_highlight_job(
         logger.info("Job %s cancelled (client disconnected)", job_id)
         await job_store.update_job(job_id, status=JobStatus.CANCELLED)
         await jobs_store.set_state(job_id, JobState.CANCELLED)
+
+    except HighlightSourcePreparationError as e:
+        logger.exception("Job %s highlight source preparation failed", job_id)
+        public_error_message = e.public_message
+        await progress.fail(
+            current_stage,
+            public_error_message,
+            highlights_found_so_far=highlights_found_total,
+        )
+        await job_store.update_job(job_id, status=JobStatus.FAILED, error_message=public_error_message)
 
     except Exception as e:
         logger.exception("Job %s highlight_job failed", job_id)
