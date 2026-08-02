@@ -58,7 +58,8 @@ from service.models import AdmittedTrackRequest, JobStatus
 from service.pipelines import executors, gemini_retry, gemini_upload
 from service.pipelines.registry import get_default
 from service.sns import SNSPublisher, clip_to_axis_only_event
-from service.worker import majority_vote, seam_dedup
+from service.worker.majority_vote import reconcile_match_actors
+from service.worker.seam_dedup import dedup_match_clips
 from service.worker.helpers import _is_cancelled, _make_s3
 from service.worker.highlight_progress import (
     DETECTING,
@@ -124,7 +125,7 @@ def _unique_detection_count(
     chunks: list[tuple[float, float]],
 ) -> int:
     """Return the seam-deduplicated count for completed outer chunks."""
-    deduped, _ = seam_dedup.dedup_match_clips(clips_by_chunk, chunks)
+    deduped, _ = dedup_match_clips(clips_by_chunk, chunks)
     return len(deduped)
 
 
@@ -494,7 +495,7 @@ async def run_highlight_job(
 
         # Phase 3 — whole-match seam dedup (AC6; service/worker/seam_dedup.py).
         current_stage = PipelineStage.HIGHLIGHT_PUBLISH
-        deduped_clips, seam_duplicates_dropped = seam_dedup.dedup_match_clips(clips_by_chunk, chunks)
+        deduped_clips, seam_duplicates_dropped = dedup_match_clips(clips_by_chunk, chunks)
         highlights_found_total = max(highlights_found_total, len(deduped_clips))
         await progress.write(
             PipelineStage.HIGHLIGHT_PUBLISH,
@@ -511,7 +512,7 @@ async def run_highlight_job(
         # Phase 4 — per-match majority-vote actor reconciliation (AC8-11;
         # service/worker/majority_vote.py) — overwrites player_id/
         # player_name/identity_uncertain/actor_sentinel on every clip.
-        reconciled_clips, flip_count = majority_vote.reconcile_match_actors(deduped_clips)
+        reconciled_clips, flip_count = reconcile_match_actors(deduped_clips)
         cross_highlight_flip_rate = (flip_count / len(reconciled_clips)) if reconciled_clips else 0.0
 
         # Phase 5 — attribution metrics, computed ONCE over the final

@@ -7,21 +7,11 @@ pydantic-settings
 cassandra-driver
 shared-lib @ file:///Users/stanliu/bjj-proj/bjj-vision-backend/shared_lib
 
-# ML pipeline (tracking + analysis)
-torch
-torchvision
+# Gemini-native service runtime
 opencv-python
 Pillow
 numpy
-scipy
-spandrel
-ultralytics>=8.4.0
-supervision>=0.25.0
-rtmlib
 google-genai
-huggingface_hub
 # QA VLM Studio (server-side YouTube frame grab for /qa/vlm-image): requires
 # system ffmpeg on PATH in addition to this package.
 yt-dlp
-# SAM2: not on PyPI — install from source:
-#   pip install "git+https://github.com/facebookresearch/sam2.git"

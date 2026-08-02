@@ -167,7 +167,8 @@ cmd_start() {
         echo "  Create one with:"
         echo "    python3 -m venv venv"
         echo "    venv/bin/pip install -r requirements-service.txt"
-        echo "    venv/bin/pip install 'git+https://github.com/facebookresearch/sam2.git'"
+        echo "  Optional legacy GPU/tracking revival:"
+        echo "    venv/bin/pip install -r requirements-legacy-gpu.txt"
         return 1
     fi
 

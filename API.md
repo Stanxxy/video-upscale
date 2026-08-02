@@ -159,7 +159,7 @@ curl http://localhost:9001/jobs/a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 **`GET /health`**
 
-Returns service health and GPU availability.
+Returns service health and the UTC response timestamp.
 
 **Example Request**
 
@@ -172,7 +172,7 @@ curl http://localhost:9001/health
 ```json
 {
   "status": "ok",
-  "gpu_available": true
+  "timestamp": "2026-08-01T12:00:00+00:00"
 }
 ```
 

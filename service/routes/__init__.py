@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 
 from service.models import AnalysisSettingsCapabilities, TrackResponse, JobResponse
-from service.routes.health import debug_memory, health, qa_client
+from service.routes.health import health, qa_client
 from service.routes.jobs import cancel_job, create_track_job, get_job
 from service.routes.analysis_settings import get_analysis_settings
 from service.routes.active_jobs import get_active_jobs, ActiveJobsResponse
@@ -52,9 +52,8 @@ router.get("/jobs/{job_id}/events")(job_events_sse)
 # handlers and tests/test_human_loop_routes_unregistered.py for the 404
 # regression guard.
 
-# Health & debug
+# Health
 router.get("/health")(health)
-router.get("/debug/memory")(debug_memory)
 
 # QA harness — Stream 2 Gemini identity-grounding live gate (analyzer only, no GPU)
 router.post("/qa/identity-analyze")(identity_analyze)

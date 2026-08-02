@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import os
@@ -114,33 +113,6 @@ async def lifespan(app: FastAPI):
     )
     recovery.start()
     service_logger.info("RecoveryManager + HeartbeatTask started")
-
-    # Pre-warm SAM2 models to eliminate cold-start latency on first job.
-    # SAM2Manager.__init__ calls SAM2VideoPredictor.from_pretrained(), which
-    # downloads/caches weights and loads them onto the device — no video file
-    # needed. Running in a thread pool avoids blocking the async event loop.
-    async def _prewarm_sam2():
-        import asyncio
-
-        def _load_models():
-            try:
-                from tracking_pipeline.sam2_manager import SAM2Manager
-
-                for model_id in [
-                    "facebook/sam2.1-hiera-tiny",       # fast mode
-                    "facebook/sam2.1-hiera-base-plus",  # standard mode
-                ]:
-                    service_logger.info("Pre-warming SAM2 model: %s", model_id)
-                    mgr = SAM2Manager(model_id=model_id)
-                    del mgr
-                    service_logger.info("Pre-warm complete: %s", model_id)
-            except Exception as e:
-                service_logger.warning("SAM2 pre-warm failed (non-fatal): %s", e)
-
-        await asyncio.get_event_loop().run_in_executor(None, _load_models)
-
-    if not config.disable_prewarm:
-        asyncio.ensure_future(_prewarm_sam2())
 
     try:
         yield

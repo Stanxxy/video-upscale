@@ -150,16 +150,6 @@ class ServiceConfig(BaseSettings):
             "targets (e.g., BJJ_SEGMENT_MAX_FRAMES=1500 for 16GB)."
         ),
     )
-    # Skip SAM2 pre-warm on Mac dev to speed up service restarts (~60s saved).
-    # Leave false (default) on gx10 production where the first-job latency matters.
-    disable_prewarm: bool = Field(
-        default=False,
-        description=(
-            "Skip SAM2 model pre-warm at startup. Set BJJ_DISABLE_PREWARM=true on dev "
-            "machines to speed up iteration. Leave false (default) on gx10 production."
-        ),
-    )
-
     # M2 S5: upscale target size and pre-scale cap.
     upscale_target_size: int = Field(
         default=768,
