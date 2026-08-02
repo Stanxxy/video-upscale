@@ -9,5 +9,6 @@ ultralytics>=8.4.0
 supervision>=0.25.0
 rtmlib
 huggingface_hub
+tqdm
 # SAM2 is not on PyPI.
 git+https://github.com/facebookresearch/sam2.git

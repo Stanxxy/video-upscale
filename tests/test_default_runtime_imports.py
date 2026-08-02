@@ -19,7 +19,7 @@ import sys
 class BlockLegacyGpuImports(importlib.abc.MetaPathFinder):
     roots = {
         'torch', 'torchvision', 'sam2', 'spandrel', 'ultralytics',
-        'supervision', 'rtmlib', 'scipy', 'huggingface_hub',
+        'supervision', 'rtmlib', 'scipy', 'huggingface_hub', 'tqdm',
     }
 
     def find_spec(self, fullname, path=None, target=None):
@@ -30,10 +30,12 @@ class BlockLegacyGpuImports(importlib.abc.MetaPathFinder):
 
 sys.meta_path.insert(0, BlockLegacyGpuImports())
 from service.app import app
+from service.routes import scheduling
 
 paths = set(app.openapi()['paths'])
 assert {'/health', '/analysis-settings/capabilities', '/track'} <= paths
 assert '/debug/memory' not in paths
+assert callable(scheduling.run_highlight_job)
 """
     result = subprocess.run(
         [sys.executable, "-c", script],

@@ -12,7 +12,7 @@ from service.config import ServiceConfig
 from service.jobs_store import JobsStore
 from service.models import ProcessingMode, TrackRequest
 
-from pipeline import deduplicate_clips
+from service.pipelines.frame_dedup import deduplicate_clips
 from service.worker.callbacks.analysis_checkpoint import _flush_analysis_checkpoint
 from service.worker.helpers import _make_s3
 from service.worker.progress import _make_worker_state
@@ -240,4 +240,3 @@ def _upscale_analysis_setup(
     _ret = {k: v for k, v in locals().items() if not k.startswith('__')}
     _ret['jpeg_pool'] = jpeg_pool
     return _ret
-

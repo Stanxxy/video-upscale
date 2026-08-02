@@ -182,7 +182,7 @@ class ContextChainConfig(BaseModel):
 
 
 class DedupConfig(BaseModel):
-    """``dedup`` — final clip merge (``pipeline.deduplicate_clips``, with the
+    """``dedup`` — final clip merge (``frame_dedup.deduplicate_clips``, with the
     Brooks R6 ``key_by`` fix: bucket by ``actor_player_id`` by default, not the
     schema's absent ``role`` field).
 
