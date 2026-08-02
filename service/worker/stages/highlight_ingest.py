@@ -2,8 +2,7 @@
 
 The source boundary is deliberately separate from Files API upload/poll so
 storage failures can become durable preparation failures without constructing
-or calling the Gemini client. ``run_highlight_ingest_stage`` remains as a
-compatibility wrapper for direct callers.
+or calling the Gemini client.
 """
 from __future__ import annotations
 
@@ -266,29 +265,4 @@ async def complete_highlight_ingest_stage(
         gemini_file_expiration=gemini_file_expiration,
         video_duration_sec=source.video_duration_sec,
         player_references=player_references,
-    )
-
-
-async def run_highlight_ingest_stage(
-    job_id: str,
-    request: TrackRequest,
-    config: ServiceConfig,
-    jobs_store: JobsStore,
-    work_dir: str,
-    gemini_client: genai.Client,
-    *,
-    progress_writer: HighlightProgressWriter | None = None,
-) -> HighlightIngestResult:
-    """Compatibility wrapper for callers that still invoke one ingest stage.
-
-    Production orchestration uses the explicit two-phase API above so it can
-    construct the Gemini client only after source preparation succeeds.
-    """
-    source = await prepare_highlight_source(
-        job_id, request, config, jobs_store, work_dir,
-        progress_writer=progress_writer,
-    )
-    return await complete_highlight_ingest_stage(
-        job_id, request, config, jobs_store, work_dir, source, gemini_client,
-        progress_writer=progress_writer,
     )

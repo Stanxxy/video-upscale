@@ -75,6 +75,16 @@ def _request(**kwargs):
     return TrackRequest(bucket="src-bucket", key="videos/match.mp4", **kwargs)
 
 
+async def _run_ingest(job_id, request, config, jobs_store, work_dir):
+    """Exercise the explicit source-preparation and completion phases."""
+    source = await highlight_ingest.prepare_highlight_source(
+        job_id, request, config, jobs_store, work_dir,
+    )
+    return await highlight_ingest.complete_highlight_ingest_stage(
+        job_id, request, config, jobs_store, work_dir, source, MagicMock(),
+    )
+
+
 @pytest.mark.asyncio
 async def test_fresh_job_uploads_and_polls_to_active(monkeypatch, tmp_path):
     monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
@@ -88,9 +98,7 @@ async def test_fresh_job_uploads_and_polls_to_active(monkeypatch, tmp_path):
     monkeypatch.setattr(highlight_ingest.gemini_upload, "poll_until_active", AsyncMock(return_value=active))
 
     jobs_store = FakeJobsStore(checkpoints=[])
-    result = await highlight_ingest.run_highlight_ingest_stage(
-        "job-1", _request(), _config(), jobs_store, str(tmp_path), MagicMock(),
-    )
+    result = await _run_ingest("job-1", _request(), _config(), jobs_store, str(tmp_path))
 
     assert result.gemini_file_uri == active.uri
     assert result.gemini_file_name == "files/abc"
@@ -134,9 +142,7 @@ async def test_resume_with_non_expired_checkpoint_skips_reupload(monkeypatch, tm
     }
     jobs_store = FakeJobsStore(checkpoints=[existing_checkpoint])
 
-    result = await highlight_ingest.run_highlight_ingest_stage(
-        "job-1", _request(), _config(), jobs_store, str(tmp_path), MagicMock(),
-    )
+    result = await _run_ingest("job-1", _request(), _config(), jobs_store, str(tmp_path))
 
     assert result.gemini_file_uri == "https://.../files/existing"
     assert result.gemini_file_name == "files/existing"
@@ -173,9 +179,7 @@ async def test_resume_with_expired_checkpoint_reuploads(monkeypatch, tmp_path):
     }
     jobs_store = FakeJobsStore(checkpoints=[existing_checkpoint])
 
-    result = await highlight_ingest.run_highlight_ingest_stage(
-        "job-1", _request(), _config(), jobs_store, str(tmp_path), MagicMock(),
-    )
+    result = await _run_ingest("job-1", _request(), _config(), jobs_store, str(tmp_path))
 
     assert result.gemini_file_uri == "https://.../files/new"
     highlight_ingest.gemini_upload.upload_video_to_gemini.assert_awaited_once()
@@ -212,9 +216,7 @@ async def test_player_references_fetched_from_athlete_bindings(monkeypatch, tmp_
     )
     jobs_store = FakeJobsStore(checkpoints=[])
 
-    result = await highlight_ingest.run_highlight_ingest_stage(
-        "job-1", request, _config(), jobs_store, str(tmp_path), MagicMock(),
-    )
+    result = await _run_ingest("job-1", request, _config(), jobs_store, str(tmp_path))
 
     assert len(result.player_references) == 1
     ref = result.player_references[0]
@@ -245,9 +247,7 @@ async def test_binding_missing_s3_key_is_skipped_not_fabricated(monkeypatch, tmp
     )
     jobs_store = FakeJobsStore(checkpoints=[])
 
-    result = await highlight_ingest.run_highlight_ingest_stage(
-        "job-1", request, _config(), jobs_store, str(tmp_path), MagicMock(),
-    )
+    result = await _run_ingest("job-1", request, _config(), jobs_store, str(tmp_path))
 
     assert result.player_references == []
 
@@ -268,8 +268,6 @@ async def test_poll_failure_propagates_never_swallowed(monkeypatch, tmp_path):
     jobs_store = FakeJobsStore(checkpoints=[])
 
     with pytest.raises(RuntimeError, match="FAILED"):
-        await highlight_ingest.run_highlight_ingest_stage(
-            "job-1", _request(), _config(), jobs_store, str(tmp_path), MagicMock(),
-        )
+        await _run_ingest("job-1", _request(), _config(), jobs_store, str(tmp_path))
 
     assert jobs_store.written == []  # no checkpoint written on failure
