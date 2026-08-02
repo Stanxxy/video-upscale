@@ -6,7 +6,7 @@ import json
 import logging
 import os
 
-from pipeline import deduplicate_clips
+from service.pipelines.frame_dedup import deduplicate_clips
 from service.worker.callbacks.analysis_checkpoint import _flush_analysis_checkpoint
 
 logger = logging.getLogger("service.worker")

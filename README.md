@@ -29,17 +29,15 @@ python3 -m venv venv
 source venv/bin/activate
 python -m pip install -U pip
 
-# Core pipeline deps
-pip install numpy opencv-python pillow tqdm
+# Default Gemini-native service runtime
+pip install -r requirements-service.txt
 
-# Enhancement (Real-ESRGAN / SwinIR / HAT via spandrel)
-pip install torch spandrel
+# Optional legacy tracking/upscale runtime (SAM2, torch, Real-ESRGAN, pose)
+pip install -r requirements-legacy-gpu.txt
 
 # Optional: diffusion mode
 pip install diffusers transformers accelerate safetensors
 
-# Optional: Gemini analysis
-pip install google-genai
 ```
 
 ## Run
@@ -105,4 +103,3 @@ Inside `--output` (e.g. `enhanced_crops/`):
 
 - **Device selection**: the upscaler and diffusion paths auto-pick `mps` (Apple Silicon), then `cuda`, then `cpu`.
 - **Large files**: this repo intentionally `.gitignore`s `analysis_*`, `enhanced_*`, `input_video.mp4`, and `input_video_hybrid_tracked.json` since they’re data outputs/inputs.
-

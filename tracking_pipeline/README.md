@@ -22,10 +22,8 @@ RF-DETR detect persons on initial frame
 # From project root, activate existing venv
 source venv/bin/activate
 
-# Install dependencies
-SAM2_BUILD_CUDA=0 pip install sam2    # Native SAM2 (no CUDA extensions)
-pip install rtmlib                     # RTMPose for keypoints
-pip install scipy                      # Hungarian assignment
+# Install the optional legacy tracking/upscale profile (SAM2, torch, pose)
+pip install -r requirements-legacy-gpu.txt
 pip install -r test_tracking/requirements.txt
 ```
 

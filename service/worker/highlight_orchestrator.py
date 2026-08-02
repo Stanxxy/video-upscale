@@ -58,7 +58,8 @@ from service.models import AdmittedTrackRequest, JobStatus
 from service.pipelines import executors, gemini_retry, gemini_upload
 from service.pipelines.registry import get_default
 from service.sns import SNSPublisher, clip_to_axis_only_event
-from service.worker import majority_vote, seam_dedup
+from service.worker.majority_vote import reconcile_match_actors
+from service.worker.seam_dedup import dedup_match_clips
 from service.worker.helpers import _is_cancelled, _make_s3
 from service.worker.highlight_progress import (
     DETECTING,
@@ -70,7 +71,11 @@ from service.worker.highlight_progress import (
     finalizing_percent,
 )
 from service.worker.progress import _make_worker_state
-from service.worker.stages.highlight_ingest import run_highlight_ingest_stage
+from service.worker.stages.highlight_ingest import (
+    HighlightSourcePreparationError,
+    complete_highlight_ingest_stage,
+    prepare_highlight_source,
+)
 
 logger = logging.getLogger("service.worker")
 
@@ -124,7 +129,7 @@ def _unique_detection_count(
     chunks: list[tuple[float, float]],
 ) -> int:
     """Return the seam-deduplicated count for completed outer chunks."""
-    deduped, _ = seam_dedup.dedup_match_clips(clips_by_chunk, chunks)
+    deduped, _ = dedup_match_clips(clips_by_chunk, chunks)
     return len(deduped)
 
 
@@ -248,13 +253,18 @@ async def run_highlight_job(
             phase=PREPARING,
         )
 
+        source = await prepare_highlight_source(
+            job_id, request, config, jobs_store, work_dir,
+            progress_writer=progress,
+        )
+
         gemini_client = genai.Client(
             api_key=config.gemini_api_key,
             http_options=types.HttpOptions(timeout=config.gemini_request_timeout_ms),
         )
 
-        ingest = await run_highlight_ingest_stage(
-            job_id, request, config, jobs_store, work_dir, gemini_client,
+        ingest = await complete_highlight_ingest_stage(
+            job_id, request, config, jobs_store, work_dir, source, gemini_client,
             progress_writer=progress,
         )
         gemini_file_name = ingest.gemini_file_name
@@ -494,7 +504,7 @@ async def run_highlight_job(
 
         # Phase 3 — whole-match seam dedup (AC6; service/worker/seam_dedup.py).
         current_stage = PipelineStage.HIGHLIGHT_PUBLISH
-        deduped_clips, seam_duplicates_dropped = seam_dedup.dedup_match_clips(clips_by_chunk, chunks)
+        deduped_clips, seam_duplicates_dropped = dedup_match_clips(clips_by_chunk, chunks)
         highlights_found_total = max(highlights_found_total, len(deduped_clips))
         await progress.write(
             PipelineStage.HIGHLIGHT_PUBLISH,
@@ -511,7 +521,7 @@ async def run_highlight_job(
         # Phase 4 — per-match majority-vote actor reconciliation (AC8-11;
         # service/worker/majority_vote.py) — overwrites player_id/
         # player_name/identity_uncertain/actor_sentinel on every clip.
-        reconciled_clips, flip_count = majority_vote.reconcile_match_actors(deduped_clips)
+        reconciled_clips, flip_count = reconcile_match_actors(deduped_clips)
         cross_highlight_flip_rate = (flip_count / len(reconciled_clips)) if reconciled_clips else 0.0
 
         # Phase 5 — attribution metrics, computed ONCE over the final
@@ -720,6 +730,16 @@ async def run_highlight_job(
         logger.info("Job %s cancelled (client disconnected)", job_id)
         await job_store.update_job(job_id, status=JobStatus.CANCELLED)
         await jobs_store.set_state(job_id, JobState.CANCELLED)
+
+    except HighlightSourcePreparationError as e:
+        logger.exception("Job %s highlight source preparation failed", job_id)
+        public_error_message = e.public_message
+        await progress.fail(
+            current_stage,
+            public_error_message,
+            highlights_found_so_far=highlights_found_total,
+        )
+        await job_store.update_job(job_id, status=JobStatus.FAILED, error_message=public_error_message)
 
     except Exception as e:
         logger.exception("Job %s highlight_job failed", job_id)

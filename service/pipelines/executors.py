@@ -44,7 +44,7 @@ from PIL import Image
 
 from analyzer import BJJMultiAgentAnalyzer, BJJTechniqueAnalyzer
 from shared_lib.models.simplified_taxonomy import AXIS2_ACTOR_SENTINELS
-from pipeline import deduplicate_clips
+from service.pipelines.frame_dedup import deduplicate_clips
 from service.pipelines import (
     chunk_segment,
     frame_source,
@@ -1454,7 +1454,7 @@ async def context_chain_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
 # dedup
 # --------------------------------------------------------------------------- #
 def _apply_dedup_bucket_key(raw_results: list, key_by: str) -> list:
-    """Brooks R6 fix: ``pipeline.deduplicate_clips`` buckets by ``clip["role"]``,
+    """Brooks R6 fix: ``frame_dedup.deduplicate_clips`` buckets by ``clip["role"]``,
     but the schema emits ``actor_player_id``. Rather than changing the shared
     function's signature, inject the desired bucketing value into a ``role``
     copy field before calling it — scoped entirely to this QA dedup call path.
@@ -1470,7 +1470,7 @@ def _apply_dedup_bucket_key(raw_results: list, key_by: str) -> list:
 
 
 def _apply_simplified_tags_dedup_keys(raw_results: list) -> list:
-    """Adapts ``simplified-tags-v1`` clips onto ``pipeline.deduplicate_clips``'s
+    """Adapts ``simplified-tags-v1`` clips onto ``frame_dedup.deduplicate_clips``'s
     expected keys WITHOUT changing that shared function: it buckets by
     ``clip.get("role", "")`` (per-actor merge) and merges same-category
     overlaps via ``clip.get("action", clip.get("category", ""))``.

@@ -343,7 +343,7 @@ def merge_analysis_results(
     Each segment produces {"match_summary": ..., "clips": [...], "fps": ...}.
     We concatenate the clips arrays and deduplicate by (start_frame, end_frame).
     """
-    from pipeline import deduplicate_clips
+    from service.pipelines.frame_dedup import deduplicate_clips
 
     if not segment_analyses:
         return None

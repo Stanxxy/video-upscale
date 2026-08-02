@@ -1,6 +1,7 @@
 """Characterization tests for POST /track, GET /job/{id}, and GET /health."""
 from __future__ import annotations
 
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -190,11 +191,20 @@ async def test_get_job_fails_visibly_for_partial_r4_analysis_settings_envelope(
 
 
 @pytest.mark.asyncio
-async def test_get_health_returns_ok(service_client):
+async def test_get_health_returns_exact_cpu_neutral_contract(service_client):
     resp = await service_client.get("/health")
     assert resp.status_code == 200
     body = resp.json()
+    assert body.keys() == {"status", "timestamp"}
     assert body["status"] == "ok"
+    assert datetime.fromisoformat(body["timestamp"])
+
+
+@pytest.mark.asyncio
+async def test_retired_gpu_memory_endpoint_is_not_registered(service_client):
+    response = await service_client.get("/debug/memory")
+
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ import asyncio
 import logging
 
 from service.models import AdmittedTrackRequest
-from service.worker import run_highlight_job
+from service.worker.highlight_orchestrator import run_highlight_job
 from service.routes import state as route_state
 
 logger = logging.getLogger("service.routes")

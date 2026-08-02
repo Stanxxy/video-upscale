@@ -1,6 +1,6 @@
 """Seconds-based dedup for ``simplified-tags-time-v1`` (Brooks HIGH seam).
 
-``pipeline.deduplicate_clips`` is FRAME-keyed (``start_frame``/``end_frame``)
+``frame_dedup.deduplicate_clips`` is FRAME-keyed (``start_frame``/``end_frame``)
 and this pipeline never has a ``ctx.native_fps`` (no frame sampling happens —
 ``chunk-segment-tags`` is entirely native-video). Rather than fabricate frames
 from seconds (banned) or force the frame-keyed function to accept a mixed

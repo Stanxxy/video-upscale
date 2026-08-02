@@ -130,13 +130,15 @@ paths:
       tags: [Streaming]
       summary: Subscribe to job events (SSE)
       description: |
-        **Server-Sent Events** stream polling Keyspaces `job_lifecycle` approximately every second.
+        **Server-Sent Events** stream reading the durable Keyspaces `job_lifecycle`
+        projection approximately every second. Workers write lifecycle progress;
+        clients never connect to the engine over WebSocket or poll for progress.
 
         Event types (JSON in `data:` unless noted):
 
         | `event` | When |
         |--------|------|
-        | `progress` | State or progress changed (`percent` delta ≥ 0.5 or lifecycle state changed). Payload includes `type`, `state` (pipeline stage), `percent`, `frame_idx`, `total_frames`. |
+        | `progress` | State or progress changed (`percent` delta ≥ 0.5 or lifecycle state changed). Payload includes `type`, `state` (pipeline stage), `phase` (`stage_message`), `percent`, `frame_idx`, and `total_frames`; highlight-v2 rows add chunk/count/attribution fields when present. |
         | `detection_needed` | Job state is `AWAITING_CORRECTION` and a checkpoint has `pending_detection`. |
         | `completed` | Job reached `COMPLETED`. Stream ends. |
         | `job_error` | Job `FAILED` / `CANCELLED`, job not found, or repeated internal errors. Stream ends. |
@@ -261,20 +263,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
 
-  /debug/memory:
-    get:
-      tags: [System]
-      summary: GPU / MPS memory usage
-      description: Intended for QA verification of model offload (CUDA or Apple MPS).
-      operationId: debugMemory
-      responses:
-        "200":
-          description: Memory snapshot
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DebugMemoryResponse"
-
 components:
   parameters:
     JobId:
@@ -310,6 +298,16 @@ components:
         sam2_model:
           type: string
           default: facebook/sam2.1-hiera-base-plus
+        processing_mode:
+          type: string
+          enum:
+            - standard
+            - fast
+          default: standard
+          description: >
+            Controls pipeline quality/speed tradeoff.
+            "standard" (default): SAM2 base-plus, Real-ESRGAN upscale, full Gemini context chain.
+            "fast": SAM2-tiny, bicubic upscale, high-fanout Gemini (no context chain). Accuracy ≥ 80% of standard.
         detection_threshold:
           type: number
           format: float
@@ -436,10 +434,6 @@ components:
       properties:
         job_id:
           type: string
-        ws_url:
-          type: string
-          default: ""
-          description: Deprecated — SSE replaces WebSocket for progress
         status:
           type: string
           example: pending
@@ -506,35 +500,19 @@ components:
 
     HealthResponse:
       type: object
-      required: [status, gpu_available, timestamp]
+      required: [status, timestamp]
       properties:
         status:
           type: string
-          example: healthy
-        gpu_available:
-          type: boolean
-          description: True if CUDA or Apple MPS is available
+          example: ok
         timestamp:
           type: string
           format: date-time
           description: UTC ISO 8601 timestamp
 
-    DebugMemoryResponse:
-      type: object
-      required: [gpu_available, allocated_mb, reserved_mb]
-      properties:
-        gpu_available:
-          type: boolean
-        allocated_mb:
-          type: number
-          format: float
-        reserved_mb:
-          type: number
-          format: float
-
     ErrorResponse:
       type: object
-      description: FastAPI HTTPException body — typically `{ "detail": string | array }`
+      description: "FastAPI HTTPException body — typically `{ \"detail\": string | array }`"
       properties:
         detail:
           oneOf:
