@@ -341,15 +341,6 @@
         </div>
       </div>
 
-      <!-- Memory check (QA debug) -->
-      <div class="card">
-        <div style="display:flex; gap:8px; align-items:center;">
-          <h2 style="margin:0">GPU Memory</h2>
-          <button class="btn btn-sm btn-primary" onclick="checkMemory()">Check</button>
-        </div>
-        <pre id="memory-info" style="font-size:0.8rem; color:var(--text-dim); margin-top:8px;">—</pre>
-      </div>
-
       <!-- Resume history -->
       <div class="card" id="history-panel" style="display:none">
         <h2>Resume History</h2>
@@ -1002,21 +993,6 @@ async function cancelDetection() {
   }
   document.getElementById('detection-panel').classList.remove('active');
 }
-// ============================================================
-// Debug helpers
-// ============================================================
-async function checkMemory() {
-  const base = document.getElementById('service-url').value.replace(/\/+$/, '');
-  try {
-    const resp = await fetch(base + '/debug/memory');
-    const data = await resp.json();
-    document.getElementById('memory-info').textContent = JSON.stringify(data, null, 2);
-    log(`GPU memory: ${data.allocated_mb}MB allocated, ${data.reserved_mb || 0}MB reserved`, 'log-info');
-  } catch (e) {
-    document.getElementById('memory-info').textContent = 'Error: ' + e.message;
-  }
-}
-
 // Update resume history display when jobHistory changes
 function updateHistory() {
   if (jobHistory.length <= 1) {

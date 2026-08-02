@@ -261,20 +261,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
 
-  /debug/memory:
-    get:
-      tags: [System]
-      summary: GPU / MPS memory usage
-      description: Intended for QA verification of model offload (CUDA or Apple MPS).
-      operationId: debugMemory
-      responses:
-        "200":
-          description: Memory snapshot
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DebugMemoryResponse"
-
 components:
   parameters:
     JobId:
@@ -506,35 +492,19 @@ components:
 
     HealthResponse:
       type: object
-      required: [status, gpu_available, timestamp]
+      required: [status, timestamp]
       properties:
         status:
           type: string
-          example: healthy
-        gpu_available:
-          type: boolean
-          description: True if CUDA or Apple MPS is available
+          example: ok
         timestamp:
           type: string
           format: date-time
           description: UTC ISO 8601 timestamp
 
-    DebugMemoryResponse:
-      type: object
-      required: [gpu_available, allocated_mb, reserved_mb]
-      properties:
-        gpu_available:
-          type: boolean
-        allocated_mb:
-          type: number
-          format: float
-        reserved_mb:
-          type: number
-          format: float
-
     ErrorResponse:
       type: object
-      description: FastAPI HTTPException body — typically `{ "detail": string | array }`
+      description: "FastAPI HTTPException body — typically `{ \"detail\": string | array }`"
       properties:
         detail:
           oneOf:
