@@ -40,7 +40,7 @@ async def test_run_job_writes_download_then_detect_checkpoints(
     s3 = stub_s3()
 
     # Stub heavy collaborators.
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch(
              "service.tracking_runner.run_detect",
@@ -125,18 +125,18 @@ async def test_run_job_skips_run_tracking_when_sentinel_resume(mock_jobs_store, 
 
     mock_run_track = MagicMock()
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch("service.tracking_runner.run_tracking_job", mock_run_track), \
-         patch.object(
-             worker, "_run_upscale_analysis",
+         patch(
+             "service.worker.stages.upscale_run._run_upscale_analysis",
              return_value=({"clips": [], "fps": 30.0}, 30.0),
          ), \
          patch(
              "service.video_annotator.annotate_video",
              return_value=str(tmp_path / "annotated_output.mp4"),
          ), \
-         patch("service.worker.SNSPublisher") as sns_cls:
+         patch("service.worker.stages.publish.SNSPublisher") as sns_cls:
         sns_cls.return_value.publish_events = MagicMock(return_value=2)
         await worker.run_job(
             job.job_id, request, config, job_store, mock_jobs_store,
@@ -190,18 +190,18 @@ async def test_run_job_skips_analysis_and_annotated_reupload_when_keys_match(
     annotated_path = tmp_path / "annotated_output.mp4"
     annotated_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch("service.tracking_runner.run_tracking_job", stub_run_tracking_job), \
-         patch.object(
-             worker, "_run_upscale_analysis",
+         patch(
+             "service.worker.stages.upscale_run._run_upscale_analysis",
              return_value=({"clips": [], "fps": 30.0}, 30.0),
          ), \
          patch(
              "service.video_annotator.annotate_video",
              return_value=str(annotated_path),
          ), \
-         patch("service.worker.SNSPublisher") as sns_cls:
+         patch("service.worker.stages.publish.SNSPublisher") as sns_cls:
         sns_cls.return_value.publish_events = MagicMock(return_value=2)
         await worker.run_job(
             job.job_id, request, config, job_store, mock_jobs_store,
@@ -278,7 +278,7 @@ async def test_run_job_progress_never_regresses_below_lifecycle_floor(
     s3 = stub_s3()
     s3.download_json = MagicMock(return_value=tracking_blob)
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch("service.tracking_runner.run_tracking_job", stub_run_tracking_job):
         await worker.run_job(
@@ -347,7 +347,7 @@ async def test_run_job_partial_resume_merges_frames_and_preserves_start_frame(
             )
         return path
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch(
              "service.tracking_runner.run_tracking_job",
@@ -397,11 +397,11 @@ async def test_run_job_failed_writes_track_progress_partial_checkpoint(
 
     s3 = stub_s3()
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch("service.tracking_runner.run_tracking_job", stub_run_tracking_job), \
-         patch.object(
-             worker, "_run_upscale_analysis",
+         patch(
+             "service.worker.stages.upscale_run._run_upscale_analysis",
              side_effect=RuntimeError("upscale boom"),
          ):
         await worker.run_job(
@@ -446,7 +446,7 @@ async def test_awaiting_correction_does_not_get_failure_partial_checkpoint(
     await mock_jobs_store.create_lifecycle(job.job_id, "vid", "u")
 
     s3 = stub_s3()
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch(
              "service.tracking_runner.run_detect",
@@ -523,18 +523,18 @@ async def test_run_job_skips_sns_when_resume_terminal_publish_done(
 
     mock_publish = MagicMock(return_value=3)
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch("service.tracking_runner.run_tracking_job", stub_run_tracking_job), \
-         patch.object(
-             worker, "_run_upscale_analysis",
+         patch(
+             "service.worker.stages.upscale_run._run_upscale_analysis",
              return_value=({"clips": [], "fps": 30.0}, 30.0),
          ), \
          patch(
              "service.video_annotator.annotate_video",
              return_value=str(tmp_path / "annotated_output.mp4"),
          ), \
-         patch("service.worker.SNSPublisher") as sns_cls:
+         patch("service.worker.stages.publish.SNSPublisher") as sns_cls:
         sns_cls.return_value.publish_events = mock_publish
         await worker.run_job(
             job.job_id, request, config, job_store, mock_jobs_store,

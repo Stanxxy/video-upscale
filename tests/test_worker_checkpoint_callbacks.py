@@ -418,6 +418,7 @@ async def test_run_upscale_analysis_writes_started_and_final_flush(
     cap_mock.get.return_value = 30.0
     cv2_mock.VideoCapture.return_value = cap_mock
     cv2_mock.imwrite.return_value = True
+    cv2_mock.imencode.return_value = (True, b"fake-jpeg-bytes")
     cv2_mock.cvtColor.side_effect = lambda frame, _code: frame
     cv2_mock.resize.side_effect = lambda frame, *_a, **_kw: frame
 
@@ -457,12 +458,23 @@ async def test_run_upscale_analysis_writes_started_and_final_flush(
         "analyzer": analyzer_mod_mock,
     }
 
+    # ``upscale_batch``/``upscale_jpeg``/``upscale_loop`` bind ``cv2`` (and
+    # ``upscale_batch`` binds ``PIL.Image``) at module scope, so earlier
+    # tests can leave them pointing at the REAL libraries regardless of the
+    # ``sys.modules`` patch above. Patch the module attributes directly to
+    # make this test order-independent.
+    from service.worker.stages import upscale_batch, upscale_jpeg, upscale_loop
+
     loop = asyncio.get_event_loop()
 
     from service import worker
 
     with _patch.dict(sys.modules, sys_modules_patches), \
-         _patch.object(worker, "_make_s3", return_value=s3):
+         _patch.object(upscale_batch, "cv2", cv2_mock), \
+         _patch.object(upscale_batch, "Image", pil_image_mock), \
+         _patch.object(upscale_jpeg, "cv2", cv2_mock), \
+         _patch.object(upscale_loop, "cv2", cv2_mock), \
+         _patch("service.worker.stages.upscale_setup._make_s3", return_value=s3):
         await loop.run_in_executor(
             None,
             lambda: worker._run_upscale_analysis(
@@ -498,5 +510,3 @@ async def test_run_upscale_analysis_writes_started_and_final_flush(
     assert data["resume_cursor"]["analysis_window_count"] == 2
     # analysis_raw.json was uploaded to the output bucket at least once.
     assert s3.upload_json.called
-
-

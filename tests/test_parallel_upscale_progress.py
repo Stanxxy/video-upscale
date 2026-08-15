@@ -2,7 +2,7 @@
 
 Design context (post 2026-05-25 refactor):
 - Tracking is **always** sequential (see
-  ``working_log/contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md``
+  ``contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md``
   §``stage_name == track`` and ``JOB_ROTATION_HANDOFF_AND_RESUME.md`` §4.1
   for why mid-track loss requires the V1 ``track`` checkpoint shape +
   AWAITING_CORRECTION + HumanVerificationSuspend, which only the
@@ -183,9 +183,9 @@ async def test_parallel_upscale_aggregator_writes_monotonic_55_to_80(
     )
 
     with _patch_segment_runner_to(n_total, seg_len), \
-         patch.object(worker_mod, "_run_upscale_analysis",
-                      side_effect=_fake_run_upscale_analysis), \
-         patch.object(worker_mod, "LIFECYCLE_HEARTBEAT_INTERVAL", 0.01):
+         patch("service.worker.stages.parallel_upscale._run_upscale_analysis",
+               side_effect=_fake_run_upscale_analysis), \
+         patch("service.worker.stages.parallel_upscale.LIFECYCLE_HEARTBEAT_INTERVAL", 0.01):
         request = _make_request()
         loop = asyncio.get_event_loop()
         result, fps = await worker_mod._run_parallel_upscale(
@@ -285,9 +285,9 @@ async def test_parallel_upscale_aggregator_clamps_at_80(
     )
 
     with _patch_segment_runner_to(n_total, seg_len), \
-         patch.object(worker_mod, "_run_upscale_analysis",
-                      side_effect=_fake_upscale), \
-         patch.object(worker_mod, "LIFECYCLE_HEARTBEAT_INTERVAL", 0.01):
+         patch("service.worker.stages.parallel_upscale._run_upscale_analysis",
+               side_effect=_fake_upscale), \
+         patch("service.worker.stages.parallel_upscale.LIFECYCLE_HEARTBEAT_INTERVAL", 0.01):
         request = _make_request()
         loop = asyncio.get_event_loop()
         await worker_mod._run_parallel_upscale(
@@ -374,9 +374,9 @@ async def test_parallel_upscale_aggregator_does_not_write_checkpoints(
     )
 
     with _patch_segment_runner_to(n_total, seg_len), \
-         patch.object(worker_mod, "_run_upscale_analysis",
-                      side_effect=_fake_upscale), \
-         patch.object(worker_mod, "LIFECYCLE_HEARTBEAT_INTERVAL", 0.01):
+         patch("service.worker.stages.parallel_upscale._run_upscale_analysis",
+               side_effect=_fake_upscale), \
+         patch("service.worker.stages.parallel_upscale.LIFECYCLE_HEARTBEAT_INTERVAL", 0.01):
         request = _make_request()
         loop = asyncio.get_event_loop()
         await worker_mod._run_parallel_upscale(
@@ -443,9 +443,9 @@ async def test_parallel_upscale_aggregator_clean_shutdown_on_failure(
     before = {t for t in asyncio.all_tasks()}
 
     with _patch_segment_runner_to(1, 100), \
-         patch.object(worker_mod, "_run_upscale_analysis",
-                      side_effect=_failing_upscale), \
-         patch.object(worker_mod, "LIFECYCLE_HEARTBEAT_INTERVAL", 0.01):
+         patch("service.worker.stages.parallel_upscale._run_upscale_analysis",
+               side_effect=_failing_upscale), \
+         patch("service.worker.stages.parallel_upscale.LIFECYCLE_HEARTBEAT_INTERVAL", 0.01):
         request = _make_request()
         loop = asyncio.get_event_loop()
         with pytest.raises(RuntimeError, match="simulated upscale failure"):

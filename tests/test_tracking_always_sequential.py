@@ -19,9 +19,9 @@ that honors the V1 ``track`` checkpoint contract on mid-track loss:
     immediately.
 
 See:
-  * ``working_log/contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md``
+  * ``contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md``
     §``stage_name == track`` / "Mid-track detection loss"
-  * ``working_log/contracts/bjj_backend/JOB_ROTATION_HANDOFF_AND_RESUME.md``
+  * ``contracts/bjj_backend/JOB_ROTATION_HANDOFF_AND_RESUME.md``
     §4.1
   * ``working_log/knowledge-base/insights/2026-04-25-job-start-resume-workflow-reference.md``
     items 7, 20, 22.
@@ -160,7 +160,11 @@ async def test_tracking_uses_sequential_path_with_detection_cb_even_when_paralle
     # Patch compute_segment_ranges at both import sites:
     #   * service.segment_runner (where _run_parallel_upscale imports it)
     #   * service.worker imports it as _csr at line ~547
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    # ``run_job`` creates its S3 client in the download stage
+    # (``service.worker.stages.download`` imports ``_make_s3`` directly
+    # from ``helpers``), so the stub must be patched at that call site —
+    # patching the ``service.worker`` re-export does not intercept it.
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, 300)), \
          patch.object(worker, "_video_frame_cap", return_value=300), \
          patch(

@@ -104,7 +104,6 @@ All outputs go to `output/`:
 | `pose.py` | RTMPose keypoint estimation from bounding boxes |
 | `sam2_manager.py` | Native SAM2VideoPredictor wrapper with memory pruning |
 | `identity_manager.py` | DINOv2 + color histogram + multi-bin re-identification |
-| `advanced_tracking.py` | Online MLP classifiers (DINOv2 joint features) |
 | `state_machine.py` | Tracking state transitions (scramble, cut, fade handling) |
 | `video_io.py` | Scene cut and fade detection |
 | `hybrid_tracking.py` | Main hybrid tracking loop (orchestrates all managers) |
@@ -121,9 +120,6 @@ Handles complex tracking scenarios:
 - **SCRAMBLE → TRACKING**: When IoU < 0.6 (separated) — triggers identity verification
 - **Scene cut → RE_ID_MODE**: Uses DINOv2 + Hungarian assignment to re-acquire athletes
 - **Fade → BLACKOUT → RECOVERING**: Resets SAM2 state through fade transitions
-
-### Online MLP Classifiers
-Per-track binary classifiers (384→64→2) trained on DINOv2 joint-patch features. Cross-trained between athletes. Cost matrix: `(1-0.7)×IOU + 0.7×MLP_score - pose_penalty`.
 
 ### Memory Pruning
 SAM2's conditioning frames grow unbounded. `prune_memory()` keeps only the last `--max_history` frames, preventing memory blowup on long videos.

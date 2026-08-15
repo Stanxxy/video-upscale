@@ -4,7 +4,6 @@
 **Status:** draft contract — vision engine + `video_analysis_and_annotation_service`
 **Companion to:** `CHECKPOINT_DATA_SCHEMA_V1.md`
 **Storage:** Amazon Keyspaces `video_analysis.job_stage_checkpoints.checkpoint_data` (JSON text).
-**Duplicate of:** `bjj-proj/whole-video-analysis/working_log/contracts/bjj_backend/CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md` (edit in one place, copy for engine repo).
 
 ## Purpose
 

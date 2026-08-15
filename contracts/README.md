@@ -2,7 +2,7 @@
 
 Normative API and handoff documents for the vision engine (`whole-video-analysis`) and BJJ vision main services (e.g. `video_analysis_and_annotation_service` in `bjj-proj`).
 
-**Sharing path:** Prefer this `contracts/` directory when linking from other repos. Some files are mirrored under `working_log/contracts/` for engine-local planning; keep **`contracts/`** as the source consumers copy or submodule.
+**Sharing path:** This `contracts/` directory is the single source consumers copy or submodule from. It is the only copy in the engine repo — no `working_log/contracts/` mirror exists.
 
 ---
 

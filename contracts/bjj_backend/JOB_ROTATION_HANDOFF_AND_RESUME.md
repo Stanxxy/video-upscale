@@ -3,7 +3,6 @@
 **Date:** 2026-05-10  
 **Status:** contract — vision engine (`whole-video-analysis`) + `video_analysis_and_annotation_service`  
 **Scope:** How `job_id` changes across human-in-the-loop resume and crash recovery, how Keyspaces rows are updated, and how a caller should resolve `video_id` → active work → `progress_percent`.  
-**Duplicate:** `working_log/contracts/bjj_backend/JOB_ROTATION_HANDOFF_AND_RESUME.md` (mirror; keep body in sync when editing).  
 **Related:** `CHECKPOINT_ARTIFACTS_V1_ADDENDUM.md` (checkpoint shapes and `replaced_by_new_job`), `CHECKPOINT_DATA_SCHEMA_V1.md` (backend source of truth for V1 envelope).
 
 ---
