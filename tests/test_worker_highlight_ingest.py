@@ -88,6 +88,7 @@ async def _run_ingest(job_id, request, config, jobs_store, work_dir):
 @pytest.mark.asyncio
 async def test_fresh_job_uploads_and_polls_to_active(monkeypatch, tmp_path):
     monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
+    monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: FakeS3({}))
 
     uploaded = SimpleNamespace(name="files/abc")
     active = SimpleNamespace(
@@ -120,6 +121,7 @@ async def test_fresh_job_uploads_and_polls_to_active(monkeypatch, tmp_path):
 @pytest.mark.asyncio
 async def test_resume_with_non_expired_checkpoint_skips_reupload(monkeypatch, tmp_path):
     monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
+    monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: FakeS3({}))
 
     upload_mock = AsyncMock()
     poll_mock = AsyncMock()
@@ -153,6 +155,7 @@ async def test_resume_with_non_expired_checkpoint_skips_reupload(monkeypatch, tm
 @pytest.mark.asyncio
 async def test_resume_with_expired_checkpoint_reuploads(monkeypatch, tmp_path):
     monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
+    monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: FakeS3({}))
 
     uploaded = SimpleNamespace(name="files/new")
     active = SimpleNamespace(
@@ -196,6 +199,7 @@ async def test_player_references_fetched_from_athlete_bindings(monkeypatch, tmp_
     upscale_setup.py:82 (`ref_bucket = request.bucket`)."""
     fake_s3 = FakeS3({("src-bucket", "player-references/vid/p1.jpg"): b"fake-jpeg-bytes"})
     monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: fake_s3)
+    monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: fake_s3)
 
     uploaded = SimpleNamespace(name="files/abc")
     active = SimpleNamespace(
@@ -233,6 +237,7 @@ async def test_player_references_fetched_from_athlete_bindings(monkeypatch, tmp_
 async def test_binding_missing_s3_key_is_skipped_not_fabricated(monkeypatch, tmp_path):
     fake_s3 = FakeS3({})
     monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: fake_s3)
+    monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: fake_s3)
 
     uploaded = SimpleNamespace(name="files/abc")
     active = SimpleNamespace(
@@ -257,6 +262,7 @@ async def test_poll_failure_propagates_never_swallowed(monkeypatch, tmp_path):
     """A FAILED/timeout Files-API state must raise all the way out of the
     ingest stage — no fallback, no fabricated ACTIVE state."""
     monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
+    monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: FakeS3({}))
 
     uploaded = SimpleNamespace(name="files/abc")
     monkeypatch.setattr(highlight_ingest.gemini_upload, "upload_video_to_gemini", AsyncMock(return_value=uploaded))

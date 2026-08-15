@@ -60,7 +60,7 @@ from service.pipelines.registry import get_default
 from service.sns import SNSPublisher, clip_to_axis_only_event
 from service.worker.majority_vote import reconcile_match_actors
 from service.worker.seam_dedup import dedup_match_clips
-from service.worker.helpers import _is_cancelled, _make_s3
+from service.worker.helpers import _is_cancelled, _make_s3, _sns_endpoint_url
 from service.worker.highlight_progress import (
     DETECTING,
     FINALIZING,
@@ -290,11 +290,16 @@ async def run_highlight_job(
         topic_arn = request.sns_topic_arn or config.sns_topic_arn
         sns: Optional[SNSPublisher] = None
         if topic_arn:
+            sns_endpoint = _sns_endpoint_url(config, topic_arn)
             sns = SNSPublisher(
                 config.aws_region, topic_arn,
-                endpoint_url=config.s3_endpoint_url or None,
+                endpoint_url=sns_endpoint,
                 access_key_id=config.aws_access_key_id or None,
                 secret_access_key=config.aws_secret_access_key or None,
+            )
+            logger.info(
+                "Job %s: SNS publisher topic=%s endpoint=%s",
+                job_id, topic_arn, sns_endpoint or "aws",
             )
         else:
             logger.warning("Job %s: no SNS topic configured — highlights will be analyzed but NOT published", job_id)
