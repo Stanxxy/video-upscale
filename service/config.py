@@ -19,7 +19,14 @@ class ServiceConfig(BaseSettings):
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
     s3_endpoint_url: str = ""  # leave empty for AWS production; set only for local S3 emulators.
+    # Optional second S3 plane for anonymous trial objects that live on LocalStack
+    # while the rest of the engine still uses real AWS.
+    trial_s3_endpoint_url: str = ""
+    trial_s3_buckets: str = ""
+    trial_aws_access_key_id: str = "test"
+    trial_aws_secret_access_key: str = "test"
     sns_topic_arn: str = ""
+    sns_endpoint_url: str = ""  # LocalStack SNS for 000000000000 ARNs; real AWS ARNs ignore this.
 
     # Gemini (credential – set in .env, do not commit)
     gemini_api_key: str = ""

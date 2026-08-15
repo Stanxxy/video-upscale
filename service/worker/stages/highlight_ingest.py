@@ -24,7 +24,7 @@ from service.jobs_store import JobsStore
 from service.models import TrackRequest
 from service.pipelines import gemini_upload
 from service.s3 import S3Client
-from service.worker.helpers import _make_s3
+from service.worker.helpers import _make_s3, _make_s3_for_bucket
 from service.worker.highlight_progress import (
     PREPARING,
     HighlightProgressWriter,
@@ -142,7 +142,7 @@ async def prepare_highlight_source(
     progress = progress_writer or HighlightProgressWriter(job_id, jobs_store)
     await progress.write(PipelineStage.HIGHLIGHT_INGEST, 1.0, phase=PREPARING)
 
-    s3 = _make_s3(config)
+    s3 = _make_s3_for_bucket(config, request.bucket)
     try:
         s3.ensure_bucket(request.bucket)
         video_path = await loop.run_in_executor(

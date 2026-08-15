@@ -10,6 +10,7 @@ from service.models import JobStatus
 from service.sns import SNSPublisher
 
 from service.worker.context import WorkerRunContext
+from service.worker.helpers import _sns_endpoint_url
 from service.worker.progress import _make_worker_state
 
 logger = logging.getLogger("service.worker")
@@ -46,7 +47,7 @@ async def run_publish_and_complete_stage(ctx: WorkerRunContext) -> None:
             sns = SNSPublisher(
                 config.aws_region,
                 topic_arn,
-                endpoint_url=config.s3_endpoint_url or None,
+                endpoint_url=_sns_endpoint_url(config, topic_arn),
                 access_key_id=config.aws_access_key_id or None,
                 secret_access_key=config.aws_secret_access_key or None,
             )
