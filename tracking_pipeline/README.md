@@ -100,7 +100,7 @@ All outputs go to `output/`:
 |------|---------|
 | `device.py` | MPS/CPU device detection, `PYTORCH_ENABLE_MPS_FALLBACK=1` |
 | `detect.py` | RF-DETR person detection (COCO class 0) |
-| `select_boxes.py` | Human verify/correct bounding boxes via cv2 UI |
+| `select_boxes/` | Human verify/correct bounding boxes via cv2 UI |
 | `pose.py` | RTMPose keypoint estimation from bounding boxes |
 | `sam2_manager.py` | Native SAM2VideoPredictor wrapper with memory pruning |
 | `identity_manager.py` | DINOv2 + color histogram + multi-bin re-identification |

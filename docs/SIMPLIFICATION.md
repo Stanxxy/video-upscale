@@ -202,3 +202,12 @@ Targeted re-run evidence:
 
 - `qa_client/vlm_studio.html` staleness (two-call/validator UI shape) is a
   tracked s12 follow-up, deliberately out of scope here.
+- `service.sh` pid-missing recovery tests
+  (`test_stop_finds_running_service_when_pid_file_is_missing`,
+  `test_start_recovers_existing_service_when_pid_file_is_missing`) were
+  deleted with the old socket-based lifecycle helpers. Do **not** restore
+  those socket tests. The remaining coverage is
+  `tests/test_service_script.py::test_stop_kills_stubborn_process_and_removes_pid_file`
+  (SIGKILL + pid-file cleanup). Re-adding pid-missing recovery needs a
+  deterministic test of the current `service.sh` process lookup, not the
+  deleted socket path.
