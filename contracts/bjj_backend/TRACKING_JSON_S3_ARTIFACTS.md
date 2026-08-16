@@ -322,10 +322,6 @@ The vision engine worker and upscale path use **`frame_idx`**. Optional normaliz
 
 Note: second frame omits `keypoints` / `keypoint_scores` to show optional fields (e.g. fast mode or pose skip on that frame).
 
-### 5.2 Local dev reference
-
-A full real file (large) may exist at `tracking_pipeline/yolo26+sam2/tracking.json` in the engine repo for manual inspection; do not depend on it in production services.
-
 ---
 
 ## 6. Agent recipes

@@ -10,7 +10,10 @@ def _ensure_models_released():
         import torch
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+        # ``torch.mps`` exists on Apple Silicon builds even when the runtime
+        # has no MPS device (e.g. sandboxed CI); calling ``empty_cache()`` in
+        # that state segfaults the process. Only release when MPS is usable.
+        if torch.backends.mps.is_available():
             torch.mps.empty_cache()
     except Exception:
         pass
@@ -50,4 +53,3 @@ def _load_partial_tracking_dict(partial_path: str) -> dict:
         except json.JSONDecodeError:
             break
     return {**header, "frames": frames}
-

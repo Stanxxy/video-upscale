@@ -67,7 +67,7 @@ async def test_skip_upscale_writes_post_upload_track_artifact_and_upload_termina
 
     s3 = stub_s3()
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch(
              "service.tracking_runner.run_tracking_job",
@@ -183,7 +183,7 @@ async def test_run_job_merges_ancestor_tracking_chain(
 
     s3.download_json = MagicMock(side_effect=_download_json)
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch(
              "service.tracking_runner.run_tracking_job",
@@ -246,15 +246,15 @@ async def test_full_path_writes_annotate_upload_publish_envelopes(
     sns_publisher = MagicMock()
     sns_publisher.publish_events = MagicMock(return_value=3)
 
-    def _annotate_stub(tracked, analysis, out, fps, sf):
+    def _annotate_stub(tracked, analysis, out, fps, sf, **kwargs):
         with open(out, "wb") as f:
             f.write(b"annotated")
         return out
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
-         patch.object(
-             worker, "_run_upscale_analysis",
+         patch(
+             "service.worker.stages.upscale_run._run_upscale_analysis",
              return_value=({"clips": [], "fps": 30.0}, 30.0),
          ), \
          patch(
@@ -265,7 +265,7 @@ async def test_full_path_writes_annotate_upload_publish_envelopes(
              "service.video_annotator.annotate_video",
              side_effect=_annotate_stub,
          ), \
-         patch("service.worker.SNSPublisher", return_value=sns_publisher):
+         patch("service.worker.stages.publish.SNSPublisher", return_value=sns_publisher):
         await worker.run_job(
             job.job_id, request, config, job_store, mock_jobs_store,
         )
@@ -337,5 +337,4 @@ async def test_full_path_writes_annotate_upload_publish_envelopes(
 
     lc = await mock_jobs_store.get_lifecycle(job.job_id)
     assert lc["job_state"] == JobState.COMPLETED.value
-
 

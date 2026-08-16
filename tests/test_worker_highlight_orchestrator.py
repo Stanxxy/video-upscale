@@ -452,8 +452,8 @@ async def test_source_preparation_failure_is_sanitized_before_gemini_client(monk
         "NoSuchKey: videos/missing.mp4",
     )
     monkeypatch.setattr(
-        "service.worker.stages.highlight_ingest._make_s3",
-        lambda config: missing_source_s3,
+        "service.worker.stages.highlight_ingest._make_s3_for_bucket",
+        lambda config, bucket: missing_source_s3,
     )
 
     upload_mock = AsyncMock()
@@ -497,8 +497,8 @@ async def test_source_preparation_precedes_gemini_client_construction(monkeypatc
         lambda bucket, key, local_path: order.append("download_file") or local_path
     )
     monkeypatch.setattr(
-        "service.worker.stages.highlight_ingest._make_s3",
-        lambda config: source_s3,
+        "service.worker.stages.highlight_ingest._make_s3_for_bucket",
+        lambda config, bucket: source_s3,
     )
     monkeypatch.setattr(
         highlight_ingest,
@@ -538,8 +538,8 @@ async def test_probe_failure_is_sanitized_before_gemini_client(monkeypatch, _moc
         lambda bucket, key, local_path: local_path
     )
     monkeypatch.setattr(
-        "service.worker.stages.highlight_ingest._make_s3",
-        lambda config: source_s3,
+        "service.worker.stages.highlight_ingest._make_s3_for_bucket",
+        lambda config, bucket: source_s3,
     )
     monkeypatch.setattr(
         highlight_ingest,

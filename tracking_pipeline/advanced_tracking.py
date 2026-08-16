@@ -1,4 +1,0 @@
-"""Legacy advanced tracking shim."""
-from tracking_pipeline.advanced_tracking.tracker import BJJAdvancedTracker
-
-__all__ = ["BJJAdvancedTracker"]

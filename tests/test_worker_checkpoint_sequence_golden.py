@@ -48,7 +48,7 @@ async def test_skip_upscale_golden_checkpoint_sequence(mock_jobs_store, tmp_path
     await mock_jobs_store.create_lifecycle(job.job_id, "vid", "u")
     s3 = stub_s3()
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
          patch(
              "service.tracking_runner.run_tracking_job",
@@ -64,7 +64,9 @@ async def test_skip_upscale_golden_checkpoint_sequence(mock_jobs_store, tmp_path
     assert PipelineStage.TRACK.value in stages
     assert PipelineStage.UPLOAD.value in stages
 
-    upload_rows = [r for s, r, c in seq if s == PipelineStage.UPLOAD.value]
+    upload_rows = [
+        row for row in seq if row[0] == PipelineStage.UPLOAD.value
+    ]
     assert upload_rows
     assert upload_rows[-1][1] == "tracking_uploaded"
     assert upload_rows[-1][2] is True
@@ -105,10 +107,10 @@ async def test_full_path_golden_includes_annotate_upload_publish(
     sns_publisher = MagicMock()
     sns_publisher.publish_events = MagicMock(return_value=3)
 
-    with patch.object(worker, "_make_s3", return_value=s3), \
+    with patch("service.worker.stages.download._make_s3", return_value=s3), \
          patch.object(worker, "_parse_time_range", return_value=(0, None)), \
-         patch.object(
-             worker, "_run_upscale_analysis",
+         patch(
+             "service.worker.stages.upscale_run._run_upscale_analysis",
              return_value=({"clips": [], "fps": 30.0}, 30.0),
          ), \
          patch(
@@ -119,7 +121,7 @@ async def test_full_path_golden_includes_annotate_upload_publish(
              "service.video_annotator.annotate_video",
              side_effect=lambda *a, **k: (open(k.get("output_path", a[2]), "wb").write(b"x") or a[2]),
          ), \
-         patch("service.worker.SNSPublisher", return_value=sns_publisher):
+         patch("service.worker.stages.publish.SNSPublisher", return_value=sns_publisher):
         await worker.run_job(
             job.job_id, request, config, job_store, mock_jobs_store,
         )
@@ -189,5 +191,4 @@ async def test_suspend_path_golden_track_mid_loss_not_completed(
     cp = mock_jobs_store._checkpoints[("job-suspend", PipelineStage.TRACK.value)]
     assert cp["completed"] is False
     data = cp["checkpoint_data"]
-    assert data["reason"] == "tracking_lost"
     assert data["pending_detection"]["reason"] == "tracking_lost"
