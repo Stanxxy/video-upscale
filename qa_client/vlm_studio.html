@@ -255,7 +255,8 @@
   table.clips th { color: var(--text-dim); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; }
 
   /* ============================================================
-     Pipeline DAG canvas (M3) — plain flex cards, no graph library.
+     Pipeline DAG canvas (M3) — flex rail for compact pipelines,
+     balanced desktop grid for long pipelines; no graph library.
      ============================================================ */
   .dag-scroll { overflow-x: auto; padding-bottom: 8px; }
   .dag-row { display: flex; align-items: stretch; min-width: max-content; }
@@ -274,6 +275,31 @@
   .dag-node-reorder { display: flex; gap: 4px; }
   .dag-node-reorder .btn { padding: 2px 6px; font-size: 0.7rem; width: auto; margin-top: 0; }
   .dag-node-lock { font-size: 0.85rem; opacity: 0.6; cursor: help; }
+
+  /* VLM Studio is a desktop experiment surface. Long DAGs use a deliberate
+     four-column flow instead of forcing the whole page into a horizontal
+     rail; the eight-node Position Timeline therefore resolves to two rows. */
+  @media (min-width: 1100px) {
+    .dag-scroll:has(.dag-row-wrapped) { overflow-x: visible; padding-bottom: 0; }
+    .dag-row-wrapped {
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px 18px; min-width: 0;
+    }
+    .dag-row-wrapped .dag-node-wrap { position: relative; min-width: 0; padding-left: 26px; }
+    .dag-row-wrapped .dag-node-wrap:first-child { padding-left: 0; }
+    .dag-row-wrapped .dag-edge {
+      position: absolute; left: 3px; top: 50%; padding: 0;
+      transform: translateY(-50%);
+    }
+    .dag-row-wrapped .dag-node-wrap:nth-child(4n + 1):not(:first-child) .dag-edge {
+      transform: translateY(-50%) rotate(90deg);
+    }
+    .dag-row-wrapped .dag-node {
+      flex: 1 1 auto; width: 100%; min-width: 0; height: 100%;
+    }
+    .dag-row-wrapped .dag-node-head,
+    .dag-row-wrapped .dag-node-kv { white-space: normal; }
+  }
 
   /* Run view: per-window cards + crops strip */
   .window-card-header { display: flex; align-items: center; gap: 8px; cursor: pointer; flex-wrap: wrap; }
@@ -2686,6 +2712,7 @@ function renderDag() {
   const host = document.getElementById('dag-nodes');
   const labelEl = document.getElementById('dag-pipeline-label');
   if (!currentPipelineDef) { host.innerHTML = ''; labelEl.textContent = '—'; return; }
+  host.className = currentPipelineDef.stages.length > 6 ? 'dag-row dag-row-wrapped' : 'dag-row';
   host.innerHTML = currentPipelineDef.stages.map((s, i) => dagNodeHtml(s, i)).join('');
   labelEl.textContent = currentPipelineDef.label || currentPipelineDef.id;
 }

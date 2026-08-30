@@ -87,6 +87,15 @@ assert.ok(
 );
 
 run("currentPipelineId = 'position-timeline-techniques'; currentPipelineDef = JSON.parse(JSON.stringify(POSITION_TIMELINE_DEFAULT));");
+run('renderDag()');
+assert.equal(byId('dag-nodes').className, 'dag-row dag-row-wrapped');
+assert.match(
+  html,
+  /@media \(min-width: 1100px\)[\s\S]*\.dag-row-wrapped[\s\S]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/,
+);
+run("currentPipelineDef = { id: 'compact', label: 'Compact', stages: POSITION_TIMELINE_DEFAULT.stages.slice(0, 6) }; renderDag();");
+assert.equal(byId('dag-nodes').className, 'dag-row');
+run("currentPipelineDef = JSON.parse(JSON.stringify(POSITION_TIMELINE_DEFAULT)); renderDag();");
 const techniqueScanConfigHtml = run(
   "nodeConfigFieldsHtml(currentPipelineDef.stages.find(stage => stage.id === 'highlight_scan'))",
 );
