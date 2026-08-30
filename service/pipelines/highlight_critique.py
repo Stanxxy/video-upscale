@@ -47,7 +47,7 @@ absolute match seconds directly off the wire, only sanity-clamped.
 from __future__ import annotations
 
 from string import Template
-from typing import Optional
+from typing import Mapping, Optional
 
 from google.genai import types
 
@@ -125,6 +125,7 @@ def build_critique_prompt(
     scan_start_sec: float, scan_end_sec: float, description: Optional[str],
     critique_forwardpad_s: float = 0.0,
     override: Optional[str] = None,
+    position_context: Optional[Mapping] = None,
 ) -> str:
     """Per-highlight "user turn" prompt — Gracie's final draft,
     ``$``-substituted (``string.Template.safe_substitute``, same idiom as
@@ -138,6 +139,8 @@ def build_critique_prompt(
     bug ``tests/test_pipelines_highlight_v2.py``'s
     ``test_*_prompt_leaves_no_leftover_tokens`` regression guards against.
     """
+    import json
+
     template = Template(override.strip()) if override and override.strip() else _INITIAL_TEMPLATE
     return template.safe_substitute(
         window_start_sec=window_start_sec, window_end_sec=window_end_sec,
@@ -145,6 +148,7 @@ def build_critique_prompt(
         critique_forwardpad_s=critique_forwardpad_s,
         scan_start_sec=scan_start_sec, scan_end_sec=scan_end_sec,
         description=description or "unknown — no description was provided by the scan pass",
+        position_context_json=json.dumps(dict(position_context or {}), sort_keys=True),
     )
 
 

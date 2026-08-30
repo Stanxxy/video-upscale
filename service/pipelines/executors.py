@@ -71,6 +71,7 @@ from service.pipelines.models import (
     PipelineDef,
     PositionCritiqueConfig,
     PositionScanConfig,
+    PositionTechniqueCandidatesConfig,
     TechniqueAnalyzeConfig,
     TimelineReconcileConfig,
     WindowConfig,
@@ -912,6 +913,7 @@ async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterato
                     scan_start_sec=highlight["start_s"], scan_end_sec=highlight["end_s"],
                     description=highlight.get("description"),
                     override=cfg.initial_prompt,
+                    position_context=highlight.get("position_context"),
                 ),
                 fps=cfg.fps, media_resolution=cfg.media_resolution,
             )
@@ -1895,6 +1897,63 @@ async def position_critique_node(ctx: RunContext, config: dict) -> AsyncIterator
         )
 
 
+async def position_technique_candidates_node(
+    ctx: RunContext, config: dict
+) -> AsyncIterator[dict]:
+    """Union independent scan hits with critiqued active position transitions."""
+    cfg = PositionTechniqueCandidatesConfig.model_validate(config)
+    if ctx.position_initial_state is None:
+        yield _set_pipeline_error(
+            ctx,
+            "position_technique_candidates",
+            "position-aware candidates require a successful position scan",
+        )
+        return
+    try:
+        player_ids = _timeline_player_ids(ctx)
+        ctx.position_intervals = position_timeline.build_position_intervals(
+            ctx.start_sec,
+            ctx.end_sec,
+            ctx.position_initial_state,
+            ctx.position_transitions,
+            player_ids=player_ids,
+        )
+        scan_candidate_count = len(ctx.highlights)
+        active_transition_count = sum(
+            1
+            for before, after in zip(
+                ctx.position_intervals, ctx.position_intervals[1:]
+            )
+            if before["position"] != "inactive" and after["position"] != "inactive"
+        )
+        ctx.highlights = position_timeline.build_position_aware_candidates(
+            ctx.highlights,
+            ctx.position_intervals,
+            scope_start_s=ctx.start_sec,
+            scope_end_s=ctx.end_sec,
+            transition_pre_s=cfg.transition_pre_s,
+            transition_post_s=cfg.transition_post_s,
+            merge_tolerance_s=cfg.merge_tolerance_s,
+        )
+    except position_timeline.TimelineValidationError as validation_error:
+        yield _set_pipeline_error(
+            ctx, "position_technique_candidates", str(validation_error)
+        )
+        return
+
+    yield {
+        "type": "technique_candidate_map",
+        "candidates": copy.deepcopy(ctx.highlights),
+        "scan_candidate_count": scan_candidate_count,
+        "transition_candidate_count": active_transition_count,
+        "merged_candidate_count": sum(
+            1 for candidate in ctx.highlights
+            if len(candidate.get("candidate_sources") or []) > 1
+        ),
+        "final_candidate_count": len(ctx.highlights),
+    }
+
+
 def _validated_technique_payload(
     data: dict,
     *,
@@ -1996,6 +2055,38 @@ async def technique_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
                 f"highlight {highlight['index']} has non-positive authoritative bounds",
             )
             return
+        if not ctx.position_intervals:
+            if ctx.position_initial_state is None:
+                yield _set_pipeline_error(
+                    ctx,
+                    "technique_analyze",
+                    "position-aware technique analysis requires a corrected position timeline",
+                )
+                return
+            try:
+                ctx.position_intervals = position_timeline.build_position_intervals(
+                    ctx.start_sec,
+                    ctx.end_sec,
+                    ctx.position_initial_state,
+                    ctx.position_transitions,
+                    player_ids=player_ids,
+                )
+            except position_timeline.TimelineValidationError as validation_error:
+                yield _set_pipeline_error(ctx, "technique_analyze", str(validation_error))
+                return
+        try:
+            position_context = position_timeline.build_position_context(
+                ctx.position_intervals,
+                authoritative_start,
+                authoritative_end,
+            )
+        except position_timeline.TimelineValidationError as validation_error:
+            yield _set_pipeline_error(ctx, "technique_analyze", str(validation_error))
+            return
+        position_context["candidate_sources"] = list(
+            highlight.get("candidate_sources") or []
+        )
+        highlight["position_context"] = position_context
         window_start = round(max(ctx.start_sec, authoritative_start - cfg.preroll_s), 3)
         window_end = round(min(ctx.end_sec, authoritative_end + cfg.postroll_s), 3)
         yield {
@@ -2010,6 +2101,7 @@ async def technique_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
             start_s=authoritative_start,
             end_s=authoritative_end,
             player_ids=player_ids,
+            position_context=position_context,
         )
         data, error = await _call_axis_json(
             analyzer,
@@ -2048,7 +2140,8 @@ async def technique_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
             window_end,
             response_schema=validator_schema,
             prompt_text=position_timeline.build_technique_validator_prompt(
-                highlight.get("description"), proposed
+                highlight.get("description"), proposed,
+                position_context=position_context,
             ),
             fps=cfg.fps,
             media_resolution=cfg.validator_media_resolution,
@@ -2122,6 +2215,8 @@ async def technique_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
             "scan_description": highlight.get("description"),
             "scan_reasoning": highlight.get("reasoning"),
             "critique_note": highlight.get("critique_note"),
+            "candidate_sources": list(highlight.get("candidate_sources") or []),
+            "position_context": copy.deepcopy(position_context),
             "validator_verdict": verdict,
             "validator_reason": str(validated.get("reason") or "").strip(),
         }
@@ -2278,6 +2373,7 @@ NODE_EXECUTORS = {
     "highlight_critique": highlight_critique_node,
     "position_scan": position_scan_node,
     "position_critique": position_critique_node,
+    "position_technique_candidates": position_technique_candidates_node,
     "technique_analyze": technique_analyze_node,
     "timeline_reconcile": timeline_reconcile_node,
 }
@@ -2328,12 +2424,13 @@ def estimate_run_plan(pipeline: PipelineDef, duration_sec: float) -> dict:
         hs_cfg = HighlightScanConfig.model_validate(stage_by_type["highlight_scan"].config)
         max_transitions = max(1, math.ceil(duration_sec / ps_cfg.min_transition_gap_s))
         max_highlights = max(1, math.ceil(duration_sec / hs_cfg.min_highlight_s))
+        max_candidates = max_highlights + max_transitions
         per_highlight_factor = _highlight_per_highlight_call_factor(stage_by_type)
         return {
             "planned_frames": 0,
-            "planned_windows": max_transitions + max_highlights,
+            "planned_windows": max_transitions + max_candidates,
             "planned_gemini_calls": (
-                1 + max_transitions + 1 + max_highlights * per_highlight_factor
+                1 + max_transitions + 1 + max_candidates * per_highlight_factor
             ),
         }
 
@@ -2455,7 +2552,7 @@ async def run_pipeline(
                 "stage_id": stage.id,
                 "stage_type": stage.type,
                 "skipped": True,
-                "reason": "technique scan found zero highlights",
+                "reason": "candidate union found zero technique candidates",
             }
             yield {
                 "type": "stage_complete",
@@ -2575,7 +2672,11 @@ async def run_pipeline(
                 )
                 return
 
-        if stage.type == "highlight_scan" and budget_cap is not None:
+        if (
+            stage.type == "highlight_scan"
+            and budget_cap is not None
+            and pipeline.id != "position-timeline-techniques"
+        ):
             # Same two-phase gate as chunk_segment above, reapplied verbatim
             # for highlight-scan-analyze (evaluator CHANGES-REQUIRED item 1).
             #
@@ -2591,15 +2692,7 @@ async def run_pipeline(
             # calls, not 1 — the plan explicitly forbids that.
             highlight_count = len(ctx.highlights)
             per_highlight_factor = _highlight_per_highlight_call_factor(stage_by_type)
-            if pipeline.id == "position-timeline-techniques":
-                real_call_count = (
-                    1
-                    + len(ctx.position_transitions)
-                    + 1
-                    + highlight_count * per_highlight_factor
-                )
-            else:
-                real_call_count = highlight_count * per_highlight_factor
+            real_call_count = highlight_count * per_highlight_factor
             if real_call_count > budget_cap:
                 yield {
                     "type": "error", "stage_id": (
@@ -2618,6 +2711,40 @@ async def run_pipeline(
                     "run_pipeline: highlight-scan-analyze/highlight-scan-critique-analyze aborting "
                     "before deep loop — highlight_count=%d x factor=%d = %d > budget_cap=%d",
                     highlight_count, per_highlight_factor, real_call_count, budget_cap,
+                )
+                return
+
+        if (
+            stage.type == "position_technique_candidates"
+            and budget_cap is not None
+        ):
+            candidate_count = len(ctx.highlights)
+            per_candidate_factor = _highlight_per_highlight_call_factor(stage_by_type)
+            real_call_count = (
+                1
+                + len(ctx.position_transitions)
+                + 1
+                + candidate_count * per_candidate_factor
+            )
+            if real_call_count > budget_cap:
+                yield {
+                    "type": "error",
+                    "stage_id": "technique_analyze",
+                    "message": (
+                        f"Actual run call count for {candidate_count} unioned technique "
+                        f"candidate(s) at per-candidate factor {per_candidate_factor} is "
+                        f"{real_call_count}, exceeding the budget cap ({budget_cap}) — "
+                        "aborting before technique critique/analyze. Narrow the scope, "
+                        "reduce position transitions, or raise the Budget cap."
+                    ),
+                }
+                logger.warning(
+                    "run_pipeline: position timeline aborting after candidate union — "
+                    "candidate_count=%d x factor=%d, total=%d > budget_cap=%d",
+                    candidate_count,
+                    per_candidate_factor,
+                    real_call_count,
+                    budget_cap,
                 )
                 return
 

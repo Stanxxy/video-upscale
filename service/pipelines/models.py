@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 NodeType = Literal[
     "video_window",
@@ -29,6 +29,7 @@ NodeType = Literal[
     "highlight_critique",
     "position_scan",
     "position_critique",
+    "position_technique_candidates",
     "technique_analyze",
     "timeline_reconcile",
 ]
@@ -59,7 +60,8 @@ STRUCTURAL_NODE_TYPES: frozenset[str] = frozenset(
         "video_window", "frame_sample", "window", "analyze",
         "chunk_segment", "chunk_analyze",
         "highlight_scan", "highlight_analyze", "highlight_critique",
-        "position_scan", "position_critique", "technique_analyze",
+        "position_scan", "position_critique", "position_technique_candidates",
+        "technique_analyze",
         "timeline_reconcile",
     }
 )
@@ -524,6 +526,21 @@ class PositionCritiqueConfig(ThinkingQualityMixin):
     initial_prompt: Optional[str] = None
 
 
+class PositionTechniqueCandidatesConfig(BaseModel):
+    """Deterministic union of Technique Scan and active position transitions."""
+
+    model_config = ConfigDict(extra="forbid")
+    transition_pre_s: float = Field(default=4.0, ge=0.0, le=30.0)
+    transition_post_s: float = Field(default=2.0, ge=0.0, le=30.0)
+    merge_tolerance_s: float = Field(default=2.0, ge=0.0, le=15.0)
+
+    @model_validator(mode="after")
+    def _require_positive_transition_window(self) -> "PositionTechniqueCandidatesConfig":
+        if self.transition_pre_s + self.transition_post_s <= 0:
+            raise ValueError("transition candidate window must have positive duration")
+        return self
+
+
 class TechniqueAnalyzeConfig(ThinkingQualityMixin):
     """Grounded technique/outcome call followed by one technique-only validator."""
 
@@ -557,6 +574,7 @@ NODE_CONFIG_MODELS: dict[str, type[BaseModel]] = {
     "highlight_critique": HighlightCritiqueConfig,
     "position_scan": PositionScanConfig,
     "position_critique": PositionCritiqueConfig,
+    "position_technique_candidates": PositionTechniqueCandidatesConfig,
     "technique_analyze": TechniqueAnalyzeConfig,
     "timeline_reconcile": TimelineReconcileConfig,
 }

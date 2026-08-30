@@ -15,6 +15,7 @@ from typing import Iterable, Mapping, Sequence
 from google.genai import types
 
 from service.pipelines.simplified_tags import ACTION_CLASS_VALUES, OUTCOME_VALUES
+from service.pipelines.highlight_critique import DEFAULT_CRITIQUE_INITIAL_PROMPT
 
 
 ACTIVE_POSITIONS: tuple[str, ...] = (
@@ -125,6 +126,19 @@ reversal followed by a submission attempt is two highlights, not one compound
 highlight.
 """.strip()
 
+TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT = (
+    DEFAULT_CRITIQUE_INITIAL_PROMPT
+    + """
+
+ADVISORY POSITION-TIMELINE CONTEXT (independently produced and fallible):
+$position_context_json
+
+Use this only as a search aid for the described movement and its likely
+before/after state. It may be wrong or slightly time-shifted. Never confirm,
+reject, or resize the event from the position labels alone: visible body-movement evidence in this clip is authoritative.
+"""
+).strip()
+
 
 def build_position_scan_prompt(start_sec: float, end_sec: float, override: str | None = None) -> str:
     template = Template(override.strip()) if override and override.strip() else _POSITION_SCAN_INITIAL_TEMPLATE
@@ -218,6 +232,10 @@ the independently built position interval later.
 The scan-described movement is the target event. Judge that movement even if
 a different technique begins later inside the video context. Do not replace
 the target with a neighboring action.
+
+ADVISORY POSITION-TIMELINE CONTEXT (independently produced and fallible):
+$position_context_json
+Use it as supporting context only. If it conflicts with visible body-movement evidence, trust the video and explain the visible technique—not the timeline.
 """.strip()
 )
 
@@ -228,12 +246,16 @@ def build_technique_prompt(
     start_s: float,
     end_s: float,
     player_ids: tuple[str, str],
+    position_context: Mapping | None = None,
 ) -> str:
+    import json
+
     return _TECHNIQUE_TEMPLATE.safe_substitute(
         description=description or "no scan description supplied",
         start_s=start_s,
         end_s=end_s,
         player_ids=", ".join(player_ids),
+        position_context_json=json.dumps(dict(position_context or {}), sort_keys=True),
     )
 
 
@@ -257,6 +279,10 @@ ADVERSARIAL TECHNIQUE REVIEW
 Body-movement scan: "$description"
 Proposed technique JSON: $technique_json
 
+ADVISORY POSITION-TIMELINE CONTEXT (independently produced and fallible):
+$position_context_json
+Use it only to challenge or corroborate the proposal; visible body-movement evidence is authoritative when the timeline conflicts with the clip.
+
 Return the final complete technique fields and the review reason. On agree,
 echo the surviving values. On correct, replace only values the visible video
 contradicts. On ditch, the fields remain schema-valid but Python discards the
@@ -267,12 +293,18 @@ only structured JSON.
 )
 
 
-def build_technique_validator_prompt(description: str | None, technique: Mapping) -> str:
+def build_technique_validator_prompt(
+    description: str | None,
+    technique: Mapping,
+    *,
+    position_context: Mapping | None = None,
+) -> str:
     import json
 
     return _TECHNIQUE_VALIDATOR_TEMPLATE.safe_substitute(
         description=description or "no scan description supplied",
         technique_json=json.dumps(dict(technique), sort_keys=True),
+        position_context_json=json.dumps(dict(position_context or {}), sort_keys=True),
     )
 
 
@@ -732,6 +764,220 @@ def build_position_intervals(
     return merged
 
 
+def _position_interval_index_at(position_intervals: Sequence[Mapping], at_s: float) -> int:
+    for interval_index, interval in enumerate(position_intervals):
+        is_last = interval_index == len(position_intervals) - 1
+        if interval["start_s"] <= at_s < interval["end_s"] or (
+            is_last and at_s == interval["end_s"]
+        ):
+            return interval_index
+    raise TimelineValidationError(f"timestamp {at_s} lies outside the position timeline")
+
+
+def _position_transition_records(position_intervals: Sequence[Mapping]) -> list[dict]:
+    records: list[dict] = []
+    for before, after in zip(position_intervals, position_intervals[1:]):
+        at_s = float(before["end_s"])
+        if at_s != float(after["start_s"]):
+            raise TimelineValidationError("position timeline contains a gap or overlap")
+        records.append(
+            {
+                "at_s": at_s,
+                "position_before": before["position"],
+                "position_after": after["position"],
+                "player_roles_before": dict(before["player_roles"]),
+                "player_roles_after": dict(after["player_roles"]),
+            }
+        )
+    return records
+
+
+def build_position_context(
+    position_intervals: Sequence[Mapping],
+    start_s: float,
+    end_s: float,
+    *,
+    transition_tolerance_s: float = 0.0,
+) -> dict:
+    """Return compact fallible position context for one technique candidate."""
+    if not position_intervals:
+        raise TimelineValidationError("position timeline must contain at least one interval")
+    start = float(start_s)
+    end = float(end_s)
+    tolerance = float(transition_tolerance_s)
+    if end <= start:
+        raise TimelineValidationError("position context range must have positive duration")
+    if tolerance < 0:
+        raise TimelineValidationError("position context transition tolerance cannot be negative")
+    scope_start = float(position_intervals[0]["start_s"])
+    scope_end = float(position_intervals[-1]["end_s"])
+    if start < scope_start or end > scope_end:
+        raise TimelineValidationError("position context range must lie inside the timeline")
+
+    before_index = _position_interval_index_at(position_intervals, start)
+    after_index = _position_interval_index_at(position_intervals, end)
+    before = position_intervals[before_index]
+    after = position_intervals[after_index]
+    overlapping_indexes = [
+        index
+        for index, interval in enumerate(position_intervals)
+        if float(interval["start_s"]) < end and float(interval["end_s"]) > start
+    ]
+    transitions = [
+        record
+        for record in _position_transition_records(position_intervals)
+        if start - tolerance <= record["at_s"] <= end + tolerance
+    ]
+    return {
+        "position_before": before["position"],
+        "position_after": after["position"],
+        "player_roles_before": dict(before["player_roles"]),
+        "player_roles_after": dict(after["player_roles"]),
+        "position_note_before": str(before.get("position_note") or ""),
+        "position_note_after": str(after.get("position_note") or ""),
+        "confidence_before": before.get("confidence"),
+        "confidence_after": after.get("confidence"),
+        "evidence_before": str(before.get("evidence") or ""),
+        "evidence_after": str(after.get("evidence") or ""),
+        "overlapping_position_interval_indexes": overlapping_indexes,
+        "position_transitions": transitions,
+    }
+
+
+def build_position_aware_candidates(
+    scan_highlights: Sequence[Mapping],
+    position_intervals: Sequence[Mapping],
+    *,
+    scope_start_s: float,
+    scope_end_s: float,
+    transition_pre_s: float,
+    transition_post_s: float,
+    merge_tolerance_s: float,
+) -> list[dict]:
+    """Union independent visual scan results with active position transitions.
+
+    A transition can enrich one nearby scan target or create one secondary
+    candidate. It never removes or relabels a scan-found movement.
+    """
+    scope_start = float(scope_start_s)
+    scope_end = float(scope_end_s)
+    pre = float(transition_pre_s)
+    post = float(transition_post_s)
+    tolerance = float(merge_tolerance_s)
+    if scope_start >= scope_end:
+        raise TimelineValidationError("requested scope must have positive duration")
+    if pre < 0 or post < 0 or pre + post <= 0:
+        raise TimelineValidationError("transition candidate window must have positive duration")
+    if tolerance < 0:
+        raise TimelineValidationError("merge tolerance cannot be negative")
+    if not position_intervals:
+        raise TimelineValidationError("position timeline must contain at least one interval")
+
+    active_transitions = [
+        record
+        for record in _position_transition_records(position_intervals)
+        if record["position_before"] != "inactive"
+        and record["position_after"] != "inactive"
+    ]
+    prepared_scans: list[dict] = []
+    for scan_index, raw in enumerate(scan_highlights):
+        item = dict(raw)
+        start = float(item["start_s"])
+        end = float(item["end_s"])
+        if end <= start or start < scope_start or end > scope_end:
+            raise TimelineValidationError(
+                f"scan_highlights[{scan_index}] must be a positive range inside the requested scope"
+            )
+        item["scan_index"] = item.get("index", scan_index)
+        item["candidate_sources"] = ["technique_scan"]
+        prepared_scans.append(item)
+
+    # One-to-one nearest pairing. A scan event and a position transition may
+    # enrich each other, but two distinct transitions must never collapse
+    # into one candidate merely because the scan window is broad.
+    eligible_pairs: list[tuple[float, int, int]] = []
+    for transition_index, transition in enumerate(active_transitions):
+        for scan_index, scan in enumerate(prepared_scans):
+            if (
+                float(scan["start_s"]) - tolerance
+                <= transition["at_s"]
+                <= float(scan["end_s"]) + tolerance
+            ):
+                midpoint = (
+                    float(scan["start_s"]) + float(scan["end_s"])
+                ) / 2.0
+                eligible_pairs.append(
+                    (abs(midpoint - transition["at_s"]), transition_index, scan_index)
+                )
+    matched_by_scan: dict[int, list[dict]] = defaultdict(list)
+    matched_transition_indexes: set[int] = set()
+    matched_scan_indexes: set[int] = set()
+    for _, transition_index, scan_index in sorted(eligible_pairs):
+        if (
+            transition_index in matched_transition_indexes
+            or scan_index in matched_scan_indexes
+        ):
+            continue
+        matched_transition_indexes.add(transition_index)
+        matched_scan_indexes.add(scan_index)
+        matched_by_scan[scan_index].append(active_transitions[transition_index])
+    unmatched_transitions = [
+        transition
+        for index, transition in enumerate(active_transitions)
+        if index not in matched_transition_indexes
+    ]
+
+    candidates: list[dict] = []
+    for scan_index, item in enumerate(prepared_scans):
+        if matched_by_scan.get(scan_index):
+            item["candidate_sources"].append("position_transition")
+        item["position_context"] = build_position_context(
+            position_intervals,
+            float(item["start_s"]),
+            float(item["end_s"]),
+            transition_tolerance_s=tolerance,
+        )
+        candidates.append(item)
+
+    for transition in unmatched_transitions:
+        start = round(max(scope_start, transition["at_s"] - pre), 3)
+        end = round(min(scope_end, transition["at_s"] + post), 3)
+        if end <= start:
+            continue
+        before = transition["position_before"]
+        after = transition["position_after"]
+        candidates.append(
+            {
+                "start_s": start,
+                "end_s": end,
+                "description": (
+                    f"The visible position state changes from {before} to {after} near "
+                    f"{transition['at_s']:.3f}s. Treat this only as a candidate; do not infer "
+                    "that an intentional technique occurred without matching body-movement evidence."
+                ),
+                "reasoning": (
+                    "Deterministic secondary candidate from a critiqued active-to-active "
+                    "position transition; the video must confirm or reject it."
+                ),
+                "candidate_sources": ["position_transition"],
+                "position_context": build_position_context(
+                    position_intervals, start, end
+                ),
+                "transition_at_s": transition["at_s"],
+                "adjustment": "position_transition_candidate",
+            }
+        )
+
+    for candidate in candidates:
+        candidate["position_context"]["candidate_sources"] = list(
+            candidate.get("candidate_sources") or []
+        )
+    candidates.sort(key=lambda item: (float(item["start_s"]), float(item["end_s"])))
+    for index, candidate in enumerate(candidates):
+        candidate["index"] = index
+    return candidates
+
+
 def attach_techniques_to_intervals(
     technique_events: Sequence[Mapping], position_intervals: Sequence[Mapping]
 ) -> list[dict]:
@@ -775,6 +1021,8 @@ def attach_techniques_to_intervals(
         item["position_interval_index"] = matched_index
         item["position"] = interval["position"]
         item["position_note"] = interval.get("position_note", "")
+        context = build_position_context(position_intervals, event_start, event_end)
+        item.update(context)
         attached.append(item)
     return attached
 
@@ -858,8 +1106,11 @@ __all__ = [
     "POSITION_CRITIQUE_SYSTEM_PROMPT",
     "POSITION_SCAN_INITIAL_PROMPT",
     "POSITION_SCAN_SYSTEM_PROMPT",
+    "TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT",
     "TimelineValidationError",
     "attach_techniques_to_intervals",
+    "build_position_aware_candidates",
+    "build_position_context",
     "build_position_critique_prompt",
     "build_objective_statistics",
     "build_position_critique_schema",

@@ -1795,9 +1795,22 @@ function renderPositionTimelineResults() {
     const detail = interval.position === 'inactive' ? interval.inactive_reason : interval.position_note;
     return '<tr><td>' + eventPillHtml(secToMmss(interval.start_s), secToMmss(interval.end_s)) + '</td><td>' + escHtml(interval.position.replace(/_/g, ' ')) + '</td><td>' + escHtml(roles) + '</td><td>' + escHtml(detail || '—') + '</td></tr>';
   }).join('');
-  const techniqueRows = events.map(event => '<tr><td>' + eventPillHtml(secToMmss(event.start_s), secToMmss(event.end_s)) + '</td><td>' + escHtml(event.specific_technique_guess || event.action_class || '—') + '</td><td>' + escHtml(names[event.actor_player_id] || event.actor_player_id || 'unclear') + '</td><td>' + escHtml(event.outcome || 'unclear') + '</td><td>' + escHtml((event.position || '—').replace(/_/g, ' ')) + (event.position_note ? '<div class="reasoning">' + escHtml(event.position_note) + '</div>' : '') + '</td></tr>').join('');
+  const techniqueRows = events.map(event => {
+    const sources = (event.candidate_sources || []).map(source => source === 'technique_scan' ? 'Technique Scan' : source === 'position_transition' ? 'Position transition' : source.replace(/_/g, ' ')).join(' + ') || '—';
+    const context = event.position_context || {};
+    const before = event.position_before || context.position_before;
+    const after = event.position_after || context.position_after;
+    const beforeAfter = before || after
+      ? escHtml(String(before || '—').replace(/_/g, ' ')) + ' → ' + escHtml(String(after || '—').replace(/_/g, ' '))
+      : '—';
+    return '<tr><td>' + eventPillHtml(secToMmss(event.start_s), secToMmss(event.end_s)) + '</td><td>' + escHtml(event.specific_technique_guess || event.action_class || '—') + '</td><td>' + escHtml(names[event.actor_player_id] || event.actor_player_id || 'unclear') + '</td><td>' + escHtml(event.outcome || 'unclear') + '</td><td>' + escHtml(sources) + '</td><td>' + beforeAfter + '</td><td>' + escHtml((event.position || '—').replace(/_/g, ' ')) + (event.position_note ? '<div class="reasoning">' + escHtml(event.position_note) + '</div>' : '') + '</td></tr>';
+  }).join('');
   const nodeCosts = Array.isArray(runState.nodeCosts) ? runState.nodeCosts : [];
   const costSummary = runState.costSummary || null;
+  const candidateSummary = runState.candidateSummary;
+  const candidateSummaryHtml = candidateSummary
+    ? '<div class="selection-badges"><span class="badge badge-neutral">' + Number(candidateSummary.scan_candidate_count || 0) + ' scan candidate(s)</span><span class="badge badge-neutral">' + Number(candidateSummary.transition_candidate_count || 0) + ' active transition(s)</span><span class="badge badge-neutral">' + Number(candidateSummary.merged_candidate_count || 0) + ' merged</span><span class="badge badge-a">' + Number(candidateSummary.final_candidate_count || 0) + ' final</span></div>'
+    : '';
   const fmtTokens = value => Number(value || 0).toLocaleString('en-US');
   const fmtUsd = value => value == null ? 'unavailable' : ('$' + Number(value).toFixed(6));
   const costRows = nodeCosts.map(cost => {
@@ -1819,7 +1832,7 @@ function renderPositionTimelineResults() {
     '<div class="timeline-stat-panel"><h3>Objective player totals</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Player</th><th>Top</th><th>Bottom</th><th>Neutral</th><th>Techniques</th></tr></thead><tbody>' + playerRows + '</tbody></table></div></div></div>' +
     '<h3 style="font-size:0.86rem;margin:16px 0 6px;">Player time by position and role</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Player</th><th>Position</th><th>Top</th><th>Bottom</th><th>Neutral</th></tr></thead><tbody>' + playerPositionRows + '</tbody></table></div>' +
     '<h3 style="font-size:0.86rem;margin:16px 0 6px;">Position interval details</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Range</th><th>Position/state</th><th>Player roles</th><th>Subposition or inactive reason</th></tr></thead><tbody>' + intervalRows + '</tbody></table></div>' +
-    '<h3 style="font-size:0.86rem;margin:16px 0 6px;">Technique events</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Time</th><th>Technique</th><th>Actor</th><th>Outcome</th><th>Attached position</th></tr></thead><tbody>' + (techniqueRows || '<tr><td colspan="5">No technique events found.</td></tr>') + '</tbody></table></div>' + costHtml;
+    '<h3 style="font-size:0.86rem;margin:16px 0 6px;">Technique events</h3>' + candidateSummaryHtml + '<div class="msg-table-wrap"><table class="clips"><thead><tr><th>Time</th><th>Technique</th><th>Actor</th><th>Outcome</th><th>Discovery source</th><th>Position context</th><th>Attached position</th></tr></thead><tbody>' + (techniqueRows || '<tr><td colspan="7">No technique events found.</td></tr>') + '</tbody></table></div>' + costHtml;
 }
 
 function renderSimplifiedTagsTable(tags) {
@@ -2453,7 +2466,14 @@ Return ONLY valid JSON matching this shape — no prose:
     "corrected_start_s": 0.0,
     "corrected_end_s": 0.0,
     "note": "string — one or two sentences: what you found, and flag any mismatch or insufficient backward padding"
-}`;
+}
+
+ADVISORY POSITION-TIMELINE CONTEXT (independently produced and fallible):
+$position_context_json
+
+Use this only as a search aid for the described movement and its likely
+before/after state. It may be wrong or slightly time-shifted. Never confirm,
+reject, or resize the event from the position labels alone: visible body-movement evidence in this clip is authoritative.`;
 
 const POSITION_TIMELINE_DEFAULT = {
   schema_version: 1, id: 'position-timeline-techniques', label: 'Position timeline + technique events (native)',
@@ -2463,6 +2483,7 @@ const POSITION_TIMELINE_DEFAULT = {
     { id: 'position_scan', type: 'position_scan', label: 'Position Scan', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', rough_fps: 1, min_transition_gap_s: 1, system_prompt: POSITION_SCAN_DEFAULT_SYSTEM_PROMPT, initial_prompt: POSITION_SCAN_DEFAULT_INITIAL_PROMPT } },
     { id: 'position_critique', type: 'position_critique', label: 'Position Critique', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', backpad_s: 4, forwardpad_s: 6, fps: 10, system_prompt: POSITION_CRITIQUE_DEFAULT_SYSTEM_PROMPT, initial_prompt: POSITION_CRITIQUE_DEFAULT_INITIAL_PROMPT } },
     { id: 'highlight_scan', type: 'highlight_scan', label: 'Technique Scan', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', rough_fps: 1, min_highlight_s: 3, max_highlight_s: 30, system_prompt: 'Find sparse intentional BJJ technique events; return one intentional technique event per highlight and use separate highlights for sequential or overlapping actions.', initial_prompt: 'Scan $start_sec through $end_sec for intentional technique events. Return one intentional technique event per highlight with absolute bounds and visible movement evidence.' } },
+    { id: 'position_technique_candidates', type: 'position_technique_candidates', label: 'Position + Technique Candidates', enabled: true, config: { transition_pre_s: 4, transition_post_s: 2, merge_tolerance_s: 2 } },
     { id: 'highlight_critique', type: 'highlight_critique', label: 'Technique Critique', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', fps: 1, critique_backpad_s: 6, critique_forwardpad_s: 4, system_prompt: TECHNIQUE_CRITIQUE_DEFAULT_SYSTEM_PROMPT, initial_prompt: TECHNIQUE_CRITIQUE_DEFAULT_INITIAL_PROMPT } },
     { id: 'technique_analyze', type: 'technique_analyze', label: 'Technique Analyze', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', fps: 10, preroll_s: 5, postroll_s: 4, validator_thinking: 'high', validator_media_resolution: 'high' } },
     { id: 'timeline_reconcile', type: 'timeline_reconcile', label: 'Timeline + Statistics', enabled: true, config: {} }
@@ -2484,8 +2505,8 @@ const MOCK_PIPELINES = [
 // flat set — rather than a per-pipeline-id map — stays correct for a future
 // data-driven Nth pipeline without needing a new map entry, since no pipeline
 // mixes in a structural type from "another" pipeline's set.
-const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze', 'highlight_scan', 'highlight_analyze', 'highlight_critique', 'position_scan', 'position_critique', 'technique_analyze', 'timeline_reconcile']);
-const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎', highlight_scan: '🔦', highlight_analyze: '🔬', highlight_critique: '🧐', position_scan: '🧭', position_critique: '🎯', technique_analyze: '🥋', timeline_reconcile: '📊' };
+const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze', 'highlight_scan', 'highlight_analyze', 'highlight_critique', 'position_scan', 'position_critique', 'position_technique_candidates', 'technique_analyze', 'timeline_reconcile']);
+const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎', highlight_scan: '🔦', highlight_analyze: '🔬', highlight_critique: '🧐', position_scan: '🧭', position_critique: '🎯', position_technique_candidates: '⊕', technique_analyze: '🥋', timeline_reconcile: '📊' };
 
 function mockPipelineDefaults(id) {
   if (id === 'single-shot') return JSON.parse(JSON.stringify(SINGLE_SHOT_DEFAULT));
@@ -2626,6 +2647,7 @@ function nodeKeyValues(stage) {
     case 'highlight_analyze': return [c.model, 'fps ' + c.fps, 'pre ' + c.preroll_s + 's / post ' + c.postroll_s + 's'];
     case 'position_scan': return [c.model, 'rough fps ' + c.rough_fps];
     case 'position_critique': return [c.model, 'fps ' + c.fps];
+    case 'position_technique_candidates': return ['pre ' + c.transition_pre_s + 's / post ' + c.transition_post_s + 's', 'merge ±' + c.merge_tolerance_s + 's'];
     case 'technique_analyze': return [c.model, 'fps ' + c.fps];
     case 'timeline_reconcile': return ['deterministic'];
     default: return [];
@@ -2756,6 +2778,7 @@ const CONFIG_FIELD_ORDER = {
   highlight_analyze: ['model', 'fps', 'thinking', 'preroll_s', 'postroll_s', 'position', 'technique', 'validator', 'max_validator_iterations']
   ,position_scan: ['thinking', 'media_resolution', 'model', 'rough_fps', 'min_transition_gap_s', 'system_prompt', 'initial_prompt']
   ,position_critique: ['thinking', 'media_resolution', 'model', 'backpad_s', 'forwardpad_s', 'fps', 'system_prompt', 'initial_prompt']
+  ,position_technique_candidates: ['transition_pre_s', 'transition_post_s', 'merge_tolerance_s']
   ,technique_analyze: ['thinking', 'media_resolution', 'model', 'fps', 'preroll_s', 'postroll_s', 'validator_thinking', 'validator_media_resolution']
   ,timeline_reconcile: []
 };
@@ -2833,6 +2856,11 @@ const CONFIG_FIELD_HINTS = {
     model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
     backpad_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Backward pad' },
     forwardpad_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Forward pad' }
+  },
+  position_technique_candidates: {
+    transition_pre_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Transition look-back' },
+    transition_post_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Transition look-forward' },
+    merge_tolerance_s: { widget: 'range', min: 0, max: 15, step: 0.5, unit: 's', label: 'Scan merge tolerance' }
   },
   technique_analyze: {
     model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
@@ -3321,9 +3349,12 @@ function nodeConfigFieldsHtml(stage) {
       return;
     }
     if (stage.type === 'highlight_critique' && key === 'initial_prompt') {
+      const contextVariable = String(c.initial_prompt || '').includes('$position_context_json')
+        ? ', $position_context_json'
+        : '';
       html += nodePromptCardHtml(
         stage, 'initial_prompt', 'Initial prompt template (' + stage.label + ')',
-        'Per-event template. Supported variables: $window_start_sec, $window_end_sec, $critique_backpad_s, $critique_forwardpad_s, $scan_start_sec, $scan_end_sec, $description. Empty resets to the bundled template.',
+        'Per-event template. Supported variables: $window_start_sec, $window_end_sec, $critique_backpad_s, $critique_forwardpad_s, $scan_start_sec, $scan_end_sec, $description' + contextVariable + '. Empty resets to the bundled template.',
       );
       return;
     }
@@ -3886,7 +3917,7 @@ function resetRunView() {
     // renderDedupRail()).
     liveEvents: [],
     positionInitialState: null, positionTransitions: [], positionIntervals: [],
-    techniqueEvents: [], statistics: null, nodeCosts: [], costSummary: null
+    techniqueEvents: [], candidateSummary: null, statistics: null, nodeCosts: [], costSummary: null
   };
   stopRunElapsedTimer();
   const errLine = document.getElementById('run-error-line');
@@ -4797,6 +4828,15 @@ function handlePipelineEvent(evt) {
     case 'highlight_map': // highlight-scan-analyze/highlight-scan-critique-analyze PASS 1 — the finalized highlight list (drives the timeline bar + highlights rail, NOT a table)
       runState.highlights = evt.highlights || [];
       break;
+    case 'technique_candidate_map':
+      runState.highlights = evt.candidates || [];
+      runState.candidateSummary = {
+        scan_candidate_count: evt.scan_candidate_count || 0,
+        transition_candidate_count: evt.transition_candidate_count || 0,
+        merged_candidate_count: evt.merged_candidate_count || 0,
+        final_candidate_count: evt.final_candidate_count || 0,
+      };
+      break;
     case 'position_map':
       runState.positionInitialState = evt.initial_state || null;
       runState.positionTransitions = evt.transitions || [];
@@ -5270,7 +5310,10 @@ async function mockPositionTimelineStream(body, signal, onEvent) {
     confidence: 0.81, evidence: 'Player A drives the knee through but the trapped leg remains',
     original_bounds: [highlight.start_s, highlight.end_s], corrected_bounds: null,
     scan_description: highlight.description, scan_reasoning: highlight.reasoning,
-    critique_note: 'mock boundary confirmed', validator_verdict: 'agree', validator_reason: 'labels survive review'
+    critique_note: 'mock boundary confirmed', validator_verdict: 'agree', validator_reason: 'labels survive review',
+    candidate_sources: ['technique_scan', 'position_transition'],
+    position_before: 'half_guard', position_after: 'half_guard',
+    position_context: { position_before: 'half_guard', position_after: 'half_guard', position_transitions: [] }
   };
   const intervals = [
     { start_s: start, end_s: boundary1, duration_s: boundary1 - start, position: 'standing', player_roles: { [playerIds[0]]: 'neutral', [playerIds[1]]: 'neutral' }, position_note: '', inactive_reason: '', confidence: 0.86, evidence: 'standing engagement', boundary_provenance: null },
@@ -5288,6 +5331,10 @@ async function mockPositionTimelineStream(body, signal, onEvent) {
       for (const transition of transitions) await emit({ type: 'position_critique_result', transition_index: transition.index, original_at_s: transition.at_s, confirmed: true, corrected_at_s: transition.at_s, state_after: transition.state_after, critique_note: 'mock boundary confirmed' }, 30);
     }
     if (stage.type === 'highlight_scan') await emit({ type: 'highlight_map', highlights: [highlight] }, 80);
+    if (stage.type === 'position_technique_candidates') await emit({
+      type: 'technique_candidate_map', candidates: [{ ...highlight, candidate_sources: ['technique_scan', 'position_transition'], position_context: event.position_context }],
+      scan_candidate_count: 1, transition_candidate_count: 1, merged_candidate_count: 1, final_candidate_count: 1
+    }, 40);
     if (stage.type === 'highlight_critique') await emit({ type: 'highlight_critique_result', highlight_index: 0, movement_confirmed: true, corrected_start_s: highlight.start_s, corrected_end_s: highlight.end_s, critique_note: 'mock event confirmed', applied: true }, 50);
     if (stage.type === 'technique_analyze') {
       await emit({ type: 'highlight_start', highlight_index: 0, scope: [highlight.start_s, highlight.end_s], highlight_bounds: [highlight.start_s, highlight.end_s], authoritative_bounds: [highlight.start_s, highlight.end_s] }, 30);

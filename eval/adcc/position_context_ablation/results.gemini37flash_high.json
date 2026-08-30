@@ -1,0 +1,814 @@
+{
+  "experiment": "adcc_oracle_position_context_ablation_v1",
+  "settings": {
+    "model": "gemini-3.7-flash",
+    "thinking": "high",
+    "fps": 10,
+    "media_resolution": null,
+    "selected_manifest_indexes": [
+      0,
+      1,
+      7,
+      8,
+      18,
+      30,
+      19,
+      20,
+      23,
+      24,
+      26,
+      27
+    ],
+    "planned_call_count": 24
+  },
+  "scope_limitations": [
+    "coarse position_bucket is supplied as oracle-style context, not predicted by Position Scan",
+    "fixed nine-second windows test classification only, not discovery recall or VTG boundaries",
+    "ADCC artifact has no two-athlete reference crops, so actor identity is not scored",
+    "single call per condition leaves ordinary model sampling variance unresolved"
+  ],
+  "records": [
+    {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "manifest_index": 0,
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "gold": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "baseline",
+        "position_context"
+      ],
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "specific_technique_guess": "half guard pass",
+          "confidence": 0.92,
+          "evidence": "The top athlete works from top half guard to extract their trapped right leg, freeing it around 5.5 seconds to establish top side control position."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"guard_pass\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"half guard pass\",\n  \"confidence\": 0.92,\n  \"evidence\": \"The top athlete works from top half guard to extract their trapped right leg, freeing it around 5.5 seconds to establish top side control position.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 85,
+          "total_token_count": 7880,
+          "thoughts_token_count": 1505
+        }
+      },
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_choke",
+          "outcome": "unsuccessful",
+          "specific_technique_guess": "guillotine choke",
+          "confidence": 0.95,
+          "evidence": "The top athlete locks a front headlock grip and commits to a guillotine choke submission attempt around the 5-second mark, but the opponent defends and prevents the finish."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): turtle. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"unsuccessful\",\n  \"specific_technique_guess\": \"guillotine choke\",\n  \"confidence\": 0.95,\n  \"evidence\": \"The top athlete locks a front headlock grip and commits to a guillotine choke submission attempt around the 5-second mark, but the opponent defends and prevents the finish.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6328,
+          "candidates_token_count": 93,
+          "total_token_count": 7024,
+          "thoughts_token_count": 603
+        }
+      }
+    },
+    {
+      "window_id": "6661e503716f12758093d038__w1",
+      "manifest_index": 1,
+      "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+      "window_start_s": 2847.0,
+      "window_end_s": 2856.0,
+      "gold": {
+        "t_s": 2852,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "mount",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "position_context",
+        "baseline"
+      ],
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "specific_technique_guess": "half guard pass to mount",
+          "confidence": 0.95,
+          "evidence": "The top athlete works from top half guard, clears his trapped leg around 47:31-47:33, and fully secures mount position, completing a successful guard pass resulting in 3 points on the scoreboard."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): mount. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"guard_pass\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"half guard pass to mount\",\n  \"confidence\": 0.95,\n  \"evidence\": \"The top athlete works from top half guard, clears his trapped leg around 47:31-47:33, and fully secures mount position, completing a successful guard pass resulting in 3 points on the scoreboard.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6327,
+          "candidates_token_count": 104,
+          "total_token_count": 7662,
+          "thoughts_token_count": 1231
+        }
+      },
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "specific_technique_guess": "half guard pass",
+          "confidence": 0.95,
+          "evidence": "The top competitor works through half guard, clears his trapped trailing leg, and establishes dominant chest-to-chest side control, earning 3 guard pass points."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"guard_pass\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"half guard pass\",\n  \"confidence\": 0.95,\n  \"evidence\": \"The top competitor works through half guard, clears his trapped trailing leg, and establishes dominant chest-to-chest side control, earning 3 guard pass points.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6289,
+          "candidates_token_count": 87,
+          "total_token_count": 6955,
+          "thoughts_token_count": 579
+        }
+      }
+    },
+    {
+      "window_id": "66138fe05da956d5ef54f21b__w7",
+      "manifest_index": 7,
+      "video_url_watch": "https://www.youtube.com/watch?v=h2ucDfTaypI",
+      "window_start_s": 1053.0,
+      "window_end_s": 1062.0,
+      "gold": {
+        "t_s": 1058,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "baseline",
+        "position_context"
+      ],
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "specific_technique_guess": "pressure guard pass",
+          "confidence": 0.95,
+          "evidence": "Tackett drives forward and bypasses Chambers' legs, flattening him out and establishing dominant top side control position."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"guard_pass\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"pressure guard pass\",\n  \"confidence\": 0.95,\n  \"evidence\": \"Tackett drives forward and bypasses Chambers' legs, flattening him out and establishing dominant top side control position.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 78,
+          "total_token_count": 7686,
+          "thoughts_token_count": 1318
+        }
+      },
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "specific_technique_guess": "body lock guard pass",
+          "confidence": 0.95,
+          "evidence": "The top competitor drives forward through the open guard, secures body control around the torso and hips, clears the bottom competitor's legs, and stabilizes chest-to-chest side control."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): open_guard. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"guard_pass\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"body lock guard pass\",\n  \"confidence\": 0.95,\n  \"evidence\": \"The top competitor drives forward through the open guard, secures body control around the torso and hips, clears the bottom competitor's legs, and stabilizes chest-to-chest side control.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 93,
+          "total_token_count": 6997,
+          "thoughts_token_count": 574
+        }
+      }
+    },
+    {
+      "window_id": "65dbd239a2434704339da0e4__w8",
+      "manifest_index": 8,
+      "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+      "window_start_s": 274.0,
+      "window_end_s": 283.0,
+      "gold": {
+        "t_s": 279,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "side_control",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "position_context",
+        "baseline"
+      ],
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "specific_technique_guess": "half guard pass",
+          "confidence": 0.95,
+          "evidence": "The top athlete extracts their trapped right leg from half guard, clears the bottom athlete's hips, and flattens out to consolidate side control."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): side_control. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"guard_pass\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"half guard pass\",\n  \"confidence\": 0.95,\n  \"evidence\": \"The top athlete extracts their trapped right leg from half guard, clears the bottom athlete's hips, and flattens out to consolidate side control.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6329,
+          "candidates_token_count": 85,
+          "total_token_count": 7138,
+          "thoughts_token_count": 724
+        }
+      },
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "specific_technique_guess": "half guard pass",
+          "confidence": 0.95,
+          "evidence": "The top competitor drives upper-body pressure into the bottom competitor, frees his trapped leg from the half guard, and establishes dominant side control."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"guard_pass\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"half guard pass\",\n  \"confidence\": 0.95,\n  \"evidence\": \"The top competitor drives upper-body pressure into the bottom competitor, frees his trapped leg from the half guard, and establishes dominant side control.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6289,
+          "candidates_token_count": 83,
+          "total_token_count": 7355,
+          "thoughts_token_count": 983
+        }
+      }
+    },
+    {
+      "window_id": "650d20c745120c8433e9d00a__w18",
+      "manifest_index": 18,
+      "video_url_watch": "https://www.youtube.com/watch?v=jc36DVinZDA",
+      "window_start_s": 373.0,
+      "window_end_s": 382.0,
+      "gold": {
+        "t_s": 378,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "half_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "baseline",
+        "position_context"
+      ],
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_arm_lock",
+          "outcome": "successful",
+          "specific_technique_guess": "kimura",
+          "confidence": 0.98,
+          "evidence": "The top competitor secures a figure-four grip on the opponent's arm and applies torque for a kimura lock, forcing a tap."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"kimura\",\n  \"confidence\": 0.98,\n  \"evidence\": \"The top competitor secures a figure-four grip on the opponent's arm and applies torque for a kimura lock, forcing a tap.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 84,
+          "total_token_count": 6990,
+          "thoughts_token_count": 616
+        }
+      },
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_arm_lock",
+          "outcome": "successful",
+          "specific_technique_guess": "kimura",
+          "confidence": 0.98,
+          "evidence": "The top grappler isolates and secures a kimura lock on the opponent's arm, stepping around the head to apply torque until the bottom athlete taps."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): half_guard. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"kimura\",\n  \"confidence\": 0.98,\n  \"evidence\": \"The top grappler isolates and secures a kimura lock on the opponent's arm, stepping around the head to apply torque until the bottom athlete taps.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 87,
+          "total_token_count": 7127,
+          "thoughts_token_count": 710
+        }
+      }
+    },
+    {
+      "window_id": "6470211a3ec8dca9d1a32710__w30",
+      "manifest_index": 30,
+      "video_url_watch": "https://www.youtube.com/watch?v=3gotA-Y0gXQ",
+      "window_start_s": 722.0,
+      "window_end_s": 731.0,
+      "gold": {
+        "t_s": 727,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "position_context",
+        "baseline"
+      ],
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_choke",
+          "outcome": "successful",
+          "specific_technique_guess": "buggy choke",
+          "confidence": 0.98,
+          "evidence": "Kade Ruotolo locks a buggy choke from bottom side control against PJ Barch, maintaining tight strangulation until the referee intervenes to stop the match due to submission."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): open_guard. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"buggy choke\",\n  \"confidence\": 0.98,\n  \"evidence\": \"Kade Ruotolo locks a buggy choke from bottom side control against PJ Barch, maintaining tight strangulation until the referee intervenes to stop the match due to submission.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 91,
+          "total_token_count": 7653,
+          "thoughts_token_count": 1232
+        }
+      },
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "takedown_attempt",
+          "outcome": "successful",
+          "specific_technique_guess": "single leg takedown",
+          "confidence": 0.95,
+          "evidence": "Barch controls Ruotolo's leg from a standing single-leg position, drives forward off his feet, and takes Ruotolo down to the mat, establishing top control."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"takedown_attempt\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"single leg takedown\",\n  \"confidence\": 0.95,\n  \"evidence\": \"Barch controls Ruotolo's leg from a standing single-leg position, drives forward off his feet, and takes Ruotolo down to the mat, establishing top control.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 95,
+          "total_token_count": 8555,
+          "thoughts_token_count": 2170
+        }
+      }
+    },
+    {
+      "window_id": "650d20c745120c8433e9d01b__w19",
+      "manifest_index": 19,
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "window_start_s": 4712.0,
+      "window_end_s": 4721.0,
+      "gold": {
+        "t_s": 4717,
+        "action_class": "submission_choke",
+        "outcome": "successful",
+        "position_bucket": "back_control",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "baseline",
+        "position_context"
+      ],
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_choke",
+          "outcome": "unsuccessful",
+          "specific_technique_guess": "rear naked choke",
+          "confidence": 0.88,
+          "evidence": "The athlete on the back locks her arm under the opponent's neck into a rear naked choke grip and applies heavy squeezing pressure, but the defending athlete hand-fights and survives the submission attempt."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"unsuccessful\",\n  \"specific_technique_guess\": \"rear naked choke\",\n  \"confidence\": 0.88,\n  \"evidence\": \"The athlete on the back locks her arm under the opponent's neck into a rear naked choke grip and applies heavy squeezing pressure, but the defending athlete hand-fights and survives the submission attempt.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 97,
+          "total_token_count": 7781,
+          "thoughts_token_count": 1394
+        }
+      },
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_choke",
+          "outcome": "successful",
+          "specific_technique_guess": "rear naked choke",
+          "confidence": 0.98,
+          "evidence": "The athlete on the back secures and tightens a rear naked choke, forcing the opponent to tap."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): back_control. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\"action_class\": \"submission_choke\", \"outcome\": \"successful\", \"specific_technique_guess\": \"rear naked choke\", \"confidence\": 0.98, \"evidence\": \"The athlete on the back secures and tightens a rear naked choke, forcing the opponent to tap.\"}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 64,
+          "total_token_count": 7214,
+          "thoughts_token_count": 820
+        }
+      }
+    },
+    {
+      "window_id": "653715dad9868c25fd158a0b__w20",
+      "manifest_index": 20,
+      "video_url_watch": "https://www.youtube.com/watch?v=VBmvEKje94s",
+      "window_start_s": 100.0,
+      "window_end_s": 109.0,
+      "gold": {
+        "t_s": 105,
+        "action_class": "submission_choke",
+        "outcome": "successful",
+        "position_bucket": "back_control",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "position_context",
+        "baseline"
+      ],
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_choke",
+          "outcome": "successful",
+          "specific_technique_guess": "rear naked choke",
+          "confidence": 0.98,
+          "evidence": "Gordon Ryan locks in a deep rear naked choke with a figure-four arm lock around the neck from back control, forcing the opponent to tap."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): back_control. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"rear naked choke\",\n  \"confidence\": 0.98,\n  \"evidence\": \"Gordon Ryan locks in a deep rear naked choke with a figure-four arm lock around the neck from back control, forcing the opponent to tap.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 85,
+          "total_token_count": 7440,
+          "thoughts_token_count": 1025
+        }
+      },
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "transition",
+          "outcome": "successful",
+          "specific_technique_guess": "closed guard",
+          "confidence": 0.95,
+          "evidence": "The athlete on the bottom brings his legs around his opponent's torso and crosses his ankles, successfully establishing full closed guard."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"transition\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"closed guard\",\n  \"confidence\": 0.95,\n  \"evidence\": \"The athlete on the bottom brings his legs around his opponent's torso and crosses his ankles, successfully establishing full closed guard.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 77,
+          "total_token_count": 7366,
+          "thoughts_token_count": 999
+        }
+      }
+    },
+    {
+      "window_id": "6666381f4828f704f1b3bead__w23",
+      "manifest_index": 23,
+      "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+      "window_start_s": 6292.0,
+      "window_end_s": 6301.0,
+      "gold": {
+        "t_s": 6297,
+        "action_class": "submission_leg_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "baseline",
+        "position_context"
+      ],
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "specific_technique_guess": "heel hook",
+          "confidence": 0.96,
+          "evidence": "Salvatore secures a heel hook from the 50/50 leg entanglement and finishes the submission as Leclerc taps on his leg around 5.0 seconds into the clip."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"heel hook\",\n  \"confidence\": 0.96,\n  \"evidence\": \"Salvatore secures a heel hook from the 50/50 leg entanglement and finishes the submission as Leclerc taps on his leg around 5.0 seconds into the clip.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 92,
+          "total_token_count": 7224,
+          "thoughts_token_count": 842
+        }
+      },
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "specific_technique_guess": "inside heel hook",
+          "confidence": 0.95,
+          "evidence": "Salvatore establishes a 50/50 leg entanglement and locks up an inside heel hook on Leclerc's leg, applying rotational pressure leading to a tap."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): open_guard. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"inside heel hook\",\n  \"confidence\": 0.95,\n  \"evidence\": \"Salvatore establishes a 50/50 leg entanglement and locks up an inside heel hook on Leclerc's leg, applying rotational pressure leading to a tap.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 90,
+          "total_token_count": 7303,
+          "thoughts_token_count": 883
+        }
+      }
+    },
+    {
+      "window_id": "652c0e04a947037aeb7eb302__w24",
+      "manifest_index": 24,
+      "video_url_watch": "https://www.youtube.com/watch?v=jBLehiPrM0E",
+      "window_start_s": 314.0,
+      "window_end_s": 323.0,
+      "gold": {
+        "t_s": 319,
+        "action_class": "submission_leg_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "position_context",
+        "baseline"
+      ],
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "specific_technique_guess": "inside heel hook",
+          "confidence": 0.95,
+          "evidence": "Ethan Crelinsten secures the saddle/cross ashi garami position and applies an inside heel hook, forcing his opponent to tap."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): open_guard. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"inside heel hook\",\n  \"confidence\": 0.95,\n  \"evidence\": \"Ethan Crelinsten secures the saddle/cross ashi garami position and applies an inside heel hook, forcing his opponent to tap.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 85,
+          "total_token_count": 6993,
+          "thoughts_token_count": 578
+        }
+      },
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "specific_technique_guess": "inside heel hook",
+          "confidence": 0.98,
+          "evidence": "Crelinsten rolls into an inside sankaku / cross ashi garami leg entanglement, controls the secondary leg, traps the heel, and applies the inside heel hook causing the opponent to tap."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"inside heel hook\",\n  \"confidence\": 0.98,\n  \"evidence\": \"Crelinsten rolls into an inside sankaku / cross ashi garami leg entanglement, controls the secondary leg, traps the heel, and applies the inside heel hook causing the opponent to tap.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 97,
+          "total_token_count": 6966,
+          "thoughts_token_count": 579
+        }
+      }
+    },
+    {
+      "window_id": "650d20c745120c8433e9d004__w26",
+      "manifest_index": 26,
+      "video_url_watch": "https://www.youtube.com/watch?v=cktdK6Lf6ts",
+      "window_start_s": 240.0,
+      "window_end_s": 249.0,
+      "gold": {
+        "t_s": 245,
+        "action_class": "sweep",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SWEEP",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "baseline",
+        "position_context"
+      ],
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "transition",
+          "outcome": "successful",
+          "specific_technique_guess": "false reap",
+          "confidence": 0.9,
+          "evidence": "The bottom athlete inverts beneath the standing opponent from open guard to enter and secure a false reap leg entanglement, bringing the opponent down to the mat."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"transition\",\n  \"outcome\": \"successful\",\n  \"specific_technique_guess\": \"false reap\",\n  \"confidence\": 0.9,\n  \"evidence\": \"The bottom athlete inverts beneath the standing opponent from open guard to enter and secure a false reap leg entanglement, bringing the opponent down to the mat.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 81,
+          "total_token_count": 8422,
+          "thoughts_token_count": 2051
+        }
+      },
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "specific_technique_guess": "inside heel hook",
+          "confidence": 0.9,
+          "evidence": "The bottom competitor enters a leg entanglement from open guard to attack a leg lock around 5.0s, but the opponent rolls and clears the knee line to escape."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): open_guard. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"specific_technique_guess\": \"inside heel hook\",\n  \"confidence\": 0.9,\n  \"evidence\": \"The bottom competitor enters a leg entanglement from open guard to attack a leg lock around 5.0s, but the opponent rolls and clears the knee line to escape.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 91,
+          "total_token_count": 7719,
+          "thoughts_token_count": 1298
+        }
+      }
+    },
+    {
+      "window_id": "650d20c745120c8433e9d031__w27",
+      "manifest_index": 27,
+      "video_url_watch": "https://www.youtube.com/watch?v=DHLk_9vT_3g",
+      "window_start_s": 249.0,
+      "window_end_s": 258.0,
+      "gold": {
+        "t_s": 254,
+        "action_class": "sweep",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SWEEP",
+        "track": "hard",
+        "scoreable": true
+      },
+      "call_order": [
+        "position_context",
+        "baseline"
+      ],
+      "position_context": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "specific_technique_guess": "straight ankle lock",
+          "confidence": 0.88,
+          "evidence": "Ruotolo on bottom attempts to attack Pena's right leg/ankle from open guard, but Pena rotates his knee, defends the position, and clears his foot from Ruotolo's grip."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nADVISORY POSITION CONTEXT (oracle-style corpus input, independently produced and fallible): open_guard. This label may be coarse or wrong. Use it only to corroborate the action; visible body-movement evidence is authoritative when the label conflicts with the clip.",
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"specific_technique_guess\": \"straight ankle lock\",\n  \"confidence\": 0.88,\n  \"evidence\": \"Ruotolo on bottom attempts to attack Pena's right leg/ankle from open guard, but Pena rotates his knee, defends the position, and clears his foot from Ruotolo's grip.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6330,
+          "candidates_token_count": 99,
+          "total_token_count": 8196,
+          "thoughts_token_count": 1767
+        }
+      },
+      "baseline": {
+        "status": "ok",
+        "error": null,
+        "prediction": {
+          "action_class": "guard_pass",
+          "outcome": "unsuccessful",
+          "specific_technique_guess": "half guard pass",
+          "confidence": 0.85,
+          "evidence": "Pena works from top position to extract his trapped leg and complete a half guard pass, but Ruotolo maintains leg entanglement and retains half guard."
+        },
+        "prompt_text": "The provided clip is a fixed evaluation window. Classify the single intentional BJJ action whose outcome anchor is nearest 5.000 seconds after the clip begins. Do not report timestamps. Do not substitute a neighboring action.\n\nNo external position label is supplied; judge from the visible clip alone.",
+        "raw_response_text": "{\n  \"action_class\": \"guard_pass\",\n  \"outcome\": \"unsuccessful\",\n  \"specific_technique_guess\": \"half guard pass\",\n  \"confidence\": 0.85,\n  \"evidence\": \"Pena works from top position to extract his trapped leg and complete a half guard pass, but Ruotolo maintains leg entanglement and retains half guard.\"\n}",
+        "usage_metadata": {
+          "prompt_token_count": 6290,
+          "candidates_token_count": 86,
+          "total_token_count": 7522,
+          "thoughts_token_count": 1146
+        }
+      }
+    }
+  ],
+  "summary": {
+    "window_count": 12,
+    "paired_success_count": 12,
+    "failed_pair_count": 0,
+    "baseline": {
+      "exact_action_correct": 6,
+      "exact_action_accuracy": 0.5,
+      "exact_outcome_correct": 10,
+      "exact_outcome_accuracy": 0.8333333333333334
+    },
+    "position_context": {
+      "exact_action_correct": 7,
+      "exact_action_accuracy": 0.5833333333333334,
+      "exact_outcome_correct": 9,
+      "exact_outcome_accuracy": 0.75
+    },
+    "exact_action_net_delta": 1,
+    "discordant": {
+      "context_only_correct": 1,
+      "baseline_only_correct": 0
+    },
+    "paired_sign_test_p_value": 1.0
+  },
+  "cost_rows": [
+    {
+      "stage_id": "baseline",
+      "stage_type": "position_context_ablation",
+      "label": "Baseline",
+      "model": "gemini-3.7-flash",
+      "call_count": 12,
+      "metered_call_count": 12,
+      "unmetered_call_count": 0,
+      "prompt_token_count": 75478,
+      "candidates_token_count": 1042,
+      "thoughts_token_count": 14182,
+      "cached_content_token_count": 0,
+      "total_token_count": 90702,
+      "pricing_tier": "standard_paid",
+      "pricing_source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "estimated_usd": 0.1136985,
+      "pricing_status": "priced",
+      "input_usd_per_million": 0.75,
+      "output_usd_per_million": 3.75,
+      "cached_input_usd_per_million": 0.075,
+      "rate_effective_from": "2026-08-26",
+      "rate_valid_through": "2026-12-31"
+    },
+    {
+      "stage_id": "position_context",
+      "stage_type": "position_context_ablation",
+      "label": "Position context",
+      "model": "gemini-3.7-flash",
+      "call_count": 12,
+      "metered_call_count": 12,
+      "unmetered_call_count": 0,
+      "prompt_token_count": 75954,
+      "candidates_token_count": 1067,
+      "thoughts_token_count": 11445,
+      "cached_content_token_count": 0,
+      "total_token_count": 88466,
+      "pricing_tier": "standard_paid",
+      "pricing_source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "estimated_usd": 0.1038855,
+      "pricing_status": "priced",
+      "input_usd_per_million": 0.75,
+      "output_usd_per_million": 3.75,
+      "cached_input_usd_per_million": 0.075,
+      "rate_effective_from": "2026-08-26",
+      "rate_valid_through": "2026-12-31"
+    }
+  ],
+  "cost_summary": {
+    "call_count": 24,
+    "metered_call_count": 24,
+    "unmetered_call_count": 0,
+    "prompt_token_count": 151432,
+    "candidates_token_count": 2109,
+    "thoughts_token_count": 25627,
+    "total_token_count": 179168,
+    "estimated_usd": 0.217584,
+    "pricing_tier": "standard_paid",
+    "pricing_source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+    "rate_effective_from": "2026-08-26",
+    "rate_valid_through": "2026-12-31",
+    "has_unknown_spend": false
+  }
+}

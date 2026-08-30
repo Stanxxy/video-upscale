@@ -24,6 +24,7 @@ from service.pipelines.models import (
     PipelineDef,
     PositionCritiqueConfig,
     PositionScanConfig,
+    PositionTechniqueCandidatesConfig,
     StageDef,
     TechniqueAnalyzeConfig,
     TimelineReconcileConfig,
@@ -44,6 +45,7 @@ from service.pipelines.position_timeline import (
     POSITION_SCAN_SYSTEM_PROMPT,
     TECHNIQUE_SCAN_INITIAL_PROMPT,
     TECHNIQUE_SCAN_SYSTEM_PROMPT,
+    TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT,
 )
 from service.routes.qa_vlm import DETECT_MODELS, EVENT_MODELS
 
@@ -456,13 +458,20 @@ def _position_timeline_techniques() -> PipelineDef:
                 ).model_dump(),
             ),
             StageDef(
+                id="position_technique_candidates",
+                type="position_technique_candidates",
+                label="Position + Technique Candidates",
+                enabled=True,
+                config=PositionTechniqueCandidatesConfig().model_dump(),
+            ),
+            StageDef(
                 id="highlight_critique", type="highlight_critique", label="Technique Critique",
                 enabled=True,
                 config=HighlightCritiqueConfig(
                     thinking="high",
                     critique_forwardpad_s=4.0,
                     system_prompt=DEFAULT_CRITIQUE_SYSTEM_PROMPT,
-                    initial_prompt=DEFAULT_CRITIQUE_INITIAL_PROMPT,
+                    initial_prompt=TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT,
                 ).model_dump(),
             ),
             StageDef(

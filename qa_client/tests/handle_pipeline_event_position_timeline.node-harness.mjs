@@ -71,11 +71,19 @@ assert.match(
 );
 assert.match(
   run("POSITION_TIMELINE_DEFAULT.stages.find(stage => stage.id === 'highlight_critique').config.initial_prompt"),
-  /\$window_start_sec.*\$description/s,
+  /\$window_start_sec.*\$description.*\$position_context_json/s,
 );
 assert.equal(
   run("POSITION_TIMELINE_DEFAULT.stages.find(stage => stage.id === 'highlight_critique').config.fps"),
   1,
+);
+assert.deepEqual(
+  JSON.parse(run("JSON.stringify(POSITION_TIMELINE_DEFAULT.stages.find(stage => stage.id === 'position_technique_candidates').config)")),
+  { transition_pre_s: 4, transition_post_s: 2, merge_tolerance_s: 2 },
+);
+assert.ok(
+  run("POSITION_TIMELINE_DEFAULT.stages.findIndex(stage => stage.id === 'position_technique_candidates')") <
+  run("POSITION_TIMELINE_DEFAULT.stages.findIndex(stage => stage.id === 'highlight_critique')"),
 );
 
 run("currentPipelineId = 'position-timeline-techniques'; currentPipelineDef = JSON.parse(JSON.stringify(POSITION_TIMELINE_DEFAULT));");
@@ -105,8 +113,16 @@ const techniqueCritiqueConfigHtml = run(
 assert.match(techniqueCritiqueConfigHtml, /System prompt \(Technique Critique\)/);
 assert.match(techniqueCritiqueConfigHtml, /Initial prompt template \(Technique Critique\)/);
 assert.match(techniqueCritiqueConfigHtml, /\$critique_forwardpad_s/);
+assert.match(techniqueCritiqueConfigHtml, /\$position_context_json/);
 assert.match(techniqueCritiqueConfigHtml, /FPS/);
 assert.match(techniqueCritiqueConfigHtml, /aria-label="System prompt \(Technique Critique\)"/);
+
+const candidateConfigHtml = run(
+  "nodeConfigFieldsHtml(POSITION_TIMELINE_DEFAULT.stages.find(stage => stage.id === 'position_technique_candidates'))",
+);
+assert.match(candidateConfigHtml, /Transition look-back/);
+assert.match(candidateConfigHtml, /Transition look-forward/);
+assert.match(candidateConfigHtml, /Scan merge tolerance/);
 
 run(`currentPipelineDef = JSON.parse(JSON.stringify(POSITION_TIMELINE_DEFAULT));
 selectedNodeIndex = currentPipelineDef.stages.findIndex(stage => stage.id === 'position_critique');
@@ -191,8 +207,16 @@ run(`handlePipelineEvent(${JSON.stringify({
   corrected_at_s: 9.5, state_after: { position: 'half_guard' }, critique_note: 'leg trapped',
 })})`);
 run(`handlePipelineEvent(${JSON.stringify({
+  type: 'technique_candidate_map', scan_candidate_count: 1, transition_candidate_count: 1,
+  merged_candidate_count: 1, final_candidate_count: 1,
+  candidates: [{ index: 0, start_s: 12, end_s: 15,
+    candidate_sources: ['technique_scan', 'position_transition'],
+    position_context: { position_before: 'half_guard', position_after: 'other',
+      position_transitions: [{ at_s: 14, position_before: 'half_guard', position_after: 'other' }] } }],
+})})`);
+run(`handlePipelineEvent(${JSON.stringify({
   type: 'technique_result', highlight_index: 0, status: 'analyzed', ditch_reason: null,
-  event: { start_s: 12, end_s: 15, action_class: 'guard_pass', specific_technique_guess: 'knee cut', actor_player_id: 'player_a', outcome: 'unsuccessful', confidence: 0.8, evidence: 'knee drives inside' },
+  event: { start_s: 12, end_s: 15, action_class: 'guard_pass', specific_technique_guess: 'knee cut', actor_player_id: 'player_a', outcome: 'unsuccessful', confidence: 0.8, evidence: 'knee drives inside', candidate_sources: ['technique_scan', 'position_transition'], position_context: { position_before: 'half_guard', position_after: 'other' } },
 })})`);
 run(`handlePipelineEvent(${JSON.stringify({
   type: 'timeline_result', player_ids: ['player_a', 'player_b'],
@@ -200,7 +224,7 @@ run(`handlePipelineEvent(${JSON.stringify({
     { start_s: 0, end_s: 9.5, duration_s: 9.5, position: 'standing', player_roles: { player_a: 'neutral', player_b: 'neutral' }, position_note: '', inactive_reason: null },
     { start_s: 9.5, end_s: 20, duration_s: 10.5, position: 'other', player_roles: { player_a: 'top', player_b: 'bottom' }, position_note: 'headquarters: one leg pinned between the knees', inactive_reason: null },
   ],
-  technique_events: [{ start_s: 12, end_s: 15, action_class: 'guard_pass', specific_technique_guess: 'knee cut', actor_player_id: 'player_a', outcome: 'unsuccessful', confidence: 0.8, evidence: 'knee drives inside', position: 'other', position_note: 'headquarters: one leg pinned between the knees' }],
+  technique_events: [{ start_s: 12, end_s: 15, action_class: 'guard_pass', specific_technique_guess: 'knee cut', actor_player_id: 'player_a', outcome: 'unsuccessful', confidence: 0.8, evidence: 'knee drives inside', position: 'other', position_note: 'headquarters: one leg pinned between the knees', candidate_sources: ['technique_scan', 'position_transition'], position_before: 'half_guard', position_after: 'other' }],
   statistics: {
     active_duration_s: 20, inactive_duration_s: 0,
     by_position: { standing: { duration_s: 9.5 }, other: { duration_s: 10.5 } },
@@ -222,6 +246,8 @@ run(`handlePipelineEvent(${JSON.stringify({
 })})`);
 
 assert.equal(run('runState.positionTransitions[0].corrected_at_s'), 9.5);
+assert.equal(run('runState.highlights.length'), 1);
+assert.equal(run('runState.candidateSummary.merged_candidate_count'), 1);
 assert.equal(run('runState.techniqueEvents.length'), 1);
 assert.equal(byId('timeline-results-card').style.display, 'block');
 assert.match(byId('position-timeline-body').innerHTML, /position-segment/);
@@ -230,6 +256,12 @@ assert.match(byId('position-statistics-body').innerHTML, /Objective player total
 assert.match(byId('position-statistics-body').innerHTML, /Player time by position and role/);
 assert.match(byId('position-statistics-body').innerHTML, /Position interval details/);
 assert.match(byId('position-statistics-body').innerHTML, /headquarters: one leg pinned/);
+assert.match(byId('position-statistics-body').innerHTML, /1 scan candidate/);
+assert.match(byId('position-statistics-body').innerHTML, /1 active transition/);
+assert.match(byId('position-statistics-body').innerHTML, /1 merged/);
+assert.match(byId('position-statistics-body').innerHTML, /1 final/);
+assert.match(byId('position-statistics-body').innerHTML, /Technique Scan \+ Position transition/);
+assert.match(byId('position-statistics-body').innerHTML, /half guard.*other/);
 assert.doesNotMatch(byId('position-statistics-body').innerHTML.toLowerCase(), /dominan/);
 assert.equal(run('runState.nodeCosts.length'), 2);
 assert.match(byId('position-statistics-body').innerHTML, /DAG node cost/);

@@ -19,6 +19,8 @@ from service.pipelines import (
     executors,
     gemini_cost,
     highlight_critique,
+    models as pipeline_models,
+    position_timeline,
     registry,
     simplified_tags,
 )
@@ -28,6 +30,7 @@ from service.pipelines.models import (
     HighlightScanConfig,
     PositionCritiqueConfig,
     PositionScanConfig,
+    PositionTechniqueCandidatesConfig,
     TechniqueAnalyzeConfig,
     TimelineReconcileConfig,
 )
@@ -38,6 +41,7 @@ from service.pipelines.position_timeline import (
     POSITION_SCAN_SYSTEM_PROMPT,
     TECHNIQUE_SCAN_INITIAL_PROMPT,
     TECHNIQUE_SCAN_SYSTEM_PROMPT,
+    TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT,
     TECHNIQUE_SYSTEM_PROMPT,
     TECHNIQUE_VALIDATOR_SYSTEM_PROMPT,
     TimelineValidationError,
@@ -50,6 +54,7 @@ from service.pipelines.position_timeline import (
     build_position_scan_schema,
     build_technique_schema,
     build_technique_prompt,
+    build_technique_validator_prompt,
     build_technique_validator_schema,
     validate_technique_validator_decision,
     validate_player_references,
@@ -184,10 +189,25 @@ def test_registry_adds_position_pipeline_without_mutating_v2_shape():
         "position_scan",
         "position_critique",
         "highlight_scan",
+        "position_technique_candidates",
         "highlight_critique",
         "technique_analyze",
         "timeline_reconcile",
     ]
+
+    candidate_stage = next(
+        stage
+        for stage in new_pipeline.stages
+        if stage.type == "position_technique_candidates"
+    )
+    assert candidate_stage.config == {
+        "transition_pre_s": 4.0,
+        "transition_post_s": 2.0,
+        "merge_tolerance_s": 2.0,
+    }
+    assert pipeline_models.PositionTechniqueCandidatesConfig.model_validate(
+        candidate_stage.config
+    )
 
     v2 = registry.get_default("highlight-scan-critique-analyze")
     assert [stage.type for stage in v2.stages] == [
@@ -214,7 +234,13 @@ def test_registry_saves_complete_critique_prompts_for_both_critique_dags():
 
     assert position_critique.config["system_prompt"] == POSITION_CRITIQUE_SYSTEM_PROMPT
     assert position_critique.config["initial_prompt"] == POSITION_CRITIQUE_INITIAL_PROMPT
-    for stage in (technique_critique, legacy_v2_critique):
+    assert technique_critique.config["system_prompt"] == (
+        highlight_critique.DEFAULT_CRITIQUE_SYSTEM_PROMPT
+    )
+    assert technique_critique.config["initial_prompt"] == (
+        TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT
+    )
+    for stage in (legacy_v2_critique,):
         assert stage.config["system_prompt"] == highlight_critique.DEFAULT_CRITIQUE_SYSTEM_PROMPT
         assert stage.config["initial_prompt"] == highlight_critique.DEFAULT_CRITIQUE_INITIAL_PROMPT
         assert stage.config["fps"] == 1
@@ -235,11 +261,12 @@ def test_position_pipeline_budget_estimate_counts_both_scans_and_deep_lanes():
     pipeline = registry.get_default("position-timeline-techniques")
     planned = executors.estimate_run_plan(pipeline, duration_sec=30.0)
     # Position: 1 scan + <=30 critiques (1s budget-only gap).
-    # Techniques: 1 scan + <=10 highlights * (critique + analyze + validator).
+    # Technique candidates: <=10 scan hits + <=30 active position transitions.
+    # Every final candidate may cost critique + analyze + validator.
     assert planned == {
         "planned_frames": 0,
-        "planned_windows": 40,
-        "planned_gemini_calls": 62,
+        "planned_windows": 70,
+        "planned_gemini_calls": 152,
     }
 
 
@@ -328,7 +355,7 @@ def test_critique_offline_html_defaults_match_backend_canonical_prompts():
             highlight_critique.DEFAULT_CRITIQUE_SYSTEM_PROMPT
         ),
         "TECHNIQUE_CRITIQUE_DEFAULT_INITIAL_PROMPT": (
-            highlight_critique.DEFAULT_CRITIQUE_INITIAL_PROMPT
+            TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT
         ),
     }
 
@@ -431,6 +458,43 @@ def test_technique_analysis_cannot_substitute_a_neighboring_event():
     assert "Do not substitute a later or overlapping technique" in system_prompt
     assert "Do not substitute a neighboring event" in validator_prompt
     assert "The scan-described movement is the target event" in event_prompt
+
+
+def test_position_context_is_advisory_in_critique_analyze_and_validator_prompts():
+    context = {
+        "position_before": "open_guard",
+        "position_after": "side_control",
+        "position_transitions": [{"at_s": 10.0}],
+    }
+    critique_prompt = highlight_critique.build_critique_prompt(
+        window_start_sec=4.0,
+        window_end_sec=14.0,
+        critique_backpad_s=4.0,
+        critique_forwardpad_s=2.0,
+        scan_start_sec=8.0,
+        scan_end_sec=12.0,
+        description="top athlete moves around the legs",
+        override=TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT,
+        position_context=context,
+    )
+    analyze_prompt = build_technique_prompt(
+        "top athlete moves around the legs",
+        start_s=8.0,
+        end_s=12.0,
+        player_ids=("player_a", "player_b"),
+        position_context=context,
+    )
+    validator_prompt = build_technique_validator_prompt(
+        "top athlete moves around the legs",
+        {"action_class": "guard_pass"},
+        position_context=context,
+    )
+
+    for prompt in (critique_prompt, analyze_prompt, validator_prompt):
+        assert '"position_before": "open_guard"' in prompt
+        assert "fallible" in prompt.lower()
+        assert "visible body-movement evidence" in prompt
+    assert "$position_context_json" not in critique_prompt
 
 
 def test_technique_validator_cannot_ditch_a_different_visible_technique():
@@ -575,6 +639,229 @@ def test_boundary_reconciliation_covers_scope_and_preserves_reset_separation():
     assert intervals[-1]["position_note"].startswith("50/50")
     assert sum(item["duration_s"] for item in intervals) == 100.0
     assert all(left["end_s"] == right["start_s"] for left, right in zip(intervals, intervals[1:]))
+
+
+def test_position_candidates_preserve_scan_targets_and_add_only_active_transitions():
+    intervals = build_position_intervals(
+        0.0,
+        40.0,
+        _state("standing", "neutral", "neutral"),
+        [
+            _transition(10.0, _state("open_guard", "top", "bottom")),
+            _transition(
+                20.0,
+                _state(
+                    "inactive",
+                    "not_applicable",
+                    "not_applicable",
+                    inactive_reason="referee reset",
+                ),
+            ),
+            _transition(22.0, _state("standing", "neutral", "neutral")),
+            _transition(32.0, _state("side_control", "top", "bottom")),
+        ],
+        player_ids=("player_a", "player_b"),
+    )
+    scanned = [
+        {
+            "index": 0,
+            "start_s": 7.0,
+            "end_s": 12.0,
+            "description": "Player A changes level and drives Player B to the mat",
+            "reasoning": "deliberate whole-body movement",
+        }
+    ]
+
+    candidates = position_timeline.build_position_aware_candidates(
+        scanned,
+        intervals,
+        scope_start_s=0.0,
+        scope_end_s=40.0,
+        transition_pre_s=4.0,
+        transition_post_s=2.0,
+        merge_tolerance_s=2.0,
+    )
+
+    assert len(candidates) == 2
+    assert candidates[0]["start_s"] == 7.0
+    assert candidates[0]["end_s"] == 12.0
+    assert candidates[0]["description"] == scanned[0]["description"]
+    assert candidates[0]["candidate_sources"] == [
+        "technique_scan",
+        "position_transition",
+    ]
+    assert [
+        item["at_s"] for item in candidates[0]["position_context"]["position_transitions"]
+    ] == [10.0]
+
+    assert candidates[1]["start_s"] == 28.0
+    assert candidates[1]["end_s"] == 34.0
+    assert candidates[1]["candidate_sources"] == ["position_transition"]
+    assert "do not infer" in candidates[1]["description"].lower()
+    assert candidates[1]["position_context"]["position_before"] == "standing"
+    assert candidates[1]["position_context"]["position_after"] == "side_control"
+    assert all(
+        item["at_s"] not in {20.0, 22.0}
+        for candidate in candidates
+        for item in candidate["position_context"]["position_transitions"]
+    )
+
+
+def test_distinct_position_transitions_never_collapse_into_one_scan_candidate():
+    intervals = build_position_intervals(
+        0.0,
+        20.0,
+        _state("standing", "neutral", "neutral"),
+        [
+            _transition(10.0, _state("open_guard", "top", "bottom")),
+            _transition(12.0, _state("side_control", "top", "bottom")),
+        ],
+        player_ids=("player_a", "player_b"),
+    )
+
+    candidates = position_timeline.build_position_aware_candidates(
+        [{"index": 0, "start_s": 9.0, "end_s": 13.0, "description": "one scan event"}],
+        intervals,
+        scope_start_s=0.0,
+        scope_end_s=20.0,
+        transition_pre_s=4.0,
+        transition_post_s=2.0,
+        merge_tolerance_s=2.0,
+    )
+
+    assert len(candidates) == 2
+    assert sum(
+        candidate["candidate_sources"] == ["technique_scan", "position_transition"]
+        for candidate in candidates
+    ) == 1
+    transition_only = next(
+        candidate
+        for candidate in candidates
+        if candidate["candidate_sources"] == ["position_transition"]
+    )
+    assert transition_only["transition_at_s"] in {10.0, 12.0}
+
+
+def test_position_context_tracks_before_after_roles_and_overlapping_intervals():
+    intervals = build_position_intervals(
+        0.0,
+        30.0,
+        _state("standing", "neutral", "neutral", confidence=0.8),
+        [
+            _transition(
+                10.0,
+                _state("open_guard", "top", "bottom", confidence=0.9),
+            ),
+            _transition(
+                20.0,
+                _state("side_control", "top", "bottom", confidence=0.95),
+            ),
+        ],
+        player_ids=("player_a", "player_b"),
+    )
+
+    context = position_timeline.build_position_context(intervals, 8.0, 22.0)
+
+    assert context["position_before"] == "standing"
+    assert context["position_after"] == "side_control"
+    assert context["player_roles_before"] == {
+        "player_a": "neutral",
+        "player_b": "neutral",
+    }
+    assert context["player_roles_after"] == {
+        "player_a": "top",
+        "player_b": "bottom",
+    }
+    assert context["overlapping_position_interval_indexes"] == [0, 1, 2]
+    assert [item["at_s"] for item in context["position_transitions"]] == [10.0, 20.0]
+    assert context["confidence_before"] == 0.8
+    assert context["confidence_after"] == 0.95
+
+
+def test_attached_technique_exposes_before_after_context_across_a_boundary():
+    intervals = build_position_intervals(
+        0.0,
+        20.0,
+        _state("open_guard", "top", "bottom"),
+        [_transition(10.0, _state("side_control", "top", "bottom"))],
+        player_ids=("player_a", "player_b"),
+    )
+
+    attached = attach_techniques_to_intervals(
+        [
+            {
+                "start_s": 7.0,
+                "end_s": 13.0,
+                "actor_player_id": "player_a",
+                "candidate_sources": ["technique_scan", "position_transition"],
+            }
+        ],
+        intervals,
+    )[0]
+
+    assert attached["position_before"] == "open_guard"
+    assert attached["position_after"] == "side_control"
+    assert attached["overlapping_position_interval_indexes"] == [0, 1]
+    assert attached["position_transitions"] == [
+        {
+            "at_s": 10.0,
+            "position_before": "open_guard",
+            "position_after": "side_control",
+            "player_roles_before": {"player_a": "top", "player_b": "bottom"},
+            "player_roles_after": {"player_a": "top", "player_b": "bottom"},
+        }
+    ]
+    assert attached["candidate_sources"] == [
+        "technique_scan",
+        "position_transition",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_position_candidate_node_rebuilds_timeline_and_streams_provenance():
+    ctx = RunContext(
+        youtube_id="x",
+        youtube_url="https://www.youtube.com/watch?v=abcdefghijk",
+        start_sec=0,
+        end_sec=30,
+        gemini_api_key="key",
+        request_timeout_ms=1_000,
+        player_references=_loaded_refs(),
+    )
+    ctx.position_initial_state = _state("standing", "neutral", "neutral")
+    ctx.position_transitions = [
+        _transition(10.0, _state("open_guard", "top", "bottom")),
+        _transition(20.0, _state("side_control", "top", "bottom")),
+    ]
+    ctx.highlights = [
+        {
+            "index": 0,
+            "start_s": 7.0,
+            "end_s": 12.0,
+            "description": "Player A drives Player B to the mat",
+            "reasoning": "deliberate body movement",
+        }
+    ]
+
+    events = [
+        event
+        async for event in executors.position_technique_candidates_node(
+            ctx, PositionTechniqueCandidatesConfig().model_dump()
+        )
+    ]
+
+    candidate_map = events[0]
+    assert candidate_map["type"] == "technique_candidate_map"
+    assert candidate_map["scan_candidate_count"] == 1
+    assert candidate_map["transition_candidate_count"] == 2
+    assert candidate_map["merged_candidate_count"] == 1
+    assert candidate_map["final_candidate_count"] == 2
+    assert ctx.position_intervals[1]["position"] == "open_guard"
+    assert ctx.highlights[0]["candidate_sources"] == [
+        "technique_scan",
+        "position_transition",
+    ]
+    assert ctx.highlights[1]["candidate_sources"] == ["position_transition"]
 
 
 def test_objective_statistics_exclude_inactive_and_never_emit_dominance_fields():
@@ -856,6 +1143,8 @@ async def test_new_nodes_stream_separate_position_and_technique_results(monkeypa
             "corrected_start_s": 11.5,
             "corrected_end_s": 18.5,
             "description": "player A drives a knee between player B's legs",
+            "candidate_sources": ["technique_scan", "position_transition"],
+            "position_context": {"position_before": "stale_scan_context"},
         }
     ]
     technique_events = [
@@ -870,6 +1159,16 @@ async def test_new_nodes_stream_separate_position_and_technique_results(monkeypa
     assert result["event"]["position"] is None  # attached only by deterministic reconcile
     assert result["event"]["original_bounds"] == [12.0, 18.0]
     assert result["event"]["corrected_bounds"] == [11.5, 18.5]
+    assert result["event"]["candidate_sources"] == [
+        "technique_scan",
+        "position_transition",
+    ]
+    assert result["event"]["position_context"]["position_before"] == "half_guard"
+    assert "stale_scan_context" not in calls[-2]["prompt_text"]
+    assert '"position_before": "half_guard"' in calls[-2]["prompt_text"]
+    assert '"position_before": "half_guard"' in calls[-1]["prompt_text"]
+    assert '"candidate_sources": ["technique_scan", "position_transition"]' in calls[-2]["prompt_text"]
+    assert '"candidate_sources": ["technique_scan", "position_transition"]' in calls[-1]["prompt_text"]
 
     timeline_events = [
         event
@@ -953,6 +1252,7 @@ async def test_actual_budget_gate_includes_position_calls_before_technique_deep_
         "position_scan",
         "position_critique",
         "highlight_scan",
+        "position_technique_candidates",
     ]
 
     with pytest.raises(TimelineValidationError, match="inside the requested scope"):
