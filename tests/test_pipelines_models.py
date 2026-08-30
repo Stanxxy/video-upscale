@@ -240,7 +240,7 @@ def test_vision_mimic_simplified_defaults():
     analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
     cfg = AnalyzeConfig.model_validate(analyze_stage.config)
     assert cfg.return_format == "simplified-tags-v1"
-    assert cfg.model == "gemini-3.1-flash-lite"
+    assert cfg.model == "gemini-3.7-flash"
     assert cfg.agent_mode == "single"
     # system_instruction defaults to the bundled taxonomy text (visible/editable
     # in the node's system_instruction card), not None.
@@ -445,10 +445,23 @@ def test_highlight_critique_config_defaults_and_bounds():
     cfg = HighlightCritiqueConfig()
     assert cfg.model == "gemini-3.1-flash-lite"
     assert cfg.critique_backpad_s == 6.0
+    assert cfg.fps == 1
+    assert cfg.system_prompt is None
+    assert cfg.initial_prompt is None
     assert cfg.thinking is None
     assert cfg.media_resolution is None
+    edited = HighlightCritiqueConfig(
+        fps=10,
+        system_prompt="edited critique system",
+        initial_prompt="edited $description at $scan_start_sec",
+    )
+    assert edited.fps == 10
+    assert edited.system_prompt == "edited critique system"
+    assert edited.initial_prompt == "edited $description at $scan_start_sec"
     HighlightCritiqueConfig(critique_backpad_s=0)  # ge=0 boundary
     HighlightCritiqueConfig(critique_backpad_s=30)  # le=30 boundary
+    with pytest.raises(ValidationError):
+        HighlightCritiqueConfig(fps=5)
     with pytest.raises(ValidationError):
         HighlightCritiqueConfig(critique_backpad_s=-0.01)
     with pytest.raises(ValidationError):

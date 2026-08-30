@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADCC Eval — Cost-Control Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface-2: #22273a;
+    --border: #2a2d3a;
+    --text: #e1e4ed;
+    --text-dim: #8b8fa3;
+    --accent: #6c8cff;
+    --green: #4ade80;
+    --red: #f87171;
+    --red-bright: #ff4d4d;
+    --yellow: #fbbf24;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .container { max-width: 980px; margin: 0 auto; padding: 20px; }
+  h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { color: var(--text-dim); font-size: 0.85rem; margin-bottom: 20px; }
+  h2 { font-size: 1rem; font-weight: 600; margin-bottom: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .card.danger-border { border-color: var(--red); }
+
+  label { display: block; font-size: 0.8rem; color: var(--text-dim); margin-bottom: 4px; margin-top: 10px; }
+  label:first-child { margin-top: 0; }
+  input, select, textarea {
+    width: 100%;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+  textarea { min-height: 60px; resize: vertical; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 160px; }
+
+  button {
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.15); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #0b0d13; }
+  button.stop {
+    background: var(--red-bright); border-color: var(--red-bright); color: #1a0505;
+    font-size: 1.1rem; padding: 16px 24px; width: 100%;
+  }
+  .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+  .pill-warn { background: rgba(251,191,36,0.15); color: var(--yellow); }
+  .pill-ok { background: rgba(74,222,128,0.15); color: var(--green); }
+  .pill-danger { background: rgba(248,113,113,0.15); color: var(--red); }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px; }
+  .stat { background: var(--surface-2); border-radius: 8px; padding: 10px; text-align: center; }
+  .stat .v { font-size: 1.3rem; font-weight: 700; }
+  .stat .k { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .stat.cost .v { color: var(--yellow); }
+  .stat.over .v { color: var(--red); }
+
+  .progress-outer { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 12px; }
+  .progress-inner { height: 100%; background: var(--accent); width: 0%; transition: width 0.2s; }
+
+  #confirm-row { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+  #confirm-row input[type=checkbox] { width: auto; }
+
+  #status-line { font-size: 0.82rem; color: var(--text-dim); margin-top: 10px; min-height: 1.1em; }
+  #status-line.err { color: var(--red); }
+  #status-line.ok { color: var(--green); }
+
+  .call-row {
+    border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; overflow: hidden;
+  }
+  .call-row-head {
+    padding: 8px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px;
+    font-size: 0.8rem; background: var(--surface-2);
+  }
+  .call-row-head:hover { filter: brightness(1.1); }
+  .call-row-head .tag { color: var(--accent); font-weight: 700; }
+  .call-row-body { padding: 10px; font-size: 0.78rem; display: none; background: var(--bg); }
+  .call-row.expanded .call-row-body { display: block; }
+  .call-row-body pre { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); padding: 8px; border-radius: 6px; margin-top: 6px; max-height: 260px; overflow: auto; }
+  .call-row-body .fieldlabel { color: var(--text-dim); font-size: 0.7rem; text-transform: uppercase; margin-top: 8px; }
+
+  #match-progress-list .match-row { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  #match-progress-list .match-row:last-child { border-bottom: none; }
+
+  .empty-note { color: var(--text-dim); font-size: 0.82rem; font-style: italic; }
+
+  .match-menu { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; margin-top: 8px; background: var(--bg); }
+  .match-row-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 0.82rem; cursor: pointer; }
+  .match-row-item:last-child { border-bottom: none; }
+  .match-row-item:hover { background: var(--surface-2); }
+  .match-row-item input[type=checkbox] { width: auto; margin: 0; flex-shrink: 0; }
+  .match-row-item .match-name { flex: 1; min-width: 100px; }
+  .match-row-item .match-meta { color: var(--text-dim); font-size: 0.75rem; white-space: nowrap; }
+  .match-row-item .match-meta.no-duration { color: var(--red); }
+
+  .stat.secondary .v { font-size: 1rem; }
+  .worst-case-line { color: var(--text-dim); font-size: 0.78rem; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>ADCC Eval — Cost-Control Dashboard</h1>
+  <div class="subtitle">Wraps the chunk-segment-tags capture engine. No single click here can spend a dollar without a fresh preview + explicit confirm.</div>
+  <div style="font-size:0.8rem; margin-bottom:16px;"><a href="/highlight" style="color:var(--accent);">Highlight Eval (coarse per-match highlight P/R/F1) &rarr;</a></div>
+
+  <!-- ===================== SCOPE + CAP ===================== -->
+  <div class="card">
+    <h2>1 · Scope &amp; Call Cap</h2>
+    <label for="scope-mode">Scope (nothing selected by default — there is no "all")</label>
+    <select id="scope-mode">
+      <option value="" selected>— choose a scope —</option>
+      <option value="single">Single match_id</option>
+      <option value="list">Hand-picked match_id list</option>
+      <option value="smoke">3-video smoke test (go/no-go)</option>
+      <option value="split">Named split</option>
+    </select>
+
+    <div id="scope-params-menu" class="scope-params" style="display:none;">
+      <label for="match-search">Search matches by athlete name (<span id="match-menu-total-count">0</span> total)</label>
+      <input id="match-search" type="text" placeholder="e.g. Gordon Ryan">
+      <div class="empty-note" id="match-menu-mode-note" style="margin-top:4px;"></div>
+      <div class="match-menu" id="match-menu-list"><div class="empty-note" style="padding:10px;">Loading match catalog…</div></div>
+    </div>
+
+    <div id="scope-params-split" class="scope-params" style="display:none;">
+      <label for="scope-split">split</label>
+      <select id="scope-split">
+        <option value="" selected>— choose —</option>
+        <option value="sandbox">sandbox</option>
+        <option value="dev">dev</option>
+        <option value="test">test</option>
+      </select>
+    </div>
+
+    <!-- Live selection aggregate — the "estimate before it begins" figure,
+         computed purely client-side from the already-fetched /matches
+         catalog (zero extra network calls). Only shown for the menu-driven
+         single/list modes. This is a convenience preview ONLY: it never
+         substitutes for the mandatory /plan preview + confirm below. -->
+    <div id="selection-aggregate" class="stat-grid" style="display:none; margin-top:14px;">
+      <div class="stat"><div class="v" id="sel-count">0</div><div class="k">Selected</div></div>
+      <div class="stat"><div class="v" id="sel-length">0:00</div><div class="k">Total length</div></div>
+      <div class="stat"><div class="v" id="sel-calls">0</div><div class="k">Est. calls (realistic)</div></div>
+      <div class="stat cost"><div class="v" id="sel-dollars">$0.00</div><div class="k">Est. $ (realistic)</div></div>
+    </div>
+    <div class="worst-case-line" id="sel-worst-case" style="display:none;"></div>
+
+    <div class="row">
+      <div>
+        <label for="cap-input">Hard call cap (GLOBAL — every Gemini call, PASS-1 + PASS-2, across the whole run)</label>
+        <input id="cap-input" type="number" min="1" step="1" placeholder="e.g. 100">
+        <div class="empty-note" id="cap-autofill-note" style="margin-top:4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== PREVIEW & CONFIRM ===================== -->
+  <div class="card">
+    <h2>2 · Preview &amp; Confirm</h2>
+    <div class="btn-row">
+      <button id="btn-preview">Preview (dry-run — zero Gemini calls)</button>
+    </div>
+    <div id="preview-result" style="display:none; margin-top: 14px;">
+      <div class="stat-grid">
+        <div class="stat"><div class="v" id="pv-matches">-</div><div class="k">Matches</div></div>
+        <div class="stat"><div class="v" id="pv-slices">-</div><div class="k">Slices (runs)</div></div>
+        <div class="stat"><div class="v" id="pv-calls-realistic">-</div><div class="k">Est. calls (realistic)</div></div>
+        <div class="stat cost"><div class="v" id="pv-dollars-realistic">-</div><div class="k">Est. $ (realistic)</div></div>
+      </div>
+      <div class="worst-case-line" id="pv-worst-case-line"></div>
+      <div id="pv-cap-warning" style="display:none; margin-top: 10px;">
+        <span class="pill pill-warn">Worst-case call count exceeds your cap — the run WILL abort early (CAP REACHED), by design.</span>
+      </div>
+      <div id="pv-over-cap-note" class="empty-note" style="margin-top: 8px;"></div>
+    </div>
+
+    <div id="confirm-row">
+      <input type="checkbox" id="confirm-checkbox" disabled>
+      <label for="confirm-checkbox" style="margin:0; display:inline;">I have reviewed this preview for the EXACT scope + cap above and want to run it against real Gemini.</label>
+    </div>
+    <div class="btn-row">
+      <button id="btn-run" class="primary" disabled>Confirm &amp; Run</button>
+    </div>
+    <div id="status-line"></div>
+  </div>
+
+  <!-- ===================== LIVE RUN ===================== -->
+  <div class="card" id="live-run-card" style="display:none;">
+    <h2>3 · Live Run</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="v" id="lr-calls">0</div><div class="k">Calls spent / cap</div></div>
+      <div class="stat cost"><div class="v" id="lr-dollars">$0.00</div><div class="k">$ spent (running)</div></div>
+      <div class="stat"><div class="v" id="lr-matches">0 / 0</div><div class="k">Matches done / total</div></div>
+      <div class="stat" id="lr-phase-stat"><div class="v" id="lr-phase">idle</div><div class="k">Current match · phase</div></div>
+    </div>
+    <div class="progress-outer"><div class="progress-inner" id="lr-progress-bar"></div></div>
+    <div id="lr-terminal-banner" style="display:none; margin-top: 12px;"></div>
+    <div class="btn-row">
+      <button id="btn-stop" class="stop">STOP</button>
+    </div>
+    <div id="match-progress-list" style="margin-top: 14px;"></div>
+  </div>
+
+  <!-- ===================== PER-CALL INSPECTOR ===================== -->
+  <div class="card" id="inspector-card" style="display:none;">
+    <h2>4 · Per-call Prompt / Output Inspector</h2>
+    <div class="empty-note" style="margin-bottom:8px;">One row per Gemini call (PASS-1 per slice, PASS-2 per chunk). Collapsed by default — click a row to expand it (only one open at a time).</div>
+    <div id="call-list"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------------------------------------------------------------------- //
+  // Scope form wiring
+  // ---------------------------------------------------------------------- //
+  const scopeModeEl = document.getElementById('scope-mode');
+  const capEl = document.getElementById('cap-input');
+  const paramBlocks = {
+    single: document.getElementById('scope-params-menu'),
+    list: document.getElementById('scope-params-menu'),
+    split: document.getElementById('scope-params-split'),
+    smoke: null,
+  };
+
+  // ---------------------------------------------------------------------- //
+  // Match-picker menu — GET /matches (zero Gemini calls, pure metadata +
+  // arithmetic) populates a searchable multi-select so the founder never
+  // has to type a hex match_id. Feeds the SAME single/list ScopeSpec the
+  // rest of the preview -> confirm -> cap flow already used — the menu only
+  // builds match_id/match_ids, it never bypasses /plan or the cap gate.
+  // ---------------------------------------------------------------------- //
+  let allMatches = [];
+  let selectedMatchIds = new Set();
+
+  async function loadMatches() {
+    const listEl = document.getElementById('match-menu-list');
+    try {
+      const resp = await fetch('/matches');
+      const body = await resp.json();
+      if (!resp.ok) {
+        listEl.innerHTML = '<div class="empty-note" style="padding:10px;">Failed to load match catalog: ' + (body.detail || resp.status) + '</div>';
+        return;
+      }
+      allMatches = body.matches || [];
+      document.getElementById('match-menu-total-count').textContent = String(body.match_count || allMatches.length);
+      renderMatchMenu();
+      updateSelectionAggregate();
+    } catch (e) {
+      listEl.innerHTML = '<div class="empty-note" style="padding:10px;">Match catalog request failed: ' + e + '</div>';
+    }
+  }
+
+  function renderMatchMenu() {
+    const listEl = document.getElementById('match-menu-list');
+    const query = document.getElementById('match-search').value.trim().toLowerCase();
+    const filtered = query ? allMatches.filter(m => m.name.toLowerCase().includes(query)) : allMatches;
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div class="empty-note" style="padding:10px;">No matches found for that search.</div>';
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(m => {
+      const checked = selectedMatchIds.has(m.match_id) ? 'checked' : '';
+      const lenStr = m.has_duration ? m.length_mmss : 'no duration';
+      const callsStr = m.has_duration ? ('~' + m.est_calls_realistic + ' calls') : 'excluded from estimates';
+      const metaCls = m.has_duration ? 'match-meta' : 'match-meta no-duration';
+      return '<label class="match-row-item" data-match-id="' + escapeHtml(m.match_id) + '">' +
+        '<input type="checkbox" class="match-checkbox" ' + checked + '>' +
+        '<span class="match-name">' + escapeHtml(m.name) + '</span>' +
+        '<span class="' + metaCls + '">' + escapeHtml(lenStr) + ' · ' + escapeHtml(callsStr) + '</span>' +
+        '</label>';
+    }).join('');
+
+    listEl.querySelectorAll('.match-checkbox').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const row = e.target.closest('.match-row-item');
+        onMatchToggle(row.getAttribute('data-match-id'), e.target.checked);
+      });
+    });
+  }
+
+  function onMatchToggle(matchId, checked) {
+    if (scopeModeEl.value === 'single') {
+      // Single mode: checking a new row replaces the previous selection
+      // (checkboxes have no native radio-group exclusivity).
+      selectedMatchIds.clear();
+      if (checked) selectedMatchIds.add(matchId);
+      renderMatchMenu();
+    } else {
+      if (checked) selectedMatchIds.add(matchId);
+      else selectedMatchIds.delete(matchId);
+    }
+    updateSelectionAggregate();
+    invalidatePreview('scope changed');
+  }
+
+  document.getElementById('match-search').addEventListener('input', renderMatchMenu);
+
+  function formatHms(totalSecondsRaw) {
+    const total = Math.max(0, Math.round(totalSecondsRaw));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  function updateSelectionAggregate() {
+    const mode = scopeModeEl.value;
+    const showAgg = mode === 'single' || mode === 'list';
+    document.getElementById('selection-aggregate').style.display = showAgg ? 'grid' : 'none';
+    const worstCaseLine = document.getElementById('sel-worst-case');
+    worstCaseLine.style.display = showAgg ? 'block' : 'none';
+    if (!showAgg) return;
+
+    const selected = allMatches.filter(m => selectedMatchIds.has(m.match_id));
+    const withDuration = selected.filter(m => m.has_duration);
+    const totalLength = withDuration.reduce((sum, m) => sum + m.length_seconds, 0);
+    const totalCallsRealistic = withDuration.reduce((sum, m) => sum + m.est_calls_realistic, 0);
+    const totalDollarsRealistic = withDuration.reduce((sum, m) => sum + m.est_dollars_realistic, 0);
+    const totalCallsWorstCase = withDuration.reduce((sum, m) => sum + m.est_calls_worst_case, 0);
+
+    document.getElementById('sel-count').textContent = String(selected.length);
+    document.getElementById('sel-length').textContent = formatHms(totalLength);
+    document.getElementById('sel-calls').textContent = String(totalCallsRealistic);
+    document.getElementById('sel-dollars').textContent = '$' + totalDollarsRealistic.toFixed(2);
+
+    let worstCaseText = 'worst-case ceiling (cap suggestion, pathological-case formula): ~' + totalCallsWorstCase + ' calls';
+    if (selected.length && selected.length !== withDuration.length) {
+      worstCaseText += ' — ' + (selected.length - withDuration.length) +
+        ' selected match(es) have no resolvable duration and are excluded from these totals.';
+    }
+    worstCaseLine.textContent = worstCaseText;
+
+    maybeAutofillCap(totalCallsWorstCase);
+  }
+
+  function maybeAutofillCap(worstCaseCalls) {
+    if (!worstCaseCalls) return;
+    // Only auto-fill an EMPTY cap, or one we auto-filled ourselves last time
+    // (tracked via dataset.autofilled) — never clobber a value the founder
+    // typed in by hand.
+    if (capEl.value === '' || capEl.dataset.autofilled === 'true') {
+      capEl.value = String(worstCaseCalls);
+      capEl.dataset.autofilled = 'true';
+      document.getElementById('cap-autofill-note').textContent =
+        'Auto-filled to the worst-case ceiling (' + worstCaseCalls + ') for your selection — a safe default that won’t false-abort a legit run. Lower it if you want.';
+    }
+  }
+
+  scopeModeEl.addEventListener('change', () => {
+    Object.values(paramBlocks).forEach(el => { if (el) el.style.display = 'none'; });
+    const block = paramBlocks[scopeModeEl.value];
+    if (block) block.style.display = 'block';
+
+    if (scopeModeEl.value === 'single' || scopeModeEl.value === 'list') {
+      selectedMatchIds.clear();
+      document.getElementById('match-search').value = '';
+      document.getElementById('match-menu-mode-note').textContent =
+        scopeModeEl.value === 'single'
+          ? 'Select exactly one match (checking a new one replaces the previous selection).'
+          : 'Select one or more matches.';
+      renderMatchMenu();
+    }
+    updateSelectionAggregate();
+    invalidatePreview('scope changed');
+  });
+
+  function currentScope() {
+    const mode = scopeModeEl.value;
+    if (mode === 'single') {
+      const ids = Array.from(selectedMatchIds);
+      return { mode, match_id: ids.length === 1 ? ids[0] : null };
+    }
+    if (mode === 'list') {
+      const ids = Array.from(selectedMatchIds);
+      return { mode, match_ids: ids.length ? ids : null };
+    }
+    if (mode === 'split') {
+      return { mode, split: document.getElementById('scope-split').value || null };
+    }
+    if (mode === 'smoke') {
+      return { mode };
+    }
+    return { mode: '' };
+  }
+
+  function scopeIsComplete(scope) {
+    if (!scope.mode) return false;
+    if (scope.mode === 'single') return !!scope.match_id;
+    if (scope.mode === 'list') return !!(scope.match_ids && scope.match_ids.length);
+    if (scope.mode === 'split') return !!scope.split;
+    return scope.mode === 'smoke';
+  }
+
+  function scopeQueryString(scope, cap) {
+    const params = new URLSearchParams();
+    params.set('mode', scope.mode);
+    params.set('cap', String(cap));
+    if (scope.match_id) params.set('match_id', scope.match_id);
+    if (scope.match_ids) params.set('match_ids', scope.match_ids.join(','));
+    if (scope.split) params.set('split', scope.split);
+    return params.toString();
+  }
+
+  document.getElementById('scope-split').addEventListener('change', () => invalidatePreview('scope changed'));
+  capEl.addEventListener('input', () => { capEl.dataset.autofilled = 'false'; });
+  ['input', 'change'].forEach(evt => {
+    capEl.addEventListener(evt, () => invalidatePreview('cap changed'));
+  });
+
+  loadMatches();
+
+  // ---------------------------------------------------------------------- //
+  // Preview state — a valid preview is tied EXACTLY to the scope+cap
+  // fingerprint it was computed for. Any change invalidates it.
+  // ---------------------------------------------------------------------- //
+  let lastPreview = null; // { fingerprint, plan_token, response }
+
+  function fingerprintOf(scope, cap) {
+    return JSON.stringify(scope) + '::' + String(cap);
+  }
+
+  function invalidatePreview(reason) {
+    lastPreview = null;
+    document.getElementById('preview-result').style.display = 'none';
+    const cb = document.getElementById('confirm-checkbox');
+    cb.checked = false;
+    cb.disabled = true;
+    document.getElementById('btn-run').disabled = true;
+    setStatus(reason ? ('Preview invalidated: ' + reason + ' — preview again before running.') : '', '');
+  }
+
+  function setStatus(msg, cls) {
+    const el = document.getElementById('status-line');
+    el.textContent = msg;
+    el.className = cls || '';
+  }
+
+  document.getElementById('btn-preview').addEventListener('click', async () => {
+    const scope = currentScope();
+    const cap = parseInt(capEl.value, 10);
+    if (!scopeIsComplete(scope)) { setStatus('Complete the scope fields first.', 'err'); return; }
+    if (!cap || cap <= 0) { setStatus('Enter a positive call cap first.', 'err'); return; }
+
+    setStatus('Fetching preview (zero Gemini calls)…', '');
+    try {
+      const resp = await fetch('/plan?' + scopeQueryString(scope, cap));
+      const body = await resp.json();
+      if (!resp.ok) { setStatus('Preview failed: ' + (body.detail || resp.status), 'err'); return; }
+
+      lastPreview = { fingerprint: fingerprintOf(scope, cap), plan_token: body.plan_token, scope, cap, response: body };
+      renderPreview(body);
+      document.getElementById('confirm-checkbox').disabled = false;
+      setStatus('Preview ready — review it, then check the confirm box to enable Run.', 'ok');
+    } catch (e) {
+      setStatus('Preview request failed: ' + e, 'err');
+    }
+  });
+
+  function renderPreview(body) {
+    document.getElementById('preview-result').style.display = 'block';
+    document.getElementById('pv-matches').textContent = body.match_count;
+    document.getElementById('pv-slices').textContent = body.total_slices;
+    // HEADLINE numbers: LeCun's realistic estimate — never the pathological
+    // worst-case ceiling with no explanation next to it (the trust bug).
+    document.getElementById('pv-calls-realistic').textContent = body.total_calls_realistic;
+    document.getElementById('pv-dollars-realistic').textContent = '$' + body.est_dollars_realistic.toFixed(2);
+    document.getElementById('pv-worst-case-line').textContent =
+      'worst-case ceiling (cap suggestion, pathological-case formula): ' +
+      body.total_planned_gemini_calls_worst_case + ' calls · $' + body.est_dollars_with_margin.toFixed(2) + ' with margin';
+    const warn = document.getElementById('pv-cap-warning');
+    warn.style.display = body.within_cap ? 'none' : 'block';
+    const note = document.getElementById('pv-over-cap-note');
+    note.textContent = body.over_cap_match_count > 0
+      ? (body.over_cap_match_count + ' of ' + body.match_count + ' match(es) needed slicing (over 12min scope cap).')
+      : '';
+  }
+
+  document.getElementById('confirm-checkbox').addEventListener('change', (e) => {
+    const cb = e.target;
+    const scope = currentScope();
+    const cap = parseInt(capEl.value, 10);
+    const stillFresh = lastPreview && lastPreview.fingerprint === fingerprintOf(scope, cap);
+    document.getElementById('btn-run').disabled = !(cb.checked && stillFresh);
+    if (cb.checked && !stillFresh) {
+      setStatus('Scope/cap changed since your last preview — re-preview before confirming.', 'err');
+      cb.checked = false;
+    }
+  });
+
+  // ---------------------------------------------------------------------- //
+  // Run + live counters + STOP
+  // ---------------------------------------------------------------------- //
+  let runActive = false;
+  let expandedCallId = null;
+  let callSeq = 0;
+  let matchOrder = [];
+  let matchStatus = {}; // match_id -> 'running' | 'done'
+
+  document.getElementById('btn-run').addEventListener('click', async () => {
+    if (!lastPreview) return;
+    const scope = currentScope();
+    const cap = parseInt(capEl.value, 10);
+    if (fingerprintOf(scope, cap) !== lastPreview.fingerprint) {
+      setStatus('Scope/cap changed — re-preview before running.', 'err');
+      return;
+    }
+
+    resetRunView();
+    document.getElementById('live-run-card').style.display = 'block';
+    document.getElementById('inspector-card').style.display = 'block';
+    document.getElementById('btn-run').disabled = true;
+    document.getElementById('btn-preview').disabled = true;
+    runActive = true;
+    setStatus('Run started — streaming live.', 'ok');
+
+    try {
+      const resp = await fetch('/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scope, cap, plan_token: lastPreview.plan_token, confirm: true,
+        }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        setStatus('Run rejected: ' + (body.detail || resp.status), 'err');
+        endRun();
+        return;
+      }
+      await consumeNdjsonStream(resp.body, handleRunEvent);
+    } catch (e) {
+      setStatus('Run stream failed: ' + e, 'err');
+    } finally {
+      endRun();
+    }
+  });
+
+  document.getElementById('btn-stop').addEventListener('click', async () => {
+    try {
+      const resp = await fetch('/stop', { method: 'POST' });
+      const body = await resp.json().catch(() => ({}));
+      setStatus(resp.ok ? 'STOP sent — no new Gemini calls will start.' : ('Stop failed: ' + (body.detail || resp.status)), resp.ok ? 'ok' : 'err');
+    } catch (e) {
+      setStatus('Stop request failed: ' + e, 'err');
+    }
+  });
+
+  function endRun() {
+    runActive = false;
+    document.getElementById('btn-preview').disabled = false;
+    // Run button stays disabled until a fresh preview + re-confirm — a
+    // finished/aborted run is NOT auto-re-armed.
+  }
+
+  function resetRunView() {
+    callSeq = 0;
+    matchOrder = [];
+    matchStatus = {};
+    expandedCallId = null;
+    document.getElementById('call-list').innerHTML = '';
+    document.getElementById('match-progress-list').innerHTML = '';
+    document.getElementById('lr-terminal-banner').style.display = 'none';
+    document.getElementById('lr-calls').textContent = '0 / ' + (lastPreview ? lastPreview.cap : '?');
+    document.getElementById('lr-dollars').textContent = '$0.00';
+    document.getElementById('lr-matches').textContent = '0 / ' + (lastPreview ? lastPreview.response.match_count : '?');
+    document.getElementById('lr-phase').textContent = 'starting…';
+    document.getElementById('lr-progress-bar').style.width = '0%';
+  }
+
+  async function consumeNdjsonStream(bodyStream, onEvent) {
+    const reader = bodyStream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n')) !== -1) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (line) dispatchLine(line, onEvent);
+      }
+    }
+    const rest = buffer.trim();
+    if (rest) dispatchLine(rest, onEvent);
+  }
+
+  function dispatchLine(line, onEvent) {
+    let evt;
+    try { evt = JSON.parse(line); } catch (e) { return; }
+    onEvent(evt);
+  }
+
+  function handleRunEvent(evt) {
+    switch (evt.type) {
+      case 'batch_start':
+        document.getElementById('lr-matches').textContent = '0 / ' + evt.match_count;
+        document.getElementById('lr-phase').textContent = 'batch starting';
+        break;
+      case 'match_start':
+        matchOrder.push(evt.match_id);
+        matchStatus[evt.match_id] = 'running';
+        document.getElementById('lr-phase').textContent = evt.match_id + ' · segmenting';
+        renderMatchList();
+        break;
+      case 'slice_start':
+        document.getElementById('lr-phase').textContent = evt.match_id + ' · slice ' + evt.slice_index + ' · PASS-1 scan';
+        break;
+      case 'chunk_map':
+        document.getElementById('lr-phase').textContent = evt.match_id + ' · slice ' + evt.slice_index + ' · PASS-2 deep tagging';
+        addCallRow('PASS-1 (chunk_map)', evt);
+        break;
+      case 'chunk_start':
+        document.getElementById('lr-phase').textContent = evt.match_id + ' · chunk ' + evt.chunk_index + ' · PASS-2';
+        break;
+      case 'chunk_result':
+        addCallRow('PASS-2 (chunk_result #' + evt.chunk_index + ')', evt);
+        break;
+      case 'match_complete':
+        matchStatus[evt.match_id] = 'done';
+        renderMatchList();
+        updateMatchProgress();
+        break;
+      case 'cap_reached':
+        showTerminal('CAP REACHED — ' + evt.calls_spent + ' / ' + evt.cap + ' calls spent. Run stopped automatically.', 'pill-danger');
+        break;
+      case 'run_stopped':
+        showTerminal('STOPPED by operator — ' + evt.calls_spent + ' call(s) spent, $' + (evt.dollars_spent || 0).toFixed(2) + '.', 'pill-warn');
+        break;
+      case 'batch_complete':
+        showTerminal('COMPLETE — ' + evt.calls_spent + ' call(s) spent, $' + evt.dollars_spent.toFixed(2) + '.', 'pill-ok');
+        document.getElementById('lr-progress-bar').style.width = '100%';
+        break;
+      case 'error':
+        addLogNote('error [' + (evt.stage_id || '?') + ']: ' + evt.message);
+        break;
+      default:
+        break;
+    }
+
+    if (typeof evt.global_calls_spent === 'number') {
+      const cap = lastPreview ? lastPreview.cap : '?';
+      document.getElementById('lr-calls').textContent = evt.global_calls_spent + ' / ' + cap;
+      document.getElementById('lr-dollars').textContent = '$' + evt.global_dollars_spent.toFixed(2);
+      if (lastPreview && lastPreview.cap) {
+        const pct = Math.min(100, Math.round(100 * evt.global_calls_spent / lastPreview.cap));
+        document.getElementById('lr-progress-bar').style.width = pct + '%';
+      }
+    }
+  }
+
+  function updateMatchProgress() {
+    const done = Object.values(matchStatus).filter(s => s === 'done').length;
+    const total = lastPreview ? lastPreview.response.match_count : matchOrder.length;
+    document.getElementById('lr-matches').textContent = done + ' / ' + total;
+  }
+
+  function renderMatchList() {
+    const el = document.getElementById('match-progress-list');
+    el.innerHTML = matchOrder.map(mid => {
+      const status = matchStatus[mid] || 'pending';
+      const cls = status === 'done' ? 'pill-ok' : (status === 'running' ? 'pill-warn' : '');
+      return '<div class="match-row"><span>' + escapeHtml(mid) + '</span><span class="pill ' + cls + '">' + status + '</span></div>';
+    }).join('');
+  }
+
+  function showTerminal(msg, pillCls) {
+    const el = document.getElementById('lr-terminal-banner');
+    el.style.display = 'block';
+    el.innerHTML = '<span class="pill ' + pillCls + '">' + escapeHtml(msg) + '</span>';
+  }
+
+  function addLogNote(msg) {
+    const list = document.getElementById('call-list');
+    const div = document.createElement('div');
+    div.className = 'empty-note';
+    div.textContent = msg;
+    list.appendChild(div);
+  }
+
+  // ---------------------------------------------------------------------- //
+  // Per-call inspector — collapsed flat list, one expanded at a time.
+  // ---------------------------------------------------------------------- //
+  function addCallRow(label, evt) {
+    callSeq += 1;
+    const id = 'call-' + callSeq;
+    const list = document.getElementById('call-list');
+    const row = document.createElement('div');
+    row.className = 'call-row';
+    row.id = id;
+
+    const usage = evt.usage_metadata;
+    const usageStr = usage
+      ? ('in=' + usage.prompt_token_count + ' out=' + usage.candidates_token_count)
+      : 'usage: n/a';
+
+    row.innerHTML =
+      '<div class="call-row-head">' +
+        '<span><span class="tag">' + escapeHtml(label) + '</span> — ' + escapeHtml(evt.match_id || '') +
+          (evt.slice_index != null ? (' · slice ' + evt.slice_index) : '') + '</span>' +
+        '<span>' + escapeHtml(usageStr) + '</span>' +
+      '</div>' +
+      '<div class="call-row-body">' +
+        '<div class="fieldlabel">Prompt</div><pre>' + escapeHtml(evt.prompt_text || '(not captured)') + '</pre>' +
+        '<div class="fieldlabel">Raw response</div><pre>' + escapeHtml(evt.raw_response_text || '(not captured)') + '</pre>' +
+        '<div class="fieldlabel">Usage metadata</div><pre>' + escapeHtml(JSON.stringify(usage || {}, null, 2)) + '</pre>' +
+      '</div>';
+
+    row.querySelector('.call-row-head').addEventListener('click', () => toggleCallRow(id));
+    list.appendChild(row);
+  }
+
+  function toggleCallRow(id) {
+    if (expandedCallId && expandedCallId !== id) {
+      const prev = document.getElementById(expandedCallId);
+      if (prev) prev.classList.remove('expanded');
+    }
+    const el = document.getElementById(id);
+    const willExpand = !el.classList.contains('expanded');
+    el.classList.toggle('expanded', willExpand);
+    expandedCallId = willExpand ? id : null;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+})();
+</script>
+</body>
+</html>

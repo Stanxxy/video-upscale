@@ -1,0 +1,1244 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9d018__g4_0",
+    "match_id": "650d20c745120c8433e9d018",
+    "gold_event": {
+      "t_s": 226,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ATkSimsKwtg",
+    "window_start_s": 221.0,
+    "window_end_s": 230.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the light-colored shorts with the prominent leg tattoo is clearly initiating the offensive movement and is identified as ref_right based on the reference images.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the light-colored shorts with the prominent leg tattoo is clearly initiating the offensive movement and is identified as ref_right based on the reference images."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 61,
+        "total_token_count": 7274
+      },
+      "latency_ms": 1318.5,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"The athletes are engaged in a complex scramble with shifting positions, and without reference images, it is impossible to identify either individual.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "The athletes are engaged in a complex scramble with shifting positions, and without reference images, it is impossible to identify either individual."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 53,
+        "total_token_count": 6732
+      },
+      "latency_ms": 923.9,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d018__g4_1",
+    "match_id": "650d20c745120c8433e9d018",
+    "gold_event": {
+      "t_s": 483,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ATkSimsKwtg",
+    "window_start_s": 478.0,
+    "window_end_s": 487.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the light-colored rashguard, identified as ref_right, is the primary actor initiating the pressure and passing the guard.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the light-colored rashguard, identified as ref_right, is the primary actor initiating the pressure and passing the guard."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 57,
+        "total_token_count": 7270
+      },
+      "latency_ms": 5840.1,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, so the primary actor cannot be named.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, so the primary actor cannot be named."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 46,
+        "total_token_count": 6725
+      },
+      "latency_ms": 821.4,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d018__g4_2",
+    "match_id": "650d20c745120c8433e9d018",
+    "gold_event": {
+      "t_s": 497,
+      "action_class": "submission_choke",
+      "outcome": "successful",
+      "position_bucket": "back_control",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ATkSimsKwtg",
+    "window_start_s": 492.0,
+    "window_end_s": 501.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the grey rashguard, identified as ref_left, is the one actively applying the submission hold throughout the clip.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the grey rashguard, identified as ref_left, is the one actively applying the submission hold throughout the clip."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 55,
+        "total_token_count": 7268
+      },
+      "latency_ms": 5322.9,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"The athletes are engaged in a tight, mutually active scramble where neither individual is clearly dominating the exchange.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "The athletes are engaged in a tight, mutually active scramble where neither individual is clearly dominating the exchange."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 48,
+        "total_token_count": 6727
+      },
+      "latency_ms": 1034.9,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d027__g4_0",
+    "match_id": "650d20c745120c8433e9d027",
+    "gold_event": {
+      "t_s": 8463,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 8458.0,
+    "window_end_s": 8467.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with white text on the back is clearly identified as ref_right and is the one initiating the sweep and maintaining top position.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with white text on the back is clearly identified as ref_right and is the one initiating the sweep and maintaining top position."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 61,
+        "total_token_count": 7274
+      },
+      "latency_ms": 4781.7,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and the clip shows a highly contested scramble where both athletes are actively engaged.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and the clip shows a highly contested scramble where both athletes are actively engaged."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 53,
+        "total_token_count": 6732
+      },
+      "latency_ms": 840.9,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d027__g4_1",
+    "match_id": "650d20c745120c8433e9d027",
+    "gold_event": {
+      "t_s": 8571,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "closed_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 8566.0,
+    "window_end_s": 8575.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with braided hair matches the visual features of the athlete in reference image 2.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with braided hair matches the visual features of the athlete in reference image 2."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 52,
+        "total_token_count": 7265
+      },
+      "latency_ms": 4400.8,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and the clip shows a complex grappling exchange where both athletes are actively engaged.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and the clip shows a complex grappling exchange where both athletes are actively engaged."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 53,
+        "total_token_count": 6732
+      },
+      "latency_ms": 942.7,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d027__g4_2",
+    "match_id": "650d20c745120c8433e9d027",
+    "gold_event": {
+      "t_s": 8803,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 8798.0,
+    "window_end_s": 8807.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with the visible back tattoo is the primary actor initiating the movement, which matches the visual features of ref_right.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with the visible back tattoo is the primary actor initiating the movement, which matches the visual features of ref_right."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 59,
+        "total_token_count": 7272
+      },
+      "latency_ms": 3921.9,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and the clip shows a complex grappling exchange where both athletes are actively engaged.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and the clip shows a complex grappling exchange where both athletes are actively engaged."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 53,
+        "total_token_count": 6732
+      },
+      "latency_ms": 853.8,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "65396bbbb7741492b97777fc__g4_0",
+    "match_id": "65396bbbb7741492b97777fc",
+    "gold_event": {
+      "t_s": 4614,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 4609.0,
+    "window_end_s": 4618.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with the blonde hair and beard matches the visual appearance of the athlete in reference image 1.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with the blonde hair and beard matches the visual appearance of the athlete in reference image 1."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 55,
+        "total_token_count": 7268
+      },
+      "latency_ms": 6841.3,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes in the clip.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes in the clip."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 41,
+        "total_token_count": 6720
+      },
+      "latency_ms": 807.9,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "65396bbbb7741492b97777fc__g4_1",
+    "match_id": "65396bbbb7741492b97777fc",
+    "gold_event": {
+      "t_s": 4630,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 4625.0,
+    "window_end_s": 4634.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with the 'CROSSTILLER' logo on the back matches the reference image for ref_left.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with the 'CROSSTILLER' logo on the back matches the reference image for ref_left."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 58,
+        "total_token_count": 7271
+      },
+      "latency_ms": 4176.7,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, making it impossible to determine the primary actor.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, making it impossible to determine the primary actor."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 48,
+        "total_token_count": 6727
+      },
+      "latency_ms": 753.5,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "65396bbbb7741492b97777fc__g4_2",
+    "match_id": "65396bbbb7741492b97777fc",
+    "gold_event": {
+      "t_s": 4664,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 4659.0,
+    "window_end_s": 4668.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with blonde hair matches the visual appearance of the athlete in reference image 1.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with blonde hair matches the visual appearance of the athlete in reference image 1."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 52,
+        "total_token_count": 7265
+      },
+      "latency_ms": 4170.0,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and both are actively engaged in a grappling exchange.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and both are actively engaged in a grappling exchange."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 48,
+        "total_token_count": 6727
+      },
+      "latency_ms": 894.8,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "6567972aa4a13c99c4fe36ca__g4_0",
+    "match_id": "6567972aa4a13c99c4fe36ca",
+    "gold_event": {
+      "t_s": 20,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=oHb7bR0epUI",
+    "window_start_s": 15.0,
+    "window_end_s": 24.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete identified as ref_left is clearly visible in the black rashguard with white lettering, which matches the reference image.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete identified as ref_left is clearly visible in the black rashguard with white lettering, which matches the reference image."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 54,
+        "total_token_count": 7267
+      },
+      "latency_ms": 5002.0,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and the clip shows a neutral, contested exchange on the ground.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and the clip shows a neutral, contested exchange on the ground."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 51,
+        "total_token_count": 6730
+      },
+      "latency_ms": 799.9,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "6567972aa4a13c99c4fe36ca__g4_1",
+    "match_id": "6567972aa4a13c99c4fe36ca",
+    "gold_event": {
+      "t_s": 48,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=oHb7bR0epUI",
+    "window_start_s": 43.0,
+    "window_end_s": 52.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with white lettering (ref_right) is the primary actor as he initiates the takedown attempt and maintains top position throughout the exchange.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with white lettering (ref_right) is the primary actor as he initiates the takedown attempt and maintains top position throughout the exchange."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 63,
+        "total_token_count": 7276
+      },
+      "latency_ms": 6158.8,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"The athletes are engaged in a neutral, technical exchange from a seated position where neither is clearly dominating the other, and no reference images were provided to identify them.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "The athletes are engaged in a neutral, technical exchange from a seated position where neither is clearly dominating the other, and no reference images were provided to identify them."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 60,
+        "total_token_count": 6739
+      },
+      "latency_ms": 1047.0,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "6567972aa4a13c99c4fe36ca__g4_2",
+    "match_id": "6567972aa4a13c99c4fe36ca",
+    "gold_event": {
+      "t_s": 90,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=oHb7bR0epUI",
+    "window_start_s": 85.0,
+    "window_end_s": 94.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with white text on the front matches the visual appearance of the athlete in reference image 1.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with white text on the front matches the visual appearance of the athlete in reference image 1."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 55,
+        "total_token_count": 7268
+      },
+      "latency_ms": 4419.9,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and the clip shows a neutral, contested exchange on the ground.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and the clip shows a neutral, contested exchange on the ground."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 51,
+        "total_token_count": 6730
+      },
+      "latency_ms": 3436.0,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "65dbe62da2434704339da256__g4_0",
+    "match_id": "65dbe62da2434704339da256",
+    "gold_event": {
+      "t_s": 1200,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "window_start_s": 1195.0,
+    "window_end_s": 1204.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with white text on the back matches the visual appearance of the athlete in reference image 2.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with white text on the back matches the visual appearance of the athlete in reference image 2."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 55,
+        "total_token_count": 7268
+      },
+      "latency_ms": 1358.5,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and the clip shows a neutral, contested scramble on the ground.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and the clip shows a neutral, contested scramble on the ground."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 51,
+        "total_token_count": 6730
+      },
+      "latency_ms": 926.4,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "65dbe62da2434704339da256__g4_1",
+    "match_id": "65dbe62da2434704339da256",
+    "gold_event": {
+      "t_s": 1211,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "window_start_s": 1206.0,
+    "window_end_s": 1215.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with white text on the back is clearly identified as ref_right from the reference images and is the one initiating the leg entanglement.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with white text on the back is clearly identified as ref_right from the reference images and is the one initiating the leg entanglement."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 62,
+        "total_token_count": 7275
+      },
+      "latency_ms": 3835.7,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"contested\",\n  \"identity_uncertain\": true,\n  \"justification\": \"The athletes are engaged in a neutral, ground-based scramble where neither individual clearly dominates the exchange.\"\n}",
+      "parsed": {
+        "actor": "contested",
+        "identity_uncertain": true,
+        "justification": "The athletes are engaged in a neutral, ground-based scramble where neither individual clearly dominates the exchange."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 48,
+        "total_token_count": 6727
+      },
+      "latency_ms": 851.6,
+      "actor": "contested"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "65dbe62da2434704339da256__g4_2",
+    "match_id": "65dbe62da2434704339da256",
+    "gold_event": {
+      "t_s": 1250,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "window_start_s": 1245.0,
+    "window_end_s": 1254.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with the white logo on the back matches the visual appearance of the athlete in reference image 2.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with the white logo on the back matches the visual appearance of the athlete in reference image 2."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 56,
+        "total_token_count": 7269
+      },
+      "latency_ms": 1498.7,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, so the primary actor cannot be determined.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, so the primary actor cannot be determined."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 46,
+        "total_token_count": 6725
+      },
+      "latency_ms": 880.5,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "662ae0ce532ae8f232657f96__g4_0",
+    "match_id": "662ae0ce532ae8f232657f96",
+    "gold_event": {
+      "t_s": 525,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=srZxKZ70eW0",
+    "window_start_s": 520.0,
+    "window_end_s": 529.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the white shirt and green shorts, identified as ref_right, is the primary actor as they initiate the takedown and maintain top position throughout the exchange.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the white shirt and green shorts, identified as ref_right, is the primary actor as they initiate the takedown and maintain top position throughout the exchange."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 63,
+        "total_token_count": 7276
+      },
+      "latency_ms": 9303.2,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and the exchange is a neutral scramble on the mat.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and the exchange is a neutral scramble on the mat."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 49,
+        "total_token_count": 6728
+      },
+      "latency_ms": 954.4,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "662ae0ce532ae8f232657f96__g4_1",
+    "match_id": "662ae0ce532ae8f232657f96",
+    "gold_event": {
+      "t_s": 558,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=srZxKZ70eW0",
+    "window_start_s": 553.0,
+    "window_end_s": 562.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the white shirt and green shorts is clearly identifiable as ref_left, and they are the one initiating the takedown attempt.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the white shirt and green shorts is clearly identifiable as ref_left, and they are the one initiating the takedown attempt."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 57,
+        "total_token_count": 7270
+      },
+      "latency_ms": 12187.1,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes in the clip.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes in the clip."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 41,
+        "total_token_count": 6720
+      },
+      "latency_ms": 835.2,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "662ae0ce532ae8f232657f96__g4_2",
+    "match_id": "662ae0ce532ae8f232657f96",
+    "gold_event": {
+      "t_s": 596,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=srZxKZ70eW0",
+    "window_start_s": 591.0,
+    "window_end_s": 600.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the white shirt and green shorts is clearly initiating the leg entanglement and controlling the exchange, matching the visual appearance of the athlete labeled ref_left.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the white shirt and green shorts is clearly initiating the leg entanglement and controlling the exchange, matching the visual appearance of the athlete labeled ref_left."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 61,
+        "total_token_count": 7274
+      },
+      "latency_ms": 4925.3,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, and the athletes are in a neutral, tangled position on the mat.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, and the athletes are in a neutral, tangled position on the mat."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 52,
+        "total_token_count": 6731
+      },
+      "latency_ms": 886.4,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "664b79b5532ae8f2326a66b7__g4_0",
+    "match_id": "664b79b5532ae8f2326a66b7",
+    "gold_event": {
+      "t_s": 1667,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=vCyb33erhsc",
+    "window_start_s": 1662.0,
+    "window_end_s": 1671.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the camouflage rashguard matches the visual appearance of the athlete in reference image 1.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the camouflage rashguard matches the visual appearance of the athlete in reference image 1."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 49,
+        "total_token_count": 7262
+      },
+      "latency_ms": 8797.0,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes in the clip.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes in the clip."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 41,
+        "total_token_count": 6720
+      },
+      "latency_ms": 779.0,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "664b79b5532ae8f2326a66b7__g4_1",
+    "match_id": "664b79b5532ae8f2326a66b7",
+    "gold_event": {
+      "t_s": 1735,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=vCyb33erhsc",
+    "window_start_s": 1730.0,
+    "window_end_s": 1739.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the camouflage rashguard matches the reference image for ref_right and is the one actively applying the pressure and initiating the movement in the clip.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the camouflage rashguard matches the reference image for ref_right and is the one actively applying the pressure and initiating the movement in the clip."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 60,
+        "total_token_count": 7273
+      },
+      "latency_ms": 7285.4,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, so the primary actor cannot be determined.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, so the primary actor cannot be determined."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 46,
+        "total_token_count": 6725
+      },
+      "latency_ms": 833.7,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "664b79b5532ae8f2326a66b7__g4_2",
+    "match_id": "664b79b5532ae8f2326a66b7",
+    "gold_event": {
+      "t_s": 1754,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "closed_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=vCyb33erhsc",
+    "window_start_s": 1749.0,
+    "window_end_s": 1758.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the patterned rashguard, identified as ref_right, is the one actively applying the toe hold submission.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the patterned rashguard, identified as ref_right, is the one actively applying the toe hold submission."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 53,
+        "total_token_count": 7266
+      },
+      "latency_ms": 10788.6,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the athletes, so the primary actor remains unclear.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the athletes, so the primary actor remains unclear."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 45,
+        "total_token_count": 6724
+      },
+      "latency_ms": 779.1,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "6665f04d4828f704f1b3afd8__g4_0",
+    "match_id": "6665f04d4828f704f1b3afd8",
+    "gold_event": {
+      "t_s": 6187,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 6182.0,
+    "window_end_s": 6191.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_right\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with the red ankle tape matches the athlete in reference image 2.\"\n}",
+      "parsed": {
+        "actor": "ref_right",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with the red ankle tape matches the athlete in reference image 2."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 50,
+        "total_token_count": 7263
+      },
+      "latency_ms": 4720.2,
+      "actor": "ref_right",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"contested\",\n  \"identity_uncertain\": true,\n  \"justification\": \"The athletes are engaged in a neutral scramble on the ground with no clear dominant actor, and no reference images were provided to identify them.\"\n}",
+      "parsed": {
+        "actor": "contested",
+        "identity_uncertain": true,
+        "justification": "The athletes are engaged in a neutral scramble on the ground with no clear dominant actor, and no reference images were provided to identify them."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 55,
+        "total_token_count": 6734
+      },
+      "latency_ms": 1021.1,
+      "actor": "contested"
+    },
+    "status": "ok"
+  },
+  {
+    "window_id": "6665f04d4828f704f1b3afd8__g4_1",
+    "match_id": "6665f04d4828f704f1b3afd8",
+    "gold_event": {
+      "t_s": 6221,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 6216.0,
+    "window_end_s": 6225.0,
+    "ref_offset_s": 3.0,
+    "with_refs": {
+      "call_name": "actor_with_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"ref_left\",\n  \"identity_uncertain\": false,\n  \"justification\": \"The athlete in the black rashguard with the 'B' logo on the chest matches the athlete labeled ref_left.\"\n}",
+      "parsed": {
+        "actor": "ref_left",
+        "identity_uncertain": false,
+        "justification": "The athlete in the black rashguard with the 'B' logo on the chest matches the athlete labeled ref_left."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 7213,
+        "candidates_token_count": 53,
+        "total_token_count": 7266
+      },
+      "latency_ms": 3665.9,
+      "actor": "ref_left",
+      "identity_uncertain": false
+    },
+    "without_refs": {
+      "call_name": "actor_without_refs",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"actor\": \"unclear\",\n  \"identity_uncertain\": true,\n  \"justification\": \"No reference images were provided to identify the two athletes engaged in the grappling exchange.\"\n}",
+      "parsed": {
+        "actor": "unclear",
+        "identity_uncertain": true,
+        "justification": "No reference images were provided to identify the two athletes engaged in the grappling exchange."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6679,
+        "candidates_token_count": 44,
+        "total_token_count": 6723
+      },
+      "latency_ms": 929.5,
+      "actor": "unclear"
+    },
+    "status": "ok"
+  }
+]

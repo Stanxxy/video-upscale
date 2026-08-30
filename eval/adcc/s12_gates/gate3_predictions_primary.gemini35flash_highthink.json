@@ -1,0 +1,1385 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9cff3__w32",
+    "match_id": "650d20c745120c8433e9cff3",
+    "gold_event": {
+      "t_s": 761,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "match_id": "650d20c745120c8433e9cff3",
+      "gate5_straddler": true,
+      "gold_event": {
+        "t_s": 761,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BKZ6Dt7SpYE",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 756.0,
+      "window_end_s": 765.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"Eoghan O'Flanagan has secured back control on Xande Ribeiro after a guillotine attempt and a transition from turtle.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 1.5,\n      \"position\": \"standing\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"takedown_attempt\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"guillotine snapdown to front headlock takedown\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 1.5,\n      \"end_s\": 4.0,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"guillotine choke\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 4.0,\n      \"end_s\": 6.0,\n      \"position\": \"turtle\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"back_take\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"back take from turtle\",\n      \"confidence\": 0.95\n    },\n    {\n      \"start_s\": 6.0,\n      \"end_s\": 9.0,\n      \"position\": \"back_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"establishing back control with hooks\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "Eoghan O'Flanagan has secured back control on Xande Ribeiro after a guillotine attempt and a transition from turtle.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 1.5,
+                "position": "standing",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "takedown_attempt",
+                "outcome": "successful",
+                "specific_technique_guess": "guillotine snapdown to front headlock takedown",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 1.5,
+                "end_s": 4.0,
+                "position": "side_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "guillotine choke",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 4.0,
+                "end_s": 6.0,
+                "position": "turtle",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "back_take",
+                "outcome": "successful",
+                "specific_technique_guess": "back take from turtle",
+                "confidence": 0.95
+              },
+              {
+                "start_s": 6.0,
+                "end_s": 9.0,
+                "position": "back_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "establishing back control with hooks",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 477,
+            "total_token_count": 10957
+          },
+          "latency_ms": 15881.2,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 756.0,
+          "end_s": 757.5,
+          "action_class": "takedown_attempt",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 757.5,
+          "end_s": 760.0,
+          "action_class": "submission_choke",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 760.0,
+          "end_s": 762.0,
+          "action_class": "back_take",
+          "confidence": 0.95
+        },
+        {
+          "start_s": 762.0,
+          "end_s": 765.0,
+          "action_class": "transition",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "match_id": "650d20c745120c8433e9cff3",
+      "gate5_straddler": true,
+      "gold_event": {
+        "t_s": 761,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BKZ6Dt7SpYE",
+      "ingestion_path": "files_api",
+      "window_start_s": 756.0,
+      "window_end_s": 765.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with Eoghan O'Flanagan initiating a snapdown takedown on Xande Ribeiro, transitioning into a front headlock guillotine attempt, and ultimately taking Ribeiro's back to establish back control.\",\n  \"clips\": [\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 3.2,\n      \"position\": \"standing\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"takedown_attempt\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"snapdown\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 3.2,\n      \"end_s\": 6.0,\n      \"position\": \"scramble\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"guillotine choke\",\n      \"confidence\": 0.85\n    },\n    {\n      \"start_s\": 6.0,\n      \"end_s\": 8.0,\n      \"position\": \"turtle\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"back_take\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"back take from turtle\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 8.0,\n      \"end_s\": 10.9,\n      \"position\": \"back_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"seatbelt control\",\n      \"confidence\": 0.95\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with Eoghan O'Flanagan initiating a snapdown takedown on Xande Ribeiro, transitioning into a front headlock guillotine attempt, and ultimately taking Ribeiro's back to establish back control.",
+            "clips": [
+              {
+                "start_s": 2.0,
+                "end_s": 3.2,
+                "position": "standing",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "takedown_attempt",
+                "outcome": "successful",
+                "specific_technique_guess": "snapdown",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 3.2,
+                "end_s": 6.0,
+                "position": "scramble",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "guillotine choke",
+                "confidence": 0.85
+              },
+              {
+                "start_s": 6.0,
+                "end_s": 8.0,
+                "position": "turtle",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "back_take",
+                "outcome": "successful",
+                "specific_technique_guess": "back take from turtle",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 8.0,
+                "end_s": 10.9,
+                "position": "back_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "seatbelt control",
+                "confidence": 0.95
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 484,
+            "total_token_count": 10953
+          },
+          "latency_ms": 15977.8,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 758.0,
+          "end_s": 759.2,
+          "action_class": "takedown_attempt",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 759.2,
+          "end_s": 762.0,
+          "action_class": "submission_choke",
+          "confidence": 0.85
+        },
+        {
+          "start_s": 762.0,
+          "end_s": 764.0,
+          "action_class": "back_take",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 764.0,
+          "end_s": 766.9,
+          "action_class": "transition",
+          "confidence": 0.95
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "gold_event": {
+      "t_s": 142,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "match_id": "650d20c745120c8433e9d00e",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 142,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 137.0,
+      "window_end_s": 146.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The top player in the black/red rashguard successfully takes the back of the bottom player in the blue rashguard from turtle position, then transitions into a rear naked choke attempt.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 4.0,\n      \"position\": \"turtle\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"back_take\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"back take from turtle\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 4.0,\n      \"end_s\": 8.9,\n      \"position\": \"back_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"rear naked choke\",\n      \"confidence\": 0.95\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The top player in the black/red rashguard successfully takes the back of the bottom player in the blue rashguard from turtle position, then transitions into a rear naked choke attempt.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 4.0,
+                "position": "turtle",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "back_take",
+                "outcome": "successful",
+                "specific_technique_guess": "back take from turtle",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 4.0,
+                "end_s": 8.9,
+                "position": "back_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "rear naked choke",
+                "confidence": 0.95
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 268,
+            "total_token_count": 11404
+          },
+          "latency_ms": 18600.8,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 137.0,
+          "end_s": 141.0,
+          "action_class": "back_take",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 141.0,
+          "end_s": 145.9,
+          "action_class": "submission_choke",
+          "confidence": 0.95
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "match_id": "650d20c745120c8433e9d00e",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 142,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+      "ingestion_path": "files_api",
+      "window_start_s": 137.0,
+      "window_end_s": 146.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The top player has secured back control and is actively hunting for a rear naked choke against the bottom player.\",\n  \"clips\": [\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 10.9,\n      \"position\": \"back_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"rear naked choke attempt\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The top player has secured back control and is actively hunting for a rear naked choke against the bottom player.",
+            "clips": [
+              {
+                "start_s": 2.0,
+                "end_s": 10.9,
+                "position": "back_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "rear naked choke attempt",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 151,
+            "total_token_count": 9716
+          },
+          "latency_ms": 20079.9,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 139.0,
+          "end_s": 147.9,
+          "action_class": "submission_choke",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "match_id": "650d20c745120c8433e9d024",
+    "gold_event": {
+      "t_s": 12624,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "match_id": "650d20c745120c8433e9d024",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is on the ground with the top player in black rashguard attacking from half guard, attempting a guillotine choke before transitioning to mount.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 7.5,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"guillotine choke\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 7.5,\n      \"end_s\": 8.9,\n      \"position\": \"mount\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"mount establishment\",\n      \"confidence\": 0.85\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is on the ground with the top player in black rashguard attacking from half guard, attempting a guillotine choke before transitioning to mount.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 7.5,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "guillotine choke",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 7.5,
+                "end_s": 8.9,
+                "position": "mount",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "mount establishment",
+                "confidence": 0.85
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 258,
+            "total_token_count": 10141
+          },
+          "latency_ms": 13653.6,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 12619.0,
+          "end_s": 12626.5,
+          "action_class": "submission_choke",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 12626.5,
+          "end_s": 12627.9,
+          "action_class": "transition",
+          "confidence": 0.85
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "match_id": "650d20c745120c8433e9d024",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "ingestion_path": "files_api",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"Top player escaped a guillotine choke attempt from bottom player and successfully passed the guard to establish side control.\",\n  \"clips\": [\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 8.0,\n      \"position\": \"closed_guard\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"guillotine choke\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 7.5,\n      \"end_s\": 9.5,\n      \"position\": \"open_guard\",\n      \"actor\": \"top\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"guard pass\",\n      \"confidence\": 0.85\n    },\n    {\n      \"start_s\": 9.5,\n      \"end_s\": 10.9,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "Top player escaped a guillotine choke attempt from bottom player and successfully passed the guard to establish side control.",
+            "clips": [
+              {
+                "start_s": 2.0,
+                "end_s": 8.0,
+                "position": "closed_guard",
+                "actor": "bottom",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "guillotine choke",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 7.5,
+                "end_s": 9.5,
+                "position": "open_guard",
+                "actor": "top",
+                "action_class": "guard_pass",
+                "outcome": "successful",
+                "specific_technique_guess": "guard pass",
+                "confidence": 0.85
+              },
+              {
+                "start_s": 9.5,
+                "end_s": 10.9,
+                "position": "side_control",
+                "actor": "top",
+                "action_class": "transition",
+                "outcome": "successful",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 306,
+            "total_token_count": 10132
+          },
+          "latency_ms": 12062.5,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 12621.0,
+          "end_s": 12627.0,
+          "action_class": "submission_choke",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 12626.5,
+          "end_s": 12628.5,
+          "action_class": "guard_pass",
+          "confidence": 0.85
+        },
+        {
+          "start_s": 12628.5,
+          "end_s": 12629.9,
+          "action_class": "transition",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "650d20c745120c8433e9d031__w27",
+    "match_id": "650d20c745120c8433e9d031",
+    "gold_event": {
+      "t_s": 254,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SWEEP",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "650d20c745120c8433e9d031__w27",
+      "match_id": "650d20c745120c8433e9d031",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 254,
+        "action_class": "sweep",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SWEEP",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=DHLk_9vT_3g",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 249.0,
+      "window_end_s": 258.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is in an open guard scenario where the bottom player attempts a leg lock, which is defended by the top player, leading to a passing scramble.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 4.0,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"actor_gi_color\": \"grey\",\n      \"action_class\": \"submission_leg_lock\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"heel hook attempt\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 4.0,\n      \"end_s\": 8.9,\n      \"position\": \"open_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"guard pass attempt\",\n      \"confidence\": 0.8\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is in an open guard scenario where the bottom player attempts a leg lock, which is defended by the top player, leading to a passing scramble.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 4.0,
+                "position": "open_guard",
+                "actor": "bottom",
+                "actor_gi_color": "grey",
+                "action_class": "submission_leg_lock",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "heel hook attempt",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 4.0,
+                "end_s": 8.9,
+                "position": "open_guard",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "guard_pass",
+                "outcome": "unclear",
+                "specific_technique_guess": "guard pass attempt",
+                "confidence": 0.8
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 265,
+            "total_token_count": 10165
+          },
+          "latency_ms": 12738.2,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 249.0,
+          "end_s": 253.0,
+          "action_class": "submission_leg_lock",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 253.0,
+          "end_s": 257.9,
+          "action_class": "guard_pass",
+          "confidence": 0.8
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "650d20c745120c8433e9d031__w27",
+      "match_id": "650d20c745120c8433e9d031",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 254,
+        "action_class": "sweep",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SWEEP",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=DHLk_9vT_3g",
+      "ingestion_path": "files_api",
+      "window_start_s": 249.0,
+      "window_end_s": 258.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"Felipe Pena (top, black rashguard) defends a leg lock attempt from Tye Ruotolo (bottom, grey rashguard). After escaping, Pena immediately works to pass Ruotolo's guard as Ruotolo transitions towards turtle.\",\n  \"clips\": [\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 6.0,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"actor_gi_color\": \"grey\",\n      \"action_class\": \"submission_leg_lock\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"heel hook\",\n      \"confidence\": 0.95\n    },\n    {\n      \"start_s\": 6.0,\n      \"end_s\": 10.9,\n      \"position\": \"open_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"guard pass to turtle control\",\n      \"confidence\": 0.85\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "Felipe Pena (top, black rashguard) defends a leg lock attempt from Tye Ruotolo (bottom, grey rashguard). After escaping, Pena immediately works to pass Ruotolo's guard as Ruotolo transitions towards turtle.",
+            "clips": [
+              {
+                "start_s": 2.0,
+                "end_s": 6.0,
+                "position": "open_guard",
+                "actor": "bottom",
+                "actor_gi_color": "grey",
+                "action_class": "submission_leg_lock",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "heel hook",
+                "confidence": 0.95
+              },
+              {
+                "start_s": 6.0,
+                "end_s": 10.9,
+                "position": "open_guard",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "guard_pass",
+                "outcome": "unclear",
+                "specific_technique_guess": "guard pass to turtle control",
+                "confidence": 0.85
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 288,
+            "total_token_count": 11238
+          },
+          "latency_ms": 18386.8,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 251.0,
+          "end_s": 255.0,
+          "action_class": "submission_leg_lock",
+          "confidence": 0.95
+        },
+        {
+          "start_s": 255.0,
+          "end_s": 259.9,
+          "action_class": "guard_pass",
+          "confidence": 0.85
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "653715dad9868c25fd158a0b__w20",
+    "match_id": "653715dad9868c25fd158a0b",
+    "gold_event": {
+      "t_s": 105,
+      "action_class": "submission_choke",
+      "outcome": "successful",
+      "position_bucket": "back_control",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "653715dad9868c25fd158a0b__w20",
+      "match_id": "653715dad9868c25fd158a0b",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 105,
+        "action_class": "submission_choke",
+        "outcome": "successful",
+        "position_bucket": "back_control",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=VBmvEKje94s",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 100.0,
+      "window_end_s": 109.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is on the ground with the top player in white rashguard holding back control and actively attacking with a rear-naked choke.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 8.9,\n      \"position\": \"back_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"rear naked choke\",\n      \"confidence\": 0.95\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is on the ground with the top player in white rashguard holding back control and actively attacking with a rear-naked choke.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 8.9,
+                "position": "back_control",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "submission_choke",
+                "outcome": "unclear",
+                "specific_technique_guess": "rear naked choke",
+                "confidence": 0.95
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 156,
+            "total_token_count": 9386
+          },
+          "latency_ms": 8280.7,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 100.0,
+          "end_s": 108.9,
+          "action_class": "submission_choke",
+          "confidence": 0.95
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "653715dad9868c25fd158a0b__w20",
+      "match_id": "653715dad9868c25fd158a0b",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 105,
+        "action_class": "submission_choke",
+        "outcome": "successful",
+        "position_bucket": "back_control",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=VBmvEKje94s",
+      "ingestion_path": "files_api",
+      "window_start_s": 100.0,
+      "window_end_s": 109.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"Top player has back control and is actively attacking with a rear naked choke.\",\n  \"clips\": [\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 10.9,\n      \"position\": \"back_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"rear naked choke\",\n      \"confidence\": 0.95\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "Top player has back control and is actively attacking with a rear naked choke.",
+            "clips": [
+              {
+                "start_s": 2.0,
+                "end_s": 10.9,
+                "position": "back_control",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "submission_choke",
+                "outcome": "unclear",
+                "specific_technique_guess": "rear naked choke",
+                "confidence": 0.95
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 145,
+            "total_token_count": 9294
+          },
+          "latency_ms": 8012.3,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 102.0,
+          "end_s": 110.9,
+          "action_class": "submission_choke",
+          "confidence": 0.95
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "65dbd239a2434704339da0e4__w8",
+    "match_id": "65dbd239a2434704339da0e4",
+    "gold_event": {
+      "t_s": 279,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "65dbd239a2434704339da0e4__w8",
+      "match_id": "65dbd239a2434704339da0e4",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 279,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "side_control",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 274.0,
+      "window_end_s": 283.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is in the open guard position with Langaker attacking Guzman Gil's leg from the bottom.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 6.0,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"submission_leg_lock\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"heel hook attempt from K-guard\",\n      \"confidence\": 0.85\n    },\n    {\n      \"start_s\": 6.0,\n      \"end_s\": 8.9,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"sweep\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"matrix sweep\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is in the open guard position with Langaker attacking Guzman Gil's leg from the bottom.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 6.0,
+                "position": "open_guard",
+                "actor": "bottom",
+                "action_class": "submission_leg_lock",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "heel hook attempt from K-guard",
+                "confidence": 0.85
+              },
+              {
+                "start_s": 6.0,
+                "end_s": 8.9,
+                "position": "open_guard",
+                "actor": "bottom",
+                "action_class": "sweep",
+                "outcome": "successful",
+                "specific_technique_guess": "matrix sweep",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 232,
+            "total_token_count": 10121
+          },
+          "latency_ms": 13058.4,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 274.0,
+          "end_s": 280.0,
+          "action_class": "submission_leg_lock",
+          "confidence": 0.85
+        },
+        {
+          "start_s": 280.0,
+          "end_s": 282.9,
+          "action_class": "sweep",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "65dbd239a2434704339da0e4__w8",
+      "match_id": "65dbd239a2434704339da0e4",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 279,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "side_control",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+      "ingestion_path": "files_api",
+      "window_start_s": 274.0,
+      "window_end_s": 283.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is on the ground with the top player attempting to pass the half guard of the bottom player.\",\n  \"clips\": [\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 10.9,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"knee cut pass attempt\",\n      \"confidence\": 0.90\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is on the ground with the top player attempting to pass the half guard of the bottom player.",
+            "clips": [
+              {
+                "start_s": 2.0,
+                "end_s": 10.9,
+                "position": "half_guard",
+                "actor": "top",
+                "action_class": "guard_pass",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "knee cut pass attempt",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 139,
+            "total_token_count": 9916
+          },
+          "latency_ms": 12225.5,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 276.0,
+          "end_s": 284.9,
+          "action_class": "guard_pass",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "65de3657a2434704339dc36b__w12",
+    "match_id": "65de3657a2434704339dc36b",
+    "gold_event": {
+      "t_s": 4898,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "65de3657a2434704339dc36b__w12",
+      "match_id": "65de3657a2434704339dc36b",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 4898,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "half_guard",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=KzYTzUD5rRA",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 4893.0,
+      "window_end_s": 4902.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The top player is in half guard, attempting an arm-triangle choke on the bottom player.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 8.9,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"grey\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"arm-triangle choke\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The top player is in half guard, attempting an arm-triangle choke on the bottom player.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 8.9,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "grey",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "arm-triangle choke",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 148,
+            "total_token_count": 9941
+          },
+          "latency_ms": 11288.9,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 4893.0,
+          "end_s": 4901.9,
+          "action_class": "submission_choke",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "65de3657a2434704339dc36b__w12",
+      "match_id": "65de3657a2434704339dc36b",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 4898,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "half_guard",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=KzYTzUD5rRA",
+      "ingestion_path": "files_api",
+      "window_start_s": 4893.0,
+      "window_end_s": 4902.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The top player in the white/grey rashguard is in half guard, attempting to pass the guard of the bottom player in the black rashguard using heavy shoulder pressure.\",\n  \"clips\": [\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 10.9,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"half guard pass with crossface pressure\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The top player in the white/grey rashguard is in half guard, attempting to pass the guard of the bottom player in the black rashguard using heavy shoulder pressure.",
+            "clips": [
+              {
+                "start_s": 2.0,
+                "end_s": 10.9,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "guard_pass",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "half guard pass with crossface pressure",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 166,
+            "total_token_count": 9931
+          },
+          "latency_ms": 11945.8,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 4895.0,
+          "end_s": 4903.9,
+          "action_class": "guard_pass",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "6661e503716f12758093d038__w1",
+    "match_id": "6661e503716f12758093d038",
+    "gold_event": {
+      "t_s": 2852,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "6661e503716f12758093d038__w1",
+      "match_id": "6661e503716f12758093d038",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 2852,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "mount",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 2847.0,
+      "window_end_s": 2856.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"E. Crelinsten (top, black rashguard) passes J. Calestine's (bottom, blue rashguard) guard to secure side control, leading 5-0.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 2.0,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"half guard pass\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 8.9,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"side control stabilization\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "E. Crelinsten (top, black rashguard) passes J. Calestine's (bottom, blue rashguard) guard to secure side control, leading 5-0.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 2.0,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "guard_pass",
+                "outcome": "successful",
+                "specific_technique_guess": "half guard pass",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 2.0,
+                "end_s": 8.9,
+                "position": "side_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "side control stabilization",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 267,
+            "total_token_count": 10915
+          },
+          "latency_ms": 16850.5,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 2847.0,
+          "end_s": 2849.0,
+          "action_class": "guard_pass",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 2849.0,
+          "end_s": 2855.9,
+          "action_class": "transition",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "6661e503716f12758093d038__w1",
+      "match_id": "6661e503716f12758093d038",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 2852,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "mount",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+      "ingestion_path": "files_api",
+      "window_start_s": 2847.0,
+      "window_end_s": 2856.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"Top player in black rashguard successfully passes the half guard of the bottom player in blue shorts to establish side control, earning 3 points.\",\n  \"clips\": [\n    {\n      \"start_s\": 2.0,\n      \"end_s\": 9.0,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"half guard pass\",\n      \"confidence\": 0.95\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "Top player in black rashguard successfully passes the half guard of the bottom player in blue shorts to establish side control, earning 3 points.",
+            "clips": [
+              {
+                "start_s": 2.0,
+                "end_s": 9.0,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "guard_pass",
+                "outcome": "successful",
+                "specific_technique_guess": "half guard pass",
+                "confidence": 0.95
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 155,
+            "total_token_count": 9376
+          },
+          "latency_ms": 9555.6,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 2849.0,
+          "end_s": 2856.0,
+          "action_class": "guard_pass",
+          "confidence": 0.95
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": true,
+    "replaced_window_id": "650d20c745120c8433e9d059__w17",
+    "replacement_reason": "w17 (650d20c745120c8433e9d059__w17, guard_pass, video FO4jG04aGqc) was dropped from the \u00a7H.1 draw: its source video is YouTube-unavailable ('ERROR: [youtube] FO4jG04aGqc: Video unavailable. It was blocked due to the claimed content by SME.', yt-dlp-reproduced 2026-07-26) \u2014 an external, permanent failure, not a Files-API/Gemini issue. Replaced per GATES_1_2_DESIGN.md \u00a7G.2's procedure: a FRESH random.Random(gate_common.SEED_REPLACEMENT=20260727) instance sampling 1 window from the remaining 29-window eligible pool (the original 37-window \u00a7H.1-eligible set minus the 8 already drawn) selected 6661e503716f12758093d038__w1 (back_take, video dsldlavgLz4). CEO-authorized (option a), Bezos-reviewed, 2026-07-26 \u2014 never a silent substitution."
+  }
+]

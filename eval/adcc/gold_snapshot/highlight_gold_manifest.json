@@ -1,0 +1,12 @@
+{
+  "asserted_counts": {
+    "match_count": 258,
+    "median_highlights_per_match": 2,
+    "total_highlights": 557,
+    "zero_highlight_match_count": 17
+  },
+  "include_takedowns": false,
+  "predicate_version": "highlight_predicate_v1",
+  "source_gold_snapshot": "eval/adcc/gold_snapshot/normalized_gold.jsonl",
+  "source_gold_snapshot_sha256": "0546515713ba0806869bf667a8de35233b08394b40f375c75095ccd1203017dd"
+}

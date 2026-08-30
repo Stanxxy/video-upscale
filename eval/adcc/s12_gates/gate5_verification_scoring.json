@@ -1,0 +1,464 @@
+{
+  "generated_at_utc": "2026-07-26T22:12:34.588153+00:00",
+  "n_events": 8,
+  "recall_a_patched": {
+    "hit": 1,
+    "n": 8,
+    "rate": 0.125
+  },
+  "recall_b_pre_patch": {
+    "hit": 0,
+    "n": 8,
+    "rate": 0.0
+  },
+  "reference_baselines_untruncated_context": {
+    "flash_lite_v1": {
+      "hit": 0,
+      "n": 8,
+      "rate": 0.0,
+      "source": "GATE5_ADDENDUM.md"
+    },
+    "qualified_v2": {
+      "hit": 5,
+      "n": 8,
+      "rate": 0.625,
+      "source": "GATE5_ADDENDUM.gemini35flash_highthink.md"
+    }
+  },
+  "seam_dedup_double_publish_check": {
+    "events_at_risk_of_double_publish": 7,
+    "events_where_dedup_correctly_prevented": 3,
+    "events_where_dedup_declined_to_merge_due_to_class_mismatch": 4
+  },
+  "total_spend_usd": 0.8065,
+  "per_event": [
+    {
+      "event_id": "e1",
+      "match_label": "PJ Barch vs Kade Ruotolo",
+      "t_s": 727,
+      "gold_action_class": "submission_arm_lock",
+      "needs_reroute": false,
+      "a_patched": {
+        "chunk1_bounds_abs": [
+          675.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_leg_lock",
+        "predicted_position": "open_guard",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          675,
+          732.0
+        ],
+        "hit": false
+      },
+      "b_pre_patch": {
+        "chunk1_bounds_abs": [
+          720.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_leg_lock",
+        "predicted_position": "open_guard",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          720,
+          731.0
+        ],
+        "hit": false
+      },
+      "seam_dedup_stress": {
+        "chunk0_stress_clip": {
+          "start_s": 661.0,
+          "end_s": 731.0,
+          "action_class": "submission_arm_lock"
+        },
+        "chunk1_patched_clip": {
+          "start_s": 675,
+          "end_s": 732.0,
+          "action_class": "submission_leg_lock"
+        },
+        "survivors": 1,
+        "dropped": 1,
+        "double_publish_would_occur_without_dedup": true,
+        "dedup_correctly_prevented_double_publish": true
+      },
+      "total_cost_usd": 0.1106256
+    },
+    {
+      "event_id": "e2",
+      "match_label": "Joshua Cisneros vs Ethan Crelinsten",
+      "t_s": 774,
+      "gold_action_class": "guard_pass",
+      "needs_reroute": false,
+      "a_patched": {
+        "chunk1_bounds_abs": [
+          675.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "takedown_attempt",
+        "predicted_position": "standing",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          710.0,
+          771.0
+        ],
+        "hit": false
+      },
+      "b_pre_patch": {
+        "chunk1_bounds_abs": [
+          720.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_leg_lock",
+        "predicted_position": "open_guard",
+        "predicted_outcome": "unsuccessful",
+        "clip_span_abs": [
+          741.0,
+          771.0
+        ],
+        "hit": false
+      },
+      "seam_dedup_stress": {
+        "chunk0_stress_clip": {
+          "start_s": 710.0,
+          "end_s": 779.0,
+          "action_class": "escape"
+        },
+        "chunk1_patched_clip": {
+          "start_s": 710.0,
+          "end_s": 771.0,
+          "action_class": "takedown_attempt"
+        },
+        "survivors": 2,
+        "dropped": 0,
+        "double_publish_would_occur_without_dedup": true,
+        "dedup_correctly_prevented_double_publish": false
+      },
+      "total_cost_usd": 0.11770979999999999
+    },
+    {
+      "event_id": "e3",
+      "match_label": "Xande Ribeiro vs Eoghan O'Flanagan",
+      "t_s": 761,
+      "gold_action_class": "back_take",
+      "needs_reroute": false,
+      "a_patched": {
+        "chunk1_bounds_abs": [
+          675.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "back_take",
+        "predicted_position": "back_control",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          751.0,
+          765.0
+        ],
+        "hit": true
+      },
+      "b_pre_patch": {
+        "chunk1_bounds_abs": [
+          720.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_choke",
+        "predicted_position": "back_control",
+        "predicted_outcome": "unsuccessful",
+        "clip_span_abs": [
+          751.0,
+          764.0
+        ],
+        "hit": false
+      },
+      "seam_dedup_stress": {
+        "chunk0_stress_clip": null,
+        "chunk1_patched_clip": {
+          "start_s": 751.0,
+          "end_s": 765.0,
+          "action_class": "back_take"
+        },
+        "survivors": 1,
+        "dropped": 0,
+        "double_publish_would_occur_without_dedup": false,
+        "dedup_correctly_prevented_double_publish": false
+      },
+      "total_cost_usd": 0.055273199999999995
+    },
+    {
+      "event_id": "e4",
+      "match_label": "Ffion Davies vs Beatriz Mesquita",
+      "t_s": 760,
+      "gold_action_class": "guard_pass",
+      "needs_reroute": false,
+      "a_patched": {
+        "chunk1_bounds_abs": [
+          675.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_choke",
+        "predicted_position": "half_guard",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          694.0,
+          763.0
+        ],
+        "hit": false
+      },
+      "b_pre_patch": {
+        "chunk1_bounds_abs": [
+          720.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_choke",
+        "predicted_position": "mount",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          720,
+          761.0
+        ],
+        "hit": false
+      },
+      "seam_dedup_stress": {
+        "chunk0_stress_clip": {
+          "start_s": 694.0,
+          "end_s": 761.0,
+          "action_class": "submission_choke"
+        },
+        "chunk1_patched_clip": {
+          "start_s": 694.0,
+          "end_s": 763.0,
+          "action_class": "submission_choke"
+        },
+        "survivors": 1,
+        "dropped": 1,
+        "double_publish_would_occur_without_dedup": true,
+        "dedup_correctly_prevented_double_publish": true
+      },
+      "total_cost_usd": 0.13346639999999999
+    },
+    {
+      "event_id": "e5",
+      "match_label": "Margot Ciccarelli vs Ashley Bendle",
+      "t_s": 729,
+      "gold_action_class": "sweep",
+      "needs_reroute": false,
+      "a_patched": {
+        "chunk1_bounds_abs": [
+          675.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_leg_lock",
+        "predicted_position": "open_guard",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          695.0,
+          729.0
+        ],
+        "hit": false
+      },
+      "b_pre_patch": {
+        "chunk1_bounds_abs": [
+          720.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_leg_lock",
+        "predicted_position": "open_guard",
+        "predicted_outcome": "unsuccessful",
+        "clip_span_abs": [
+          722.0,
+          733.0
+        ],
+        "hit": false
+      },
+      "seam_dedup_stress": {
+        "chunk0_stress_clip": {
+          "start_s": 678.0,
+          "end_s": 727.0,
+          "action_class": "submission_arm_lock"
+        },
+        "chunk1_patched_clip": {
+          "start_s": 695.0,
+          "end_s": 729.0,
+          "action_class": "submission_leg_lock"
+        },
+        "survivors": 1,
+        "dropped": 1,
+        "double_publish_would_occur_without_dedup": true,
+        "dedup_correctly_prevented_double_publish": true
+      },
+      "total_cost_usd": 0.0899052
+    },
+    {
+      "event_id": "e6",
+      "match_label": "Nia Blackman vs Salla Simola",
+      "t_s": 2235,
+      "gold_action_class": "back_take",
+      "needs_reroute": false,
+      "a_patched": {
+        "chunk1_bounds_abs": [
+          2140.0,
+          2905.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "guard_pass",
+        "predicted_position": "open_guard",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          2172.0,
+          2220.0
+        ],
+        "hit": false
+      },
+      "b_pre_patch": {
+        "chunk1_bounds_abs": [
+          2185.0,
+          2905.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_arm_lock",
+        "predicted_position": "open_guard",
+        "predicted_outcome": "unsuccessful",
+        "clip_span_abs": [
+          2185,
+          2203.0
+        ],
+        "hit": false
+      },
+      "seam_dedup_stress": {
+        "chunk0_stress_clip": {
+          "start_s": 2172.0,
+          "end_s": 2218.0,
+          "action_class": "transition"
+        },
+        "chunk1_patched_clip": {
+          "start_s": 2172.0,
+          "end_s": 2220.0,
+          "action_class": "guard_pass"
+        },
+        "survivors": 2,
+        "dropped": 0,
+        "double_publish_would_occur_without_dedup": true,
+        "dedup_correctly_prevented_double_publish": false
+      },
+      "total_cost_usd": 0.0923454
+    },
+    {
+      "event_id": "e7",
+      "match_label": "Fabricio Andrey vs Kaua Gabriel",
+      "t_s": 754,
+      "gold_action_class": "back_take",
+      "needs_reroute": false,
+      "a_patched": {
+        "chunk1_bounds_abs": [
+          675.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "escape",
+        "predicted_position": "back_control",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          689.0,
+          759.0
+        ],
+        "hit": false
+      },
+      "b_pre_patch": {
+        "chunk1_bounds_abs": [
+          720.0,
+          1440.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "takedown_attempt",
+        "predicted_position": "standing",
+        "predicted_outcome": "unsuccessful",
+        "clip_span_abs": [
+          722.0,
+          742.0
+        ],
+        "hit": false
+      },
+      "seam_dedup_stress": {
+        "chunk0_stress_clip": {
+          "start_s": 693.0,
+          "end_s": 758.0,
+          "action_class": "takedown_attempt"
+        },
+        "chunk1_patched_clip": {
+          "start_s": 689.0,
+          "end_s": 759.0,
+          "action_class": "escape"
+        },
+        "survivors": 2,
+        "dropped": 0,
+        "double_publish_would_occur_without_dedup": true,
+        "dedup_correctly_prevented_double_publish": false
+      },
+      "total_cost_usd": 0.12333659999999999
+    },
+    {
+      "event_id": "e8",
+      "match_label": "Huaiqing Xu vs Daiki Yonekura",
+      "t_s": 30443,
+      "gold_action_class": "back_take",
+      "needs_reroute": true,
+      "a_patched": {
+        "chunk1_bounds_abs": [
+          30360.0,
+          31125.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "guard_pass",
+        "predicted_position": "open_guard",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          30381.0,
+          30415.0
+        ],
+        "hit": false
+      },
+      "b_pre_patch": {
+        "chunk1_bounds_abs": [
+          30405.0,
+          31125.0
+        ],
+        "status": "ok",
+        "predicted_action_class": "submission_choke",
+        "predicted_position": "back_control",
+        "predicted_outcome": "successful",
+        "clip_span_abs": [
+          30427.0,
+          30446.0
+        ],
+        "hit": false
+      },
+      "seam_dedup_stress": {
+        "chunk0_stress_clip": {
+          "start_s": 30383.0,
+          "end_s": 30390.0,
+          "action_class": "submission_leg_lock"
+        },
+        "chunk1_patched_clip": {
+          "start_s": 30381.0,
+          "end_s": 30415.0,
+          "action_class": "guard_pass"
+        },
+        "survivors": 2,
+        "dropped": 0,
+        "double_publish_would_occur_without_dedup": true,
+        "dedup_correctly_prevented_double_publish": false
+      },
+      "total_cost_usd": 0.0837918
+    }
+  ]
+}

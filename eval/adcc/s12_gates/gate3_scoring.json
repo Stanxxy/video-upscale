@@ -1,0 +1,354 @@
+{
+  "gate": "gate3",
+  "primary_arm_s": {
+    "n_windows": 8,
+    "n_scored": 8,
+    "agreement_count": 3,
+    "agreement_rate": 0.375,
+    "accuracy_youtube_count": 1,
+    "accuracy_youtube": 0.125,
+    "accuracy_files_api_count": 4,
+    "accuracy_files_api": 0.5,
+    "accuracy_delta": 0.375,
+    "design_pass_bar_agreement_ge_6_of_8": false,
+    "design_pass_bar_accuracy_no_material_regression": true,
+    "design_pass_bar_met": false,
+    "rows": [
+      {
+        "window_id": "650d20c745120c8433e9cff3__w32",
+        "match_id": "650d20c745120c8433e9cff3",
+        "gold_class": "back_take",
+        "gold_outcome": "successful",
+        "youtube_status": "ok",
+        "files_api_status": "ok",
+        "scored": true,
+        "youtube_final_class": "sweep",
+        "youtube_hit": false,
+        "files_api_final_class": "back_take",
+        "files_api_hit": true,
+        "agree": false,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "650d20c745120c8433e9d00e__w6",
+        "match_id": "650d20c745120c8433e9d00e",
+        "gold_class": "back_take",
+        "gold_outcome": "successful",
+        "youtube_status": "ok",
+        "files_api_status": "ok",
+        "scored": true,
+        "youtube_final_class": "guard_pass",
+        "youtube_hit": false,
+        "files_api_final_class": "back_take",
+        "files_api_hit": true,
+        "agree": false,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "650d20c745120c8433e9d024__w0",
+        "match_id": "650d20c745120c8433e9d024",
+        "gold_class": "back_take",
+        "gold_outcome": "successful",
+        "youtube_status": "ok",
+        "files_api_status": "ok",
+        "scored": true,
+        "youtube_final_class": "submission_arm_lock",
+        "youtube_hit": false,
+        "files_api_final_class": "submission_arm_lock",
+        "files_api_hit": false,
+        "agree": true,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "650d20c745120c8433e9d031__w27",
+        "match_id": "650d20c745120c8433e9d031",
+        "gold_class": "sweep",
+        "gold_outcome": "successful",
+        "youtube_status": "ok",
+        "files_api_status": "ok",
+        "scored": true,
+        "youtube_final_class": null,
+        "youtube_hit": false,
+        "files_api_final_class": null,
+        "files_api_hit": false,
+        "agree": true,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "653715dad9868c25fd158a0b__w20",
+        "match_id": "653715dad9868c25fd158a0b",
+        "gold_class": "submission_choke",
+        "gold_outcome": "successful",
+        "youtube_status": "ok",
+        "files_api_status": "ok",
+        "scored": true,
+        "youtube_final_class": "guard_pass",
+        "youtube_hit": false,
+        "files_api_final_class": "submission_choke",
+        "files_api_hit": true,
+        "agree": false,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "65dbd239a2434704339da0e4__w8",
+        "match_id": "65dbd239a2434704339da0e4",
+        "gold_class": "guard_pass",
+        "gold_outcome": "successful",
+        "youtube_status": "ok",
+        "files_api_status": "ok",
+        "scored": true,
+        "youtube_final_class": "guard_pass",
+        "youtube_hit": true,
+        "files_api_final_class": "submission_leg_lock",
+        "files_api_hit": false,
+        "agree": false,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "65de3657a2434704339dc36b__w12",
+        "match_id": "65de3657a2434704339dc36b",
+        "gold_class": "guard_pass",
+        "gold_outcome": "successful",
+        "youtube_status": "ok",
+        "files_api_status": "ok",
+        "scored": true,
+        "youtube_final_class": null,
+        "youtube_hit": false,
+        "files_api_final_class": "guard_pass",
+        "files_api_hit": true,
+        "agree": false,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "6661e503716f12758093d038__w1",
+        "match_id": "6661e503716f12758093d038",
+        "gold_class": "back_take",
+        "gold_outcome": "successful",
+        "youtube_status": "ok",
+        "files_api_status": "ok",
+        "scored": true,
+        "youtube_final_class": "guard_pass",
+        "youtube_hit": false,
+        "files_api_final_class": "guard_pass",
+        "files_api_hit": false,
+        "agree": true,
+        "is_replacement": true,
+        "replaced_window_id": "650d20c745120c8433e9d059__w17"
+      }
+    ]
+  },
+  "spot_check_arm_t": {
+    "n_windows": 3,
+    "n_scored": 3,
+    "agreement_count": 2,
+    "rows": [
+      {
+        "window_id": "650d20c745120c8433e9cff3__w32",
+        "match_id": "650d20c745120c8433e9cff3",
+        "gold_class": "back_take",
+        "gold_outcome": "successful",
+        "youtube_status": "analyzed",
+        "files_api_status": "analyzed",
+        "scored": true,
+        "youtube_final_class": "submission_choke",
+        "youtube_hit": false,
+        "files_api_final_class": "sweep",
+        "files_api_hit": false,
+        "agree": false,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "650d20c745120c8433e9d00e__w6",
+        "match_id": "650d20c745120c8433e9d00e",
+        "gold_class": "back_take",
+        "gold_outcome": "successful",
+        "youtube_status": "analyzed",
+        "files_api_status": "analyzed",
+        "scored": true,
+        "youtube_final_class": "submission_leg_lock",
+        "youtube_hit": false,
+        "files_api_final_class": "submission_leg_lock",
+        "files_api_hit": false,
+        "agree": true,
+        "is_replacement": false,
+        "replaced_window_id": null
+      },
+      {
+        "window_id": "650d20c745120c8433e9d024__w0",
+        "match_id": "650d20c745120c8433e9d024",
+        "gold_class": "back_take",
+        "gold_outcome": "successful",
+        "youtube_status": "analyzed",
+        "files_api_status": "analyzed",
+        "scored": true,
+        "youtube_final_class": "submission_choke",
+        "youtube_hit": false,
+        "files_api_final_class": "submission_choke",
+        "files_api_hit": false,
+        "agree": true,
+        "is_replacement": false,
+        "replaced_window_id": null
+      }
+    ]
+  },
+  "fps_honoring": {
+    "n_clips": 2,
+    "n_detectable_diff_strong": 2,
+    "confirmed": true,
+    "rows": [
+      {
+        "window_id": "650d20c745120c8433e9cff3__w32",
+        "match_id": "650d20c745120c8433e9cff3",
+        "fps1_status": "ok",
+        "fps1_action_class": "back_take",
+        "fps1_justification": "The bottom player uses a butterfly hook to elevate the top player and rotates to secure back control.",
+        "fps10_status": "ok",
+        "fps10_action_class": "sweep",
+        "fps10_justification": "The bottom player uses a butterfly hook and grip on the top player's arm to elevate and roll them over, successfully reversing the position to top.",
+        "detectable_diff_strong_action_class": true,
+        "detectable_diff_weak_justification_text": true
+      },
+      {
+        "window_id": "650d20c745120c8433e9d00e__w6",
+        "match_id": "650d20c745120c8433e9d00e",
+        "fps1_status": "ok",
+        "fps1_action_class": "submission_choke",
+        "fps1_justification": "The top player has their arm wrapped around the bottom player's neck in a rear-naked choke configuration, but the bottom player is successfully defending by hand fighting and keeping their chin tucked.",
+        "fps10_status": "ok",
+        "fps10_action_class": "submission_arm_lock",
+        "fps10_justification": "The top player is applying an armbar from the mount position, but the bottom player successfully defends by clasping their hands together to prevent the extension of the arm.",
+        "detectable_diff_strong_action_class": true,
+        "detectable_diff_weak_justification_text": true
+      }
+    ]
+  },
+  "bonus_finding": {
+    "note": "Bonus finding (\u00a7H.4) \u2014 NOT part of the n=8 fidelity sample. For w37/occ0/occ11, Files-API succeeded where native YouTube ingestion 400'd unconditionally on every probed offset/fps. Evidence that Files-API is a viable fallback/workaround for the undocumented duration-cap bug \u2014 a claim about VIABILITY, not FIDELITY; not blended into the n=8 agreement_rate/accuracy numbers above.",
+    "windows": [
+      "66b009481c62a1db7a53d504__w37",
+      "66afe5ab1c62a1db7a53b80b__occ0",
+      "66a6ff021c62a1db7a5133c0__occ11"
+    ],
+    "source_artifacts": [
+      "gate1_predictions_arm_s.json",
+      "gate1_predictions_arm_t.json",
+      "gate2_predictions.json",
+      "reroute_manifest.json"
+    ]
+  },
+  "replacement": {
+    "replaced_window_id": "650d20c745120c8433e9d059__w17",
+    "replacement_window_id": "6661e503716f12758093d038__w1",
+    "reason": "w17 (650d20c745120c8433e9d059__w17, guard_pass, video FO4jG04aGqc) was dropped from the \u00a7H.1 draw: its source video is YouTube-unavailable ('ERROR: [youtube] FO4jG04aGqc: Video unavailable. It was blocked due to the claimed content by SME.', yt-dlp-reproduced 2026-07-26) \u2014 an external, permanent failure, not a Files-API/Gemini issue. Replaced per GATES_1_2_DESIGN.md \u00a7G.2's procedure: a FRESH random.Random(gate_common.SEED_REPLACEMENT=20260727) instance sampling 1 window from the remaining 29-window eligible pool (the original 37-window \u00a7H.1-eligible set minus the 8 already drawn) selected 6661e503716f12758093d038__w1 (back_take, video dsldlavgLz4). CEO-authorized (option a), Bezos-reviewed, 2026-07-26 \u2014 never a silent substitution."
+  },
+  "upload_metrics": [
+    {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/3zul1u9c24vp",
+      "file_name": "files/3zul1u9c24vp",
+      "upload_latency_ms": 1481.8945829756558,
+      "active_wait_ms": 5235.9032079111785,
+      "sec_start_s": 754.0,
+      "call_bounds": [
+        2.0,
+        11.0
+      ]
+    },
+    {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/n2z42v8zfbu3",
+      "file_name": "files/n2z42v8zfbu3",
+      "upload_latency_ms": 1142.8480420727283,
+      "active_wait_ms": 5218.695000046864,
+      "sec_start_s": 135.0,
+      "call_bounds": [
+        2.0,
+        11.0
+      ]
+    },
+    {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/odfxkaaqwbac",
+      "file_name": "files/odfxkaaqwbac",
+      "upload_latency_ms": 1268.702375004068,
+      "active_wait_ms": 5206.044374965131,
+      "sec_start_s": 12617.0,
+      "call_bounds": [
+        2.0,
+        11.0
+      ]
+    },
+    {
+      "window_id": "650d20c745120c8433e9d031__w27",
+      "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/vypvf6ljn958",
+      "file_name": "files/vypvf6ljn958",
+      "upload_latency_ms": 1237.1222081128508,
+      "active_wait_ms": 5206.261000130326,
+      "sec_start_s": 247.0,
+      "call_bounds": [
+        2.0,
+        11.0
+      ]
+    },
+    {
+      "window_id": "653715dad9868c25fd158a0b__w20",
+      "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/e1l711xajv9d",
+      "file_name": "files/e1l711xajv9d",
+      "upload_latency_ms": 1324.3556250818074,
+      "active_wait_ms": 5189.421917079017,
+      "sec_start_s": 98.0,
+      "call_bounds": [
+        2.0,
+        11.0
+      ],
+      "is_replacement": false
+    },
+    {
+      "window_id": "65dbd239a2434704339da0e4__w8",
+      "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/463sue0tgtwb",
+      "file_name": "files/463sue0tgtwb",
+      "upload_latency_ms": 1887.9556658212095,
+      "active_wait_ms": 5222.927999915555,
+      "sec_start_s": 272.0,
+      "call_bounds": [
+        2.0,
+        11.0
+      ],
+      "is_replacement": false
+    },
+    {
+      "window_id": "65de3657a2434704339dc36b__w12",
+      "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/r8pch0b5uxwx",
+      "file_name": "files/r8pch0b5uxwx",
+      "upload_latency_ms": 2132.5083340052515,
+      "active_wait_ms": 5254.791165934876,
+      "sec_start_s": 4891.0,
+      "call_bounds": [
+        2.0,
+        11.0
+      ],
+      "is_replacement": false
+    },
+    {
+      "window_id": "6661e503716f12758093d038__w1",
+      "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/ydlthd6jgv4w",
+      "file_name": "files/ydlthd6jgv4w",
+      "upload_latency_ms": 994.4036251399666,
+      "active_wait_ms": 5420.341040939093,
+      "sec_start_s": 2845.0,
+      "call_bounds": [
+        2.0,
+        11.0
+      ],
+      "is_replacement": true
+    }
+  ]
+}

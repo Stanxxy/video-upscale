@@ -1,0 +1,19 @@
+{
+  "asserted_counts": {
+    "expected_unique_videos": 103,
+    "expected_usable_match_ids": 258,
+    "unique_videos": 103,
+    "usable_match_ids": 258
+  },
+  "derived_counts": {
+    "non_scoreable_events": 1272,
+    "scoreable_events": 1847,
+    "total_normalized_events": 3119
+  },
+  "mapping_version": 1,
+  "pulled_at": "2026-07-12T00:00:00Z",
+  "source_sha256": {
+    "metadata_and_events.json": "bec8285f237ca07238387bee78c099ac0fdddb4dddc31ad187371bd15cc689fc",
+    "video_links.json": "0fa25a43f933d9e1611059815069d365279b76c15219fd37807ef7e6d55b895e"
+  }
+}

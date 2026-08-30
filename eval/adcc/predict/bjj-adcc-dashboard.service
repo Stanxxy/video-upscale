@@ -1,0 +1,13 @@
+[Unit]
+Description=ADCC eval cost-control dashboard (chunk-segment-tags capture engine wrapper)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/vlm-eval/code
+ExecStart=%h/vlm-eval/venv/bin/python -m uvicorn eval.adcc.predict.dashboard_app:app --host 0.0.0.0 --port 8321
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

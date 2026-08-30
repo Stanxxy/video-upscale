@@ -1,0 +1,65 @@
+{
+  "window_id": "650d20c745120c8433e9d024__w0",
+  "gold_action_class": "back_take",
+  "opus_route_check": {
+    "direct_anthropic": {
+      "action_class": "sweep",
+      "outcome": "successful",
+      "latency_ms": 14580.94216696918,
+      "thinking_requested": true
+    },
+    "openrouter": {
+      "action_class": "guard_pass",
+      "outcome": "unclear",
+      "latency_ms": 7326.302125118673,
+      "usage": {
+        "prompt_tokens": 7145,
+        "completion_tokens": 118,
+        "total_tokens": 7263,
+        "reasoning_tokens": 0,
+        "cost_usd": 0.038675
+      },
+      "thinking_confirmed": false
+    },
+    "same_enum_choice": false,
+    "route_check_passed": false,
+    "default_route": "direct_anthropic"
+  },
+  "kimi_smoke": {
+    "position": {
+      "position": "turtle",
+      "justification": "The bottom player is on all fours in a turtled posture with the top player draped over their back from behind, and no hooks or body triangle are visibly secured."
+    },
+    "technique": {
+      "action_class": "submission_choke",
+      "outcome": "unclear",
+      "justification": "Top player wraps her arm around the turtled opponent's neck from the front-head position and rolls through while maintaining the neck grip, indicating a choke attack (anaconda/d'arce-style); no tap or referee stoppage is visible and the finishing grip is hidden between the bodies, so whether it landed cannot be confirmed."
+    },
+    "usage": {
+      "position": {
+        "prompt_tokens": 6699,
+        "completion_tokens": 149,
+        "total_tokens": 6848,
+        "reasoning_tokens": 82,
+        "cost_usd": 0.022332
+      },
+      "technique": {
+        "prompt_tokens": 6939,
+        "completion_tokens": 264,
+        "total_tokens": 7203,
+        "reasoning_tokens": 156,
+        "cost_usd": 0.024777
+      }
+    },
+    "hit_vs_gold": false
+  },
+  "opus_smoke": {
+    "position": {
+      "position": "turtle",
+      "justification": "The bottom player is compressed on knees and elbows in a turtled shell while the top player drapes over the back with arms wrapping around the head/body."
+    },
+    "technique_reused_from_step1": "sweep",
+    "route_used": "direct_anthropic",
+    "hit_vs_gold": false
+  }
+}

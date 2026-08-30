@@ -1,0 +1,82 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9cff3__w32",
+    "match_id": "650d20c745120c8433e9cff3",
+    "fps1": {
+      "call_name": "technique_fps1",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The athlete in the black and white shorts rolls over his opponent's shoulder to secure seatbelt control and insert hooks, successfully establishing back control.\"\n}",
+      "parsed": {
+        "action_class": "back_take",
+        "outcome": "successful",
+        "justification": "The athlete in the black and white shorts rolls over his opponent's shoulder to secure seatbelt control and insert hooks, successfully establishing back control."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 1556,
+        "candidates_token_count": 59,
+        "total_token_count": 1980
+      },
+      "latency_ms": 8355.4,
+      "ingestion_path": "files_api"
+    },
+    "fps10": {
+      "call_name": "technique_fps10",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The athlete in the black rashguard transitions from a front headlock to climb onto his opponent's back, securing his hooks to establish back control.\"\n}",
+      "parsed": {
+        "action_class": "back_take",
+        "outcome": "successful",
+        "justification": "The athlete in the black rashguard transitions from a front headlock to climb onto his opponent's back, securing his hooks to establish back control."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6902,
+        "candidates_token_count": 60,
+        "total_token_count": 7590
+      },
+      "latency_ms": 5426.3,
+      "ingestion_path": "files_api"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "fps1": {
+      "call_name": "technique_fps1",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The top player attempts to secure back control from the turtle position but is unable to insert his second hook due to the bottom player's tight defense.\"\n}",
+      "parsed": {
+        "action_class": "back_take",
+        "outcome": "unsuccessful",
+        "justification": "The top player attempts to secure back control from the turtle position but is unable to insert his second hook due to the bottom player's tight defense."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 1556,
+        "candidates_token_count": 61,
+        "total_token_count": 3031
+      },
+      "latency_ms": 10214.4,
+      "ingestion_path": "files_api"
+    },
+    "fps10": {
+      "call_name": "technique_fps10",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The top player inserts both legs as hooks around the turtled bottom player's thighs to secure back control.\"\n}",
+      "parsed": {
+        "action_class": "back_take",
+        "outcome": "successful",
+        "justification": "The top player inserts both legs as hooks around the turtled bottom player's thighs to secure back control."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6902,
+        "candidates_token_count": 52,
+        "total_token_count": 7374
+      },
+      "latency_ms": 18301.5,
+      "ingestion_path": "files_api"
+    }
+  }
+]

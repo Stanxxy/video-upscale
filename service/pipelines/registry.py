@@ -22,16 +22,37 @@ from service.pipelines.models import (
     HighlightCritiqueConfig,
     HighlightScanConfig,
     PipelineDef,
+    PositionCritiqueConfig,
+    PositionScanConfig,
     StageDef,
+    TechniqueAnalyzeConfig,
+    TimelineReconcileConfig,
     VideoWindowConfig,
     WindowConfig,
 )
 from service.pipelines.highlight_scan import DEFAULT_INITIAL_PROMPT, DEFAULT_SYSTEM_PROMPT
+from service.pipelines.highlight_critique import (
+    DEFAULT_CRITIQUE_INITIAL_PROMPT,
+    DEFAULT_CRITIQUE_SYSTEM_PROMPT,
+)
 from service.pipelines.simplified_tags import DEFAULT_TAXONOMY_TEXT
+from service.pipelines.claude_frames import CLAUDE_MODELS
+from service.pipelines.position_timeline import (
+    POSITION_CRITIQUE_INITIAL_PROMPT,
+    POSITION_CRITIQUE_SYSTEM_PROMPT,
+    POSITION_SCAN_INITIAL_PROMPT,
+    POSITION_SCAN_SYSTEM_PROMPT,
+    TECHNIQUE_SCAN_INITIAL_PROMPT,
+    TECHNIQUE_SCAN_SYSTEM_PROMPT,
+)
 from service.routes.qa_vlm import DETECT_MODELS, EVENT_MODELS
 
+# Highlight Analyze (playground A/B) may select Claude; scan/critique/other
+# EVENT nodes stay Gemini-only — Claude on those stages is a 400, not a silent swap.
+HIGHLIGHT_ANALYZE_MODELS: list[str] = list(EVENT_MODELS) + list(CLAUDE_MODELS)
+
 # Model-id allowlists per node type, reused (not redefined) from qa_vlm.py's
-# live-verified per-task lists — same no-silent-swap discipline as
+# provider-documented per-task lists — same no-silent-swap discipline as
 # ``qa_vlm._select_model``: an off-allowlist model is a 400 at validation time,
 # never a late Gemini 4xx mid-stream.
 _MODEL_ALLOWLIST_BY_NODE_TYPE: dict[str, list[str]] = {
@@ -40,9 +61,32 @@ _MODEL_ALLOWLIST_BY_NODE_TYPE: dict[str, list[str]] = {
     "chunk_segment": EVENT_MODELS,
     "chunk_analyze": EVENT_MODELS,
     "highlight_scan": EVENT_MODELS,
-    "highlight_analyze": EVENT_MODELS,
+    "highlight_analyze": HIGHLIGHT_ANALYZE_MODELS,
     "highlight_critique": EVENT_MODELS,
+    "position_scan": EVENT_MODELS,
+    "position_critique": EVENT_MODELS,
+    "technique_analyze": EVENT_MODELS,
 }
+
+
+NON_SINGLE_SHOT_DEFAULT_MODEL = "gemini-3.7-flash"
+
+
+def _set_nested_model_defaults(value, model_id: str):
+    """Replace only config keys named ``model`` in a registry-owned copy."""
+    if isinstance(value, dict):
+        return {
+            key: model_id if key == "model" else _set_nested_model_defaults(child, model_id)
+            for key, child in value.items()
+        }
+    if isinstance(value, list):
+        return [_set_nested_model_defaults(child, model_id) for child in value]
+    return value
+
+
+def _with_default_model(pipeline: PipelineDef, model_id: str) -> PipelineDef:
+    data = _set_nested_model_defaults(pipeline.model_dump(), model_id)
+    return PipelineDef.model_validate(data)
 
 
 def _single_shot() -> PipelineDef:
@@ -353,7 +397,11 @@ def _highlight_scan_critique_analyze() -> PipelineDef:
             ),
             StageDef(
                 id="highlight_critique", type="highlight_critique", label="Highlight Critique",
-                enabled=True, config=HighlightCritiqueConfig().model_dump(),
+                enabled=True,
+                config=HighlightCritiqueConfig(
+                    system_prompt=DEFAULT_CRITIQUE_SYSTEM_PROMPT,
+                    initial_prompt=DEFAULT_CRITIQUE_INITIAL_PROMPT,
+                ).model_dump(),
             ),
             StageDef(
                 id="highlight_analyze", type="highlight_analyze", label="Highlight Analyze",
@@ -363,14 +411,99 @@ def _highlight_scan_critique_analyze() -> PipelineDef:
     )
 
 
+def _position_timeline_techniques() -> PipelineDef:
+    """Grounded continuous position state plus sparse technique events."""
+    return PipelineDef(
+        id="position-timeline-techniques",
+        label="Position timeline + technique events (native)",
+        description=(
+            "Two grounded native-video lanes: transition-boundary scan + critique builds an "
+            "exact-coverage position timeline, while the v2 highlight scan + critique machinery "
+            "finds sparse techniques for a grounded technique-only analyzer. A deterministic "
+            "terminal stage reports objective per-player role/position durations; no dominance "
+            "or controller judgment is produced. Requires exactly two labelled reference images."
+        ),
+        stages=[
+            StageDef(
+                id="video_window", type="video_window", label="Video Window",
+                enabled=True, config=VideoWindowConfig().model_dump(),
+            ),
+            StageDef(
+                id="position_scan", type="position_scan", label="Position Scan",
+                enabled=True,
+                config=PositionScanConfig(
+                    thinking="high",
+                    system_prompt=POSITION_SCAN_SYSTEM_PROMPT,
+                    initial_prompt=POSITION_SCAN_INITIAL_PROMPT,
+                ).model_dump(),
+            ),
+            StageDef(
+                id="position_critique", type="position_critique", label="Position Critique",
+                enabled=True,
+                config=PositionCritiqueConfig(
+                    thinking="high",
+                    system_prompt=POSITION_CRITIQUE_SYSTEM_PROMPT,
+                    initial_prompt=POSITION_CRITIQUE_INITIAL_PROMPT,
+                ).model_dump(),
+            ),
+            StageDef(
+                id="highlight_scan", type="highlight_scan", label="Technique Scan",
+                enabled=True,
+                config=HighlightScanConfig(
+                    thinking="high",
+                    system_prompt=TECHNIQUE_SCAN_SYSTEM_PROMPT,
+                    initial_prompt=TECHNIQUE_SCAN_INITIAL_PROMPT,
+                ).model_dump(),
+            ),
+            StageDef(
+                id="highlight_critique", type="highlight_critique", label="Technique Critique",
+                enabled=True,
+                config=HighlightCritiqueConfig(
+                    thinking="high",
+                    critique_forwardpad_s=4.0,
+                    system_prompt=DEFAULT_CRITIQUE_SYSTEM_PROMPT,
+                    initial_prompt=DEFAULT_CRITIQUE_INITIAL_PROMPT,
+                ).model_dump(),
+            ),
+            StageDef(
+                id="technique_analyze", type="technique_analyze", label="Technique Analyze",
+                enabled=True,
+                config=TechniqueAnalyzeConfig(
+                    thinking="high", validator_thinking="high"
+                ).model_dump(),
+            ),
+            StageDef(
+                id="timeline_reconcile", type="timeline_reconcile", label="Timeline + Statistics",
+                enabled=True, config=TimelineReconcileConfig().model_dump(),
+            ),
+        ],
+    )
+
+
 DEFAULT_PIPELINES: dict[str, PipelineDef] = {
     "single-shot": _single_shot(),
-    "vision-mimic": _vision_mimic("vision-mimic", "Vision-engine mimic", "single"),
-    "vision-mimic-multi": _vision_mimic("vision-mimic-multi", "Vision-engine mimic (multi-agent)", "multi"),
-    "vision-mimic-simplified": _vision_mimic_simplified(),
-    "chunk-segment-tags": _chunk_segment_tags(),
-    "highlight-scan-analyze": _highlight_scan_analyze(),
-    "highlight-scan-critique-analyze": _highlight_scan_critique_analyze(),
+    "vision-mimic": _with_default_model(
+        _vision_mimic("vision-mimic", "Vision-engine mimic", "single"), NON_SINGLE_SHOT_DEFAULT_MODEL,
+    ),
+    "vision-mimic-multi": _with_default_model(
+        _vision_mimic("vision-mimic-multi", "Vision-engine mimic (multi-agent)", "multi"),
+        NON_SINGLE_SHOT_DEFAULT_MODEL,
+    ),
+    "vision-mimic-simplified": _with_default_model(
+        _vision_mimic_simplified(), NON_SINGLE_SHOT_DEFAULT_MODEL,
+    ),
+    "chunk-segment-tags": _with_default_model(
+        _chunk_segment_tags(), NON_SINGLE_SHOT_DEFAULT_MODEL,
+    ),
+    "highlight-scan-analyze": _with_default_model(
+        _highlight_scan_analyze(), NON_SINGLE_SHOT_DEFAULT_MODEL,
+    ),
+    "highlight-scan-critique-analyze": _with_default_model(
+        _highlight_scan_critique_analyze(), NON_SINGLE_SHOT_DEFAULT_MODEL,
+    ),
+    "position-timeline-techniques": _with_default_model(
+        _position_timeline_techniques(), NON_SINGLE_SHOT_DEFAULT_MODEL,
+    ),
 }
 
 # Fixed stage-type SET per pipeline id (order-independent) — used by fail-closed
@@ -470,14 +603,16 @@ def validate_pipeline_def(pipeline: PipelineDef) -> PipelineDef:
         # each carry their OWN `model` field (ThinkingQualityMixin subclasses)
         # — same no-silent-swap discipline as every top-level `model` field
         # above, extended here since these are nested, not reachable by the
-        # generic top-level check.
+        # generic top-level check. Nested axes use the SAME Claude-extended
+        # allowlist as the top-level highlight_analyze model (not EVENT_MODELS).
         if stage.type == "highlight_analyze":
             for axis_name in ("position", "technique", "validator"):
                 axis_cfg = getattr(validated_config, axis_name)
-                if axis_cfg.model not in EVENT_MODELS:
+                if axis_cfg.model not in HIGHLIGHT_ANALYZE_MODELS:
                     raise PipelineValidationError(
                         f"Unsupported model {axis_cfg.model!r} for stage {stage.id!r} "
-                        f"(type={stage.type!r}, axis={axis_name!r}); must be one of {EVENT_MODELS}."
+                        f"(type={stage.type!r}, axis={axis_name!r}); "
+                        f"must be one of {HIGHLIGHT_ANALYZE_MODELS}."
                     )
 
         if stage.type in STRUCTURAL_NODE_TYPES and not stage.enabled:

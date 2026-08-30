@@ -7,6 +7,8 @@ import logging
 from typing import Optional
 from PIL import Image
 
+from service.pipelines.gemini_model_compat import generation_sampling_kwargs
+
 logger = logging.getLogger(__name__)
 
 # Default when caller does not pass request_timeout_ms (matches ServiceConfig default).
@@ -151,9 +153,9 @@ class BJJTechniqueAnalyzer:
         (no ``thinking_config``) is byte-identical to the pre-seam call site."""
         kwargs = dict(
             system_instruction=system_instruction,
-            temperature=self.temperature,
             response_mime_type="application/json",
             response_schema=response_schema,
+            **generation_sampling_kwargs(self.model_id, temperature=self.temperature),
         )
         if self.thinking_config is not None:
             kwargs["thinking_config"] = self.thinking_config
@@ -397,7 +399,10 @@ class BJJMultiAgentAnalyzer:
         self.taxonomy_path = taxonomy_path
 
     def _build_generate_config(self, system_instruction, temperature, response_schema=None):
-        kwargs = dict(system_instruction=system_instruction, temperature=temperature)
+        kwargs = dict(
+            system_instruction=system_instruction,
+            **generation_sampling_kwargs(self.model_id, temperature=temperature),
+        )
         if response_schema is not None:
             kwargs["response_mime_type"] = "application/json"
             kwargs["response_schema"] = response_schema

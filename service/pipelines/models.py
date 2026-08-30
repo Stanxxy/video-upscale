@@ -27,6 +27,10 @@ NodeType = Literal[
     "highlight_scan",
     "highlight_analyze",
     "highlight_critique",
+    "position_scan",
+    "position_critique",
+    "technique_analyze",
+    "timeline_reconcile",
 ]
 
 # Node types that structurally define the pipeline's shape — the UX layer locks
@@ -45,17 +49,18 @@ NodeType = Literal[
 # ``ctx.highlights`` to loop over, and disabling ``highlight_analyze`` leaves
 # PASS 1's highlight map with no consumer.
 #
-# ``highlight_critique`` (v2, ``highlight-scan-critique-analyze`` ONLY) is one
-# of that pipeline's THREE fixed Gemini-calling stages (alongside
-# ``highlight_scan``/``highlight_analyze``) — same "fixed stage set, no
-# arbitrary disable" discipline applied uniformly to every Gemini-calling node
-# in this registry (only ``detect_crop``/``context_chain``/``dedup`` are
-# genuinely optional passes, never structural).
+# ``highlight_critique`` is structural in both native v2 and Position
+# Timeline's technique lane. The same "fixed stage set, no arbitrary disable"
+# discipline applies uniformly to every Gemini-calling node in this registry
+# (only ``detect_crop``/``context_chain``/``dedup`` are genuinely optional
+# passes, never structural).
 STRUCTURAL_NODE_TYPES: frozenset[str] = frozenset(
     {
         "video_window", "frame_sample", "window", "analyze",
         "chunk_segment", "chunk_analyze",
         "highlight_scan", "highlight_analyze", "highlight_critique",
+        "position_scan", "position_critique", "technique_analyze",
+        "timeline_reconcile",
     }
 )
 
@@ -323,10 +328,11 @@ class HighlightScanConfig(ThinkingQualityMixin):
 
 
 class HighlightCritiqueConfig(ThinkingQualityMixin):
-    """``highlight_critique`` — NEW v2 stage (``highlight-scan-critique-analyze``
-    ONLY), sitting between ``highlight_scan`` and ``highlight_analyze``: per
-    scanned highlight, sends a BACKWARD-padded native-video window
-    (``[max(scope_start, start_s - critique_backpad_s), end_s]``) plus the
+    """Shared per-highlight critique stage used by native v2 and Position Timeline.
+
+    For each scanned highlight, sends a padded native-video window
+    (``[max(scope_start, start_s - critique_backpad_s),
+    min(scope_end, end_s + critique_forwardpad_s)]``) plus the
     scan's ``description`` and asks Gemini to confirm the description and
     locate the highlight's TRUE start (the quiet setup cue a rough scan
     tends to anchor past — Gracie's VTG-drift finding) and a corrected end.
@@ -341,6 +347,16 @@ class HighlightCritiqueConfig(ThinkingQualityMixin):
     (build plan FOUNDER DECISIONS #2), not a value derived from a
     production-shaped measurement yet.
 
+    ``critique_forwardpad_s`` defaults to zero for backward-compatible v2
+    behavior. Position Timeline explicitly sets four seconds so its corrected
+    clip end can include the visible successful/unsuccessful/unclear outcome.
+
+    ``fps`` is explicit because the QA editor must expose every runtime input;
+    its default of one preserves the previously fixed executor value.
+    ``system_prompt`` and ``initial_prompt`` are registry-populated canonical
+    text that callers may replace for prompt engineering. Empty values reset
+    to the canonical runtime prompts.
+
     ``model`` is allowlist-validated against ``qa_vlm.EVENT_MODELS`` at
     ``registry.validate_pipeline_def`` time — same no-silent-swap discipline
     as every other Gemini-calling node config in this module.
@@ -348,7 +364,14 @@ class HighlightCritiqueConfig(ThinkingQualityMixin):
 
     model_config = ConfigDict(extra="forbid")
     model: str = "gemini-3.1-flash-lite"
+    fps: Literal[1, 10, 15] = 1
     critique_backpad_s: float = Field(default=6.0, ge=0, le=30)
+    # Zero preserves the legacy v2 critique window exactly. Position Timeline
+    # opts into four seconds in its registry definition so corrected clip ends
+    # can include the visible outcome without changing older pipelines.
+    critique_forwardpad_s: float = Field(default=0.0, ge=0, le=10)
+    system_prompt: Optional[str] = None
+    initial_prompt: Optional[str] = None
 
 
 class PositionAxisConfig(ThinkingQualityMixin):
@@ -424,9 +447,9 @@ class HighlightAnalyzeConfig(BaseModel):
     sub-cases and how each is handled (one fixed via a synthetic-seam
     preroll/postroll clamp, one accepted as a playground-scope limitation).
 
-    ``model`` is allowlist-validated against ``qa_vlm.EVENT_MODELS`` at
-    ``registry.validate_pipeline_def`` time — same no-silent-swap discipline
-    as ``chunk_analyze``/``analyze``.
+    ``model`` is allowlist-validated against ``HIGHLIGHT_ANALYZE_MODELS``
+    (``EVENT_MODELS`` + Claude playground ids) at ``registry.validate_pipeline_def``
+    time — same no-silent-swap discipline as ``chunk_analyze``/``analyze``.
 
     **v2 evolution (this node's executor is SHARED by both
     ``highlight-scan-analyze`` and ``highlight-scan-critique-analyze`` — the
@@ -442,13 +465,13 @@ class HighlightAnalyzeConfig(BaseModel):
     ``for _ in range(max_validator_iterations)`` ``validator`` pass
     (``ValidatorAxisConfig``, re-invoked on disagreement — position/technique
     are NOT re-asked) that can ditch the highlight. ``model``/``thinking``
-    above are RETAINED but now UNUSED by the real per-axis calls (each axis
-    owns its own ``model``/``thinking`` via the mixin) — kept only so
-    ``registry.validate_pipeline_def``'s
-    existing top-level allowlist check and pre-existing tests asserting
-    these fields' presence/defaults stay green without a special case;
-    documented here as a deliberate, minor redundancy rather than silently
-    repurposed. ``fps``/``preroll_s``/``postroll_s`` ARE still real and used
+    above are RETAINED: for Gemini, per-axis ``model`` fields drive the real
+    calls (top-level ``model`` is unused except validation); when top-level
+    ``model`` is a Claude id (``claude-opus-4-8``), the executor overrides all
+    three axes to that model and uses the frame-sample Anthropic path
+    (``claude_frames``) — the UI also cascades Model dropdown changes into the
+    three axis ``model`` fields so saved configs stay coherent.
+    ``fps``/``preroll_s``/``postroll_s`` ARE still real and used
     (identically to before) for all three axis calls' shared window.
 
     v1 ships ``max_validator_iterations`` default **1** (single pass, per
@@ -469,6 +492,56 @@ class HighlightAnalyzeConfig(BaseModel):
     max_validator_iterations: int = Field(default=1, ge=1, le=5)
 
 
+class PositionScanConfig(ThinkingQualityMixin):
+    """Whole-scope scan that returns one initial state plus transition boundaries."""
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = "gemini-3.7-flash"
+    rough_fps: float = Field(default=1.0, gt=0.0, le=5.0)
+    # Budget-estimation bound only. Actual transition count is always gated
+    # after the scan; no transition is dropped or coerced to satisfy this.
+    min_transition_gap_s: float = Field(default=1.0, gt=0.0, le=30.0)
+    system_prompt: Optional[str] = None
+    initial_prompt: Optional[str] = None
+
+
+class PositionCritiqueConfig(ThinkingQualityMixin):
+    """Per-transition native-video boundary correction and state confirmation.
+
+    The registry persists the canonical ``system_prompt`` and
+    ``initial_prompt`` so the QA editor shows the complete call contract.
+    Empty values reset to the canonical runtime prompts.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = "gemini-3.7-flash"
+    backpad_s: float = Field(default=4.0, ge=0.0, le=30.0)
+    # Six seconds gives a rough early boundary enough forward context to show
+    # the new state settling; corrected_at_s still marks first establishment.
+    forwardpad_s: float = Field(default=6.0, ge=0.0, le=30.0)
+    fps: Literal[1, 10, 15] = 10
+    system_prompt: Optional[str] = None
+    initial_prompt: Optional[str] = None
+
+
+class TechniqueAnalyzeConfig(ThinkingQualityMixin):
+    """Grounded technique/outcome call followed by one technique-only validator."""
+
+    model_config = ConfigDict(extra="forbid")
+    model: str = "gemini-3.7-flash"
+    fps: Literal[1, 10, 15] = 10
+    preroll_s: float = Field(default=5.0, ge=0.0, le=15.0)
+    postroll_s: float = Field(default=4.0, ge=0.0, le=10.0)
+    validator_thinking: Optional[Literal["off", "low", "medium", "high"]] = "high"
+    validator_media_resolution: Optional[Literal["low", "medium", "high"]] = "high"
+
+
+class TimelineReconcileConfig(BaseModel):
+    """Deterministic terminal stage; intentionally has no model configuration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
 NODE_CONFIG_MODELS: dict[str, type[BaseModel]] = {
     "video_window": VideoWindowConfig,
     "frame_sample": FrameSampleConfig,
@@ -482,6 +555,10 @@ NODE_CONFIG_MODELS: dict[str, type[BaseModel]] = {
     "highlight_scan": HighlightScanConfig,
     "highlight_analyze": HighlightAnalyzeConfig,
     "highlight_critique": HighlightCritiqueConfig,
+    "position_scan": PositionScanConfig,
+    "position_critique": PositionCritiqueConfig,
+    "technique_analyze": TechniqueAnalyzeConfig,
+    "timeline_reconcile": TimelineReconcileConfig,
 }
 
 

@@ -26,6 +26,7 @@ from typing import Optional
 from google.genai import types
 
 from service.pipelines import gemini_retry
+from service.pipelines.gemini_model_compat import generation_sampling_kwargs
 
 logger = logging.getLogger("service.pipelines.simplified_tags")
 
@@ -95,11 +96,19 @@ def extract_usage_metadata(response) -> Optional[dict]:
     usage = getattr(response, "usage_metadata", None)
     if usage is None:
         return None
-    return {
+    result = {
         "prompt_token_count": getattr(usage, "prompt_token_count", None),
         "candidates_token_count": getattr(usage, "candidates_token_count", None),
         "total_token_count": getattr(usage, "total_token_count", None),
     }
+    # Additive optional fields: Gemini 3 thinking is billed as output, and a
+    # cached prefix is billed at its own reduced input rate. Preserve the
+    # historical three-key shape when an older SDK/test double omits them.
+    for field_name in ("thoughts_token_count", "cached_content_token_count"):
+        value = getattr(usage, field_name, None)
+        if value is not None:
+            result[field_name] = value
+    return result
 
 
 def _strip_markdown_fences(text: str) -> str:
@@ -334,9 +343,9 @@ class SimplifiedTagsAnalyzer:
     def _build_generate_config(self, response_schema: types.Schema) -> types.GenerateContentConfig:
         kwargs = dict(
             system_instruction=self.system_instruction,
-            temperature=self.temperature,
             response_mime_type="application/json",
             response_schema=response_schema,
+            **generation_sampling_kwargs(self.model_id, temperature=self.temperature),
         )
         if self.thinking_config is not None:
             kwargs["thinking_config"] = self.thinking_config
@@ -589,10 +598,10 @@ class SimplifiedTagsTimeAnalyzer:
     ) -> types.GenerateContentConfig:
         kwargs = dict(
             system_instruction=self.system_instruction,
-            temperature=self.temperature,
             response_mime_type="application/json",
             response_schema=response_schema,
             media_resolution=media_resolution_enum(media_resolution),
+            **generation_sampling_kwargs(self.model_id, temperature=self.temperature),
         )
         if self.thinking_config is not None:
             kwargs["thinking_config"] = self.thinking_config
@@ -601,7 +610,7 @@ class SimplifiedTagsTimeAnalyzer:
     async def analyze_chunk(
         self, youtube_url: str, start_sec: float, end_sec: float, previous_context: Optional[str] = None,
         *, response_schema=None, fps: int = 1, media_resolution: Optional[str] = None,
-        prompt_text: Optional[str] = None,
+        prompt_text: Optional[str] = None, extra_parts: Optional[list[types.Part]] = None,
     ) -> str:
         """Analyze ONE native-video chunk ``[start_sec, end_sec)``.
 
@@ -632,6 +641,12 @@ class SimplifiedTagsTimeAnalyzer:
         non-``None`` value is sent VERBATIM (the caller has already built its
         own final prompt text — this function never re-substitutes or
         re-wraps it).
+
+        ``extra_parts`` is an additive grounded-reference seam used only by
+        ``position-timeline-techniques``. ``None`` preserves the historical
+        request parts exactly (prompt + native video). When supplied, the
+        already-labelled inline-image parts are inserted between the prompt
+        and video so every player-specific output is grounded.
         """
         effective_schema = response_schema if response_schema is not None else build_video_response_schema()
         prompt = prompt_text if prompt_text is not None else build_video_prompt(previous_context)
@@ -656,10 +671,14 @@ class SimplifiedTagsTimeAnalyzer:
                 "Gemini simplified-tags-time-v1: chunk [%.1f-%.1f]s, model %s",
                 start_sec, end_sec, self.model_id,
             )
+            request_parts = [types.Part(text=prompt)]
+            if extra_parts:
+                request_parts.extend(extra_parts)
+            request_parts.append(video_part)
             response = await gemini_retry.call_with_retry(
                 lambda: self.client.aio.models.generate_content(
                     model=self.model_id,
-                    contents=[types.Content(role="user", parts=[types.Part(text=prompt), video_part])],
+                    contents=[types.Content(role="user", parts=request_parts)],
                     config=self._build_generate_config(effective_schema, media_resolution),
                 ),
                 op_name="simplified-tags-time-v1",

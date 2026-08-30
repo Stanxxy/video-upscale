@@ -1,0 +1,132 @@
+# SAM3 scout clip manifest — 8 ADCC gold windows (≤40s trims under 45s chunk threshold).
+# Gold points are t_s; window is [t-20, t+20] clamped at 0.
+# Media stem on ADCC root: md5(embed_url) == video_url_md5.
+
+chunk_defaults:
+  sam3_chunk_seconds: 30
+  chunk_threshold_seconds: 45
+  concurrency: 1
+  text_prompt: "person"
+  upscale_target: 1080
+  highlight_fill_alpha: 0.30
+
+clips:
+  - clip_id: 6470211a_submission_arm_lock_727
+    match_id: 6470211a3ec8dca9d1a32710
+    name: "PJ Barch vs Kade Ruotolo"
+    video_url_md5: 2362fa565b23923f00ffc6d98e49e75f
+    video_url: https://www.youtube.com/embed/3gotA-Y0gXQ
+    action_class: submission_arm_lock
+    outcome: successful
+    track: hard
+    t_s: 727.0
+    window_start_s: 707.0
+    window_end_s: 747.0
+    stratum: submission
+    occlusion_heavy: true
+    gold_source: highlight_gold
+
+  - clip_id: 650d20c7_submission_arm_lock_8767
+    match_id: 650d20c745120c8433e9cfb2
+    name: "Dante Leon vs PJ Barch"
+    video_url_md5: aab8ef7a13e96ee568b2819a2e6eda7e
+    video_url: https://www.youtube.com/embed/l3meC5NHMOA
+    action_class: submission_arm_lock
+    outcome: successful
+    track: hard
+    t_s: 8767.0
+    window_start_s: 8747.0
+    window_end_s: 8787.0
+    stratum: submission
+    occlusion_heavy: true
+    gold_source: highlight_gold
+
+  - clip_id: 650d20c7_sweep_3512
+    match_id: 650d20c745120c8433e9cfbb
+    name: "Roberto Jimenez vs Andy Varela"
+    video_url_md5: aab8ef7a13e96ee568b2819a2e6eda7e
+    video_url: https://www.youtube.com/embed/l3meC5NHMOA
+    action_class: sweep
+    outcome: successful
+    track: hard
+    t_s: 3512.0
+    window_start_s: 3492.0
+    window_end_s: 3532.0
+    stratum: sweep_back_take
+    occlusion_heavy: false
+    gold_source: highlight_gold
+
+  - clip_id: 650d20c7_sweep_169
+    match_id: 650d20c745120c8433e9cfde
+    name: "Sam McNally vs Joshua Cisneros"
+    video_url_md5: cc817ff298cb364dd72bbe867c8022b9
+    video_url: https://www.youtube.com/embed/Ux7yBOQeDvA
+    action_class: sweep
+    outcome: successful
+    track: hard
+    t_s: 169.0
+    window_start_s: 149.0
+    window_end_s: 189.0
+    stratum: sweep_back_take
+    occlusion_heavy: false
+    gold_source: highlight_gold
+
+  - clip_id: 650d20c7_guard_pass_171
+    match_id: 650d20c745120c8433e9cfd7
+    name: "Dante Leon vs Magid Hage"
+    video_url_md5: ca00e7309426bab9fcbe6983b2f11327
+    video_url: https://www.youtube.com/embed/78qZ9t2Pohs
+    action_class: guard_pass
+    outcome: successful
+    track: hard
+    t_s: 171.0
+    window_start_s: 151.0
+    window_end_s: 191.0
+    stratum: guard_pass
+    occlusion_heavy: false
+    gold_source: highlight_gold
+
+  - clip_id: 650d20c7_guard_pass_3873
+    match_id: 650d20c745120c8433e9cfda
+    name: "Micael Galvao vs Oliver Taza"
+    video_url_md5: aab8ef7a13e96ee568b2819a2e6eda7e
+    video_url: https://www.youtube.com/embed/l3meC5NHMOA
+    action_class: guard_pass
+    outcome: successful
+    track: hard
+    t_s: 3873.0
+    window_start_s: 3853.0
+    window_end_s: 3893.0
+    stratum: guard_pass
+    occlusion_heavy: false
+    gold_source: highlight_gold
+
+  - clip_id: 6470211a_escape_384
+    match_id: 6470211a3ec8dca9d1a32710
+    name: "PJ Barch vs Kade Ruotolo"
+    video_url_md5: 2362fa565b23923f00ffc6d98e49e75f
+    video_url: https://www.youtube.com/embed/3gotA-Y0gXQ
+    action_class: escape
+    outcome: successful
+    track: hard
+    t_s: 384.0
+    window_start_s: 364.0
+    window_end_s: 404.0
+    stratum: scramble_transition
+    occlusion_heavy: false
+    gold_source: normalized_gold
+
+  - clip_id: 650d20c7_escape_8372
+    match_id: 650d20c745120c8433e9cfb2
+    name: "Dante Leon vs PJ Barch"
+    video_url_md5: aab8ef7a13e96ee568b2819a2e6eda7e
+    video_url: https://www.youtube.com/embed/l3meC5NHMOA
+    action_class: escape
+    outcome: successful
+    track: hard
+    t_s: 8372.0
+    window_start_s: 8352.0
+    window_end_s: 8392.0
+    stratum: scramble_transition
+    occlusion_heavy: false
+    gold_source: normalized_gold

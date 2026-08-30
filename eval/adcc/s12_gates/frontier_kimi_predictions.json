@@ -1,0 +1,1362 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "match_id": "650d20c745120c8433e9d024",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 12624,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 12619.0,
+    "window_end_s": 12628.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "turtle",
+          "justification": "The bottom athlete is curled face-down on knees/forearms with head tucked while the top athlete sprawls over her back, and no hooks or body triangle are visible."
+        },
+        "latency_ms": 56471.54812514782,
+        "cost_usd": 0.0947868,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "submission_choke",
+          "outcome": "unsuccessful",
+          "justification": "The top athlete works from a front-headlock/head-and-arm position on the turtled opponent and rolls through while keeping the neck/head tied up, but no tap, stoppage, or score change is visible as the clip continues."
+        },
+        "latency_ms": 85643.7082090415,
+        "cost_usd": 0.1085106,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against position='turtle': the strongest counter is that the top athlete is chest-to-back behind the opponent throughout frames 1-9, which could be argued as back_control \u2014 but no hooks or body triangle are ever visible; the bottom athlete is on knees and forearms with head tucked, the textbook turtle definition, and the top athlete is sprawled over the back rather than seated with hooks in. In the later frames (14-19) the top athlete is seated facing the opponent's head, so one could argue the position shifted to front headlock/guard-adjacent, but the bottom athlete never establishes guard and remains balled up, so turtle still best describes the window. Against action_class='submission_choke': the counter is that the roll-through in frames 9-13 could be labeled a back_take attempt or a positional transition, since the top athlete inverts over the opponent's head \u2014 however, frame 13-19 show the top athlete seated with the opponent's head and arm wrapped tight (head-and-arm/front-headlock configuration consistent with an anaconda/d'arce style choke), not behind with hooks, so the intent is the neck, not the back. Against outcome='unsuccessful': the counter would be that no clear finish is visible \u2014 but no tap, referee stoppage, or scoreboard change (stays 2-0, advantages 0-0) occurs through frame 20, and the bottom athlete is still defending actively at clip end, so 'unsuccessful' survives.",
+          "verdict": "agree",
+          "final_position": "turtle",
+          "final_action_class": "submission_choke",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 1-8: bottom athlete is face-down on knees/forearms with head tucked while top sprawls over her back with no hooks in \u2014 pure turtle. Frames 9-13: top athlete rolls through while keeping the head-and-arm tie, and frames 14-19 show her seated with the opponent's head wrapped in a front-headlock/choke configuration, confirming choke intent rather than a back take (no hooks or body triangle ever appear). Scoreboard remains 2-0 with no advantage change and no tap or referee intervention through frame 20, confirming the choke was unsuccessful. Turtle x submission_choke is not an impossible combination (front-headlock chokes from turtle are standard), and the clear roll-through plus grip work fails the strict ditch test."
+        },
+        "latency_ms": 39600.86741601117,
+        "cost_usd": 0.0347376,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "turtle",
+    "final_outcome": "unsuccessful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 12619.0,
+        "end_s": 12628.0,
+        "action_class": "submission_choke",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6661e503716f12758093d038__w1",
+    "match_id": "6661e503716f12758093d038",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2852,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 2847.0,
+    "window_end_s": 2856.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The top player is chest-to-side across the bottom player's torso with hips past the legs, while the bottom player is flat on their back and has no ankles locked or hooks in."
+        },
+        "latency_ms": 42833.584166830406,
+        "cost_usd": 0.0338568,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "justification": "The top athlete (Crellinsten, dark top) works around the bottom player's legs, clears the guard and settles into side/top control, and the scoreboard updates from 2-0 to 5-0 mid-clip (a 3-point pass under ADCC scoring), confirming the pass was credited."
+        },
+        "latency_ms": 21912.712750025094,
+        "cost_usd": 0.0263706,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the position label: several frames (7\u201310) show the top athlete sitting up high with hips elevated and one knee near the bottom player's head/shoulder line, which could be argued as mount or knee-on-belly rather than side_control \u2014 in frame 9 the top player's torso is nearly upright over the bottom player's chest, a posture more typical of mount stabilization than a low side-control pin. Against the action_class/outcome labels: one could argue the guard was already passed before this window opened (frame 1 already shows the top athlete past the legs with the bottom player flat), making this clip a side-control stabilization/transition rather than the pass itself; under that reading action_class should be 'transition' with outcome 'successful', or the clip shows only positional maintenance with no discrete technique. However, the scoreboard changes from 2-0 to 5-0 between frames ~15 and 17 \u2014 exactly a 3-point guard pass under ADCC scoring \u2014 meaning the pass was credited DURING this window, which directly refutes the 'already passed' reading. The mount argument also fails: in every frame the top athlete's weight is chest-to-side across the torso, the bottom player's shoulders are flat with no hook or ankle lock visible, and the top player's near hip stays on the mat beside the bottom player's hip rather than straddling the belly.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "guard_pass",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The scoreboard updates from 2-0 to 5-0 mid-clip (visible between the 0:15 and 0:14 frames), a +3 swing that matches an ADCC guard pass being credited in this exact window, corroborating guard_pass/successful. Visually, the top athlete (patterned shorts) is chest-to-side across the bottom player's (blue) torso with hips clear of the legs in every frame, bottom player flat on back with no closed ankles or hooks \u2014 consistent with a side_control ending position. No genuine position\u00d7action_class contradiction exists (guard_pass ending in side_control is the definition of a successful pass), and the ditch test fails immediately because there is continuous intentional movement (grip/hip/weight adjustment by the top player, defensive framing by the bottom player) plus a confirmed scoring event."
+        },
+        "latency_ms": 31758.946999907494,
+        "cost_usd": 0.0333336,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "successful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2847.0,
+        "end_s": 2856.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6643b593532ae8f232692d70__w2",
+    "match_id": "6643b593532ae8f232692d70",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2559,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 2554.0,
+    "window_end_s": 2563.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "turtle",
+          "justification": "The bald player is on his knees/elbows with head tucked while the other is draped over his back, and no hooks, mount, or guard configuration is clearly established."
+        },
+        "latency_ms": 43495.67916686647,
+        "cost_usd": 0.0177264,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "submission_choke",
+          "outcome": "unclear",
+          "justification": "Top player has his arms wrapped around the bottom (turtled) player's head and neck in a front-headlock-style choke configuration and rolls through to finish, but the choking grip and any tap are occluded by the stacked bodies and the clip ends mid-roll without a visible tap or release."
+        },
+        "latency_ms": 26455.745625076815,
+        "cost_usd": 0.0134412,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the POSITION call: one could argue 'back_control' or a 'front_headlock' variant instead of turtle, since the tan athlete (Aly) is draped over the bald athlete's back with his arm wrapped around the neck from the side/back in frames 1-15. However, back_control requires hooks or a body triangle, and frames 1-6 clearly show the bald athlete (Hansen, black KINGZ rashguard) on knees and forearms with head tucked while Aly's legs are off to the side with no hooks inserted \u2014 the defining turtle configuration. Against the ACTION_CLASS call: one could argue 'transition' or no submission at all, since no choking hand-to-hand connection is ever visible \u2014 the grip is occluded between the stacked bodies in every frame, and the roll in frames 17-20 could theoretically be a positional roll rather than a choke finish. But Aly's arm is consistently threaded around Hansen's head/neck in a front-headlock configuration (frames 4-13), and the frames 17-20 roll-through \u2014 Aly rotating over the top of Hansen's back while maintaining the head-and-arm wrap \u2014 matches the classic anaconda/d'Arce-style choke finishing motion, which is a genuine choke attempt, not mere movement.",
+          "verdict": "agree",
+          "final_position": "turtle",
+          "final_action_class": "submission_choke",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 1-15: Hansen is on knees/elbows with head tucked, Aly draped over his back with no hooks \u2014 textbook turtle, ruling out back_control. Aly's arm stays wrapped around Hansen's head/neck throughout (visible in frames 4-13 from the near-side angle), and frames 17-20 show Aly rolling over the top of Hansen's back while retaining the head-and-arm wrap \u2014 an intentional choke-finishing roll. No tap, release, or referee intervention is visible before the clip ends mid-roll (frame 20), so outcome='unclear' survives. The combination turtle x submission_choke is not on the impossible list (front-headlock chokes from turtle are standard), and the deliberate grip maintenance plus the roll-through fails the ditch test outright."
+        },
+        "latency_ms": 33331.788667012006,
+        "cost_usd": 0.0331776,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "turtle",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2554.0,
+        "end_s": 2563.0,
+        "action_class": "submission_choke",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6580c285827346aa0335a86b__w3",
+    "match_id": "6580c285827346aa0335a86b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 840,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=SDWG9WMbvl0",
+    "window_start_s": 835.0,
+    "window_end_s": 844.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "turtle",
+          "justification": "The bottom player is on hands and knees/elbows in a turtled posture while the top player rides draped over his back from behind."
+        },
+        "latency_ms": 15528.96091598086,
+        "cost_usd": 0.0073554,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "justification": "The top player in camo shorts elevates his hips and slices his knee over the bottom player's legs around frames 6-8, clearing the guard and settling into side control with chest-to-chest pressure for the remainder of the clip."
+        },
+        "latency_ms": 11798.35862503387,
+        "cost_usd": 0.0064002,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against position=turtle: in frames 1-5 the bottom athlete looks more supine/side-lying with shoulders on the mat and the top athlete chest-to-chest, not a clean hands-and-knees turtle with a rear ride; the unmistakable turtle only appears late in frames 16-20. Against action_class=guard_pass/successful: frames 6-8 show the bottom athlete's hips and legs exploding upward and the top athlete being rotated/airborne, which could be read as a bottom granby/sweep scramble rather than a controlled top knee-slice, and because the bottom later recovers to knees in frames 18-20 one could argue the pass was never consolidated and should be transition/unsuccessful.",
+          "verdict": "agree",
+          "final_position": "turtle",
+          "final_action_class": "guard_pass",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The labels survive: frames 1-5 still show a leg/knee-shield relationship rather than an established side-control pin, frames 6-8 show the top athlete elevating the hips and cutting across the legs, frames 9-15 show him landing heavy chest-to-chest on top after the legs are cleared, and frames 16-20 show the bottom athlete turning to elbows/knees while the top athlete rides from behind, matching an ending turtle. Turtle x guard_pass is not a listed structural impossibility, and there is clear intentional hip/weight movement throughout, so it is not a ditch."
+        },
+        "latency_ms": 218361.7791251745,
+        "cost_usd": 0.1086636,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "turtle",
+    "final_outcome": "successful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 835.0,
+        "end_s": 844.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "654152332d513512a36b6212__w4",
+    "match_id": "654152332d513512a36b6212",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2052,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=5ix4aFb5Xiw",
+    "window_start_s": 2047.0,
+    "window_end_s": 2056.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The red-clad top player lies chest-to-chest perpendicular across the prone bottom player's upper body with a crossface and no guard legs or hooks involved, a stable side-control configuration."
+        },
+        "latency_ms": 12688.68654104881,
+        "cost_usd": 0.0055314,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "submission_choke",
+          "outcome": "unclear",
+          "justification": "Top red/white athlete has both arms wrapped around the bottom black athlete's head/neck from side control in a head-and-arm/arm-triangle shape, but the finishing clasp and any tap are occluded by their bodies with no visible stoppage."
+        },
+        "latency_ms": 84737.10845899768,
+        "cost_usd": 0.0366312,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the POSITION label: one could argue mount, since in frames 1-4 the red athlete's hips ride high over the bottom player's torso with the bottom player flat and legs splayed. But the low side angle in frames 5-20 shows the top athlete's chest is perpendicular across the bottom player's upper body, hips off to one side, one knee on the mat beside the bottom player's hip and no straddle of the torso \u2014 that is textbook side control, not mount, and not north-south (bodies are perpendicular, not head-to-head aligned). Against the ACTION_CLASS label: one could argue this is mere positional control/transition, since a true arm-triangle requires the bottom player's own arm trapped across his neck, and the frames never clearly show that trapped arm \u2014 the top athlete could simply be holding a crossface/head-wrap pin. However, from frame 9 onward the top athlete's arms are visibly clasped together behind/around the bottom player's head and neck with his head dropped to the far side and shoulder driving into the neck \u2014 a head-and-arm squeeze configuration \u2014 and the bottom player responds with defensive bridging and leg movement (frames 15-20), which is consistent with an active choke attempt rather than static pinning. Against the OUTCOME 'unclear': one could argue 'unsuccessful' since no tap is visible and the clock keeps running, but the finishing clasp is occluded by the bodies in every frame and there is no clear defensive escape either, so 'unclear' is the honest call.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "submission_choke",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 5-8 (low side angle) confirm perpendicular chest-to-chest side control with a crossface and no legs/hooks involved. Frames 9-14 show the top athlete's arms clasped around the bottom player's head/neck in a head-and-arm/arm-triangle shape with shoulder pressure into the neck \u2014 an active choke attempt. Frames 15-20 show the bottom player bridging and moving his legs defensively, so this is a real attempt (not a non-event), but the finishing grip and any tap are occluded by the bodies and no referee stoppage is visible, supporting outcome 'unclear'. No position\u00d7action_class contradiction exists: submission_choke from side_control (arm-triangle family) is structurally valid."
+        },
+        "latency_ms": 34215.786332963035,
+        "cost_usd": 0.0336816,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2047.0,
+        "end_s": 2056.0,
+        "action_class": "submission_choke",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "65dfbed6a2434704339de9a3__w5",
+    "match_id": "65dfbed6a2434704339de9a3",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 3544,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=nDc0L96J6i4",
+    "window_start_s": 3539.0,
+    "window_end_s": 3548.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "scramble",
+          "justification": "Both athletes are rolling/inverting with hips and legs untangled and no crossed ankles, hooks, mount, or pinned torso visible, so no stable position is established."
+        },
+        "latency_ms": 31654.051583027467,
+        "cost_usd": 0.0819318,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "transition",
+          "outcome": "unclear",
+          "justification": "Top player in black maintains heavy chest/hip pressure over a turtled, balled-up opponent without securing hooks, completing a pass, or showing a visible submission grip, so it reads as positional control rather than a named technique; the referee steps in and the athletes separate, and the stacked bodies/ref intervention hide any clean resolution (no tap, hooks, or pass visible)."
+        },
+        "latency_ms": 32721.34287515655,
+        "cost_usd": 0.0134562,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the position label 'scramble': for the first ~14 of 20 frames, the player in all black is not scrambling at all \u2014 he is established in a stable turtle-attack ride, chest draped over the back of the balled-up opponent (visible green ankle band on the bottom player), hips heavy, legs posted wide in a sprawl (frames 1-2). That body configuration is a coherent front-headlock/turtle-top position, arguably classifiable as front_headlock or a turtle-ride variant of side/back attack, not an untangled scramble. Against action_class 'transition': the top player's pressure over the turtle with his head and chest on the opponent's back could be read as a back_take attempt in progress \u2014 he is positioned behind the opponent's shoulders attacking the back, and around frames 15-18 he inverts/rolls through, which could be a back-take entry (berimbolo-style inversion) rather than an undefined transition. Against outcome 'unclear': the clip ends with both athletes separating and the referee stepping in (frames 11-13, ref bending over them; frames 19-20, bodies apart), so one could argue the outcome is simply 'failure' of the top player's attack since no hooks, pass, or tap materialized.",
+          "verdict": "agree",
+          "final_position": "scramble",
+          "final_action_class": "transition",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The opposing case fails on the taxonomy's own definitions: throughout the entire sequence the bottom athlete never gives up hooks and the top athlete never secures a seatbelt or crossed-ankle control \u2014 in frames 15-18 the top player inverts and rolls over his own shoulder with legs visibly untangled from the opponent's, and by frames 19-20 both are separated and rolling apart, so no stable position (back_control, side_control, or guard) is ever established; 'scramble' correctly captures the unresolved entanglement. Likewise no back_take completes (no hooks visible in any frame, opponent stays turtled/seated rather than having his back taken), and the referee's intervention at frames 11-13 plus the mutual separation at frames 19-20 means no pass, submission grip, or positional resolution is visible \u2014 supporting transition/unclear. No position x action_class contradiction: scramble x transition is not on the incompatible list. Ditch test fails cleanly: there are multiple intentional hip and weight changes \u2014 the top player's sprawl-to-pressure shift (frames 1-6), his inversion roll (frames 15-18), and the bottom player's rolling escape attempt (frames 18-20) \u2014 so this is a real, contested sequence, not a non-event."
+        },
+        "latency_ms": 44273.895625025034,
+        "cost_usd": 0.0359916,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "scramble",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 3539.0,
+        "end_s": 3548.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 142,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+    "window_start_s": 137.0,
+    "window_end_s": 146.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "turtle",
+          "justification": "The blue-clad player remains on hands and knees in a turtled posture throughout while the top player rides over his back."
+        },
+        "latency_ms": 15507.352540967986,
+        "cost_usd": 0.0077604,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "submission_choke",
+          "outcome": "unclear",
+          "justification": "Top athlete is chest-to-back on the turtled blue player with an arm wrapped around the neck/head area as if working a rear choke, but the choking grip and any tap are occluded by the stacked bodies so the finish cannot be confirmed."
+        },
+        "latency_ms": 105979.06762501225,
+        "cost_usd": 0.0454902,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the position label: the top athlete is chest-to-back behind a kneeling opponent, which could arguably be back_control \u2014 but back_control requires hooks in or at minimum the opponent's back being taken with the bottom player flattened; here blue stays posted on hands and knees in every frame, and no hooks are visible (top's legs trail outside/behind blue's hips, e.g., frames 4-7 where top's left leg swings over but never inserts as a hook), so 'turtle' is the better call. Against the action_class: the sequence could be labeled 'back_take' or 'transition' \u2014 top is riding and his arm near blue's head could be a seatbelt/crossface for positional control rather than a choke. However, in frames 1-3 and again 8-13, top's right arm is visibly wrapped around blue's neck/head junction with his head glued tight to blue's upper back, the classic rear-choke-from-turtle configuration (RNC/clock-choke style attack on a turtled opponent), and his grip adjusts deeper across frames 14-20, which reads as an active choke attempt rather than mere control. Against outcome: no tap, no referee stoppage, and the hand fighting is occluded, so 'unclear' is justified rather than 'success' or 'fail'.",
+          "verdict": "agree",
+          "final_position": "turtle",
+          "final_action_class": "submission_choke",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Blue remains on hands and knees in all 20 frames (turtle confirmed); top athlete is chest-to-back with right arm encircling blue's neck/head area (frames 1-3, 8-13) and actively adjusts the grip deeper while blue defends (frames 14-20), consistent with a choke attempt from turtle. No hooks are established (ruling out back_control), and no tap or stoppage is visible (outcome unclear). Turtle x submission_choke is a physically valid combination, and the continuous grip/hip adjustments by both athletes fail the strict ditch test \u2014 this is a real, contested exchange."
+        },
+        "latency_ms": 31947.664709063247,
+        "cost_usd": 0.0313806,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "turtle",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 137.0,
+        "end_s": 146.0,
+        "action_class": "submission_choke",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "66138fe05da956d5ef54f21b__w7",
+    "match_id": "66138fe05da956d5ef54f21b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1058,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=h2ucDfTaypI",
+    "window_start_s": 1053.0,
+    "window_end_s": 1062.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The top player settles chest-across-chest with hips past the bottom player's knee line while the bottom player is on their back with ankles uncrossed and no hooks in."
+        },
+        "latency_ms": 27798.876457847655,
+        "cost_usd": 0.0271668,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "justification": "Top player (black rashguard) drives forward past the bottom player's legs, flattens them out, and settles into side control with hips low and head pressure, holding the passed position through the end of the clip."
+        },
+        "latency_ms": 16046.253791078925,
+        "cost_usd": 0.0237006,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Strongest case against the labels: (1) POSITION could be half_guard rather than side_control \u2014 in frames 13-18 the bottom player's legs come up over/around the top player's back and hips, which could indicate the top player's near-side leg is still trapped between the bottom player's legs, meaning the pass never fully cleared the knee line. (2) OUTCOME could be 'unsuccessful' or the action_class 'transition' if the top player is still entangled \u2014 the bottom player's raised legs in frames 14-18 might be an active re-guard/inversion attempt rather than a flattened, passed guard. (3) POSITION could arguably be mount-in-progress or north_south in frames 9-12 as the top player's chest rides high across the bottom player's upper torso with head on the far side. However, weighing the evidence: the bottom athlete is flat on their back with ankles uncrossed and visibly no hook trapping the top's leg \u2014 the raised legs in late frames are over the top's back (framing/hip-escape attempt), not closed around the top's thigh; the top player's hips are clearly past the knee line and low, chest-across-chest, and they hold the settled position through frames 15-19. That is a completed pass into side control, not half guard retention.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "guard_pass",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 1-4: top player bent over with bottom player's legs between them (guard/leg entanglement). Frames 5-10: top player drives forward, hips dropping past the bottom player's knee line, flattening them out. Frames 11-19: top player settles chest-across-chest with low hips and head pressure on the far side; bottom player is flat on their back, ankles uncrossed, no hooks in \u2014 their raised legs in frames 14-18 rest over the top's back without trapping a leg. The pass is completed and held. guard_pass \u00d7 side_control is the normal success pairing (not a contradiction), and the clip shows clear intentional weight and hip movement by both athletes, so it fails the ditch test."
+        },
+        "latency_ms": 41641.31775009446,
+        "cost_usd": 0.0360156,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "successful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 1053.0,
+        "end_s": 1062.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "65dbd239a2434704339da0e4__w8",
+    "match_id": "65dbd239a2434704339da0e4",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 279,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "window_start_s": 274.0,
+    "window_end_s": 283.0,
+    "settings": {
+      "fps": 10,
+      "model": "",
+      "provider_route": "",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player is on their back with ankles uncrossed and legs actively framing/hooking the bent-over passing top player, with no locked closed guard, stable mount, or settled side control visible."
+        },
+        "latency_ms": 19845.380207989365,
+        "cost_usd": 0.0083604,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "unclear",
+          "justification": "Top player in black repeatedly drives around the bottom player's legs, pressuring past the guard while the bottom player inverts and re-entangles; by the final frames the top player is chest-heavy in a side position but the bottom player's legs are still partially involved and the camera distance leaves the final control ambiguous, so no clean pass completion is visible."
+        },
+        "latency_ms": 29326.179332798347,
+        "cost_usd": 0.0289746,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "call_failed",
+        "error": "Expecting value: line 157 column 1 (char 858)",
+        "parsed": null,
+        "latency_ms": 0.0,
+        "cost_usd": 0.0,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": null,
+    "final_outcome": null,
+    "verdict": null,
+    "ditch_reason": null,
+    "emitted_events": [],
+    "status": "call_failed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d01f__w9",
+    "match_id": "650d20c745120c8433e9d01f",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2650,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 2645.0,
+    "window_end_s": 2654.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "half_guard",
+          "justification": "The bottom player (black, red ankle band) has one leg trapped between the top player's thighs while her other leg frames free, and the top player (light blue) is crossfacing from above that trapped leg."
+        },
+        "latency_ms": 14585.153999971226,
+        "cost_usd": 0.0231018,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "submission_choke",
+          "outcome": "unsuccessful",
+          "justification": "Top player (light blue) has bottom player's head and near arm wrapped together in a head-and-arm/arm-triangle configuration, chest compressing across the neck while working to free her leg from the half guard to finish; no tap occurs and the top player's leg remains trapped as the clip ends, so the choke is not completed."
+        },
+        "latency_ms": 22833.022291073576,
+        "cost_usd": 0.0270456,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the position label: in the middle frames (roughly frames 4-13), the bottom player's legs appear extended and flat on the mat with the top player's hips seemingly past the knee line \u2014 this could be argued as side_control rather than half_guard, since the top player's trapped leg is not clearly visible between the bottom player's thighs in that stretch. Against the action_class label: the dominant visible activity is the top player driving her hips forward and trying to extract her leg from between the bottom player's thighs (frames 1-3, 14-20), which looks like a guard_pass attempt with a crossface rather than a committed submission_choke \u2014 one could argue the head-and-arm wrap is merely the crossface/underhook battle of a pass, not a choke. Against the outcome: no tap occurs, so 'unsuccessful' holds, but if the action were relabeled a pass, the pass also fails since the leg stays trapped.",
+          "verdict": "agree",
+          "final_position": "half_guard",
+          "final_action_class": "submission_choke",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The half_guard label survives because the ending frames (14-20) clearly show the top player's right leg re-trapped between the bottom player's thighs while the bottom player's far leg frames free, and the clip's final configuration is half guard, not side control. The submission_choke label survives because in frames 1-2 and 14-16 the top player has the bottom player's head AND near arm wrapped together with her chest compressed across the neck \u2014 a head-and-arm choke configuration distinct from a simple crossface, and she maintains the squeeze while working to free her leg to finish. No contradiction: half_guard x submission_choke is physically possible (head-and-arm/arm-triangle from top half guard) and absent from the impossible-combination list. Ditch test fails: there is clear intentional activity from both athletes \u2014 top player's crossface/head-arm squeeze and hip pressure, bottom player's bridging, framing, and leg re-insertion \u2014 so this is a real unsuccessful submission attempt, not a non-event. No tap occurs and the top player's leg remains trapped at clip end, confirming 'unsuccessful'."
+        },
+        "latency_ms": 35790.34920898266,
+        "cost_usd": 0.0343056,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "half_guard",
+    "final_outcome": "unsuccessful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2645.0,
+        "end_s": 2654.0,
+        "action_class": "submission_choke",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6634291e532ae8f23266cafe__w10",
+    "match_id": "6634291e532ae8f23266cafe",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 498,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=bLS3oXDIjs8",
+    "window_start_s": 493.0,
+    "window_end_s": 502.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The black-clad player is chest-to-chest on top of the supine white-clad player with perpendicular torso pressure and no crossed ankles or guard legs around the top player."
+        },
+        "latency_ms": 30039.36920897104,
+        "cost_usd": 0.0290658,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "unclear",
+          "justification": "The black-clad top player keeps chest pressure and works his knee/hip across the white-clad bottom player's legs as if to pass, but the decisive leg clearance/stabilization is hidden behind the referee and stacked bodies, with no scoreboard change visible."
+        },
+        "latency_ms": 95790.049290983,
+        "cost_usd": 0.0561396,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the position label: in frames 1-2 the black-clad athlete's hips are elevated and stacked, and in frames 5-8 a bare leg of the white-clad athlete is visible on the right side of black's hip line, which could indicate an active guard (closed or half guard) with legs framed around/behind the top player \u2014 I could have called this closed_guard or half_guard top rather than side_control. Against the action/outcome labels: no pass is ever visibly completed \u2014 the scoreboard stays 2-0, black never clearly stabilizes with hip-and-shoulder control for a count, and white keeps framing with both arms (frames 14-20) \u2014 so I could have called action_class='transition' (a stalled pressure exchange) or outcome='failure' rather than an 'unclear' guard_pass. Against 'unclear' specifically: if the ending position really is side_control and black started in front of the guard, the pass arguably succeeded, making outcome='success'.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "guard_pass",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 9-13 show black chest-to-chest with perpendicular torso pressure, head past white's head line, and white's legs not visibly crossed around black's waist \u2014 consistent with side_control rather than a closed guard. Frames 1-2 (stacked hips) and 8 (black posting his right hand on the mat while driving forward) show an active passing effort, satisfying guard_pass as the action class. However, the referee's body occludes the leg line in frames 3-10 and no scoreboard change or clean three-second stabilization is visible by frame 20, so the pass cannot be confirmed as success or failure \u2014 'unclear' survives. No position\u00d7action contradiction: guard_pass ending in side_control is a normal successful-pass pairing, and the clip clearly contains intentional grip, weight, and hip changes (stacking, hand post, chest pressure), so it fails the strict ditch test."
+        },
+        "latency_ms": 43219.116874970496,
+        "cost_usd": 0.0360246,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 493.0,
+        "end_s": 502.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d029__w11",
+    "match_id": "650d20c745120c8433e9d029",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 809,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=u-3Xw89OpTw",
+    "window_start_s": 804.0,
+    "window_end_s": 813.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The bottom player is dragged from turtle flat onto his back while the top player settles perpendicular with chest pressure across his torso, pinning him from the side."
+        },
+        "latency_ms": 16848.423749906942,
+        "cost_usd": 0.0239808,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "justification": "Rodriguez in purple stays heavy through Varela's roll, clears the legs with a knee-cut-style drive, and settles chest-to-chest into side control."
+        },
+        "latency_ms": 96072.10995908827,
+        "cost_usd": 0.0556296,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the POSITION label: one could argue the end state is half guard or a mount-transition rather than side_control \u2014 in frames 14-16 the top player's right leg appears trapped between the bottom player's thighs as he steps over, and in frame 15 his left leg kicks high overhead like a mount attempt, so a call of 'mount' or 'half_guard' at the moment of the leg-step is defensible. Against the ACTION_CLASS label: the sequence opens with the bottom player in a pure turtle (frames 1-4: on knees and elbows, top player behind him with a front-headlock/seatbelt-style grip around the head and shoulder) \u2014 there is no guard to pass at the start, so one could argue this is a turtle-breakdown/takedown or 'transition' rather than guard_pass; dragging a turtled opponent flat is not passing a guard in the strict sense. Against the OUTCOME label: the bottom player never stops moving \u2014 he rolls from turtle to his back (frames 8-11) and keeps framing on the top player's head (frames 12-14), so one could argue the pass is still in progress at clip end (outcome 'attempt' or 'ongoing') rather than clean success.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "guard_pass",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 13-15 show the top player driving a knee across the bottom player's hip line and stepping his far leg over the legs (a knee-cut-style clear), and by frames 17-20 he is settled perpendicular, chest-to-chest across the torso with hips low, while the bottom player is flat on his back with no guard structure between them \u2014 that is a completed pass ending in side control, so guard_pass x side_control is normal success, not a contradiction, and the clip is full of intentional weight and hip changes (far from the ditch bar)."
+        },
+        "latency_ms": 51702.37554097548,
+        "cost_usd": 0.0390396,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "successful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 804.0,
+        "end_s": 813.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "65de3657a2434704339dc36b__w12",
+    "match_id": "65de3657a2434704339dc36b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 4898,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KzYTzUD5rRA",
+    "window_start_s": 4893.0,
+    "window_end_s": 4902.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The white-rashguard player is chest-to-chest across the bottom player's torso with hips to the side while the bottom player is flat and has no ankles crossed or guard legs controlling the top."
+        },
+        "latency_ms": 99082.52079202794,
+        "cost_usd": 0.0546168,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "justification": "Top player (white rashguard) drives forward with heavy head-and-shoulder pressure from half guard, progressively extracting his trapped leg as the bottom player's extended leg (red ankle band) is cleared, ending chest-to-chest past the guard line in consolidated top control."
+        },
+        "latency_ms": 20665.055749937892,
+        "cost_usd": 0.0260706,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the POSITION label (side_control): one could argue the ending position is still half_guard, because in frames 10-14 the bottom player (black rashguard) visibly brings his right knee up and frames it between the bodies, and the top player's left hip appears to sit on the bottom side of that knee line \u2014 the bottom player's legs are not fully cleared, so 'side_control' could be premature. Against the ACTION_CLASS/OUTCOME labels (guard_pass/successful): one could argue this is a failed or incomplete pass \u2014 the top player never fully disengages the legs; in the final frames (17-20) the bottom player's knees are drawn up toward his chest, suggesting guard retention rather than a completed pass, so action_class could be 'guard_pass' with outcome 'failed' or even 'transition'.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "guard_pass",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "In the early frames (1-6) the bottom player's extended left leg with the red ankle band is visibly sprawled out to the side with the top player's right leg trapped over it \u2014 a half-guard configuration. Across frames 7-16 the top player drives his head under the chin (crossface), shifts his hips left, and progressively extracts the trapped leg: by frame 15-16 his right leg is visibly free and his hips are chest-to-chest past the knee line. In the final frames (17-20) the bottom player is flat on his back with knees raised defensively but no ankles crossed, no hook in, and no leg controlling the top player's hip \u2014 the top player is settled chest-to-chest perpendicular across the torso, which is side_control, not retained guard. The late knee-up frames are a defensive reaction after the pass, not retention. No position\u00d7action_class contradiction: guard_pass ending in side_control is the definition of a successful pass. Ditch test fails (in the good way): there is clear intentional weight shift, crossface pressure, and leg extraction by the top player, so this is a real completed technique, not a non-event."
+        },
+        "latency_ms": 32446.07450021431,
+        "cost_usd": 0.0314646,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "successful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 4893.0,
+        "end_s": 4902.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6650bbca532ae8f2326b5de9__w13",
+    "match_id": "6650bbca532ae8f2326b5de9",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 417,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 412.0,
+    "window_end_s": 421.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "closed_guard",
+          "justification": "The bottom athlete is on their back with legs wrapped and ankles locked behind the kneeling top athlete's waist/back for the established portion of the clip."
+        },
+        "latency_ms": 74628.22116701864,
+        "cost_usd": 0.0465258,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "sweep",
+          "outcome": "unclear",
+          "justification": "Bottom player in the black singlet opens the guard, hooks both legs under the top player, and elevates/rolls the camo-clad top player over (frames 16-20) while coming up on a posted hand; the clip ends mid-reversal in a scramble with neither player established on top, so completion cannot be confirmed."
+        },
+        "latency_ms": 25161.187042016536,
+        "cost_usd": 0.0264546,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against position=closed_guard: one could argue the guard is already open or transitioning to butterfly/half guard for much of the clip \u2014 in frames 11-15 the bottom athlete's legs appear to drop and reposition rather than stay locked, and by frames 16-17 both legs are clearly unhooked and inserted as under-hooks beneath the top player's hips, which is no longer closed guard at all. However, the label describes the established position, and frames 1-10 show the black-singlet bottom athlete on their back with legs wrapped around the camo top athlete's waist/torso line while the top athlete kneels in tight \u2014 consistent with closed guard as the starting configuration. Against action_class=sweep: one could argue this is a guard_pass attempt by the camo athlete (frames 1-12 show heavy top pressure, head buried, driving forward) and that the bottom player's leg elevation in frames 16-18 is merely defensive guard retention or a scramble rather than a committed sweep. But frames 16-19 show the bottom athlete deliberately hooking both legs under the top player's thighs/hips, elevating the camo athlete off their base (feet visibly leave the mat, body tilts), and rolling them over while posting a hand to come up \u2014 that is an initiated reversal, i.e., a sweep attempt, not passive retention. Against outcome=unclear: one could argue the sweep succeeded because in frames 19-20 the camo athlete is rolled toward their back/side; but frame 20 shows neither athlete established \u2014 the camo athlete is mid-roll with a hand posted and the black-singlet athlete has not consolidated top position \u2014 so completion genuinely cannot be confirmed.",
+          "verdict": "agree",
+          "final_position": "closed_guard",
+          "final_action_class": "sweep",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 1-10: bottom athlete supine with legs wrapped around kneeling top athlete's waist (closed guard). Frames 16-19: bottom athlete inserts both legs as under-hooks, elevates the camo athlete whose feet visibly leave the mat, and rolls them laterally while coming up on a posted hand \u2014 a clear sweep initiation. Frame 20: scramble with neither athlete established on top, so the reversal is unresolved at clip end \u2014 supporting outcome=unclear. No position\u00d7action_class contradiction (sweep from closed_guard start is structurally normal), and the deliberate hooks, elevation, and roll clearly fail the ditch test (an intentional, real unsuccessful attempt)."
+        },
+        "latency_ms": 41222.16087509878,
+        "cost_usd": 0.0338976,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "closed_guard",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 412.0,
+        "end_s": 421.0,
+        "action_class": "sweep",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00c__w14",
+    "match_id": "650d20c745120c8433e9d00c",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 340,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=pyXp_jD_Yqc",
+    "window_start_s": 335.0,
+    "window_end_s": 344.0,
+    "settings": {
+      "fps": 10,
+      "model": "",
+      "provider_route": "",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "call_failed",
+        "error": "ffprobe fps probe failed (rc=1): outube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=391&met=1785090009%2C&mh=KO&mm=31%2C26&mn=sn-8xgp1vo-ab56%2Csn-p5qs7nd7&ms=au%2Conr&mv=m&mvi=3&pcm2cms=yes&pl=41&rms=au%2Cau&initcwndbps=3897500&bui=AZFlqhMYni2SG22SwsXgL7LsKVbPSNJRSm2QHVJeyP546gxbS1zT406rseRmTYkuU_3NwxEKVuFGpw-Y&spc=SQ-umjarVW5KueUjSsGS7ViZyXdOIkVG9mwp3SBxLeyeoOmDtQ&vprv=1&svpuc=1&mime=video%2Fmp4&rqh=1&cnr=14&ratebypass=yes&dur=644.516&lmt=1763425333153433&mt=1785089823&fvip=2&fexp=51565116%2C51946838%2C51992867&c=ANDROID_VR&txp=5538534&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Crqh%2Ccnr%2Cratebypass%2Cdur%2Clmt&sig=AE0s2JYwRQIhAOynpYbKXmz52cn1_MRoW5slCt-zYBq1RzOxNRQ3rjERAiBFkeoOkU6rG5dCW56gBGJHluCNfZONmF0cYzr52AaNjw%3D%3D&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpcm2cms%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAN0FPhOyKbdwolSUvn9MX4yRmWA0AaWhva2tUEz21_4VAiEA1Mn-NEEVJajPiQQZUPcjoloPY1_P4kNVL-v2RgmjA_Y%3D: Server returned 403 Forbidden (access denied)\n",
+        "parsed": null,
+        "latency_ms": 0.0,
+        "cost_usd": 0.0,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": null,
+    "final_outcome": null,
+    "verdict": null,
+    "ditch_reason": null,
+    "emitted_events": [],
+    "status": "call_failed"
+  },
+  {
+    "window_id": "6640f3e4532ae8f23268fe0f__w15",
+    "match_id": "6640f3e4532ae8f23268fe0f",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1253,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "closed_guard",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 1248.0,
+    "window_end_s": 1257.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "standing",
+          "justification": "Both athletes remain upright in collar-and-underhook clinch/hand-fighting through the takedown shot and lift, with no legs locked, hooks, mount, or stable top control ever established."
+        },
+        "latency_ms": 25503.316291840747,
+        "cost_usd": 0.0267018,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "takedown_attempt",
+          "outcome": "successful",
+          "justification": "The athlete in black with red-trimmed shorts penetrates, lifts his opponent fully off the mat onto his shoulder, and carries him down to the ground, finishing on top \u2014 a completed standing-to-ground takedown."
+        },
+        "latency_ms": 12195.087041938677,
+        "cost_usd": 0.0221556,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Strongest opposing case: the POSITION label should not be standing because the sequence does not end upright \u2014 frames 11-16 show the red-trimmed/black athlete lifting the Hyperfly-clad opponent completely off the mat onto his shoulder, and frames 18-20 show both athletes on the ground with the lifter's chest/hips over the opponent's side while the opponent is on his back/side and not on his feet. A better ending-position call is side_control or a grounded top-scramble rather than standing. Against the TECHNIQUE/OUTCOME call, one could argue the takedown was not fully successful because there is no long, stabilized pin and the landing is chaotic; however the visible penetration step, level change, full lift, carry, and downward finish to the mat satisfy a completed takedown more than a mere attempt. No genuine enum-impossible contradiction is present: standing x takedown_attempt is a normal origin/action pairing, and a successful takedown ending in side_control is expected rather than contradictory. Ditch test fails outright: there are intentional collar/underhook grip fights, a level change, hip penetration, a lift, and a takedown.",
+          "verdict": "disagree",
+          "final_position": "side_control",
+          "final_action_class": "takedown_attempt",
+          "final_outcome": "successful",
+          "wrong_label": "position",
+          "reason": "The clip ends grounded after a completed lift-and-carry takedown, not standing; side_control is the closest ending position even if control is not yet fully settled.",
+          "evidence": "Frames 6-10: red-trimmed athlete drops level and penetrates with head/shoulder into the opponent's hips. Frames 11-16: opponent is fully airborne across the lifter's shoulder with both legs off the mat. Frames 18-20: both are on the mat, red-trimmed athlete is on top from the side with torso/hips over the opponent, while the opponent is on his back/side and not standing."
+        },
+        "latency_ms": 94020.23358386941,
+        "cost_usd": 0.0512886,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "successful",
+    "verdict": "disagree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 1248.0,
+        "end_s": 1257.0,
+        "action_class": "takedown_attempt",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d018__w16",
+    "match_id": "650d20c745120c8433e9d018",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 226,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ATkSimsKwtg",
+    "window_start_s": 221.0,
+    "window_end_s": 230.0,
+    "settings": {
+      "fps": 10,
+      "model": "moonshotai/kimi-k3",
+      "provider_route": "openrouter",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom athlete stays on his back/side with knees and feet framing the top athlete's hips while the top athlete works between the legs, with no crossed ankles, stable side-control pin, mount, or back hooks."
+        },
+        "latency_ms": 124717.43795811199,
+        "cost_usd": 0.0605508,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "justification": "Top player in grey shorts stacks and drives his hips over the bottom player's legs across the sequence, ending chest-on-top with the bottom player's guard legs bypassed and pinned to the mat in the final frames."
+        },
+        "latency_ms": 24731.631707865745,
+        "cost_usd": 0.0267696,
+        "model_id": "moonshotai/kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the position label: frames 6-9 show the bottom athlete in dark shorts with his near leg wrapped around the top athlete's thigh and his body inverted underneath \u2014 this looks like a half-guard/deep-half or leg-entanglement configuration rather than true open_guard, where the bottom player's legs should be framing without a trapped leg. Against the action/outcome labels: in frames 9-13 the bottom athlete inverts and rolls through, briefly threatening to come up on top or re-entangle the legs, which could support calling the sequence a sweep attempt or an unsuccessful pass still in progress; and in frame 18 the bottom athlete's shin is still visible across the top athlete's hip line, which could argue the pass was never fully completed and the outcome should be 'unsuccessful' or the action 'transition'.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "guard_pass",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 1-5 show the bottom athlete on his back with knees and feet framing the grey-shorted top athlete's hips without a locked leg around the waist or a stable half-guard clamp, supporting open_guard. The top athlete stacks and drives his hips over the bottom player's legs (frames 7-12), and by frames 17-20 he is chest-on-chest with the bottom athlete's legs cleared to one side and pinned to the mat \u2014 a completed guard pass, so guard_pass/successful is consistent and not a taxonomy contradiction (open_guard + guard_pass is not on the impossible list). Clear intentional hip and weight changes throughout rule out ditching."
+        },
+        "latency_ms": 35753.84991709143,
+        "cost_usd": 0.0320226,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": "open_guard",
+    "final_outcome": "successful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 221.0,
+        "end_s": 230.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d059__w17",
+    "match_id": "650d20c745120c8433e9d059",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1337,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=FO4jG04aGqc",
+    "window_start_s": 1332.0,
+    "window_end_s": 1341.0,
+    "settings": {
+      "fps": 10,
+      "model": "",
+      "provider_route": "",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "call_failed",
+        "error": "ERROR: [youtube] FO4jG04aGqc: Video unavailable. It was blocked due to the claimed content by SME.",
+        "parsed": null,
+        "latency_ms": 0.0,
+        "cost_usd": 0.0,
+        "model_id": "moonshotai/kimi-k3"
+      }
+    ],
+    "final_position": null,
+    "final_outcome": null,
+    "verdict": null,
+    "ditch_reason": null,
+    "emitted_events": [],
+    "status": "call_failed"
+  }
+]

@@ -1,0 +1,35 @@
+{
+  "generated_at_utc": "2026-07-26T21:05:28.374707+00:00",
+  "primary_vs_gemini_arm_s": {
+    "n_attempted": 29,
+    "n_scored_lane": 29,
+    "n_scored_baseline": 29,
+    "hit_count_lane": 6,
+    "hit_count_baseline": 15,
+    "hit_rate_lane": 0.20689655172413793,
+    "hit_rate_baseline": 0.5172413793103449
+  },
+  "secondary_vs_gemini_arm_t": {
+    "n_attempted": 12,
+    "n_scored_lane": 12,
+    "n_scored_baseline": 12,
+    "hit_count_lane": 5,
+    "hit_count_baseline": 3,
+    "hit_rate_lane": 0.4166666666666667,
+    "hit_rate_baseline": 0.25
+  },
+  "sublane_c_native_vs_frames": {
+    "n_paired": 11,
+    "native_hit": 4,
+    "frames_hit": 3,
+    "native_rate": 0.36363636363636365,
+    "frames_rate": 0.2727272727272727,
+    "delta_pp": 9.090909090909092
+  },
+  "spend": {
+    "total_calls": 66,
+    "ok": 65,
+    "failed": 1,
+    "total_cost_usd": 9.622254
+  }
+}

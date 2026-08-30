@@ -1,0 +1,2981 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "match_id": "650d20c745120c8433e9d024",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 12624,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 12619.0,
+    "window_end_s": 12628.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "No-gi match with the scoreboard showing the red-corner athlete ahead 2-0 early. In this clip the top athlete starts in a stable mount with heavy pressure; the bottom athlete bridges/turns late and the sequence ends in an unresolved scramble rather than a clean escape.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 8.0,
+              "position": "mount",
+              "actor": "top",
+              "action_class": "positional_control",
+              "outcome": "success",
+              "specific_technique_guess": "high mount pressure with crossface/upper-body control",
+              "confidence": 0.84
+            },
+            {
+              "start_s": 8.0,
+              "end_s": 11.0,
+              "position": "mount",
+              "actor": "bottom",
+              "action_class": "escape",
+              "outcome": "failure",
+              "specific_technique_guess": "bridge and elbow/knee escape attempt from mount",
+              "confidence": 0.66
+            },
+            {
+              "start_s": 11.0,
+              "end_s": 13.1,
+              "position": "scramble",
+              "actor": "bottom",
+              "action_class": "escape",
+              "outcome": "neutral",
+              "specific_technique_guess": "rolling/hip escape into partial leg recovery, still contested",
+              "confidence": 0.58
+            }
+          ]
+        },
+        "latency_ms": 102173.36008395068,
+        "cost_usd": 0.14871299999999998,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 12617.0,
+        "end_s": 12625.0,
+        "action_class": "positional_control",
+        "confidence": 0.84
+      },
+      {
+        "start_s": 12625.0,
+        "end_s": 12628.0,
+        "action_class": "escape",
+        "confidence": 0.66
+      },
+      {
+        "start_s": 12628.0,
+        "end_s": 12630.1,
+        "action_class": "escape",
+        "confidence": 0.58
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "6661e503716f12758093d038__w1",
+    "match_id": "6661e503716f12758093d038",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2852,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 2847.0,
+    "window_end_s": 2856.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Top athlete in black is ahead 5-0 after passing from half guard to side control; bottom athlete in blue remains on their back under pressure late in TB1.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 9.6,
+              "position": "half_guard",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "guard_pass",
+              "outcome": "success",
+              "specific_technique_guess": "pressure pass from half guard to side control",
+              "confidence": 0.74
+            },
+            {
+              "start_s": 0.0,
+              "end_s": 8.8,
+              "position": "half_guard",
+              "actor": "bottom",
+              "actor_gi_color": "blue",
+              "action_class": "escape",
+              "outcome": "failure",
+              "specific_technique_guess": "frames and hip escape attempts, gets flattened",
+              "confidence": 0.62
+            },
+            {
+              "start_s": 9.6,
+              "end_s": 12.6,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "positional_control",
+              "outcome": "success",
+              "specific_technique_guess": "heavy side control / chest pressure",
+              "confidence": 0.8
+            }
+          ]
+        },
+        "latency_ms": 94373.94224992022,
+        "cost_usd": 0.130518,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 2845.0,
+        "end_s": 2854.6,
+        "action_class": "guard_pass",
+        "confidence": 0.74
+      },
+      {
+        "start_s": 2845.0,
+        "end_s": 2853.8,
+        "action_class": "escape",
+        "confidence": 0.62
+      },
+      {
+        "start_s": 2854.6,
+        "end_s": 2857.6,
+        "action_class": "positional_control",
+        "confidence": 0.8
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "6643b593532ae8f232692d70__w2",
+    "match_id": "6643b593532ae8f232692d70",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2559,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 2554.0,
+    "window_end_s": 2563.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Scoreless early match. The top athlete opens behind/above a turtled opponent in back/turtle control, then the exchange turns into a rolling contested scramble near the edge with no score or submission by clip end.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 8.8,
+              "position": "turtle",
+              "actor": "top",
+              "action_class": "control",
+              "outcome": "ongoing",
+              "specific_technique_guess": "rear/turtle control with upper-body harness",
+              "confidence": 0.74
+            },
+            {
+              "start_s": 8.8,
+              "end_s": 12.6,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "scramble",
+              "outcome": "ongoing",
+              "specific_technique_guess": "rolling/granby-style scramble from turtle/back control",
+              "confidence": 0.62
+            }
+          ]
+        },
+        "latency_ms": 85803.00079192966,
+        "cost_usd": 0.136158,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 2552.0,
+        "end_s": 2560.8,
+        "action_class": "control",
+        "confidence": 0.74
+      },
+      {
+        "start_s": 2560.8,
+        "end_s": 2564.6,
+        "action_class": "scramble",
+        "confidence": 0.62
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "6580c285827346aa0335a86b__w3",
+    "match_id": "6580c285827346aa0335a86b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 840,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=SDWG9WMbvl0",
+    "window_start_s": 835.0,
+    "window_end_s": 844.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "No-gi -77kg bout, score still 0-0 early in period 1. The athlete in black star-pattern shorts is on top of the red-anklet athlete; the sequence goes from top side control, through a bottom bridge/escape scramble, into top back/turtle control, and ends in an unresolved rolling scramble with the top athlete still generally controlling.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.5,
+              "position": "side_control",
+              "actor": "top",
+              "action_class": "control",
+              "outcome": "maintained",
+              "specific_technique_guess": "side control chest-to-chest pressure over flat-on-back opponent",
+              "confidence": 0.82
+            },
+            {
+              "start_s": 3.5,
+              "end_s": 6.2,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "escape",
+              "outcome": "failed",
+              "specific_technique_guess": "bottom bridge/hip escape with legs coming over, top stays heavy",
+              "confidence": 0.7
+            },
+            {
+              "start_s": 6.2,
+              "end_s": 9.7,
+              "position": "back_control",
+              "actor": "top",
+              "action_class": "control",
+              "outcome": "maintained",
+              "specific_technique_guess": "top moves behind turning opponent toward seatbelt/back as bottom posts and turtles",
+              "confidence": 0.68
+            },
+            {
+              "start_s": 9.7,
+              "end_s": 12.303,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "scramble",
+              "outcome": "ongoing",
+              "specific_technique_guess": "bottom inverts/rolls through, both spin into tangled unresolved position",
+              "confidence": 0.66
+            }
+          ]
+        },
+        "latency_ms": 88435.71991682984,
+        "cost_usd": 0.162852,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 833.0,
+        "end_s": 836.5,
+        "action_class": "control",
+        "confidence": 0.82
+      },
+      {
+        "start_s": 836.5,
+        "end_s": 839.2,
+        "action_class": "escape",
+        "confidence": 0.7
+      },
+      {
+        "start_s": 839.2,
+        "end_s": 842.7,
+        "action_class": "control",
+        "confidence": 0.68
+      },
+      {
+        "start_s": 842.7,
+        "end_s": 845.303,
+        "action_class": "scramble",
+        "confidence": 0.66
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "654152332d513512a36b6212__w4",
+    "match_id": "654152332d513512a36b6212",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2052,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=5ix4aFb5Xiw",
+    "window_start_s": 2047.0,
+    "window_end_s": 2056.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Red-clad athlete is ahead on the shown scoreboard and spends most of the clip on top in side control, pressuring the black-clad bottom athlete; late in the clip the bottom athlete bridges/rolls into a scramble and may reverse as the clip ends.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.5,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "red",
+              "action_class": "positional_control",
+              "outcome": "ongoing",
+              "specific_technique_guess": "top side-control pressure after guard pass",
+              "confidence": 0.78
+            },
+            {
+              "start_s": 3.5,
+              "end_s": 9.6,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "red",
+              "action_class": "submission_attempt",
+              "outcome": "defended",
+              "specific_technique_guess": "head-and-arm / arm-triangle setup from side control",
+              "confidence": 0.46
+            },
+            {
+              "start_s": 9.6,
+              "end_s": 12.3,
+              "position": "scramble",
+              "actor": "bottom",
+              "actor_gi_color": "black",
+              "action_class": "sweep",
+              "outcome": "success",
+              "specific_technique_guess": "bridge-and-roll escape/reversal from bottom side control",
+              "confidence": 0.58
+            }
+          ]
+        },
+        "latency_ms": 86034.2050830368,
+        "cost_usd": 0.156447,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 2045.0,
+        "end_s": 2048.5,
+        "action_class": "positional_control",
+        "confidence": 0.78
+      },
+      {
+        "start_s": 2048.5,
+        "end_s": 2054.6,
+        "action_class": "submission_attempt",
+        "confidence": 0.46
+      },
+      {
+        "start_s": 2054.6,
+        "end_s": 2057.3,
+        "action_class": "sweep",
+        "confidence": 0.58
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "65dfbed6a2434704339de9a3__w5",
+    "match_id": "65dfbed6a2434704339de9a3",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 3544,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=nDc0L96J6i4",
+    "window_start_s": 3539.0,
+    "window_end_s": 3548.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "No score in the clip. The athlete in black starts on top behind a kneeling/turtle opponent and maintains heavy front/back-side control; the bottom athlete then rolls into a scramble and the exchange ends in a guard/leg-entanglement position with no clear points yet.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 8.3,
+              "position": "turtle",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "control",
+              "outcome": "ongoing",
+              "specific_technique_guess": "top ride / front-headlock style control behind turtle",
+              "confidence": 0.72
+            },
+            {
+              "start_s": 8.3,
+              "end_s": 10.4,
+              "position": "scramble",
+              "actor": "bottom",
+              "action_class": "escape",
+              "outcome": "success",
+              "specific_technique_guess": "granby/shoulder-roll escape out of turtle",
+              "confidence": 0.63
+            },
+            {
+              "start_s": 10.4,
+              "end_s": 12.6,
+              "position": "guard",
+              "actor": "contested",
+              "action_class": "transition",
+              "outcome": "neutral",
+              "specific_technique_guess": "scramble into open guard / leg entanglement",
+              "confidence": 0.58
+            }
+          ]
+        },
+        "latency_ms": 73258.13620793633,
+        "cost_usd": 0.124218,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 3537.0,
+        "end_s": 3545.3,
+        "action_class": "control",
+        "confidence": 0.72
+      },
+      {
+        "start_s": 3545.3,
+        "end_s": 3547.4,
+        "action_class": "escape",
+        "confidence": 0.63
+      },
+      {
+        "start_s": 3547.4,
+        "end_s": 3549.6,
+        "action_class": "transition",
+        "confidence": 0.58
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 142,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+    "window_start_s": 137.0,
+    "window_end_s": 146.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "White/red-clad athlete is on top riding the blue-clad athlete, who is turtled/flattened on the mat. Top athlete maintains dominant rear/ride pressure throughout the clip while blue defends and attempts small escapes; no clean reversal or finish occurs. Top (white/red) remains ahead positionally.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.5,
+              "position": "back_control",
+              "actor": "top",
+              "actor_gi_color": "white",
+              "action_class": "submission_attempt",
+              "outcome": "in_progress",
+              "specific_technique_guess": "rear ride / possible rear-naked choke setup from turtle",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 3.5,
+              "end_s": 8.0,
+              "position": "turtle",
+              "actor": "top",
+              "actor_gi_color": "white",
+              "action_class": "control",
+              "outcome": "maintained",
+              "specific_technique_guess": "top ride over turtled opponent, pressure and hook hunting",
+              "confidence": 0.75
+            },
+            {
+              "start_s": 6.0,
+              "end_s": 12.3,
+              "position": "turtle",
+              "actor": "bottom",
+              "actor_gi_color": "blue",
+              "action_class": "escape",
+              "outcome": "failure",
+              "specific_technique_guess": "bottom athlete attempts to build base and shrug off the ride but stays flattened",
+              "confidence": 0.7
+            }
+          ]
+        },
+        "latency_ms": 62593.52029184811,
+        "cost_usd": 0.145347,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 135.0,
+        "end_s": 138.5,
+        "action_class": "submission_attempt",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 138.5,
+        "end_s": 143.0,
+        "action_class": "control",
+        "confidence": 0.75
+      },
+      {
+        "start_s": 141.0,
+        "end_s": 147.3,
+        "action_class": "escape",
+        "confidence": 0.7
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "66138fe05da956d5ef54f21b__w7",
+    "match_id": "66138fe05da956d5ef54f21b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1058,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=h2ucDfTaypI",
+    "window_start_s": 1053.0,
+    "window_end_s": 1062.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Score remains tied 0-0. The top athlete has pressured from half guard into side control after countering an inversion, while the bottom athlete is defending and trying to invert/recover guard.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.4,
+              "position": "half_guard",
+              "actor": "top",
+              "action_class": "pass",
+              "outcome": "ongoing",
+              "specific_technique_guess": "heavy smash/knee-cut style passing pressure against a half guard or knee shield",
+              "confidence": 0.58
+            },
+            {
+              "start_s": 3.4,
+              "end_s": 5.2,
+              "position": "scramble",
+              "actor": "bottom",
+              "action_class": "sweep",
+              "outcome": "fail",
+              "specific_technique_guess": "bottom inversion/roll attempt countered by the top athlete",
+              "confidence": 0.52
+            },
+            {
+              "start_s": 5.2,
+              "end_s": 7.0,
+              "position": "side_control",
+              "actor": "top",
+              "action_class": "pass",
+              "outcome": "success",
+              "specific_technique_guess": "pass consolidated into side control after the scramble",
+              "confidence": 0.6
+            },
+            {
+              "start_s": 7.0,
+              "end_s": 12.3,
+              "position": "side_control",
+              "actor": "bottom",
+              "action_class": "escape",
+              "outcome": "ongoing",
+              "specific_technique_guess": "inverted guard-recovery/leg-over escape attempt from bottom side control",
+              "confidence": 0.55
+            }
+          ]
+        },
+        "latency_ms": 136899.44412512705,
+        "cost_usd": 0.183852,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 1051.0,
+        "end_s": 1054.4,
+        "action_class": "pass",
+        "confidence": 0.58
+      },
+      {
+        "start_s": 1054.4,
+        "end_s": 1056.2,
+        "action_class": "sweep",
+        "confidence": 0.52
+      },
+      {
+        "start_s": 1056.2,
+        "end_s": 1058.0,
+        "action_class": "pass",
+        "confidence": 0.6
+      },
+      {
+        "start_s": 1058.0,
+        "end_s": 1063.3,
+        "action_class": "escape",
+        "confidence": 0.55
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "65dbd239a2434704339da0e4__w8",
+    "match_id": "65dbd239a2434704339da0e4",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 279,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "window_start_s": 274.0,
+    "window_end_s": 283.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Scoreless no-gi exchange at the mat edge: the top athlete pressure-passes from guard/half-guard into side control and then toward mount, while the bottom athlete frames and hip-escapes; top ends the clip in dominant top position.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.5,
+              "position": "half_guard",
+              "actor": "top",
+              "action_class": "guard_pass",
+              "outcome": "success",
+              "specific_technique_guess": "pressure/knee-slice style pass from half guard",
+              "confidence": 0.58
+            },
+            {
+              "start_s": 3.5,
+              "end_s": 8.0,
+              "position": "side_control",
+              "actor": "top",
+              "action_class": "control",
+              "outcome": "success",
+              "specific_technique_guess": "crossface/underhook side-control consolidation",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 8.0,
+              "end_s": 12.345,
+              "position": "mount",
+              "actor": "top",
+              "action_class": "positional_transition",
+              "outcome": "success",
+              "specific_technique_guess": "transition from side control toward high mount",
+              "confidence": 0.52
+            }
+          ]
+        },
+        "latency_ms": 105402.50712516718,
+        "cost_usd": 0.16352699999999998,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 272.0,
+        "end_s": 275.5,
+        "action_class": "guard_pass",
+        "confidence": 0.58
+      },
+      {
+        "start_s": 275.5,
+        "end_s": 280.0,
+        "action_class": "control",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 280.0,
+        "end_s": 284.345,
+        "action_class": "positional_transition",
+        "confidence": 0.52
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d01f__w9",
+    "match_id": "650d20c745120c8433e9d01f",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2650,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 2645.0,
+    "window_end_s": 2654.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Scoreless opening exchange; top athlete in light blue maintains heavy side control over bottom athlete in black, who is framing, bridging, and trying to recover guard without success.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.0,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "blue",
+              "action_class": "maintain_control",
+              "outcome": "success",
+              "specific_technique_guess": "side control pressure with crossface/underhook",
+              "confidence": 0.82
+            },
+            {
+              "start_s": 2.0,
+              "end_s": 8.0,
+              "position": "side_control",
+              "actor": "bottom",
+              "actor_gi_color": "black",
+              "action_class": "escape",
+              "outcome": "failure",
+              "specific_technique_guess": "elbow-knee shrimp and bridge guard recovery attempt",
+              "confidence": 0.74
+            },
+            {
+              "start_s": 8.0,
+              "end_s": 11.5,
+              "position": "side_control",
+              "actor": "contested",
+              "action_class": "transition",
+              "outcome": "neutral",
+              "specific_technique_guess": "bottom explosive bridge/turn; top spins and re-pins hips",
+              "confidence": 0.68
+            },
+            {
+              "start_s": 11.5,
+              "end_s": 12.6,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "blue",
+              "action_class": "maintain_control",
+              "outcome": "success",
+              "specific_technique_guess": "re-established side control after scramble",
+              "confidence": 0.78
+            }
+          ]
+        },
+        "latency_ms": 51117.701292037964,
+        "cost_usd": 0.114003,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 2643.0,
+        "end_s": 2646.0,
+        "action_class": "maintain_control",
+        "confidence": 0.82
+      },
+      {
+        "start_s": 2645.0,
+        "end_s": 2651.0,
+        "action_class": "escape",
+        "confidence": 0.74
+      },
+      {
+        "start_s": 2651.0,
+        "end_s": 2654.5,
+        "action_class": "transition",
+        "confidence": 0.68
+      },
+      {
+        "start_s": 2654.5,
+        "end_s": 2655.6,
+        "action_class": "maintain_control",
+        "confidence": 0.78
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "6634291e532ae8f23266cafe__w10",
+    "match_id": "6634291e532ae8f23266cafe",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 498,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=bLS3oXDIjs8",
+    "window_start_s": 493.0,
+    "window_end_s": 502.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Scoreboard shows a 2-0 lead with about 1:12 left in period 1. The black-gi athlete is on top pressuring and attempting to pass, while the white-gi athlete is on their back defending from guard/half-guard; the exchange remains unresolved.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.5,
+              "position": "guard",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "guard_pass",
+              "outcome": "ongoing",
+              "specific_technique_guess": "pressure pass / posture break attempt against closed guard",
+              "confidence": 0.58
+            },
+            {
+              "start_s": 0.0,
+              "end_s": 5.0,
+              "position": "guard",
+              "actor": "bottom",
+              "actor_gi_color": "white",
+              "action_class": "guard_retention",
+              "outcome": "ongoing",
+              "specific_technique_guess": "closed-guard retention with frames and hip adjustment",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 3.5,
+              "end_s": 8.5,
+              "position": "half_guard",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "guard_pass",
+              "outcome": "ongoing",
+              "specific_technique_guess": "knee-cut / headquarters passing pressure",
+              "confidence": 0.52
+            },
+            {
+              "start_s": 8.5,
+              "end_s": 12.3,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "control",
+              "outcome": "ongoing",
+              "specific_technique_guess": "chest-to-chest side pressure with head/shoulder control",
+              "confidence": 0.48
+            }
+          ]
+        },
+        "latency_ms": 117121.62000010721,
+        "cost_usd": 0.174807,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 491.0,
+        "end_s": 494.5,
+        "action_class": "guard_pass",
+        "confidence": 0.58
+      },
+      {
+        "start_s": 491.0,
+        "end_s": 496.0,
+        "action_class": "guard_retention",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 494.5,
+        "end_s": 499.5,
+        "action_class": "guard_pass",
+        "confidence": 0.52
+      },
+      {
+        "start_s": 499.5,
+        "end_s": 503.3,
+        "action_class": "control",
+        "confidence": 0.48
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d029__w11",
+    "match_id": "650d20c745120c8433e9d029",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 809,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=u-3Xw89OpTw",
+    "window_start_s": 804.0,
+    "window_end_s": 813.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Top athlete in gray is ahead 8-0 and remains dominant, moving from side/turtle control into mount while the tattooed bottom athlete in red shorts defends and tries to recover.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.0,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "gray",
+              "action_class": "control_maintenance",
+              "outcome": "ongoing",
+              "specific_technique_guess": "heavy side-control ride as bottom builds to elbows",
+              "confidence": 0.78
+            },
+            {
+              "start_s": 3.0,
+              "end_s": 7.0,
+              "position": "turtle",
+              "actor": "contested",
+              "action_class": "scramble",
+              "outcome": "neutral",
+              "specific_technique_guess": "bottom turtles/sits out while top follows the roll",
+              "confidence": 0.72
+            },
+            {
+              "start_s": 6.5,
+              "end_s": 8.5,
+              "position": "mount",
+              "actor": "top",
+              "actor_gi_color": "gray",
+              "action_class": "positional_advance",
+              "outcome": "success",
+              "specific_technique_guess": "top transitions from the turtle/side ride into mount",
+              "confidence": 0.76
+            },
+            {
+              "start_s": 8.5,
+              "end_s": 12.3,
+              "position": "mount",
+              "actor": "top",
+              "actor_gi_color": "gray",
+              "action_class": "control_maintenance",
+              "outcome": "ongoing",
+              "specific_technique_guess": "high-mount pressure and control while bottom frames",
+              "confidence": 0.84
+            }
+          ]
+        },
+        "latency_ms": 65540.04812496714,
+        "cost_usd": 0.145197,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 802.0,
+        "end_s": 805.0,
+        "action_class": "control_maintenance",
+        "confidence": 0.78
+      },
+      {
+        "start_s": 805.0,
+        "end_s": 809.0,
+        "action_class": "scramble",
+        "confidence": 0.72
+      },
+      {
+        "start_s": 808.5,
+        "end_s": 810.5,
+        "action_class": "positional_advance",
+        "confidence": 0.76
+      },
+      {
+        "start_s": 810.5,
+        "end_s": 814.3,
+        "action_class": "control_maintenance",
+        "confidence": 0.84
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "6650bbca532ae8f2326b5de9__w13",
+    "match_id": "6650bbca532ae8f2326b5de9",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 417,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 412.0,
+    "window_end_s": 421.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "No-gi bout from the start. The athlete in the light patterned rashguard begins on top inside the bottom athlete's guard, survives a bottom sweep/roll attempt, then moves around the guard and finishes the clip consolidating a top side-control ride. Score remains 0-0.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 4.5,
+              "position": "closed_guard",
+              "actor": "contested",
+              "action_class": "control",
+              "outcome": "ongoing",
+              "specific_technique_guess": "top pressure in closed guard with over-under body lock",
+              "confidence": 0.78
+            },
+            {
+              "start_s": 4.5,
+              "end_s": 8.5,
+              "position": "closed_guard",
+              "actor": "bottom",
+              "action_class": "sweep_attempt",
+              "outcome": "fail",
+              "specific_technique_guess": "hip bump / roll sweep attempt from closed guard",
+              "confidence": 0.72
+            },
+            {
+              "start_s": 8.5,
+              "end_s": 11.5,
+              "position": "open_guard",
+              "actor": "top",
+              "action_class": "guard_pass",
+              "outcome": "success",
+              "specific_technique_guess": "guard opening and pass around the legs to the side",
+              "confidence": 0.76
+            },
+            {
+              "start_s": 11.5,
+              "end_s": 12.6,
+              "position": "side_control",
+              "actor": "top",
+              "action_class": "control",
+              "outcome": "success",
+              "specific_technique_guess": "stabilizing side control after the pass",
+              "confidence": 0.8
+            }
+          ]
+        },
+        "latency_ms": 41907.304499996826,
+        "cost_usd": 0.106788,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 410.0,
+        "end_s": 414.5,
+        "action_class": "control",
+        "confidence": 0.78
+      },
+      {
+        "start_s": 414.5,
+        "end_s": 418.5,
+        "action_class": "sweep_attempt",
+        "confidence": 0.72
+      },
+      {
+        "start_s": 418.5,
+        "end_s": 421.5,
+        "action_class": "guard_pass",
+        "confidence": 0.76
+      },
+      {
+        "start_s": 421.5,
+        "end_s": 422.6,
+        "action_class": "control",
+        "confidence": 0.8
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00c__w14",
+    "match_id": "650d20c745120c8433e9d00c",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 340,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=pyXp_jD_Yqc",
+    "window_start_s": 335.0,
+    "window_end_s": 344.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Early match, score 0-0. Athlete in white/red rashguard starts standing over the shirtless/blue-shorted athlete who is on his back in open guard. Top pressures to pass while bottom inverts and retains guard through leg entanglements; by the end of the clip top has cleared the legs and is consolidating side control/top position.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 2.0,
+              "position": "open_guard",
+              "actor": "top",
+              "actor_gi_color": "white",
+              "action_class": "guard_pass",
+              "outcome": "in_progress",
+              "specific_technique_guess": "standing pressure pass / leg-drag entry vs open guard",
+              "confidence": 0.72
+            },
+            {
+              "start_s": 2.0,
+              "end_s": 4.5,
+              "position": "open_guard",
+              "actor": "bottom",
+              "actor_gi_color": "blue",
+              "action_class": "guard_retention",
+              "outcome": "success",
+              "specific_technique_guess": "inversion/spinning guard recovery with leg pummeling",
+              "confidence": 0.7
+            },
+            {
+              "start_s": 4.5,
+              "end_s": 7.5,
+              "position": "leg_entanglement",
+              "actor": "contested",
+              "action_class": "scramble",
+              "outcome": "neutral",
+              "specific_technique_guess": "leg entanglement / reverse de la riva style frames vs knee-cut pressure",
+              "confidence": 0.66
+            },
+            {
+              "start_s": 7.5,
+              "end_s": 10.0,
+              "position": "scramble",
+              "actor": "top",
+              "actor_gi_color": "white",
+              "action_class": "guard_pass",
+              "outcome": "success",
+              "specific_technique_guess": "clearing the legs to side control during the scramble",
+              "confidence": 0.7
+            },
+            {
+              "start_s": 10.0,
+              "end_s": 12.3,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "white",
+              "action_class": "control",
+              "outcome": "success",
+              "specific_technique_guess": "consolidating side control while bottom tries to re-guard",
+              "confidence": 0.68
+            }
+          ]
+        },
+        "latency_ms": 70423.07679192163,
+        "cost_usd": 0.149442,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 333.0,
+        "end_s": 335.0,
+        "action_class": "guard_pass",
+        "confidence": 0.72
+      },
+      {
+        "start_s": 335.0,
+        "end_s": 337.5,
+        "action_class": "guard_retention",
+        "confidence": 0.7
+      },
+      {
+        "start_s": 337.5,
+        "end_s": 340.5,
+        "action_class": "scramble",
+        "confidence": 0.66
+      },
+      {
+        "start_s": 340.5,
+        "end_s": 343.0,
+        "action_class": "guard_pass",
+        "confidence": 0.7
+      },
+      {
+        "start_s": 343.0,
+        "end_s": 345.3,
+        "action_class": "control",
+        "confidence": 0.68
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "6640f3e4532ae8f23268fe0f__w15",
+    "match_id": "6640f3e4532ae8f23268fe0f",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1253,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "closed_guard",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 1248.0,
+    "window_end_s": 1257.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Scoreless no-gi exchange begins standing. After hand-fighting, the all-black/red-trim athlete's level-change is countered; the black/white rashguard athlete lifts and returns him to the mat, ending on top in side control as the clip ends. Positional advantage: black/white rashguard on top.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.8,
+              "position": "standing",
+              "actor": "contested",
+              "action_class": "grip_fighting",
+              "outcome": "neutral",
+              "specific_technique_guess": "collar ties and hand fighting",
+              "confidence": 0.9
+            },
+            {
+              "start_s": 4.8,
+              "end_s": 6.4,
+              "position": "standing",
+              "actor": "contested",
+              "action_class": "takedown_attempt",
+              "outcome": "defended",
+              "specific_technique_guess": "level change/double-leg entry countered into lift",
+              "confidence": 0.72
+            },
+            {
+              "start_s": 6.4,
+              "end_s": 10.1,
+              "position": "standing",
+              "actor": "top",
+              "action_class": "takedown",
+              "outcome": "success",
+              "specific_technique_guess": "high-crotch lift/mat return",
+              "confidence": 0.86
+            },
+            {
+              "start_s": 10.1,
+              "end_s": 12.8,
+              "position": "side_control",
+              "actor": "top",
+              "action_class": "control",
+              "outcome": "success",
+              "specific_technique_guess": "settling heavy top pressure after takedown",
+              "confidence": 0.83
+            }
+          ]
+        },
+        "latency_ms": 83059.3447079882,
+        "cost_usd": 0.125118,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 1246.0,
+        "end_s": 1249.8,
+        "action_class": "grip_fighting",
+        "confidence": 0.9
+      },
+      {
+        "start_s": 1250.8,
+        "end_s": 1252.4,
+        "action_class": "takedown_attempt",
+        "confidence": 0.72
+      },
+      {
+        "start_s": 1252.4,
+        "end_s": 1256.1,
+        "action_class": "takedown",
+        "confidence": 0.86
+      },
+      {
+        "start_s": 1256.1,
+        "end_s": 1258.8,
+        "action_class": "control",
+        "confidence": 0.83
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d018__w16",
+    "match_id": "650d20c745120c8433e9d018",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 226,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ATkSimsKwtg",
+    "window_start_s": 221.0,
+    "window_end_s": 230.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "No score yet. The light-clad athlete is on top and positionally ahead, working from guard through a brief leg/inversion scramble and consolidating toward side control by the end; the darker-clad athlete is on bottom defending.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.4,
+              "position": "guard",
+              "actor": "top",
+              "action_class": "positional_control",
+              "outcome": "no_change",
+              "specific_technique_guess": "pressure passing posture inside guard",
+              "confidence": 0.62
+            },
+            {
+              "start_s": 3.4,
+              "end_s": 7.2,
+              "position": "guard",
+              "actor": "contested",
+              "action_class": "scramble",
+              "outcome": "no_change",
+              "specific_technique_guess": "open guard / inversion scramble during pass attempt",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 7.2,
+              "end_s": 10.5,
+              "position": "half_guard",
+              "actor": "top",
+              "action_class": "guard_pass",
+              "outcome": "success",
+              "specific_technique_guess": "smash/knee-cut style pass toward side control",
+              "confidence": 0.58
+            },
+            {
+              "start_s": 10.5,
+              "end_s": 12.345,
+              "position": "side_control",
+              "actor": "top",
+              "action_class": "positional_control",
+              "outcome": "success",
+              "specific_technique_guess": "chest-to-chest side control consolidation",
+              "confidence": 0.66
+            }
+          ]
+        },
+        "latency_ms": 105725.60629202053,
+        "cost_usd": 0.159837,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 219.0,
+        "end_s": 222.4,
+        "action_class": "positional_control",
+        "confidence": 0.62
+      },
+      {
+        "start_s": 222.4,
+        "end_s": 226.2,
+        "action_class": "scramble",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 226.2,
+        "end_s": 229.5,
+        "action_class": "guard_pass",
+        "confidence": 0.58
+      },
+      {
+        "start_s": 229.5,
+        "end_s": 231.345,
+        "action_class": "positional_control",
+        "confidence": 0.66
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00a__w18",
+    "match_id": "650d20c745120c8433e9d00a",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 378,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=jc36DVinZDA",
+    "window_start_s": 373.0,
+    "window_end_s": 382.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "No-gi match still 0-0 on the visible board. The dark-rashguard athlete is on top throughout: he works through an early guard/turtle scramble into side control, then mount, and appears to force a referee stoppage/tap with an upper-body arm attack before the athletes separate.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 2.0,
+              "position": "open_guard",
+              "actor": "top",
+              "action_class": "pass",
+              "outcome": "success",
+              "specific_technique_guess": "pressure guard pass toward turtle/side",
+              "confidence": 0.62
+            },
+            {
+              "start_s": 2.0,
+              "end_s": 5.6,
+              "position": "side_control",
+              "actor": "top",
+              "action_class": "transition",
+              "outcome": "success",
+              "specific_technique_guess": "chest-to-chest side control progressing toward mount",
+              "confidence": 0.7
+            },
+            {
+              "start_s": 5.6,
+              "end_s": 9.8,
+              "position": "mount",
+              "actor": "top",
+              "action_class": "submission_attempt",
+              "outcome": "submission",
+              "specific_technique_guess": "mounted arm attack, possible americana/wrist-arm finish",
+              "confidence": 0.74
+            }
+          ]
+        },
+        "latency_ms": 168861.5203339141,
+        "cost_usd": 0.19828199999999999,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 371.0,
+        "end_s": 373.0,
+        "action_class": "pass",
+        "confidence": 0.62
+      },
+      {
+        "start_s": 373.0,
+        "end_s": 376.6,
+        "action_class": "transition",
+        "confidence": 0.7
+      },
+      {
+        "start_s": 376.6,
+        "end_s": 380.8,
+        "action_class": "submission_attempt",
+        "confidence": 0.74
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d01b__w19",
+    "match_id": "650d20c745120c8433e9d01b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 4717,
+      "action_class": "submission_choke",
+      "outcome": "successful",
+      "position_bucket": "back_control",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 4712.0,
+    "window_end_s": 4721.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Early match, score still 0-0. The athlete in black has progressed from riding the turtle to securing back control on the grey/blue-clad athlete and is attacking the neck while the grey/blue-clad athlete hand-fights and bridges to survive.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 1.6,
+              "position": "turtle",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "control",
+              "outcome": "ongoing",
+              "specific_technique_guess": "turtle ride / front headlock pressure setting up back take",
+              "confidence": 0.62
+            },
+            {
+              "start_s": 1.6,
+              "end_s": 3.8,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "transition",
+              "outcome": "success",
+              "specific_technique_guess": "roll through to back control with seatbelt/hook entry",
+              "confidence": 0.58
+            },
+            {
+              "start_s": 3.8,
+              "end_s": 12.5,
+              "position": "back_control",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "submission_attempt",
+              "outcome": "ongoing",
+              "specific_technique_guess": "rear-naked choke / short choke pressure from back control",
+              "confidence": 0.7
+            },
+            {
+              "start_s": 5.0,
+              "end_s": 12.5,
+              "position": "back_control",
+              "actor": "bottom",
+              "actor_gi_color": "grey",
+              "action_class": "escape",
+              "outcome": "ongoing",
+              "specific_technique_guess": "two-on-one hand fighting, bridging and hip escape to clear hooks",
+              "confidence": 0.55
+            }
+          ]
+        },
+        "latency_ms": 120832.94512494467,
+        "cost_usd": 0.153573,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 4710.0,
+        "end_s": 4711.6,
+        "action_class": "control",
+        "confidence": 0.62
+      },
+      {
+        "start_s": 4711.6,
+        "end_s": 4713.8,
+        "action_class": "transition",
+        "confidence": 0.58
+      },
+      {
+        "start_s": 4713.8,
+        "end_s": 4722.5,
+        "action_class": "submission_attempt",
+        "confidence": 0.7
+      },
+      {
+        "start_s": 4715.0,
+        "end_s": 4722.5,
+        "action_class": "escape",
+        "confidence": 0.55
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "653715dad9868c25fd158a0b__w20",
+    "match_id": "653715dad9868c25fd158a0b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 105,
+      "action_class": "submission_choke",
+      "outcome": "successful",
+      "position_bucket": "back_control",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=VBmvEKje94s",
+    "window_start_s": 100.0,
+    "window_end_s": 109.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Scoreless early exchange. White rashguard starts from bottom guard with head/arm control, briefly sweeps toward top, a rolling scramble follows, and by the end black shorts is back on top kneeling in white's guard with no pass or points completed.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 2.8,
+              "position": "guard",
+              "actor": "bottom",
+              "actor_gi_color": "white",
+              "action_class": "control",
+              "outcome": "neutral",
+              "specific_technique_guess": "closed-guard overhook/head-and-arm control",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 2.8,
+              "end_s": 6.2,
+              "position": "guard",
+              "actor": "bottom",
+              "actor_gi_color": "white",
+              "action_class": "sweep",
+              "outcome": "success",
+              "specific_technique_guess": "sit-up/hip-bump style sweep from overhook guard",
+              "confidence": 0.6
+            },
+            {
+              "start_s": 6.2,
+              "end_s": 8.4,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "scramble",
+              "outcome": "neutral",
+              "specific_technique_guess": "rolling scramble after the sweep",
+              "confidence": 0.5
+            },
+            {
+              "start_s": 8.4,
+              "end_s": 12.6,
+              "position": "guard",
+              "actor": "top",
+              "actor_gi_color": "black",
+              "action_class": "pass",
+              "outcome": "neutral",
+              "specific_technique_guess": "kneeling pressure/pass attempt against closed guard",
+              "confidence": 0.5
+            }
+          ]
+        },
+        "latency_ms": 192417.6546249073,
+        "cost_usd": 0.179943,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 98.0,
+        "end_s": 100.8,
+        "action_class": "control",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 100.8,
+        "end_s": 104.2,
+        "action_class": "sweep",
+        "confidence": 0.6
+      },
+      {
+        "start_s": 104.2,
+        "end_s": 106.4,
+        "action_class": "scramble",
+        "confidence": 0.5
+      },
+      {
+        "start_s": 106.4,
+        "end_s": 110.6,
+        "action_class": "pass",
+        "confidence": 0.5
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "65385351b7741492b9769745__w21",
+    "match_id": "65385351b7741492b9769745",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 157,
+      "action_class": "submission_choke",
+      "outcome": "successful",
+      "position_bucket": "back_control",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=Lcz1V3NHlYg",
+    "window_start_s": 152.0,
+    "window_end_s": 161.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Match start, score 0-0. Top athlete (blue USA-themed rashguard) is established in side control over the bottom athlete (black rashguard), maintaining chest pressure and head/arm control while the bottom athlete frames and hip-escapes; no pass, sweep, or submission has completed.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 12.6,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "blue",
+              "action_class": "control",
+              "outcome": "maintained",
+              "specific_technique_guess": "side control pressure with cross-face/underhook, bottom framing and hip escape attempts",
+              "confidence": 0.78
+            },
+            {
+              "start_s": 0.5,
+              "end_s": 4.5,
+              "position": "side_control",
+              "actor": "bottom",
+              "actor_gi_color": "black",
+              "action_class": "escape",
+              "outcome": "defended",
+              "specific_technique_guess": "bottom frames on head/shoulder and attempts hip escape/leg retraction to recover guard",
+              "confidence": 0.66
+            },
+            {
+              "start_s": 4.5,
+              "end_s": 12.6,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "blue",
+              "action_class": "positional_advance",
+              "outcome": "maintained",
+              "specific_technique_guess": "top adjusts grips and hips looking to improve toward mount/arm isolation while pinning bottom's near arm",
+              "confidence": 0.6
+            }
+          ]
+        },
+        "latency_ms": 58686.396582983434,
+        "cost_usd": 0.11433299999999999,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 150.0,
+        "end_s": 162.6,
+        "action_class": "control",
+        "confidence": 0.78
+      },
+      {
+        "start_s": 150.5,
+        "end_s": 154.5,
+        "action_class": "escape",
+        "confidence": 0.66
+      },
+      {
+        "start_s": 154.5,
+        "end_s": 162.6,
+        "action_class": "positional_advance",
+        "confidence": 0.6
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "656682dfa4a13c99c4fcdd35__w22",
+    "match_id": "656682dfa4a13c99c4fcdd35",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 295,
+      "action_class": "submission_choke",
+      "outcome": "successful",
+      "position_bucket": "back_control",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=vFflkxR2fZY",
+    "window_start_s": 290.0,
+    "window_end_s": 299.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "The light/white-clad athlete is on top in side control and appears to be ahead 6-0; the black-clad athlete is on bottom defending, framing, and trying to recover guard as the clip ends around 1:17 on the visible timer.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.5,
+              "position": "guard",
+              "actor": "contested",
+              "actor_gi_color": "black",
+              "action_class": "scramble",
+              "outcome": "neutral",
+              "specific_technique_guess": "entangled guard/half-guard scramble with top athlete trying to clear the legs",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 3.5,
+              "end_s": 6.5,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "white",
+              "action_class": "pass",
+              "outcome": "success",
+              "specific_technique_guess": "guard pass into chest-to-chest side control",
+              "confidence": 0.62
+            },
+            {
+              "start_s": 6.5,
+              "end_s": 12.3,
+              "position": "side_control",
+              "actor": "bottom",
+              "actor_gi_color": "black",
+              "action_class": "escape",
+              "outcome": "failed",
+              "specific_technique_guess": "bottom frames and hip movement but remains pinned under side control",
+              "confidence": 0.6
+            }
+          ]
+        },
+        "latency_ms": 77541.94795899093,
+        "cost_usd": 0.145137,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 288.0,
+        "end_s": 291.5,
+        "action_class": "scramble",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 291.5,
+        "end_s": 294.5,
+        "action_class": "pass",
+        "confidence": 0.62
+      },
+      {
+        "start_s": 294.5,
+        "end_s": 300.3,
+        "action_class": "escape",
+        "confidence": 0.6
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "6666381f4828f704f1b3bead__w23",
+    "match_id": "6666381f4828f704f1b3bead",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 6297,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 6292.0,
+    "window_end_s": 6301.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Scoreless early exchange. The blue-clad athlete started on top over the black-clad athlete's guard, but the bottom athlete entered the legs and forced a contested leg-entanglement/50-50 battle with no finish. By the end of the clip both athletes are back standing and neutral.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 2.6,
+              "position": "guard",
+              "actor": "top",
+              "actor_gi_color": "blue",
+              "action_class": "pass",
+              "outcome": "failure",
+              "specific_technique_guess": "standing guard pass pressure",
+              "confidence": 0.72
+            },
+            {
+              "start_s": 2.6,
+              "end_s": 4.6,
+              "position": "guard",
+              "actor": "bottom",
+              "actor_gi_color": "black",
+              "action_class": "sweep",
+              "outcome": "success",
+              "specific_technique_guess": "inversion into ashi garami / 50-50 entry",
+              "confidence": 0.66
+            },
+            {
+              "start_s": 4.6,
+              "end_s": 9.4,
+              "position": "leg_entanglement",
+              "actor": "contested",
+              "action_class": "submission_attempt",
+              "outcome": "neutral",
+              "specific_technique_guess": "mutual 50-50 leg-lock battle",
+              "confidence": 0.78
+            },
+            {
+              "start_s": 9.4,
+              "end_s": 12.5,
+              "position": "standing",
+              "actor": "contested",
+              "action_class": "escape",
+              "outcome": "success",
+              "specific_technique_guess": "disengage from leg entanglement and return to feet",
+              "confidence": 0.7
+            }
+          ]
+        },
+        "latency_ms": 90868.7842078507,
+        "cost_usd": 0.135618,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 6290.0,
+        "end_s": 6292.6,
+        "action_class": "pass",
+        "confidence": 0.72
+      },
+      {
+        "start_s": 6292.6,
+        "end_s": 6294.6,
+        "action_class": "sweep",
+        "confidence": 0.66
+      },
+      {
+        "start_s": 6294.6,
+        "end_s": 6299.4,
+        "action_class": "submission_attempt",
+        "confidence": 0.78
+      },
+      {
+        "start_s": 6299.4,
+        "end_s": 6302.5,
+        "action_class": "escape",
+        "confidence": 0.7
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "652c0e04a947037aeb7eb302__w24",
+    "match_id": "652c0e04a947037aeb7eb302",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 319,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=jBLehiPrM0E",
+    "window_start_s": 314.0,
+    "window_end_s": 323.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "On-screen score remains 2-0 for the red-score athlete. The clip moves from a turtle/front-headlock scramble into guard play, includes a failed bottom-side leg attack and a successful top-side escape, and ends with the competitors separated/reset toward neutral with no additional score in this clip.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 2.0,
+              "position": "turtle",
+              "actor": "top",
+              "action_class": "control",
+              "outcome": "neutral",
+              "specific_technique_guess": "front headlock / back-take threat over a turtled opponent",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 1.8,
+              "end_s": 4.6,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "transition",
+              "outcome": "neutral",
+              "specific_technique_guess": "rolling transition from turtle/front-headlock into guard",
+              "confidence": 0.6
+            },
+            {
+              "start_s": 4.4,
+              "end_s": 8.2,
+              "position": "guard",
+              "actor": "top",
+              "action_class": "pass",
+              "outcome": "failure",
+              "specific_technique_guess": "top pressure/pass attempt against retained open guard",
+              "confidence": 0.5
+            },
+            {
+              "start_s": 8.0,
+              "end_s": 10.6,
+              "position": "guard",
+              "actor": "bottom",
+              "action_class": "submission",
+              "outcome": "failure",
+              "specific_technique_guess": "leg/ankle attack from bottom, possibly straight ankle or heel-hook entry",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 9.4,
+              "end_s": 11.4,
+              "position": "scramble",
+              "actor": "top",
+              "action_class": "escape",
+              "outcome": "success",
+              "specific_technique_guess": "top clears the leg entanglement and escapes the submission attempt",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 11.0,
+              "end_s": 12.31,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "transition",
+              "outcome": "neutral",
+              "specific_technique_guess": "referee separation/reset to a neutral kneeling posture",
+              "confidence": 0.5
+            }
+          ]
+        },
+        "latency_ms": 153081.0786250513,
+        "cost_usd": 0.19972199999999998,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 312.0,
+        "end_s": 314.0,
+        "action_class": "control",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 313.8,
+        "end_s": 316.6,
+        "action_class": "transition",
+        "confidence": 0.6
+      },
+      {
+        "start_s": 316.4,
+        "end_s": 320.2,
+        "action_class": "pass",
+        "confidence": 0.5
+      },
+      {
+        "start_s": 320.0,
+        "end_s": 322.6,
+        "action_class": "submission",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 321.4,
+        "end_s": 323.4,
+        "action_class": "escape",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 323.0,
+        "end_s": 324.31,
+        "action_class": "transition",
+        "confidence": 0.5
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "65db983aa2434704339d99e3__w25",
+    "match_id": "65db983aa2434704339d99e3",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1169,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=_XkxgHggRjA",
+    "window_start_s": 1164.0,
+    "window_end_s": 1173.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Scoreless early sequence: after a short grounded roll the athletes reverse into a guard-versus-passer exchange; the guard player eventually sweeps/stands and the athletes separate as the clip ends.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 3.4,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "scramble",
+              "outcome": "neutral",
+              "specific_technique_guess": "ground roll / reversal scramble",
+              "confidence": 0.62
+            },
+            {
+              "start_s": 3.4,
+              "end_s": 8.7,
+              "position": "guard",
+              "actor": "top",
+              "action_class": "guard_pass",
+              "outcome": "failure",
+              "specific_technique_guess": "standing/kneeling guard passing pressure",
+              "confidence": 0.68
+            },
+            {
+              "start_s": 8.7,
+              "end_s": 10.6,
+              "position": "guard",
+              "actor": "bottom",
+              "action_class": "sweep",
+              "outcome": "success",
+              "specific_technique_guess": "underhook/tripod-style sweep to stand-up",
+              "confidence": 0.58
+            }
+          ]
+        },
+        "latency_ms": 141445.9026658442,
+        "cost_usd": 0.17044199999999998,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 1162.0,
+        "end_s": 1165.4,
+        "action_class": "scramble",
+        "confidence": 0.62
+      },
+      {
+        "start_s": 1165.4,
+        "end_s": 1170.7,
+        "action_class": "guard_pass",
+        "confidence": 0.68
+      },
+      {
+        "start_s": 1170.7,
+        "end_s": 1172.6,
+        "action_class": "sweep",
+        "confidence": 0.58
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d004__w26",
+    "match_id": "650d20c745120c8433e9d004",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 245,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SWEEP",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=cktdK6Lf6ts",
+    "window_start_s": 240.0,
+    "window_end_s": 249.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Early match, no-gi: the navy athlete begins on top against the camo-shorted athlete's guard, briefly gets to side control, then the exchange turns into a rolling inversion/leg-entanglement scramble. By the end positions are still volatile, with the camo/black athlete pressuring from top and the navy athlete defending; no clear score or submission is shown.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 2.8,
+              "position": "open_guard",
+              "actor": "top",
+              "actor_gi_color": "navy",
+              "action_class": "guard_pass",
+              "outcome": "ongoing",
+              "specific_technique_guess": "knee-cut/leg-drag style passing against seated/open guard",
+              "confidence": 0.72
+            },
+            {
+              "start_s": 2.8,
+              "end_s": 4.4,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "navy",
+              "action_class": "positional_advance",
+              "outcome": "success",
+              "specific_technique_guess": "pass to side control / heavy cross-side pressure",
+              "confidence": 0.66
+            },
+            {
+              "start_s": 4.4,
+              "end_s": 5.9,
+              "position": "half_guard",
+              "actor": "bottom",
+              "actor_gi_color": "camo",
+              "action_class": "escape",
+              "outcome": "success",
+              "specific_technique_guess": "inversion/under-hook guard recovery from side pressure",
+              "confidence": 0.62
+            },
+            {
+              "start_s": 5.9,
+              "end_s": 8.6,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "scramble",
+              "outcome": "neutral",
+              "specific_technique_guess": "granby/inversion scramble with both athletes rolling through",
+              "confidence": 0.78
+            },
+            {
+              "start_s": 8.6,
+              "end_s": 11.0,
+              "position": "open_guard",
+              "actor": "bottom",
+              "actor_gi_color": "camo",
+              "action_class": "submission_attempt",
+              "outcome": "failure",
+              "specific_technique_guess": "leg entanglement toward heel hook/kneebar while top defends and rolls",
+              "confidence": 0.58
+            },
+            {
+              "start_s": 11.0,
+              "end_s": 12.3,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "camo",
+              "action_class": "positional_advance",
+              "outcome": "ongoing",
+              "specific_technique_guess": "reversal into top pressure as referee moves closer",
+              "confidence": 0.52
+            }
+          ]
+        },
+        "latency_ms": 86547.05958301201,
+        "cost_usd": 0.155862,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 238.0,
+        "end_s": 240.8,
+        "action_class": "guard_pass",
+        "confidence": 0.72
+      },
+      {
+        "start_s": 240.8,
+        "end_s": 242.4,
+        "action_class": "positional_advance",
+        "confidence": 0.66
+      },
+      {
+        "start_s": 242.4,
+        "end_s": 243.9,
+        "action_class": "escape",
+        "confidence": 0.62
+      },
+      {
+        "start_s": 243.9,
+        "end_s": 246.6,
+        "action_class": "scramble",
+        "confidence": 0.78
+      },
+      {
+        "start_s": 246.6,
+        "end_s": 249.0,
+        "action_class": "submission_attempt",
+        "confidence": 0.58
+      },
+      {
+        "start_s": 249.0,
+        "end_s": 250.3,
+        "action_class": "positional_advance",
+        "confidence": 0.52
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d031__w27",
+    "match_id": "650d20c745120c8433e9d031",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 254,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SWEEP",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=DHLk_9vT_3g",
+    "window_start_s": 249.0,
+    "window_end_s": 258.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "No-gi bout still 0-0 early. Athlete in black is on top pressuring/stacking to pass; athlete in dark camo is on bottom playing inverted/open guard, retaining and framing. Late in the clip the bottom athlete sits up into a single-leg/sweep attempt, producing a scramble, but no score is registered.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 2.6,
+              "position": "guard",
+              "actor": "top",
+              "action_class": "guard_pass",
+              "outcome": "defended",
+              "specific_technique_guess": "stack/double-under pressure pass vs inverted guard",
+              "confidence": 0.7
+            },
+            {
+              "start_s": 2.6,
+              "end_s": 5.3,
+              "position": "guard",
+              "actor": "bottom",
+              "action_class": "guard_recovery",
+              "outcome": "success",
+              "specific_technique_guess": "inversion/rolling guard retention with leg entanglement",
+              "confidence": 0.65
+            },
+            {
+              "start_s": 5.3,
+              "end_s": 8.8,
+              "position": "half_guard",
+              "actor": "top",
+              "action_class": "guard_pass",
+              "outcome": "defended",
+              "specific_technique_guess": "headquarters/leg-drag style passing vs knee shield/reverse De La Riva",
+              "confidence": 0.68
+            },
+            {
+              "start_s": 8.8,
+              "end_s": 12.3,
+              "position": "scramble",
+              "actor": "contested",
+              "action_class": "sweep",
+              "outcome": "neutral",
+              "specific_technique_guess": "bottom sit-up into single-leg/sweep attempt, top sprawls, no clean score",
+              "confidence": 0.7
+            }
+          ]
+        },
+        "latency_ms": 75151.68633288704,
+        "cost_usd": 0.14935199999999998,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 247.0,
+        "end_s": 249.6,
+        "action_class": "guard_pass",
+        "confidence": 0.7
+      },
+      {
+        "start_s": 249.6,
+        "end_s": 252.3,
+        "action_class": "guard_recovery",
+        "confidence": 0.65
+      },
+      {
+        "start_s": 252.3,
+        "end_s": 255.8,
+        "action_class": "guard_pass",
+        "confidence": 0.68
+      },
+      {
+        "start_s": 255.8,
+        "end_s": 259.3,
+        "action_class": "sweep",
+        "confidence": 0.7
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "65dbe62da2434704339da256__w28",
+    "match_id": "65dbe62da2434704339da256",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1200,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "SWEEP",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "window_start_s": 1195.0,
+    "window_end_s": 1204.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Early 0-0 no-gi exchange: an initial standing/clinch takedown scramble resolves with one athlete consolidating top side-control pressure near the right edge; the bottom athlete frames, retains legs, and attempts to invert/re-guard, but no submission or clear score has occurred.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 2.6,
+              "position": "standing",
+              "actor": "contested",
+              "action_class": "takedown",
+              "outcome": "success",
+              "specific_technique_guess": "clinch/body-lock takedown into top position",
+              "confidence": 0.58
+            },
+            {
+              "start_s": 2.6,
+              "end_s": 6.5,
+              "position": "side_control",
+              "actor": "top",
+              "action_class": "control",
+              "outcome": "ongoing",
+              "specific_technique_guess": "chest-to-chest top consolidation",
+              "confidence": 0.66
+            },
+            {
+              "start_s": 6.5,
+              "end_s": 10.5,
+              "position": "side_control",
+              "actor": "bottom",
+              "action_class": "escape",
+              "outcome": "failed",
+              "specific_technique_guess": "framing and hip escape to retain guard",
+              "confidence": 0.55
+            },
+            {
+              "start_s": 10.5,
+              "end_s": 12.3,
+              "position": "open_guard",
+              "actor": "bottom",
+              "action_class": "escape",
+              "outcome": "ongoing",
+              "specific_technique_guess": "inversion/granby re-guard attempt under top pressure",
+              "confidence": 0.48
+            }
+          ]
+        },
+        "latency_ms": 78466.32745815441,
+        "cost_usd": 0.153687,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 1193.0,
+        "end_s": 1195.6,
+        "action_class": "takedown",
+        "confidence": 0.58
+      },
+      {
+        "start_s": 1195.6,
+        "end_s": 1199.5,
+        "action_class": "control",
+        "confidence": 0.66
+      },
+      {
+        "start_s": 1199.5,
+        "end_s": 1203.5,
+        "action_class": "escape",
+        "confidence": 0.55
+      },
+      {
+        "start_s": 1203.5,
+        "end_s": 1205.3,
+        "action_class": "escape",
+        "confidence": 0.48
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d030__w29",
+    "match_id": "650d20c745120c8433e9d030",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 524,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SWEEP",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=SXRb0XaMg3U",
+    "window_start_s": 519.0,
+    "window_end_s": 528.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Early in the match: gray is seated playing open guard while blue stands and looks to pass. Blue attempts an explosive aerial pass; gray inverts through the scramble and ends up moving toward blue's back/top side with the exchange still unresolved.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 7.8,
+              "position": "open_guard",
+              "actor": "bottom",
+              "actor_gi_color": "gray",
+              "action_class": "guard_retention",
+              "outcome": "in_progress",
+              "specific_technique_guess": "seated open guard hand fighting and distance management",
+              "confidence": 0.78
+            },
+            {
+              "start_s": 7.8,
+              "end_s": 9.3,
+              "position": "scramble",
+              "actor": "top",
+              "actor_gi_color": "blue",
+              "action_class": "guard_pass",
+              "outcome": "fail",
+              "specific_technique_guess": "explosive flying/cartwheel-style guard pass attempt",
+              "confidence": 0.66
+            },
+            {
+              "start_s": 9.3,
+              "end_s": 12.3,
+              "position": "back_control",
+              "actor": "top",
+              "actor_gi_color": "gray",
+              "action_class": "back_take",
+              "outcome": "in_progress",
+              "specific_technique_guess": "inversion/roll-through counter into back attack",
+              "confidence": 0.62
+            }
+          ]
+        },
+        "latency_ms": 72573.51787481457,
+        "cost_usd": 0.14354699999999998,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 517.0,
+        "end_s": 524.8,
+        "action_class": "guard_retention",
+        "confidence": 0.78
+      },
+      {
+        "start_s": 524.8,
+        "end_s": 526.3,
+        "action_class": "guard_pass",
+        "confidence": 0.66
+      },
+      {
+        "start_s": 526.3,
+        "end_s": 529.3,
+        "action_class": "back_take",
+        "confidence": 0.62
+      }
+    ],
+    "status": "ok"
+  },
+  {
+    "window_id": "65de3657a2434704339dc36b__w12",
+    "match_id": "65de3657a2434704339dc36b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 4898,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KzYTzUD5rRA",
+    "window_start_s": 4893.0,
+    "window_end_s": 4902.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "arm_s",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "current_context_summary": "Score remains 0-0. The light/white-rashguard athlete is on top, having settled from side control into a heavy north-south/top pin over the black-rashguard athlete, who is defending from his back with no submission in progress.",
+          "clips": [
+            {
+              "start_s": 0.0,
+              "end_s": 4.5,
+              "position": "side_control",
+              "actor": "top",
+              "actor_gi_color": "white",
+              "action_class": "control",
+              "outcome": "ongoing",
+              "specific_technique_guess": "heavy side control / crossface pressure",
+              "confidence": 0.72
+            },
+            {
+              "start_s": 4.5,
+              "end_s": 8.0,
+              "position": "north_south",
+              "actor": "top",
+              "actor_gi_color": "white",
+              "action_class": "transition",
+              "outcome": "success",
+              "specific_technique_guess": "circle from side control toward north-south",
+              "confidence": 0.64
+            },
+            {
+              "start_s": 8.0,
+              "end_s": 12.32,
+              "position": "north_south",
+              "actor": "bottom",
+              "actor_gi_color": "black",
+              "action_class": "escape",
+              "outcome": "failed",
+              "specific_technique_guess": "framing and hip movement against north-south pressure",
+              "confidence": 0.66
+            }
+          ]
+        },
+        "latency_ms": 95912.95137512498,
+        "cost_usd": 0.153102,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "emitted_events": [
+      {
+        "start_s": 4891.0,
+        "end_s": 4895.5,
+        "action_class": "control",
+        "confidence": 0.72
+      },
+      {
+        "start_s": 4895.5,
+        "end_s": 4899.0,
+        "action_class": "transition",
+        "confidence": 0.64
+      },
+      {
+        "start_s": 4899.0,
+        "end_s": 4903.32,
+        "action_class": "escape",
+        "confidence": 0.66
+      }
+    ],
+    "status": "ok"
+  }
+]

@@ -1,0 +1,986 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "match_id": "650d20c745120c8433e9d024",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 12624,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 12619.0,
+    "window_end_s": 12628.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The top athlete is lying perpendicular across the bottom athlete\u2019s torso with pressure over the chest while the bottom athlete\u2019s legs extend away and their near arm is trapped."
+        },
+        "latency_ms": 115899.4810830336,
+        "cost_usd": 0.150009,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "transition",
+          "outcome": "unclear",
+          "justification": "The sequence shows a turtle/back ride dissolving into a rolling scramble without a clearly completed named technique, and the final control or any tap is hidden by intertwined limbs and framing."
+        },
+        "latency_ms": 84415.13750003651,
+        "cost_usd": 0.135957,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "The labels could be defended if the bottom athlete is read as lying on her side/back with the top athlete perpendicular across the torso: at 00:00-00:03 the top athlete's chest is draped over the bottom athlete, the bottom athlete's legs point away to the left, and her near arm appears pinned under the top body, which superficially matches the side_control justification. The subsequent roll (00:08-00:12) would then be a transition from side control with an unresolved/unclear outcome, and side_control x transition is not internally contradictory. On that reading the given labels are coherent.",
+          "verdict": "disagree",
+          "final_position": "back_control",
+          "final_action_class": "transition",
+          "final_outcome": "unclear",
+          "wrong_label": "position",
+          "reason": "The position is mislabeled: the bottom athlete is prone/turtled rather than supine, so the top athlete is riding from above/behind (back/turtle ride), not lying perpendicular across a supine chest as side control requires. The action/outcome labels (transition, unclear) remain consistent with the rolling, unresolved finish.",
+          "evidence": "At 00:00-00:02 the bottom athlete's face is turned down toward the canvas with braided hair hanging to the mat and knees tucked beneath her (prone/turtle), while the top athlete's hips sit behind/above her shoulders; there is no supine bottom athlete looking up with the top across the chest. Around 00:06-00:12 the pair roll and limbs intertwine without a clear tap or stabilized new control, supporting transition/unclear but not side_control."
+        },
+        "latency_ms": 59588.28104194254,
+        "cost_usd": 0.124641,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "back_control",
+    "final_outcome": "unclear",
+    "verdict": "disagree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 12619.0,
+        "end_s": 12628.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6661e503716f12758093d038__w1",
+    "match_id": "6661e503716f12758093d038",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2852,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 2847.0,
+    "window_end_s": 2856.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "mount",
+          "justification": "The top athlete is straddling the bottom athlete\u2019s torso with both knees on the mat and heavy chest pressure while the bottom athlete is pinned flat underneath."
+        },
+        "latency_ms": 41989.08012500033,
+        "cost_usd": 0.11082900000000001,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "back_take",
+          "outcome": "success",
+          "justification": "The top athlete moves from front/turtle control to behind the blue-clad opponent and establishes back control as the scoreboard jumps from 2-0 to 5-0."
+        },
+        "latency_ms": 52235.591209027916,
+        "cost_usd": 0.12041699999999998,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "The +3 scoreboard jump (2-0 to 5-0 at ~0:14) is worth the same as a guard pass (3 pts) as back control (3 pts) under ADCC-style scoring, so the score alone cannot prove a back take; the wide camera angle never crisply shows both hooks/seatbelt fully behind blue, and in the opening seconds red is simply riding on top of a side/supine blue in a mount-like fashion. On that reading the clip is just mount held (position=mount) after a pass, and the 'back_take' label is the wrong one. I rejected this because blue finishes prone/turned-in with red high and behind rather than straddling a supine torso, the +3 timing coincides with red getting onto/behind a turtled blue, and a successful back_take cannot terminate in mount\u2014so the internally inconsistent label is the position.",
+          "verdict": "disagree",
+          "final_position": "back_control",
+          "final_action_class": "back_take",
+          "final_outcome": "success",
+          "wrong_label": "position",
+          "reason": "The action/outcome are corroborated by the +3 score and red ending high/behind a prone, turned-in blue, but 'mount' contradicts a successful back take's end state and does not match blue being face-down/turtled rather than pinned flat on their back.",
+          "evidence": "Scoreboard moves 2-0 to 5-0 (~0:14), a +3 consistent with back control being awarded; in the later frames (\u22480:09-0:12) blue's face is toward the mat/turned in while red rides high on/behind blue's back instead of straddling a supine torso. A successful back_take cannot end in mount, creating a position\u00d7action contradiction that resolves against the position label."
+        },
+        "latency_ms": 85626.46104115993,
+        "cost_usd": 0.138753,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "back_control",
+    "final_outcome": "success",
+    "verdict": "disagree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2847.0,
+        "end_s": 2856.0,
+        "action_class": "back_take",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6643b593532ae8f232692d70__w2",
+    "match_id": "6643b593532ae8f232692d70",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2559,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 2554.0,
+    "window_end_s": 2563.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "Half Guard",
+          "justification": "Aly is on top with heavy shoulder/crossface pressure while Hansen stays on his hip underneath with legs still engaged around Aly, so the pass is being contested from half guard rather than side control, mount, or back."
+        },
+        "latency_ms": 225899.59891606122,
+        "cost_usd": 0.210594,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "transition",
+          "outcome": "unclear",
+          "justification": "The top grappler keeps chest-to-chest control and then rolls/repositions with his hips and legs without a recognizable named submission, sweep, or pass; the scoreboard stays 0-0 and the clip ends mid-scramble with no tap or scoring cue visible."
+        },
+        "latency_ms": 25902.374875033274,
+        "cost_usd": 0.10457699999999998,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against 'Half Guard': Aly's hips look low and past Hansen's knee line with a heavy crossface (00:00-00:08), which could be read as side control rather than half guard if Hansen's legs are merely beside him and not actually trapping Aly's leg. Against action_class='transition': at 00:09-00:13 Aly rolls over his own head/shoulder and Hansen's legs come up/invert, which could be reframed as a bottom-player sweep/inversion attempt or a leg-entanglement attack rather than a neutral top-side 'transition,' and if Hansen briefly improves position the outcome would be a successful reversal rather than 'unclear.' However, no pass points, no tap, no referee signal, and no stable reversed top position are shown before the clip cuts.",
+          "verdict": "agree",
+          "final_position": "Half Guard",
+          "final_action_class": "transition",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "In 00:00-00:08 Hansen stays on his hip underneath with legs still in play around Aly's lower body while Aly applies crossface/shoulder pressure chest-to-chest, consistent with contested top half guard rather than settled side control/mount (no pass scored). At 00:09-00:13 Aly rolls/repositions through his hips and over the shoulder into a scramble, but the scoreboard remains 0-0, there is no tap or referee stoppage, and the clip ends mid-scramble, so a generic transition with unresolved outcome fits better than a named submission/sweep/pass."
+        },
+        "latency_ms": 65004.82541695237,
+        "cost_usd": 0.12669,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "Half Guard",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2554.0,
+        "end_s": 2563.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6580c285827346aa0335a86b__w3",
+    "match_id": "6580c285827346aa0335a86b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 840,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=SDWG9WMbvl0",
+    "window_start_s": 835.0,
+    "window_end_s": 844.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "half_guard",
+          "justification": "The star-shorted athlete is on top with one leg trapped between the opponent\u2019s legs while the bottom athlete frames and rolls to sweep, making the half-guard pass/sweep the contested position."
+        },
+        "latency_ms": 126504.69404202886,
+        "cost_usd": 0.18633300000000003,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "success",
+          "justification": "The star-shorted top grappler rolls/inverts through the bottom player's legs and settles into dominant top/back control, clearing the guard."
+        },
+        "latency_ms": 101398.66779185832,
+        "cost_usd": 0.17535599999999998,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "The given labels overclaim a completed guard pass. The star-shorted athlete is not shown cleanly clearing the legs and stabilizing side control/mount/back; instead the sequence from roughly 00:03.5-00:06 is an inversion/scramble in which the black-clad bottom athlete nearly comes up, and by 00:10-00:12 the two are still rolling with legs entangled rather than the top athlete holding a defined dominant position. Position is also not unambiguously half_guard throughout: at moments it resembles front-headlock/turtle/side-control transitions. The safest challenge is that outcome='success' is premature because no passed, controlled position is established before the clip ends.",
+          "verdict": "disagree",
+          "final_position": "half_guard",
+          "final_action_class": null,
+          "final_outcome": null,
+          "wrong_label": "outcome",
+          "reason": "A guard pass may be attempted, but the clip never shows a stabilized pass to side control, mount, or back; the athletes remain in a live scramble/leg entanglement through the final frame, so outcome='success' is unsupported.",
+          "evidence": "Around 00:04-00:06 the bottom athlete rolls/inverts and briefly threatens to reverse top; at 00:10-00:12 both are still tangled with no hooks, mount, or settled side control; the timer reaches 0:50 with the exchange unresolved rather than a held dominant position."
+        },
+        "latency_ms": 42699.06533299945,
+        "cost_usd": 0.144042,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "half_guard",
+    "final_outcome": "success",
+    "verdict": "disagree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 835.0,
+        "end_s": 844.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "654152332d513512a36b6212__w4",
+    "match_id": "654152332d513512a36b6212",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2052,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=5ix4aFb5Xiw",
+    "window_start_s": 2047.0,
+    "window_end_s": 2056.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The red-clad athlete is on top with a perpendicular chest-to-chest pin over the black-clad opponent, who is flat on his back trying to bridge and escape."
+        },
+        "latency_ms": 32156.58829198219,
+        "cost_usd": 0.132108,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "back_take",
+          "outcome": "success",
+          "justification": "The red athlete moves from side/top control around the defender and ends behind him with back/body control as the defender turns."
+        },
+        "latency_ms": 97431.47820793092,
+        "cost_usd": 0.16827599999999998,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against position=side_control: in the opening frames (00:00:00-00:02.64) the black athlete's legs are high and framed and he is actively bridging rather than flattened under a settled crossface/underhook pin, so the start could be read as half_guard or a passing scramble rather than clean side control. Against action=back_take/success: red drifts toward the rear but black keeps turning and by 00:11-00:12 the pair rolls into a scramble where black appears to come back into red, so one could argue no stabilized back control with hooks is ever locked and the take is not truly successful.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "back_take",
+          "final_outcome": "success",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Early frames show red on top and roughly perpendicular over black who is on his back (side-control start, no position-action contradiction since back_take from side_control is coherent). Around 00:05.28-00:08.80 red works around the turning defender and is clearly behind him with chest-to-back/shoulder contact and arms wrapped while black stays on his side and keeps bridging/turning, consistent with a successful move to the back."
+        },
+        "latency_ms": 67599.1440829821,
+        "cost_usd": 0.157299,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "success",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2047.0,
+        "end_s": 2056.0,
+        "action_class": "back_take",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "65dfbed6a2434704339de9a3__w5",
+    "match_id": "65dfbed6a2434704339de9a3",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 3544,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=nDc0L96J6i4",
+    "window_start_s": 3539.0,
+    "window_end_s": 3548.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "turtle",
+          "justification": "One athlete is on knees/elbows underneath while the other stays draped over her back/hips for most of the clip before the late roll."
+        },
+        "latency_ms": 73878.29691707157,
+        "cost_usd": 0.128139,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "transition",
+          "outcome": "unclear",
+          "justification": "The clip shows a rolling turtle/front-headlock scramble with the bottom athlete inverting and both athletes rolling, but no stabilized sweep, pass, or submission is visible before the clip ends and final control is obscured."
+        },
+        "latency_ms": 50343.06324995123,
+        "cost_usd": 0.11617199999999998,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the labels: the late sequence could be called a successful sweep/reversal rather than an unclear transition, because the athlete with the green ankle band goes from knees/elbows underneath to initiating an inversion/roll around 00:00:08.5-00:00:12.5 and the previously top athlete in black is displaced; one could also argue the early position is closer to a front-headlock/back-attack scramble than a clean turtle because the top athlete is high on the back/hips and the bottom athlete is posting a leg rather than staying compact. The counter is that the roll ends tangled with no stabilized top control, no referee point signal, no tap, and the scoreboard remains 0-0, so any sweep/submission reading is speculative.",
+          "verdict": "agree",
+          "final_position": "turtle",
+          "final_action_class": "transition",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "From 00:00:00-00:00:08 the bottom athlete is on knees/elbows with the green ankle band visible while the black-clad athlete is draped over her back/hips, matching turtle; at 00:00:08.5-00:00:12.6 both athletes roll/invert across the mat, but the final frame shows an unresolved tangle with no stable mount/side/back control, no submission tap, and no score change from 0-0."
+        },
+        "latency_ms": 45270.88191686198,
+        "cost_usd": 0.114411,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "turtle",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 3539.0,
+        "end_s": 3548.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 142,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+    "window_start_s": 137.0,
+    "window_end_s": 146.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "turtle",
+          "justification": "The blue athlete is based on hands and knees while the white/red athlete rides from behind/above, indicating a turtle attack rather than a completed hooked back mount."
+        },
+        "latency_ms": 44375.396999996156,
+        "cost_usd": 0.140553,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "back_take",
+          "outcome": "success",
+          "justification": "The white/red-clad athlete stays chest-to-back behind the blue-clad opponent and circles into dominant back/turtle control with arm control, with no visible escape or reset."
+        },
+        "latency_ms": 85562.91858409531,
+        "cost_usd": 0.167601,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "The strongest case against the labels is that the 'back_take' transition is never actually shown: at 00:00.000 the white/red athlete is already chest-to-back behind the blue athlete, so the take appears pre-completed and the clip only shows riding/consolidation rather than a take. Additionally, clear double-hook insertion is not visibly confirmed in any frame (the white/red legs are draped/climbing but hooks are ambiguous at 00:02.633 and 00:08.800), which weakens 'back_take, success' if success is defined as hooked back mount. One could also argue 'turtle' undersells it because white/red is high on the back near mount in frames 00:03.516-00:06.166.",
+          "verdict": "agree",
+          "final_position": "turtle",
+          "final_action_class": "back_take",
+          "final_outcome": "success",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Blue remains based on hands and knees throughout (00:00.000-00:12.316) with white/red chest-to-back behind/above, confirming turtle rather than completed hooked mount. White/red circles and tightens rear control (00:01.766-00:07.916), keeps arm/head control, and blue never escapes, stands, or resets, so the back attack is dominant and successful. Turtle + back_take is a coherent position-action pairing, and the visuals are clear enough to pass the ditch test."
+        },
+        "latency_ms": 41253.672749968246,
+        "cost_usd": 0.14397,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "turtle",
+    "final_outcome": "success",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 137.0,
+        "end_s": 146.0,
+        "action_class": "back_take",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "66138fe05da956d5ef54f21b__w7",
+    "match_id": "66138fe05da956d5ef54f21b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1058,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=h2ucDfTaypI",
+    "window_start_s": 1053.0,
+    "window_end_s": 1062.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The red-ankled athlete stays chest-to-chest on top with hips past the opponent\u2019s legs while the bottom athlete frames and inverts, indicating side control rather than guard or mount."
+        },
+        "latency_ms": 94916.11762484536,
+        "cost_usd": 0.169428,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "transition",
+          "outcome": "unclear",
+          "justification": "The athletes stay locked in a guard-versus-passing scramble with the bottom player inverting/retaining and the top player pressuring, but no sweep, pass, takedown, or submission is completed and the score remains 0-0; any decisive control change is hidden by the tangled bodies and camera angle."
+        },
+        "latency_ms": 20536.97266592644,
+        "cost_usd": 0.128721,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "The strongest case against the labels is that 'side_control' is not supported: in the opening frames (00:00\u201300:03) the red-ankled/top athlete is bent over with hands posted on the mat and the bottom athlete\u2019s knees/feet are still between the two bodies, i.e., a guard/passing posture rather than settled side control. Through 00:05\u201300:12 the bottom athlete frames with the legs, shoulder-rolls/inverts, and keeps the legs engaged near the top athlete\u2019s hips and shoulders, so the top athlete never clearly gets hips past the legs with a cross-face/underhook stabilization, and the scoreboard stays 0-0 with no pass points. That is more consistent with guard retention versus a passing scramble than side control. This does not create a true position\u00d7action contradiction (a transition can occur from guard), and the scene is not too ambiguous to score, so it should not be ditched; only the position label is wrong while transition/unclear remain reasonable.",
+          "verdict": "disagree",
+          "final_position": "guard",
+          "final_action_class": "transition",
+          "final_outcome": "unclear",
+          "wrong_label": "position",
+          "reason": "The clip shows a passing-versus-guard-retention scramble with the bottom athlete\u2019s legs persistently between the athletes and repeated inverting/framing, never a stabilized side control; no sweep/pass/submission is completed and the score remains 0-0.",
+          "evidence": "00:00\u201300:03 top athlete posts hands and stays bent over while the bottom athlete\u2019s legs remain in front (guard, not hips-past-legs); 00:05\u201300:09 bottom athlete turns/inverts and keeps feet/legs framing near the top athlete\u2019s body; 00:10\u201300:12 the pair stays tangled with legs engaged and no chest-to-chest settled side control, cross-face, or pass points, with the overlay still 0-0 at 4:09."
+        },
+        "latency_ms": 63245.04795810208,
+        "cost_usd": 0.152016,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "guard",
+    "final_outcome": "unclear",
+    "verdict": "disagree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 1053.0,
+        "end_s": 1062.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "65dbd239a2434704339da0e4__w8",
+    "match_id": "65dbd239a2434704339da0e4",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 279,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "window_start_s": 274.0,
+    "window_end_s": 283.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The top athlete clears the bottom athlete\u2019s legs and settles chest-to-chest perpendicular across the torso near the mat edge."
+        },
+        "latency_ms": 87724.28754088469,
+        "cost_usd": 0.16375800000000001,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "success",
+          "justification": "The top athlete works from inside the bottom athlete's guard, clears the legs/hips across the sequence, and consolidates a dominant side/top position by the final frames while the bottom athlete (red ankle band) is flattened to the mat."
+        },
+        "latency_ms": 30674.11575000733,
+        "cost_usd": 0.134376,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "The strongest case against the labels is that the scoreboard remains 0-0 from 1:48 through 1:36, so no scoring pass is ever registered; the athletes work right at the mat edge beside the ADCC banner where a pass could be negated/out-of-bounds; the red-banded bottom athlete keeps their legs active and elevated (frames 1:42-1:39) and the top athlete has to post/re-balance, suggesting an unresolved scramble or half-guard rather than consolidated side control; and the motion could be read as the bottom athlete attempting an inversion/sweep rather than the top athlete completing a pass.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "guard_pass",
+          "final_outcome": "success",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Across the sequence the top (black/white) athlete works from inside the red-banded bottom athlete's guard, progressively clears the legs/hips (visible by 1:40-1:38), and by the final frames (1:37-1:36) is settled chest-to-chest perpendicular across the torso with the bottom athlete flattened near the mat edge \u2014 a guard-pass-to-side-control sequence with no position\u00d7action contradiction; the unchanged 0-0 score is explained by the pass being consolidated only at the clip's end without a scoring hold."
+        },
+        "latency_ms": 59457.95737486333,
+        "cost_usd": 0.15285,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "success",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 274.0,
+        "end_s": 283.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d01f__w9",
+    "match_id": "650d20c745120c8433e9d01f",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2650,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 2645.0,
+    "window_end_s": 2654.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The blue-clad athlete stays chest-to-chest and perpendicular across the supine opponent\u2019s torso while the opponent frames and hip-escapes from the bottom."
+        },
+        "latency_ms": 37950.72462502867,
+        "cost_usd": 0.108699,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "failure",
+          "justification": "The top athlete uses chest-to-chest side-control/leg-drag pressure to clear the legs, but the bottom athlete keeps framing and hip-escaping so no stable pass or points are established."
+        },
+        "latency_ms": 147306.83204112574,
+        "cost_usd": 0.17672699999999997,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "The labels are internally inconsistent: POSITION=side_control asserts the guard has already been cleared and the top athlete is settled chest-to-chest perpendicular, while TECHNIQUE=guard_pass with outcome=failure asserts the guard was never passed. You cannot simultaneously be in side control (pass completed) and have a guard pass fail (pass not completed). The scoreboard staying 0-0 for the entire 13 s (period 1, 4:48\u21924:35) is the decisive contextual cue that no pass was ever scored, which favors the failed-pass reading and undermines the side_control reading.",
+          "verdict": "disagree",
+          "final_position": "half_guard",
+          "final_action_class": "guard_pass",
+          "final_outcome": "failure",
+          "wrong_label": "position",
+          "reason": "A completed pass to side control would score, yet the score remains 0-0 throughout, and the bottom athlete repeatedly re-inserts legs/frames and hip-escapes, so the top athlete never secures clean side control. The correct read is an ongoing guard/half-guard passing exchange that fails, i.e. the action/outcome labels are right but the position label is not.",
+          "evidence": "Scoreboard shows 0-0 with no points from 00:00 (4:48) to 00:12 (4:35); bottom athlete's feet are up between the bodies at 00:00-00:02, a knee-shield/frame and hip escape are visible at 00:04-00:07, and at 00:10-00:12 the bottom athlete bridges and brings the legs back in front of the top athlete, showing the top athlete's legs never fully clear to a scoring side control."
+        },
+        "latency_ms": 85579.05837497674,
+        "cost_usd": 0.14043299999999997,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "half_guard",
+    "final_outcome": "failure",
+    "verdict": "disagree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2645.0,
+        "end_s": 2654.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6634291e532ae8f23266cafe__w10",
+    "match_id": "6634291e532ae8f23266cafe",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 498,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=bLS3oXDIjs8",
+    "window_start_s": 493.0,
+    "window_end_s": 502.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "closed guard",
+          "justification": "The white-clad athlete is supine with his arms and legs controlling the black-clad athlete, who is chest-to-chest between his legs trying to pass."
+        },
+        "latency_ms": 80121.56737502664,
+        "cost_usd": 0.16614299999999999,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "transition",
+          "outcome": "unclear",
+          "justification": "The athletes remain in a tight guard/leg-entanglement scramble with hip and angle changes but no clear pass, sweep, or submission; the outcome is unclear because grips and any tap/score signal are obscured by their bodies and the camera/referee angle."
+        },
+        "latency_ms": 40578.83695885539,
+        "cost_usd": 0.141591,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the labels: the 'closed guard' call is vulnerable because around 0:03-0:06 the black-clad athlete postures up and posts a hand while the white-clad athlete's feet are not clearly shown crossed/locked and one black leg looks potentially free, which could be open/half guard or a pass-in-progress rather than closed guard. The 'transition/unclear' call is also vulnerable because the scoreboard stays 2-0 from 1:24 to 1:12 and the athletes remain broadly chest-to-chest, so this could be mere control/in-fighting with no meaningful transition and an outcome of 'none' rather than 'unclear'.",
+          "verdict": "agree",
+          "final_position": "closed guard",
+          "final_action_class": "transition",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Despite referee/body occlusion, the white athlete stays supine with the black athlete positioned between his legs and chest-to-chest across the sequence; black postures/posts around 0:04-0:06 and then settles back into the same guard battle by 0:09-0:12. No pass, sweep, tap, referee signal, or score change is visible (score remains 2-0), and there is no position\u00d7action contradiction: a closed-guard/pass-attempt scramble with unresolved outcome is coherent and not ambiguous enough to ditch."
+        },
+        "latency_ms": 75242.39374999888,
+        "cost_usd": 0.161595,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "closed guard",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 493.0,
+        "end_s": 502.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d029__w11",
+    "match_id": "650d20c745120c8433e9d029",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 809,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=u-3Xw89OpTw",
+    "window_start_s": 804.0,
+    "window_end_s": 813.0,
+    "settings": {
+      "native_video_mechanism": "inline data:video/mp4;base64 URI in a video_url content block",
+      "fps": "not controllable, provider default",
+      "thinking": "high",
+      "model": "kimi-k3",
+      "provider_route": "moonshot_direct"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The purple-clad athlete stays perpendicular and chest-to-chest over the tattooed athlete, who is on his back/side without guard control, using cross-face/underhook pressure to hold top side control."
+        },
+        "latency_ms": 62754.61095897481,
+        "cost_usd": 0.151593,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "transition",
+          "outcome": "unclear",
+          "justification": "The clip shows continuous scrambling between top pressure, turtle/inversion, and re-guarding with no clean pass, sweep, submission, or scoreboard change, so no decisive outcome is visible."
+        },
+        "latency_ms": 51307.06095811911,
+        "cost_usd": 0.147996,
+        "model_id": "kimi-k3"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the labels: the POSITION 'side_control' is not stable across the clip \u2014 from ~0:02-0:09 the tattooed athlete is not flat on his back under a perpendicular chest-to-chest pin; he turns to his knees/turtle (0:02-0:04), sits up (0:04-0:06), then inverts/granby-rolls with legs overhead (0:07-0:09), while the purple athlete is often behind/above him rather than in classic side control, resembling turtle-top/front-headlock/back-threat more than a pin. Against outcome='unclear': the exchange actually resolves decisively with purple re-establishing top side control by 0:10-0:12 while the scoreboard stays 8-0, so one could argue the outcome is 'successful retention for the top athlete' rather than unclear.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "transition",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The clip opens (0:00) and closes (0:10-0:12) with the purple-clad Rodriguez perpendicular, chest-to-chest on top of the tattooed Varela, who is on his back with no guard control \u2014 i.e., side control bookends the sequence. The intervening 0:02-0:09 is a continuous scramble (turtle, sit-up, inversion/roll) with no guard pass, sweep, tap, or scoreboard change (stays Rodriguez 8 - Varela 0), which matches action_class='transition' and outcome='unclear'. The mid-clip turtle/inversion is transitional motion within an exchange that returns to side control, not a contradiction of the anchor position, and the sequence is clearly interpretable, so the strict ditch test is not met."
+        },
+        "latency_ms": 56849.670415977016,
+        "cost_usd": 0.150177,
+        "model_id": "kimi-k3"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 804.0,
+        "end_s": 813.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  }
+]

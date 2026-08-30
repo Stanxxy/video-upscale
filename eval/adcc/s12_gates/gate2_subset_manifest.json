@@ -1,0 +1,345 @@
+{
+  "gate": "gate2",
+  "design_doc": "eval/adcc/s12_gates/GATES_1_2_DESIGN.md",
+  "seed": 20260726,
+  "rng_procedure": "Bezos condition 5 (founder pass-with-conditions, 2026-07-25) supersedes the design doc's original 'one shared Random instance' text: arm_lock's and leg_lock's successful-pool samples each use their OWN freshly-seeded random.Random(20260726) instance, drawn in class order (arm_lock, then leg_lock).",
+  "settings": {
+    "fps": 10,
+    "model": "gemini-3.1-flash-lite",
+    "thinking": null,
+    "preroll_s": 5.0,
+    "postroll_s": 4.0,
+    "media_resolution": {
+      "position": null,
+      "technique": null,
+      "validator_low": "low",
+      "validator_high": "high"
+    }
+  },
+  "quota_per_class": 8,
+  "forced_unsuccessful": {
+    "submission_arm_lock": [
+      {
+        "match_id": "66afe5ab1c62a1db7a53b80b",
+        "t_s": 28325
+      }
+    ],
+    "submission_leg_lock": [
+      {
+        "match_id": "65e3a69da2434704339e4460",
+        "t_s": 333
+      },
+      {
+        "match_id": "65f648c51dcf397e6900a827",
+        "t_s": 241
+      },
+      {
+        "match_id": "6643b593532ae8f232692d70",
+        "t_s": 2647
+      },
+      {
+        "match_id": "66a6ff021c62a1db7a5133c0",
+        "t_s": 12775
+      },
+      {
+        "match_id": "66d4e7091c7649ed30cbef2b",
+        "t_s": 164
+      }
+    ]
+  },
+  "n_clips": 16,
+  "clips": [
+    {
+      "window_id": "66afe5ab1c62a1db7a53b80b__occ0",
+      "index": 0,
+      "match_id": "66afe5ab1c62a1db7a53b80b",
+      "gold_event": {
+        "t_s": 28325,
+        "action_class": "submission_arm_lock",
+        "outcome": "unsuccessful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=pwGbW5GZgfc",
+      "window_start_s": 28320.0,
+      "window_end_s": 28329.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "650d20c745120c8433e9cfdb__occ1",
+      "index": 1,
+      "match_id": "650d20c745120c8433e9cfdb",
+      "gold_event": {
+        "t_s": 139,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=Wv4BRC-x1yQ",
+      "window_start_s": 134.0,
+      "window_end_s": 143.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "65f7217fc98f78bbaa6af549__occ2",
+      "index": 2,
+      "match_id": "65f7217fc98f78bbaa6af549",
+      "gold_event": {
+        "t_s": 986,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=ivJyZEimZIc",
+      "window_start_s": 981.0,
+      "window_end_s": 990.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "65dbe62da2434704339da256__occ3",
+      "index": 3,
+      "match_id": "65dbe62da2434704339da256",
+      "gold_event": {
+        "t_s": 1250,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+      "window_start_s": 1245.0,
+      "window_end_s": 1254.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "650d20c745120c8433e9d011__occ4",
+      "index": 4,
+      "match_id": "650d20c745120c8433e9d011",
+      "gold_event": {
+        "t_s": 80,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=CqO714FY4Eo",
+      "window_start_s": 75.0,
+      "window_end_s": 84.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "650d20c745120c8433e9d005__occ5",
+      "index": 5,
+      "match_id": "650d20c745120c8433e9d005",
+      "gold_event": {
+        "t_s": 31,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "half_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BmulmE8MyK4",
+      "window_start_s": 26.0,
+      "window_end_s": 35.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "650d20c745120c8433e9d022__occ6",
+      "index": 6,
+      "match_id": "650d20c745120c8433e9d022",
+      "gold_event": {
+        "t_s": 8307,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "window_start_s": 8302.0,
+      "window_end_s": 8311.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "650d20c745120c8433e9cfd4__occ7",
+      "index": 7,
+      "match_id": "650d20c745120c8433e9cfd4",
+      "gold_event": {
+        "t_s": 491,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=SNe7pQwcShA",
+      "window_start_s": 486.0,
+      "window_end_s": 495.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "65e3a69da2434704339e4460__occ8",
+      "index": 8,
+      "match_id": "65e3a69da2434704339e4460",
+      "gold_event": {
+        "t_s": 333,
+        "action_class": "submission_leg_lock",
+        "outcome": "unsuccessful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=s02rhL-3Fvs",
+      "window_start_s": 328.0,
+      "window_end_s": 337.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "65f648c51dcf397e6900a827__occ9",
+      "index": 9,
+      "match_id": "65f648c51dcf397e6900a827",
+      "gold_event": {
+        "t_s": 241,
+        "action_class": "submission_leg_lock",
+        "outcome": "unsuccessful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=ivJyZEimZIc",
+      "window_start_s": 236.0,
+      "window_end_s": 245.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "6643b593532ae8f232692d70__occ10",
+      "index": 10,
+      "match_id": "6643b593532ae8f232692d70",
+      "gold_event": {
+        "t_s": 2647,
+        "action_class": "submission_leg_lock",
+        "outcome": "unsuccessful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+      "window_start_s": 2642.0,
+      "window_end_s": 2651.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "66a6ff021c62a1db7a5133c0__occ11",
+      "index": 11,
+      "match_id": "66a6ff021c62a1db7a5133c0",
+      "gold_event": {
+        "t_s": 12775,
+        "action_class": "submission_leg_lock",
+        "outcome": "unsuccessful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=pwGbW5GZgfc",
+      "window_start_s": 12770.0,
+      "window_end_s": 12779.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "66d4e7091c7649ed30cbef2b__occ12",
+      "index": 12,
+      "match_id": "66d4e7091c7649ed30cbef2b",
+      "gold_event": {
+        "t_s": 164,
+        "action_class": "submission_leg_lock",
+        "outcome": "unsuccessful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=KVW9yzKPKRg",
+      "window_start_s": 159.0,
+      "window_end_s": 168.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "652c0e04a947037aeb7eb302__occ13",
+      "index": 13,
+      "match_id": "652c0e04a947037aeb7eb302",
+      "gold_event": {
+        "t_s": 319,
+        "action_class": "submission_leg_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=jBLehiPrM0E",
+      "window_start_s": 314.0,
+      "window_end_s": 323.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "65dfb6dba2434704339de920__occ14",
+      "index": 14,
+      "match_id": "65dfb6dba2434704339de920",
+      "gold_event": {
+        "t_s": 2795,
+        "action_class": "submission_leg_lock",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=nDc0L96J6i4",
+      "window_start_s": 2790.0,
+      "window_end_s": 2799.0,
+      "clamp_warning": null
+    },
+    {
+      "window_id": "66941978a7bafe01741514db__occ15",
+      "index": 15,
+      "match_id": "66941978a7bafe01741514db",
+      "gold_event": {
+        "t_s": 4318,
+        "action_class": "submission_leg_lock",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=rfZn0eJcPZ8",
+      "window_start_s": 4313.0,
+      "window_end_s": 4322.0,
+      "clamp_warning": null
+    }
+  ],
+  "gold_snapshot_path": "/Users/stanliu/bjj-proj/whole-video-analysis-wt-vlmstudio/eval/adcc/gold_snapshot/highlight_gold.jsonl",
+  "gold_snapshot_sha256": "3964c4a1aabe709fc8dea5d2c6ef5f6f0e2a15efa0790ebbd4977a631c57d705",
+  "generated_at_utc": "2026-07-26T01:29:24.793891+00:00",
+  "manifest_sha256": "8a1a7b637d0ae9d497dcb3e78af6d11707070741eaf79276dd634718b68e1f91"
+}

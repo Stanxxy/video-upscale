@@ -1,0 +1,1400 @@
+{
+  "gate": "gate1",
+  "label": "smoke",
+  "design_margin_reference": {
+    "hit_delta": 4,
+    "n": 38
+  },
+  "required_margin_core30": 4,
+  "scopes": {
+    "core30": {
+      "n_windows_in_scope": 30,
+      "n_scored_arm_s": 2,
+      "n_scored_arm_t": 2,
+      "excluded_arm_s_call_failed_or_unrun": [
+        "6643b593532ae8f232692d70__w2",
+        "6580c285827346aa0335a86b__w3",
+        "654152332d513512a36b6212__w4",
+        "65dfbed6a2434704339de9a3__w5",
+        "650d20c745120c8433e9d00e__w6",
+        "66138fe05da956d5ef54f21b__w7",
+        "65dbd239a2434704339da0e4__w8",
+        "650d20c745120c8433e9d01f__w9",
+        "6634291e532ae8f23266cafe__w10",
+        "650d20c745120c8433e9d029__w11",
+        "65de3657a2434704339dc36b__w12",
+        "6650bbca532ae8f2326b5de9__w13",
+        "650d20c745120c8433e9d00c__w14",
+        "6640f3e4532ae8f23268fe0f__w15",
+        "650d20c745120c8433e9d018__w16",
+        "650d20c745120c8433e9d059__w17",
+        "650d20c745120c8433e9d00a__w18",
+        "650d20c745120c8433e9d01b__w19",
+        "653715dad9868c25fd158a0b__w20",
+        "65385351b7741492b9769745__w21",
+        "656682dfa4a13c99c4fcdd35__w22",
+        "6666381f4828f704f1b3bead__w23",
+        "652c0e04a947037aeb7eb302__w24",
+        "65db983aa2434704339d99e3__w25",
+        "650d20c745120c8433e9d004__w26",
+        "650d20c745120c8433e9d031__w27",
+        "65dbe62da2434704339da256__w28",
+        "650d20c745120c8433e9d030__w29"
+      ],
+      "excluded_arm_t_call_failed_or_unrun": [
+        "6643b593532ae8f232692d70__w2",
+        "6580c285827346aa0335a86b__w3",
+        "654152332d513512a36b6212__w4",
+        "65dfbed6a2434704339de9a3__w5",
+        "650d20c745120c8433e9d00e__w6",
+        "66138fe05da956d5ef54f21b__w7",
+        "65dbd239a2434704339da0e4__w8",
+        "650d20c745120c8433e9d01f__w9",
+        "6634291e532ae8f23266cafe__w10",
+        "650d20c745120c8433e9d029__w11",
+        "65de3657a2434704339dc36b__w12",
+        "6650bbca532ae8f2326b5de9__w13",
+        "650d20c745120c8433e9d00c__w14",
+        "6640f3e4532ae8f23268fe0f__w15",
+        "650d20c745120c8433e9d018__w16",
+        "650d20c745120c8433e9d059__w17",
+        "650d20c745120c8433e9d00a__w18",
+        "650d20c745120c8433e9d01b__w19",
+        "653715dad9868c25fd158a0b__w20",
+        "65385351b7741492b9769745__w21",
+        "656682dfa4a13c99c4fcdd35__w22",
+        "6666381f4828f704f1b3bead__w23",
+        "652c0e04a947037aeb7eb302__w24",
+        "65db983aa2434704339d99e3__w25",
+        "650d20c745120c8433e9d004__w26",
+        "650d20c745120c8433e9d031__w27",
+        "65dbe62da2434704339da256__w28",
+        "650d20c745120c8433e9d030__w29"
+      ],
+      "hit_s": 0,
+      "hit_t": 0,
+      "hit_delta": 0,
+      "fp_dup_rate_s": 0.0,
+      "fp_dup_rate_t": 0.0,
+      "sign_test": {
+        "n_plus_t_wins": 0,
+        "n_minus_s_wins": 0,
+        "n_ties_excluded": 2,
+        "n_unpaired_excluded": 28,
+        "n_effective": 0,
+        "p_value": null
+      },
+      "summary_arm_s": {
+        "totals": {
+          "tp": 0,
+          "fn": 2,
+          "fp": 2,
+          "gold_count": 2,
+          "pred_count": 2
+        },
+        "event_count_ratio": 1.0,
+        "micro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "macro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "back_take": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          },
+          "NO_MATCH": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          }
+        },
+        "fn_breakdown": {
+          "silent": 0,
+          "misclassified": 2,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 2,
+          "duplicate": 0
+        }
+      },
+      "summary_arm_t": {
+        "totals": {
+          "tp": 0,
+          "fn": 2,
+          "fp": 2,
+          "gold_count": 2,
+          "pred_count": 2
+        },
+        "event_count_ratio": 1.0,
+        "micro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "macro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "back_take": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          },
+          "NO_MATCH": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          }
+        },
+        "fn_breakdown": {
+          "silent": 0,
+          "misclassified": 2,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 2,
+          "duplicate": 0
+        }
+      },
+      "baselines": {
+        "whole_match": {
+          "totals": {
+            "tp": 0,
+            "fn": 2,
+            "fp": 2,
+            "gold_count": 2,
+            "pred_count": 2
+          },
+          "event_count_ratio": 1.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 2,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "back_take": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 2
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 2,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 2,
+            "duplicate": 0
+          }
+        },
+        "uniform_span": {
+          "totals": {
+            "tp": 0,
+            "fn": 2,
+            "fp": 4,
+            "gold_count": 2,
+            "pred_count": 4
+          },
+          "event_count_ratio": 2.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 4,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "back_take": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 4
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 2,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 4,
+            "duplicate": 0
+          }
+        }
+      }
+    },
+    "full38": {
+      "n_windows_in_scope": 38,
+      "n_scored_arm_s": 2,
+      "n_scored_arm_t": 2,
+      "excluded_arm_s_call_failed_or_unrun": [
+        "6643b593532ae8f232692d70__w2",
+        "6580c285827346aa0335a86b__w3",
+        "654152332d513512a36b6212__w4",
+        "65dfbed6a2434704339de9a3__w5",
+        "650d20c745120c8433e9d00e__w6",
+        "66138fe05da956d5ef54f21b__w7",
+        "65dbd239a2434704339da0e4__w8",
+        "650d20c745120c8433e9d01f__w9",
+        "6634291e532ae8f23266cafe__w10",
+        "650d20c745120c8433e9d029__w11",
+        "65de3657a2434704339dc36b__w12",
+        "6650bbca532ae8f2326b5de9__w13",
+        "650d20c745120c8433e9d00c__w14",
+        "6640f3e4532ae8f23268fe0f__w15",
+        "650d20c745120c8433e9d018__w16",
+        "650d20c745120c8433e9d059__w17",
+        "650d20c745120c8433e9d00a__w18",
+        "650d20c745120c8433e9d01b__w19",
+        "653715dad9868c25fd158a0b__w20",
+        "65385351b7741492b9769745__w21",
+        "656682dfa4a13c99c4fcdd35__w22",
+        "6666381f4828f704f1b3bead__w23",
+        "652c0e04a947037aeb7eb302__w24",
+        "65db983aa2434704339d99e3__w25",
+        "650d20c745120c8433e9d004__w26",
+        "650d20c745120c8433e9d031__w27",
+        "65dbe62da2434704339da256__w28",
+        "650d20c745120c8433e9d030__w29",
+        "6470211a3ec8dca9d1a32710__w30",
+        "650d20c745120c8433e9cfe0__w31",
+        "650d20c745120c8433e9cff3__w32",
+        "650d20c745120c8433e9d020__w33",
+        "65de1567a2434704339dbc8c__w34",
+        "65de222ea2434704339dbe9c__w35",
+        "65edf42aa2434704339f7e93__w36",
+        "66b009481c62a1db7a53d504__w37"
+      ],
+      "excluded_arm_t_call_failed_or_unrun": [
+        "6643b593532ae8f232692d70__w2",
+        "6580c285827346aa0335a86b__w3",
+        "654152332d513512a36b6212__w4",
+        "65dfbed6a2434704339de9a3__w5",
+        "650d20c745120c8433e9d00e__w6",
+        "66138fe05da956d5ef54f21b__w7",
+        "65dbd239a2434704339da0e4__w8",
+        "650d20c745120c8433e9d01f__w9",
+        "6634291e532ae8f23266cafe__w10",
+        "650d20c745120c8433e9d029__w11",
+        "65de3657a2434704339dc36b__w12",
+        "6650bbca532ae8f2326b5de9__w13",
+        "650d20c745120c8433e9d00c__w14",
+        "6640f3e4532ae8f23268fe0f__w15",
+        "650d20c745120c8433e9d018__w16",
+        "650d20c745120c8433e9d059__w17",
+        "650d20c745120c8433e9d00a__w18",
+        "650d20c745120c8433e9d01b__w19",
+        "653715dad9868c25fd158a0b__w20",
+        "65385351b7741492b9769745__w21",
+        "656682dfa4a13c99c4fcdd35__w22",
+        "6666381f4828f704f1b3bead__w23",
+        "652c0e04a947037aeb7eb302__w24",
+        "65db983aa2434704339d99e3__w25",
+        "650d20c745120c8433e9d004__w26",
+        "650d20c745120c8433e9d031__w27",
+        "65dbe62da2434704339da256__w28",
+        "650d20c745120c8433e9d030__w29",
+        "6470211a3ec8dca9d1a32710__w30",
+        "650d20c745120c8433e9cfe0__w31",
+        "650d20c745120c8433e9cff3__w32",
+        "650d20c745120c8433e9d020__w33",
+        "65de1567a2434704339dbc8c__w34",
+        "65de222ea2434704339dbe9c__w35",
+        "65edf42aa2434704339f7e93__w36",
+        "66b009481c62a1db7a53d504__w37"
+      ],
+      "hit_s": 0,
+      "hit_t": 0,
+      "hit_delta": 0,
+      "fp_dup_rate_s": 0.0,
+      "fp_dup_rate_t": 0.0,
+      "sign_test": {
+        "n_plus_t_wins": 0,
+        "n_minus_s_wins": 0,
+        "n_ties_excluded": 2,
+        "n_unpaired_excluded": 36,
+        "n_effective": 0,
+        "p_value": null
+      },
+      "summary_arm_s": {
+        "totals": {
+          "tp": 0,
+          "fn": 2,
+          "fp": 2,
+          "gold_count": 2,
+          "pred_count": 2
+        },
+        "event_count_ratio": 1.0,
+        "micro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "macro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "back_take": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          },
+          "NO_MATCH": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          }
+        },
+        "fn_breakdown": {
+          "silent": 0,
+          "misclassified": 2,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 2,
+          "duplicate": 0
+        }
+      },
+      "summary_arm_t": {
+        "totals": {
+          "tp": 0,
+          "fn": 2,
+          "fp": 2,
+          "gold_count": 2,
+          "pred_count": 2
+        },
+        "event_count_ratio": 1.0,
+        "micro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "macro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "back_take": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          },
+          "NO_MATCH": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          }
+        },
+        "fn_breakdown": {
+          "silent": 0,
+          "misclassified": 2,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 2,
+          "duplicate": 0
+        }
+      },
+      "baselines": {
+        "whole_match": {
+          "totals": {
+            "tp": 0,
+            "fn": 2,
+            "fp": 2,
+            "gold_count": 2,
+            "pred_count": 2
+          },
+          "event_count_ratio": 1.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 2,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "back_take": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 2
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 2,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 2,
+            "duplicate": 0
+          }
+        },
+        "uniform_span": {
+          "totals": {
+            "tp": 0,
+            "fn": 2,
+            "fp": 4,
+            "gold_count": 2,
+            "pred_count": 4
+          },
+          "event_count_ratio": 2.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 4,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "back_take": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 4
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 2,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 4,
+            "duplicate": 0
+          }
+        }
+      }
+    },
+    "core30_excl_files_api": {
+      "n_windows_in_scope": 30,
+      "n_scored_arm_s": 2,
+      "n_scored_arm_t": 2,
+      "excluded_arm_s_call_failed_or_unrun": [
+        "6643b593532ae8f232692d70__w2",
+        "6580c285827346aa0335a86b__w3",
+        "654152332d513512a36b6212__w4",
+        "65dfbed6a2434704339de9a3__w5",
+        "650d20c745120c8433e9d00e__w6",
+        "66138fe05da956d5ef54f21b__w7",
+        "65dbd239a2434704339da0e4__w8",
+        "650d20c745120c8433e9d01f__w9",
+        "6634291e532ae8f23266cafe__w10",
+        "650d20c745120c8433e9d029__w11",
+        "65de3657a2434704339dc36b__w12",
+        "6650bbca532ae8f2326b5de9__w13",
+        "650d20c745120c8433e9d00c__w14",
+        "6640f3e4532ae8f23268fe0f__w15",
+        "650d20c745120c8433e9d018__w16",
+        "650d20c745120c8433e9d059__w17",
+        "650d20c745120c8433e9d00a__w18",
+        "650d20c745120c8433e9d01b__w19",
+        "653715dad9868c25fd158a0b__w20",
+        "65385351b7741492b9769745__w21",
+        "656682dfa4a13c99c4fcdd35__w22",
+        "6666381f4828f704f1b3bead__w23",
+        "652c0e04a947037aeb7eb302__w24",
+        "65db983aa2434704339d99e3__w25",
+        "650d20c745120c8433e9d004__w26",
+        "650d20c745120c8433e9d031__w27",
+        "65dbe62da2434704339da256__w28",
+        "650d20c745120c8433e9d030__w29"
+      ],
+      "excluded_arm_t_call_failed_or_unrun": [
+        "6643b593532ae8f232692d70__w2",
+        "6580c285827346aa0335a86b__w3",
+        "654152332d513512a36b6212__w4",
+        "65dfbed6a2434704339de9a3__w5",
+        "650d20c745120c8433e9d00e__w6",
+        "66138fe05da956d5ef54f21b__w7",
+        "65dbd239a2434704339da0e4__w8",
+        "650d20c745120c8433e9d01f__w9",
+        "6634291e532ae8f23266cafe__w10",
+        "650d20c745120c8433e9d029__w11",
+        "65de3657a2434704339dc36b__w12",
+        "6650bbca532ae8f2326b5de9__w13",
+        "650d20c745120c8433e9d00c__w14",
+        "6640f3e4532ae8f23268fe0f__w15",
+        "650d20c745120c8433e9d018__w16",
+        "650d20c745120c8433e9d059__w17",
+        "650d20c745120c8433e9d00a__w18",
+        "650d20c745120c8433e9d01b__w19",
+        "653715dad9868c25fd158a0b__w20",
+        "65385351b7741492b9769745__w21",
+        "656682dfa4a13c99c4fcdd35__w22",
+        "6666381f4828f704f1b3bead__w23",
+        "652c0e04a947037aeb7eb302__w24",
+        "65db983aa2434704339d99e3__w25",
+        "650d20c745120c8433e9d004__w26",
+        "650d20c745120c8433e9d031__w27",
+        "65dbe62da2434704339da256__w28",
+        "650d20c745120c8433e9d030__w29"
+      ],
+      "hit_s": 0,
+      "hit_t": 0,
+      "hit_delta": 0,
+      "fp_dup_rate_s": 0.0,
+      "fp_dup_rate_t": 0.0,
+      "sign_test": {
+        "n_plus_t_wins": 0,
+        "n_minus_s_wins": 0,
+        "n_ties_excluded": 2,
+        "n_unpaired_excluded": 28,
+        "n_effective": 0,
+        "p_value": null
+      },
+      "summary_arm_s": {
+        "totals": {
+          "tp": 0,
+          "fn": 2,
+          "fp": 2,
+          "gold_count": 2,
+          "pred_count": 2
+        },
+        "event_count_ratio": 1.0,
+        "micro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "macro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "back_take": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          },
+          "NO_MATCH": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          }
+        },
+        "fn_breakdown": {
+          "silent": 0,
+          "misclassified": 2,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 2,
+          "duplicate": 0
+        }
+      },
+      "summary_arm_t": {
+        "totals": {
+          "tp": 0,
+          "fn": 2,
+          "fp": 2,
+          "gold_count": 2,
+          "pred_count": 2
+        },
+        "event_count_ratio": 1.0,
+        "micro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "macro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "back_take": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          },
+          "NO_MATCH": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          }
+        },
+        "fn_breakdown": {
+          "silent": 0,
+          "misclassified": 2,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 2,
+          "duplicate": 0
+        }
+      },
+      "baselines": {
+        "whole_match": {
+          "totals": {
+            "tp": 0,
+            "fn": 2,
+            "fp": 2,
+            "gold_count": 2,
+            "pred_count": 2
+          },
+          "event_count_ratio": 1.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 2,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "back_take": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 2
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 2,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 2,
+            "duplicate": 0
+          }
+        },
+        "uniform_span": {
+          "totals": {
+            "tp": 0,
+            "fn": 2,
+            "fp": 4,
+            "gold_count": 2,
+            "pred_count": 4
+          },
+          "event_count_ratio": 2.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 4,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "back_take": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 4
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 2,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 4,
+            "duplicate": 0
+          }
+        }
+      }
+    },
+    "full38_excl_files_api": {
+      "n_windows_in_scope": 38,
+      "n_scored_arm_s": 2,
+      "n_scored_arm_t": 2,
+      "excluded_arm_s_call_failed_or_unrun": [
+        "6643b593532ae8f232692d70__w2",
+        "6580c285827346aa0335a86b__w3",
+        "654152332d513512a36b6212__w4",
+        "65dfbed6a2434704339de9a3__w5",
+        "650d20c745120c8433e9d00e__w6",
+        "66138fe05da956d5ef54f21b__w7",
+        "65dbd239a2434704339da0e4__w8",
+        "650d20c745120c8433e9d01f__w9",
+        "6634291e532ae8f23266cafe__w10",
+        "650d20c745120c8433e9d029__w11",
+        "65de3657a2434704339dc36b__w12",
+        "6650bbca532ae8f2326b5de9__w13",
+        "650d20c745120c8433e9d00c__w14",
+        "6640f3e4532ae8f23268fe0f__w15",
+        "650d20c745120c8433e9d018__w16",
+        "650d20c745120c8433e9d059__w17",
+        "650d20c745120c8433e9d00a__w18",
+        "650d20c745120c8433e9d01b__w19",
+        "653715dad9868c25fd158a0b__w20",
+        "65385351b7741492b9769745__w21",
+        "656682dfa4a13c99c4fcdd35__w22",
+        "6666381f4828f704f1b3bead__w23",
+        "652c0e04a947037aeb7eb302__w24",
+        "65db983aa2434704339d99e3__w25",
+        "650d20c745120c8433e9d004__w26",
+        "650d20c745120c8433e9d031__w27",
+        "65dbe62da2434704339da256__w28",
+        "650d20c745120c8433e9d030__w29",
+        "6470211a3ec8dca9d1a32710__w30",
+        "650d20c745120c8433e9cfe0__w31",
+        "650d20c745120c8433e9cff3__w32",
+        "650d20c745120c8433e9d020__w33",
+        "65de1567a2434704339dbc8c__w34",
+        "65de222ea2434704339dbe9c__w35",
+        "65edf42aa2434704339f7e93__w36",
+        "66b009481c62a1db7a53d504__w37"
+      ],
+      "excluded_arm_t_call_failed_or_unrun": [
+        "6643b593532ae8f232692d70__w2",
+        "6580c285827346aa0335a86b__w3",
+        "654152332d513512a36b6212__w4",
+        "65dfbed6a2434704339de9a3__w5",
+        "650d20c745120c8433e9d00e__w6",
+        "66138fe05da956d5ef54f21b__w7",
+        "65dbd239a2434704339da0e4__w8",
+        "650d20c745120c8433e9d01f__w9",
+        "6634291e532ae8f23266cafe__w10",
+        "650d20c745120c8433e9d029__w11",
+        "65de3657a2434704339dc36b__w12",
+        "6650bbca532ae8f2326b5de9__w13",
+        "650d20c745120c8433e9d00c__w14",
+        "6640f3e4532ae8f23268fe0f__w15",
+        "650d20c745120c8433e9d018__w16",
+        "650d20c745120c8433e9d059__w17",
+        "650d20c745120c8433e9d00a__w18",
+        "650d20c745120c8433e9d01b__w19",
+        "653715dad9868c25fd158a0b__w20",
+        "65385351b7741492b9769745__w21",
+        "656682dfa4a13c99c4fcdd35__w22",
+        "6666381f4828f704f1b3bead__w23",
+        "652c0e04a947037aeb7eb302__w24",
+        "65db983aa2434704339d99e3__w25",
+        "650d20c745120c8433e9d004__w26",
+        "650d20c745120c8433e9d031__w27",
+        "65dbe62da2434704339da256__w28",
+        "650d20c745120c8433e9d030__w29",
+        "6470211a3ec8dca9d1a32710__w30",
+        "650d20c745120c8433e9cfe0__w31",
+        "650d20c745120c8433e9cff3__w32",
+        "650d20c745120c8433e9d020__w33",
+        "65de1567a2434704339dbc8c__w34",
+        "65de222ea2434704339dbe9c__w35",
+        "65edf42aa2434704339f7e93__w36",
+        "66b009481c62a1db7a53d504__w37"
+      ],
+      "hit_s": 0,
+      "hit_t": 0,
+      "hit_delta": 0,
+      "fp_dup_rate_s": 0.0,
+      "fp_dup_rate_t": 0.0,
+      "sign_test": {
+        "n_plus_t_wins": 0,
+        "n_minus_s_wins": 0,
+        "n_ties_excluded": 2,
+        "n_unpaired_excluded": 36,
+        "n_effective": 0,
+        "p_value": null
+      },
+      "summary_arm_s": {
+        "totals": {
+          "tp": 0,
+          "fn": 2,
+          "fp": 2,
+          "gold_count": 2,
+          "pred_count": 2
+        },
+        "event_count_ratio": 1.0,
+        "micro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "macro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "back_take": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          },
+          "NO_MATCH": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          }
+        },
+        "fn_breakdown": {
+          "silent": 0,
+          "misclassified": 2,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 2,
+          "duplicate": 0
+        }
+      },
+      "summary_arm_t": {
+        "totals": {
+          "tp": 0,
+          "fn": 2,
+          "fp": 2,
+          "gold_count": 2,
+          "pred_count": 2
+        },
+        "event_count_ratio": 1.0,
+        "micro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "macro": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": null
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 2,
+            "recall": 0.0,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "back_take": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          },
+          "NO_MATCH": {
+            "submission_arm_lock": 1,
+            "guard_pass": 1
+          }
+        },
+        "fn_breakdown": {
+          "silent": 0,
+          "misclassified": 2,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 2,
+          "duplicate": 0
+        }
+      },
+      "baselines": {
+        "whole_match": {
+          "totals": {
+            "tp": 0,
+            "fn": 2,
+            "fp": 2,
+            "gold_count": 2,
+            "pred_count": 2
+          },
+          "event_count_ratio": 1.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 2,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "back_take": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 2
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 2,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 2,
+            "duplicate": 0
+          }
+        },
+        "uniform_span": {
+          "totals": {
+            "tp": 0,
+            "fn": 2,
+            "fp": 4,
+            "gold_count": 2,
+            "pred_count": 4
+          },
+          "event_count_ratio": 2.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 4,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "back_take": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 4
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 2,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 4,
+            "duplicate": 0
+          }
+        }
+      }
+    }
+  },
+  "own_verdict": "NO_GO",
+  "own_verdict_reasons": [
+    "hit_T-hit_S=0 < required_margin=4 (n=30)"
+  ],
+  "verdict": "NO_GO",
+  "coupling_note": "own_verdict is not PASS \u2014 coupling check does not apply.",
+  "files_api_dual_reporting": {
+    "files_api_window_ids": [],
+    "n_files_api_in_core30": 0,
+    "own_verdict_excl_files_api": "NO_GO",
+    "own_verdict_excl_files_api_reasons": [
+      "hit_T-hit_S=0 < required_margin=4 (n=30)"
+    ],
+    "verdict_flips_on_exclusion": false,
+    "verdict_sensitivity_note": "NO-OP: the core-30 headline contains ZERO files_api-ingested windows (Gate 1's only \u00a7G.1 reroute, w37, is a gate5_straddler \u2014 already outside the core-30 by construction). own_verdict is therefore identical with/without exclusion: 'NO_GO'. Verdict does NOT flip on exclusion (trivially \u2014 there was nothing to exclude)."
+  },
+  "gate5_addendum_data": {
+    "n_straddlers_total": 8,
+    "n_straddlers_scored": 0,
+    "excluded_straddlers": [
+      "6470211a3ec8dca9d1a32710__w30",
+      "650d20c745120c8433e9cfe0__w31",
+      "650d20c745120c8433e9cff3__w32",
+      "650d20c745120c8433e9d020__w33",
+      "65de1567a2434704339dbc8c__w34",
+      "65de222ea2434704339dbe9c__w35",
+      "65edf42aa2434704339f7e93__w36",
+      "66b009481c62a1db7a53d504__w37"
+    ],
+    "straddler_arm_t_hit_rate": null,
+    "n_core_scored": 2,
+    "core_arm_t_hit_rate": 0.0,
+    "gap_pp_core_minus_straddler": null,
+    "flip_threshold_pp": 25.0,
+    "path": "fallback_count_only",
+    "flip_to_no_go": null
+  }
+}

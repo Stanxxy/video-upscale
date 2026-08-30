@@ -1,0 +1,1851 @@
+[
+  {
+    "window_id": "66afe5ab1c62a1db7a53b80b__occ0",
+    "match_id": "66afe5ab1c62a1db7a53b80b",
+    "gold_event": {
+      "t_s": 28325,
+      "action_class": "submission_arm_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=pwGbW5GZgfc",
+    "ingestion_path": "files_api",
+    "window_start_s": 28320.0,
+    "window_end_s": 28329.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player has their legs positioned between them and the top player, using their feet to control distance and grips on the top player's legs, which is characteristic of an open guard.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player has their legs positioned between them and the top player, using their feet to control distance and grips on the top player's legs, which is characteristic of an open guard."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 58,
+          "total_token_count": 6704
+        },
+        "latency_ms": 1133.4,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player attempts an armbar by isolating the top player's arm and swinging their leg over the shoulder, but the top player successfully pulls their arm free and postures up.\"\n}",
+        "parsed": {
+          "action_class": "submission_arm_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player attempts an armbar by isolating the top player's arm and swinging their leg over the shoulder, but the top player successfully pulls their arm free and postures up."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 69,
+          "total_token_count": 6971
+        },
+        "latency_ms": 1316.4,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' because the top player has one leg trapped between the bottom player's legs throughout the initial sequence (0:02-0:05). Furthermore, one could argue the action is a 'transition' rather than a 'submission_arm_lock' because the bottom player is primarily focused on guard retention and leg positioning, with the armbar attempt being secondary and never fully locked in or threatening.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 0:08, the bottom player clearly isolates the top player's left arm with a grip and swings their right leg over the top player's shoulder, establishing the classic armbar configuration before the top player successfully postures out.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' because the top player has one leg trapped between the bottom player's legs throughout the initial sequence (0:02-0:05). Furthermore, one could argue the action is a 'transition' rather than a 'submission_arm_lock' because the bottom player is primarily focused on guard retention and leg positioning, with the armbar attempt being secondary and never fully locked in or threatening.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 0:08, the bottom player clearly isolates the top player's left arm with a grip and swings their right leg over the top player's shoulder, establishing the classic armbar configuration before the top player successfully postures out."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7209,
+          "candidates_token_count": 223,
+          "total_token_count": 7432
+        },
+        "latency_ms": 1609.2,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'closed_guard' because the bottom player's legs are locked around the top player's torso at the start of the clip (00:02.000). Furthermore, one could argue the action is a 'transition' rather than a 'submission_arm_lock' because the bottom player is primarily using the leg configuration to off-balance the opponent and create space, rather than actively isolating and extending the arm for a finish.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 00:08.700, the bottom player clearly transitions to an armbar setup by swinging their leg over the top player's shoulder and isolating the arm, which confirms the submission attempt. The position is correctly identified as open guard because the legs are not locked in a closed guard configuration for the duration of the attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'closed_guard' because the bottom player's legs are locked around the top player's torso at the start of the clip (00:02.000). Furthermore, one could argue the action is a 'transition' rather than a 'submission_arm_lock' because the bottom player is primarily using the leg configuration to off-balance the opponent and create space, rather than actively isolating and extending the arm for a finish.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 00:08.700, the bottom player clearly transitions to an armbar setup by swinging their leg over the top player's shoulder and isolating the arm, which confirms the submission attempt. The position is correctly identified as open guard because the legs are not locked in a closed guard configuration for the duration of the attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25029,
+          "candidates_token_count": 250,
+          "total_token_count": 25279
+        },
+        "latency_ms": 1964.1,
+        "ingestion_path": "files_api"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_arm_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_arm_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_arm_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9cfdb__occ1",
+    "match_id": "650d20c745120c8433e9cfdb",
+    "gold_event": {
+      "t_s": 139,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=Wv4BRC-x1yQ",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 134.0,
+    "window_end_s": 143.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"half_guard\",\n  \"justification\": \"The top player has one of the bottom player's legs trapped between his own legs while working from a passing position.\"\n}",
+        "parsed": {
+          "position": "half_guard",
+          "justification": "The top player has one of the bottom player's legs trapped between his own legs while working from a passing position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 44,
+          "total_token_count": 6690
+        },
+        "latency_ms": 973.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player secures a heel hook on the top player's leg, causing the top player to tap out.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The bottom player secures a heel hook on the top player's leg, causing the top player to tap out."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 55,
+          "total_token_count": 6957
+        },
+        "latency_ms": 816.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player initiates the engagement from a seated position with both legs free before the top player steps in. Additionally, one could argue the action_class is 'transition' rather than 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or stand up, and the submission attempt is secondary or incidental to the scramble that follows.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The top player clearly traps the bottom player's left leg between his own legs at 02:15.200, establishing a clear half-guard configuration. The bottom player then uses this control to transition into a leg entanglement (Ashi Garami) and successfully applies a heel hook, forcing the tap at 02:22.000.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player initiates the engagement from a seated position with both legs free before the top player steps in. Additionally, one could argue the action_class is 'transition' rather than 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or stand up, and the submission attempt is secondary or incidental to the scramble that follows.",
+          "verdict": "agree",
+          "evidence": "The top player clearly traps the bottom player's left leg between his own legs at 02:15.200, establishing a clear half-guard configuration. The bottom player then uses this control to transition into a leg entanglement (Ashi Garami) and successfully applies a heel hook, forcing the tap at 02:22.000."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7181,
+          "candidates_token_count": 196,
+          "total_token_count": 7377
+        },
+        "latency_ms": 1422.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n    \"adversarial_case\": \"One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player is playing a seated guard and initiates the leg entanglement from a distance, rather than being pinned in a half-guard structure. However, the bottom player immediately secures the top player's leg in a classic 'ashi-garami' configuration, which is a form of leg-based guard control. The 'submission_leg_lock' is clearly successful as the top player taps out due to the pressure on his leg.\",\n    \"verdict\": \"agree\",\n    \"final_position\": \"half_guard\",\n    \"final_action_class\": \"submission_leg_lock\",\n    \"final_outcome\": \"successful\",\n    \"wrong_label\": null,\n    \"reason\": null,\n    \"evidence\": \"The bottom player initiates a leg entanglement by grabbing the top player's leg at 02:15.200, transitions into a leg-lock position, and the top player taps out at 02:22.000.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player is playing a seated guard and initiates the leg entanglement from a distance, rather than being pinned in a half-guard structure. However, the bottom player immediately secures the top player's leg in a classic 'ashi-garami' configuration, which is a form of leg-based guard control. The 'submission_leg_lock' is clearly successful as the top player taps out due to the pressure on his leg.",
+          "verdict": "agree",
+          "final_position": "half_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player initiates a leg entanglement by grabbing the top player's leg at 02:15.200, transitions into a leg-lock position, and the top player taps out at 02:22.000."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25001,
+          "candidates_token_count": 241,
+          "total_token_count": 25242
+        },
+        "latency_ms": 2077.4,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "half_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65f7217fc98f78bbaa6af549__occ2",
+    "match_id": "65f7217fc98f78bbaa6af549",
+    "gold_event": {
+      "t_s": 986,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ivJyZEimZIc",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 981.0,
+    "window_end_s": 990.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"standing\",\n  \"justification\": \"The clip begins with both competitors in a standing clinch position, engaging in a takedown attempt.\"\n}",
+        "parsed": {
+          "position": "standing",
+          "justification": "The clip begins with both competitors in a standing clinch position, engaging in a takedown attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 37,
+          "total_token_count": 6683
+        },
+        "latency_ms": 4796.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player secures an armbar by isolating the top player's arm between their legs and extending their hips, forcing the top player to tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_arm_lock",
+          "outcome": "successful",
+          "justification": "The bottom player secures an armbar by isolating the top player's arm between their legs and extending their hips, forcing the top player to tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 62,
+          "total_token_count": 6964
+        },
+        "latency_ms": 1043.1,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'open_guard' rather than 'standing' because the clip begins with the athletes already in a clinch and quickly transitioning to a ground sequence. However, the initial state is clearly standing, and the action is a takedown attempt that results in a submission. The submission is clearly an armbar, not a leg lock, so the original label is correct.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"standing\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The clip begins with both athletes standing and clinching. The bottom athlete initiates a takedown/guard pull sequence that leads directly into an armbar, which is successfully finished when the top athlete taps.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'open_guard' rather than 'standing' because the clip begins with the athletes already in a clinch and quickly transitioning to a ground sequence. However, the initial state is clearly standing, and the action is a takedown attempt that results in a submission. The submission is clearly an armbar, not a leg lock, so the original label is correct.",
+          "verdict": "agree",
+          "final_position": "standing",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The clip begins with both athletes standing and clinching. The bottom athlete initiates a takedown/guard pull sequence that leads directly into an armbar, which is successfully finished when the top athlete taps."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7181,
+          "candidates_token_count": 197,
+          "total_token_count": 7378
+        },
+        "latency_ms": 1554.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'open_guard' because the clip begins with the athletes already in a clinch that leads directly to a flying armbar attempt, which is a transition from standing to the ground. However, the initial state is clearly standing as they are upright and engaging in a clinch before the jump. The technique is clearly an armbar, and the outcome is successful as the top player taps and the bottom player releases the hold.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"standing\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The clip starts with both athletes standing upright in a clinch (16:21.000). The bottom player then jumps into a flying armbar (16:24.000), which results in the top player tapping out (16:27.000).\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'open_guard' because the clip begins with the athletes already in a clinch that leads directly to a flying armbar attempt, which is a transition from standing to the ground. However, the initial state is clearly standing as they are upright and engaging in a clinch before the jump. The technique is clearly an armbar, and the outcome is successful as the top player taps and the bottom player releases the hold.",
+          "verdict": "agree",
+          "final_position": "standing",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The clip starts with both athletes standing upright in a clinch (16:21.000). The bottom player then jumps into a flying armbar (16:24.000), which results in the top player tapping out (16:27.000)."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25001,
+          "candidates_token_count": 230,
+          "total_token_count": 25231
+        },
+        "latency_ms": 5942.9,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "standing",
+    "technique_label": "submission_arm_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_arm_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_arm_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65dbe62da2434704339da256__occ3",
+    "match_id": "65dbe62da2434704339da256",
+    "gold_event": {
+      "t_s": 1250,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 1245.0,
+    "window_end_s": 1254.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player is lying on their back with their legs extended and active against the top player, which is a classic open guard configuration.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player is lying on their back with their legs extended and active against the top player, which is a classic open guard configuration."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 48,
+          "total_token_count": 6694
+        },
+        "latency_ms": 6553.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"sweep\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player uses a butterfly hook to elevate the top player and roll them over, successfully reversing the position.\"\n}",
+        "parsed": {
+          "action_class": "sweep",
+          "outcome": "successful",
+          "justification": "The bottom player uses a butterfly hook to elevate the top player and roll them over, successfully reversing the position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 50,
+          "total_token_count": 6952
+        },
+        "latency_ms": 941.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has a clear knee shield and is actively engaging with the top player's leg, which is a hallmark of half guard. Furthermore, one could argue the action is a 'transition' rather than a 'sweep' because the bottom player does not fully reverse the top player to a dominant top position; instead, they simply use the butterfly hook to create space and reset the engagement, with the top player remaining in a neutral or slightly superior position throughout.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player is clearly in an open guard configuration with their legs extended and active against the top player's torso/hips. The butterfly hook is clearly visible at 20:51.400, and the subsequent elevation and rotation of the top player's body at 20:51.600 constitutes a successful sweep as the bottom player gains the top position.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has a clear knee shield and is actively engaging with the top player's leg, which is a hallmark of half guard. Furthermore, one could argue the action is a 'transition' rather than a 'sweep' because the bottom player does not fully reverse the top player to a dominant top position; instead, they simply use the butterfly hook to create space and reset the engagement, with the top player remaining in a neutral or slightly superior position throughout.",
+          "verdict": "agree",
+          "evidence": "The bottom player is clearly in an open guard configuration with their legs extended and active against the top player's torso/hips. The butterfly hook is clearly visible at 20:51.400, and the subsequent elevation and rotation of the top player's body at 20:51.600 constitutes a successful sweep as the bottom player gains the top position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7179,
+          "candidates_token_count": 220,
+          "total_token_count": 7399
+        },
+        "latency_ms": 1628.0,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The position is not 'open_guard' because the bottom player is in a seated, turtle-like defensive posture initially, and the action is not a 'sweep' because the top player is already in a dominant position (side control/north-south) and the bottom player is merely attempting to recover guard or escape, not reversing the position to a top-dominant one. The movement is a scramble/transition.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"transition\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The action is a failed guard recovery/scramble, not a successful sweep. The bottom player never achieves a dominant top position; they remain on their back or in a defensive posture while the top player maintains control.\",\n  \"evidence\": \"At 20:51.500, the bottom player attempts to elevate their hips to recover guard, but the top player maintains heavy pressure and control, preventing the reversal. The bottom player ends up in a defensive guard position, not a swept position.\"\n}",
+        "parsed": {
+          "adversarial_case": "The position is not 'open_guard' because the bottom player is in a seated, turtle-like defensive posture initially, and the action is not a 'sweep' because the top player is already in a dominant position (side control/north-south) and the bottom player is merely attempting to recover guard or escape, not reversing the position to a top-dominant one. The movement is a scramble/transition.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "transition",
+          "final_outcome": "unsuccessful",
+          "wrong_label": "action_class",
+          "reason": "The action is a failed guard recovery/scramble, not a successful sweep. The bottom player never achieves a dominant top position; they remain on their back or in a defensive posture while the top player maintains control.",
+          "evidence": "At 20:51.500, the bottom player attempts to elevate their hips to recover guard, but the top player maintains heavy pressure and control, preventing the reversal. The bottom player ends up in a defensive guard position, not a swept position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 24999,
+          "candidates_token_count": 262,
+          "total_token_count": 25261
+        },
+        "latency_ms": 8154.5,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "sweep",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "sweep",
+    "val_high_verdict": "disagree",
+    "val_high_final_class": "transition",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d011__occ4",
+    "match_id": "650d20c745120c8433e9d011",
+    "gold_event": {
+      "t_s": 80,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=CqO714FY4Eo",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 75.0,
+    "window_end_s": 84.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player has their legs wrapped around the top player's torso and legs without them being locked in a closed guard or having one leg trapped in a half guard.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player has their legs wrapped around the top player's torso and legs without them being locked in a closed guard or having one leg trapped in a half guard."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 54,
+          "total_token_count": 6700
+        },
+        "latency_ms": 4910.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player is applying a heel hook grip on the top player's leg, but the top player successfully clears their leg from the entanglement and escapes the position.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player is applying a heel hook grip on the top player's leg, but the top player successfully clears their leg from the entanglement and escapes the position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 66,
+          "total_token_count": 6968
+        },
+        "latency_ms": 943.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between their own legs, specifically controlling the top player's right leg in a way that restricts movement similar to a half-guard configuration. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or stand up rather than actively seeking a finish on the heel or ankle.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player clearly establishes a leg entanglement (specifically an ashi garami variation) and applies a heel hook grip on the top player's leg, which is a clear submission attempt. The top player's subsequent movement to clear their leg and disengage confirms the 'unsuccessful' outcome of the submission attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between their own legs, specifically controlling the top player's right leg in a way that restricts movement similar to a half-guard configuration. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or stand up rather than actively seeking a finish on the heel or ankle.",
+          "verdict": "agree",
+          "evidence": "The bottom player clearly establishes a leg entanglement (specifically an ashi garami variation) and applies a heel hook grip on the top player's leg, which is a clear submission attempt. The top player's subsequent movement to clear their leg and disengage confirms the 'unsuccessful' outcome of the submission attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7202,
+          "candidates_token_count": 198,
+          "total_token_count": 7400
+        },
+        "latency_ms": 1584.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n    \"adversarial_case\": \"One could argue the position is 'half_guard' because the bottom player's leg is clearly entangled with the top player's leg throughout the sequence, specifically using a leg-entanglement configuration (like a single-leg X or similar) rather than a generic open guard. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or off-balance the opponent rather than actively hunting for a finish, as the grips are focused on controlling the leg for stability rather than applying torque to the heel.\",\n    \"verdict\": \"agree\",\n    \"final_position\": \"open_guard\",\n    \"final_action_class\": \"submission_leg_lock\",\n    \"final_outcome\": \"unsuccessful\",\n    \"wrong_label\": null,\n    \"reason\": null,\n    \"evidence\": \"The bottom player is clearly attacking the top player's leg with a heel hook grip (interlocked hands on the heel/foot) at 01:18.800, which confirms the submission_leg_lock classification. The position is correctly identified as open_guard because the legs are not locked in a closed guard and the specific leg-entanglement, while present, functions as an open guard variation in this context.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' because the bottom player's leg is clearly entangled with the top player's leg throughout the sequence, specifically using a leg-entanglement configuration (like a single-leg X or similar) rather than a generic open guard. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or off-balance the opponent rather than actively hunting for a finish, as the grips are focused on controlling the leg for stability rather than applying torque to the heel.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player is clearly attacking the top player's leg with a heel hook grip (interlocked hands on the heel/foot) at 01:18.800, which confirms the submission_leg_lock classification. The position is correctly identified as open_guard because the legs are not locked in a closed guard and the specific leg-entanglement, while present, functions as an open guard variation in this context."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25022,
+          "candidates_token_count": 298,
+          "total_token_count": 25320
+        },
+        "latency_ms": 6044.1,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d005__occ5",
+    "match_id": "650d20c745120c8433e9d005",
+    "gold_event": {
+      "t_s": 31,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BmulmE8MyK4",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 26.0,
+    "window_end_s": 35.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"half_guard\",\n  \"justification\": \"The bottom player has one of the top player's legs trapped between their own legs while the top player is attempting to pass.\"\n}",
+        "parsed": {
+          "position": "half_guard",
+          "justification": "The bottom player has one of the top player's legs trapped between their own legs while the top player is attempting to pass."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 46,
+          "total_token_count": 6692
+        },
+        "latency_ms": 4434.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player secures a leg entanglement and applies pressure to the top player's leg, resulting in a tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The bottom player secures a leg entanglement and applies pressure to the top player's leg, resulting in a tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 55,
+          "total_token_count": 6957
+        },
+        "latency_ms": 874.6,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player's legs are not actively trapping the top player's leg in a traditional half-guard configuration; rather, they are using a leg entanglement (specifically a saddle/inside-senkaku variation) to isolate the limb. However, the 'half_guard' label is functionally accurate as the bottom player maintains a leg-to-leg connection that prevents the top player from passing and facilitates the leg lock. The action_class 'submission_leg_lock' is clearly correct as the bottom player is attacking the leg, and the outcome 'successful' is confirmed by the top player tapping.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"half_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom player has the top player's leg isolated in an inside-senkaku (saddle) position, applying pressure that forces the top player to tap at 00:34.000.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player's legs are not actively trapping the top player's leg in a traditional half-guard configuration; rather, they are using a leg entanglement (specifically a saddle/inside-senkaku variation) to isolate the limb. However, the 'half_guard' label is functionally accurate as the bottom player maintains a leg-to-leg connection that prevents the top player from passing and facilitates the leg lock. The action_class 'submission_leg_lock' is clearly correct as the bottom player is attacking the leg, and the outcome 'successful' is confirmed by the top player tapping.",
+          "verdict": "agree",
+          "final_position": "half_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player has the top player's leg isolated in an inside-senkaku (saddle) position, applying pressure that forces the top player to tap at 00:34.000."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7183,
+          "candidates_token_count": 268,
+          "total_token_count": 7451
+        },
+        "latency_ms": 1739.6,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player's legs are not actively trapping the top player's leg in a traditional half-guard configuration; rather, they are in a leg entanglement (specifically a saddle/inside-senkaku position) which is a distinct open guard variation. However, the 'half_guard' label is functionally accurate in many taxonomies as it involves the entanglement of one leg. The submission is clearly a leg lock, and the tap is unambiguous.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"half_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom player has the top player's leg trapped in a saddle/inside-senkaku entanglement, and the top player taps out at 00:34.000, confirming the successful submission.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player's legs are not actively trapping the top player's leg in a traditional half-guard configuration; rather, they are in a leg entanglement (specifically a saddle/inside-senkaku position) which is a distinct open guard variation. However, the 'half_guard' label is functionally accurate in many taxonomies as it involves the entanglement of one leg. The submission is clearly a leg lock, and the tap is unambiguous.",
+          "verdict": "agree",
+          "final_position": "half_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player has the top player's leg trapped in a saddle/inside-senkaku entanglement, and the top player taps out at 00:34.000, confirming the successful submission."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25003,
+          "candidates_token_count": 236,
+          "total_token_count": 25239
+        },
+        "latency_ms": 5099.9,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "half_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d022__occ6",
+    "match_id": "650d20c745120c8433e9d022",
+    "gold_event": {
+      "t_s": 8307,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 8302.0,
+    "window_end_s": 8311.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"closed_guard\",\n  \"justification\": \"The bottom player has their legs locked around the top player's torso with ankles crossed.\"\n}",
+        "parsed": {
+          "position": "closed_guard",
+          "justification": "The bottom player has their legs locked around the top player's torso with ankles crossed."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 38,
+          "total_token_count": 6684
+        },
+        "latency_ms": 36025.1,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player attempts a leg lock by isolating the top player's leg and extending their hips, but the top player successfully clears their leg and escapes the position.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player attempts a leg lock by isolating the top player's leg and extending their hips, but the top player successfully clears their leg and escapes the position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 66,
+          "total_token_count": 6968
+        },
+        "latency_ms": 975.9,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n    \"adversarial_case\": \"One could argue the position is 'open_guard' rather than 'closed_guard' because the bottom player's ankles are not locked around the top player's torso for the duration of the clip; the legs are actively manipulating the top player's leg for a leg lock entry. Furthermore, one could argue the action_class is 'transition' rather than 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or stand up, rather than applying a finishing submission pressure.\",\n    \"verdict\": \"agree\",\n    \"final_position\": \"closed_guard\",\n    \"final_action_class\": \"submission_leg_lock\",\n    \"final_outcome\": \"unsuccessful\",\n    \"wrong_label\": null,\n    \"reason\": null,\n    \"evidence\": \"The bottom player clearly initiates the sequence with legs locked around the top player's torso (closed guard) and transitions into a leg entanglement (specifically an ashi-garami variation) to attack the leg, which fits the definition of a leg lock attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'open_guard' rather than 'closed_guard' because the bottom player's ankles are not locked around the top player's torso for the duration of the clip; the legs are actively manipulating the top player's leg for a leg lock entry. Furthermore, one could argue the action_class is 'transition' rather than 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or stand up, rather than applying a finishing submission pressure.",
+          "verdict": "agree",
+          "final_position": "closed_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player clearly initiates the sequence with legs locked around the top player's torso (closed guard) and transitions into a leg entanglement (specifically an ashi-garami variation) to attack the leg, which fits the definition of a leg lock attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7186,
+          "candidates_token_count": 239,
+          "total_token_count": 7425
+        },
+        "latency_ms": 1431.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The position is not closed_guard because the bottom player's legs are not locked around the top player's torso; instead, the bottom player is in an open_guard configuration, specifically utilizing a butterfly hook and then transitioning into a leg entanglement (Ashi Garami). The action_class is not a leg lock attempt because the bottom player is actually executing a sweep (specifically a butterfly sweep) to reverse the position, not attacking the leg for a submission.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"sweep\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The bottom player is performing a sweep from open guard, not a leg lock. The legs are used to elevate the opponent's center of gravity to reverse the position, which is a successful sweep.\",\n  \"evidence\": \"At 138:28.100, the bottom player elevates the top player using their legs and hips to initiate a sweep, resulting in the top player being turned over and the bottom player gaining the top position by 138:29.000.\"\n}",
+        "parsed": {
+          "adversarial_case": "The position is not closed_guard because the bottom player's legs are not locked around the top player's torso; instead, the bottom player is in an open_guard configuration, specifically utilizing a butterfly hook and then transitioning into a leg entanglement (Ashi Garami). The action_class is not a leg lock attempt because the bottom player is actually executing a sweep (specifically a butterfly sweep) to reverse the position, not attacking the leg for a submission.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "sweep",
+          "final_outcome": "successful",
+          "wrong_label": "action_class",
+          "reason": "The bottom player is performing a sweep from open guard, not a leg lock. The legs are used to elevate the opponent's center of gravity to reverse the position, which is a successful sweep.",
+          "evidence": "At 138:28.100, the bottom player elevates the top player using their legs and hips to initiate a sweep, resulting in the top player being turned over and the bottom player gaining the top position by 138:29.000."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25006,
+          "candidates_token_count": 273,
+          "total_token_count": 25279
+        },
+        "latency_ms": 12243.0,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "closed_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "disagree",
+    "val_high_final_class": "sweep",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9cfd4__occ7",
+    "match_id": "650d20c745120c8433e9cfd4",
+    "gold_event": {
+      "t_s": 491,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=SNe7pQwcShA",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 486.0,
+    "window_end_s": 495.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player is lying on their back with their legs actively engaged and controlling the top player's posture and movement, which is characteristic of an open guard.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player is lying on their back with their legs actively engaged and controlling the top player's posture and movement, which is characteristic of an open guard."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 52,
+          "total_token_count": 6698
+        },
+        "latency_ms": 5920.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player attacks the top player's leg with a heel hook attempt, but the top player successfully clears their leg and escapes the position.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player attacks the top player's leg with a heel hook attempt, but the top player successfully clears their leg and escapes the position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 62,
+          "total_token_count": 6964
+        },
+        "latency_ms": 932.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the top player's leg is trapped between the bottom player's legs for a significant portion of the sequence (e.g., 08:08.000 to 08:10.000). Regarding the action, one could argue this is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily using the leg entanglement to sweep or stand up, rather than applying a finishing mechanic to the joint.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player is clearly in an open guard configuration at the start, and the sequence shows a deliberate, aggressive attempt to isolate and attack the leg (heel hook/leg lock entry) which is a distinct submission attempt, even if unsuccessful.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the top player's leg is trapped between the bottom player's legs for a significant portion of the sequence (e.g., 08:08.000 to 08:10.000). Regarding the action, one could argue this is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily using the leg entanglement to sweep or stand up, rather than applying a finishing mechanic to the joint.",
+          "verdict": "agree",
+          "evidence": "The bottom player is clearly in an open guard configuration at the start, and the sequence shows a deliberate, aggressive attempt to isolate and attack the leg (heel hook/leg lock entry) which is a distinct submission attempt, even if unsuccessful."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7196,
+          "candidates_token_count": 195,
+          "total_token_count": 7391
+        },
+        "latency_ms": 1505.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between their own legs, which is a hallmark of half-guard, specifically a deep half or butterfly half variation. Regarding the action, one could argue it is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily using the leg entanglement to sweep or stand up rather than applying a finishing mechanic like a heel hook or straight ankle lock. However, the leg entanglement is clearly an offensive leg-lock configuration (saddle/inside sankaku), and the bottom player is actively hunting for the heel hook, making the original labels accurate.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player secures an inside sankaku (saddle) position on the top player's leg at 08:10.000 and immediately begins attacking the heel, confirming both the open_guard (as the starting point of the engagement) and the submission_leg_lock classification.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between their own legs, which is a hallmark of half-guard, specifically a deep half or butterfly half variation. Regarding the action, one could argue it is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily using the leg entanglement to sweep or stand up rather than applying a finishing mechanic like a heel hook or straight ankle lock. However, the leg entanglement is clearly an offensive leg-lock configuration (saddle/inside sankaku), and the bottom player is actively hunting for the heel hook, making the original labels accurate.",
+          "verdict": "agree",
+          "evidence": "The bottom player secures an inside sankaku (saddle) position on the top player's leg at 08:10.000 and immediately begins attacking the heel, confirming both the open_guard (as the starting point of the engagement) and the submission_leg_lock classification."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25016,
+          "candidates_token_count": 232,
+          "total_token_count": 25248
+        },
+        "latency_ms": 5953.2,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65e3a69da2434704339e4460__occ8",
+    "match_id": "65e3a69da2434704339e4460",
+    "gold_event": {
+      "t_s": 333,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=s02rhL-3Fvs",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 328.0,
+    "window_end_s": 337.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player has their legs wrapped around the top player's hips and legs without their ankles crossed, which is characteristic of an open guard configuration.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player has their legs wrapped around the top player's hips and legs without their ankles crossed, which is characteristic of an open guard configuration."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 50,
+          "total_token_count": 6696
+        },
+        "latency_ms": 8188.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player is applying an armbar by isolating the top player's arm between their legs and extending their hips, but the top player successfully defends by pulling their arm free.\"\n}",
+        "parsed": {
+          "action_class": "submission_arm_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player is applying an armbar by isolating the top player's arm between their legs and extending their hips, but the top player successfully defends by pulling their arm free."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 69,
+          "total_token_count": 6971
+        },
+        "latency_ms": 1026.9,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The position could be argued as 'closed_guard' because the bottom player's legs are locked around the top player's torso/hips for a significant portion of the clip, which is a defining characteristic of closed guard. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_arm_lock' because the bottom player is primarily using the leg configuration to control posture and initiate a sweep or transition, rather than focusing on the arm isolation as a primary submission threat.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player clearly isolates the top player's arm between their legs and applies pressure to the joint, which is a textbook armbar attempt. The position is 'open_guard' because the ankles are not crossed behind the top player's back, which is the technical requirement for closed guard.\"\n}",
+        "parsed": {
+          "adversarial_case": "The position could be argued as 'closed_guard' because the bottom player's legs are locked around the top player's torso/hips for a significant portion of the clip, which is a defining characteristic of closed guard. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_arm_lock' because the bottom player is primarily using the leg configuration to control posture and initiate a sweep or transition, rather than focusing on the arm isolation as a primary submission threat.",
+          "verdict": "agree",
+          "evidence": "The bottom player clearly isolates the top player's arm between their legs and applies pressure to the joint, which is a textbook armbar attempt. The position is 'open_guard' because the ankles are not crossed behind the top player's back, which is the technical requirement for closed guard."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7201,
+          "candidates_token_count": 191,
+          "total_token_count": 7392
+        },
+        "latency_ms": 1679.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player's leg is clearly hooked over the top player's thigh, restricting movement in a way characteristic of half guard. Furthermore, one could argue the action is a 'transition' rather than a 'submission_arm_lock' because the bottom player is primarily focused on maintaining control and sweeping rather than fully extending the arm for a finish.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player has their legs around the top player's hips without crossing their ankles, which is the definition of open guard. The bottom player then isolates the top player's arm and attempts to extend it, which is the definition of an armbar attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player's leg is clearly hooked over the top player's thigh, restricting movement in a way characteristic of half guard. Furthermore, one could argue the action is a 'transition' rather than a 'submission_arm_lock' because the bottom player is primarily focused on maintaining control and sweeping rather than fully extending the arm for a finish.",
+          "verdict": "agree",
+          "evidence": "The bottom player has their legs around the top player's hips without crossing their ankles, which is the definition of open guard. The bottom player then isolates the top player's arm and attempts to extend it, which is the definition of an armbar attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25021,
+          "candidates_token_count": 170,
+          "total_token_count": 25191
+        },
+        "latency_ms": 7663.3,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_arm_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_arm_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_arm_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65f648c51dcf397e6900a827__occ9",
+    "match_id": "65f648c51dcf397e6900a827",
+    "gold_event": {
+      "t_s": 241,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ivJyZEimZIc",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 236.0,
+    "window_end_s": 245.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player is maintaining a guard with their legs positioned between them and the top player, without locking their ankles or trapping a leg.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player is maintaining a guard with their legs positioned between them and the top player, without locking their ankles or trapping a leg."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 48,
+          "total_token_count": 6694
+        },
+        "latency_ms": 9605.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player initiates a leg entanglement and attempts to isolate the top player's leg, but the top player successfully clears their leg from the entanglement to escape the threat.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player initiates a leg entanglement and attempts to isolate the top player's leg, but the top player successfully clears their leg from the entanglement to escape the threat."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 67,
+          "total_token_count": 6969
+        },
+        "latency_ms": 1216.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one of their legs trapped between the top player's legs for a significant portion of the clip (e.g., 03:57-04:02). Furthermore, one could argue the action is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily focused on maintaining control and adjusting their guard rather than actively applying a submission hold on the leg.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player maintains an open guard throughout the clip, using their legs to frame and control the distance. At 04:03, the bottom player initiates a clear leg entanglement (specifically a leg-lock entry) which the top player defends by clearing their leg, confirming the 'submission_leg_lock' and 'unsuccessful' outcome labels.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one of their legs trapped between the top player's legs for a significant portion of the clip (e.g., 03:57-04:02). Furthermore, one could argue the action is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily focused on maintaining control and adjusting their guard rather than actively applying a submission hold on the leg.",
+          "verdict": "agree",
+          "evidence": "The bottom player maintains an open guard throughout the clip, using their legs to frame and control the distance. At 04:03, the bottom player initiates a clear leg entanglement (specifically a leg-lock entry) which the top player defends by clearing their leg, confirming the 'submission_leg_lock' and 'unsuccessful' outcome labels."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7196,
+          "candidates_token_count": 208,
+          "total_token_count": 7404
+        },
+        "latency_ms": 1593.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' because the bottom player has one of their legs trapped between the top player's legs, which is a defining characteristic of half guard, rather than a purely open guard. Regarding the action_class, one could argue this is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily focused on controlling the top player's posture and leg to prevent a pass, rather than actively applying a finishing mechanic like a heel hook or straight ankle lock.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom player clearly initiates a leg entanglement (specifically a variation of a leg-lock entry) by wrapping their legs around the top player's leg at 03:57.000, and the top player subsequently clears their leg from this entanglement by 04:04.000, confirming the unsuccessful submission attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' because the bottom player has one of their legs trapped between the top player's legs, which is a defining characteristic of half guard, rather than a purely open guard. Regarding the action_class, one could argue this is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily focused on controlling the top player's posture and leg to prevent a pass, rather than actively applying a finishing mechanic like a heel hook or straight ankle lock.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player clearly initiates a leg entanglement (specifically a variation of a leg-lock entry) by wrapping their legs around the top player's leg at 03:57.000, and the top player subsequently clears their leg from this entanglement by 04:04.000, confirming the unsuccessful submission attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25016,
+          "candidates_token_count": 263,
+          "total_token_count": 25279
+        },
+        "latency_ms": 5635.8,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "6643b593532ae8f232692d70__occ10",
+    "match_id": "6643b593532ae8f232692d70",
+    "gold_event": {
+      "t_s": 2647,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 2642.0,
+    "window_end_s": 2651.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player is lying on their back with their legs actively controlling the top player's legs and hips, which is characteristic of an open guard position.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player is lying on their back with their legs actively controlling the top player's legs and hips, which is characteristic of an open guard position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 51,
+          "total_token_count": 6697
+        },
+        "latency_ms": 5000.6,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player is attacking the top player's leg with a heel hook grip, but the top player successfully clears the leg and escapes the entanglement.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player is attacking the top player's leg with a heel hook grip, but the top player successfully clears the leg and escapes the entanglement."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 63,
+          "total_token_count": 6965
+        },
+        "latency_ms": 919.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' because the top player's leg is trapped between the bottom player's legs, which is a defining characteristic of half guard. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to maintain control and prevent the pass, rather than actively applying a finishing submission hold.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player has a clear leg entanglement (specifically a single-leg X or similar variation) and is actively manipulating the top player's leg to prevent a pass and threaten a leg lock, which confirms both the 'open_guard' position and the 'submission_leg_lock' attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' because the top player's leg is trapped between the bottom player's legs, which is a defining characteristic of half guard. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to maintain control and prevent the pass, rather than actively applying a finishing submission hold.",
+          "verdict": "agree",
+          "evidence": "The bottom player has a clear leg entanglement (specifically a single-leg X or similar variation) and is actively manipulating the top player's leg to prevent a pass and threaten a leg lock, which confirms both the 'open_guard' position and the 'submission_leg_lock' attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7196,
+          "candidates_token_count": 176,
+          "total_token_count": 7372
+        },
+        "latency_ms": 1326.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n    \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between their own legs, which is a hallmark of half-guard or deep-half-guard variations. Regarding the action, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to off-balance the top player and stand up, rather than applying a finishing torque to the joint.\",\n    \"verdict\": \"agree\",\n    \"final_position\": \"open_guard\",\n    \"final_action_class\": \"submission_leg_lock\",\n    \"final_outcome\": \"unsuccessful\",\n    \"wrong_label\": null,\n    \"reason\": null,\n    \"evidence\": \"The bottom player has a clear 'outside ashi' or 'single leg x' style entanglement on the top player's leg, and they are actively using their arms to control the heel/foot area, which constitutes a leg lock attempt. The top player is actively pushing the bottom player's knee to clear the entanglement, confirming the 'unsuccessful' outcome.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between their own legs, which is a hallmark of half-guard or deep-half-guard variations. Regarding the action, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to off-balance the top player and stand up, rather than applying a finishing torque to the joint.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player has a clear 'outside ashi' or 'single leg x' style entanglement on the top player's leg, and they are actively using their arms to control the heel/foot area, which constitutes a leg lock attempt. The top player is actively pushing the bottom player's knee to clear the entanglement, confirming the 'unsuccessful' outcome."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25016,
+          "candidates_token_count": 257,
+          "total_token_count": 25273
+        },
+        "latency_ms": 4784.2,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "66a6ff021c62a1db7a5133c0__occ11",
+    "match_id": "66a6ff021c62a1db7a5133c0",
+    "gold_event": {
+      "t_s": 12775,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=pwGbW5GZgfc",
+    "ingestion_path": "files_api",
+    "window_start_s": 12770.0,
+    "window_end_s": 12779.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"half_guard\",\n  \"justification\": \"The top player has one of the bottom player's legs trapped between their own legs while the bottom player is on their back.\"\n}",
+        "parsed": {
+          "position": "half_guard",
+          "justification": "The top player has one of the bottom player's legs trapped between their own legs while the bottom player is on their back."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 46,
+          "total_token_count": 6692
+        },
+        "latency_ms": 3824.0,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player attempts a leg lock by securing a grip on the top player's foot and leg, but the top player successfully extracts their leg and escapes the position.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player attempts a leg lock by securing a grip on the top player's foot and leg, but the top player successfully extracts their leg and escapes the position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 67,
+          "total_token_count": 6969
+        },
+        "latency_ms": 1010.3,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player's legs are not actively locking or controlling the top player's thigh in a traditional half-guard configuration; they are more focused on leg entanglement. However, the top player's leg is clearly trapped between the bottom player's legs, which satisfies the definition of half-guard. The action is clearly a leg lock attempt, and the outcome is unsuccessful as the top player clears the entanglement.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"half_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 00:06.500, the bottom player has the top player's right leg trapped between their own legs, and at 00:09.500, the bottom player is actively gripping the top player's foot/ankle in an attempt to secure a leg lock, which the top player then clears by 00:10.500.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'open_guard' rather than 'half_guard' because the bottom player's legs are not actively locking or controlling the top player's thigh in a traditional half-guard configuration; they are more focused on leg entanglement. However, the top player's leg is clearly trapped between the bottom player's legs, which satisfies the definition of half-guard. The action is clearly a leg lock attempt, and the outcome is unsuccessful as the top player clears the entanglement.",
+          "verdict": "agree",
+          "final_position": "half_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 00:06.500, the bottom player has the top player's right leg trapped between their own legs, and at 00:09.500, the bottom player is actively gripping the top player's foot/ankle in an attempt to secure a leg lock, which the top player then clears by 00:10.500."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7195,
+          "candidates_token_count": 268,
+          "total_token_count": 7463
+        },
+        "latency_ms": 1684.8,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position is 'open_guard' rather than 'half_guard' because the bottom player's legs are not actively trapping the top player's leg in a traditional half-guard configuration; the top player is essentially kneeling between the bottom player's legs. Furthermore, one could argue the action is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily focused on controlling the leg to prevent a pass or to set up a sweep, rather than applying a specific joint lock mechanism.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"half_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 00:02.000, the top player has their right leg trapped between the bottom player's legs, which is the definition of half-guard. Throughout the clip, the bottom player maintains a grip on the top player's foot and ankle (00:09.500), which constitutes a leg lock attempt, and the top player successfully clears their leg by 00:10.800, confirming the unsuccessful outcome.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position is 'open_guard' rather than 'half_guard' because the bottom player's legs are not actively trapping the top player's leg in a traditional half-guard configuration; the top player is essentially kneeling between the bottom player's legs. Furthermore, one could argue the action is a 'transition' rather than a 'submission_leg_lock' attempt, as the bottom player is primarily focused on controlling the leg to prevent a pass or to set up a sweep, rather than applying a specific joint lock mechanism.",
+          "verdict": "agree",
+          "final_position": "half_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 00:02.000, the top player has their right leg trapped between the bottom player's legs, which is the definition of half-guard. Throughout the clip, the bottom player maintains a grip on the top player's foot and ankle (00:09.500), which constitutes a leg lock attempt, and the top player successfully clears their leg by 00:10.800, confirming the unsuccessful outcome."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25015,
+          "candidates_token_count": 294,
+          "total_token_count": 25309
+        },
+        "latency_ms": 5049.5,
+        "ingestion_path": "files_api"
+      }
+    ],
+    "position_label": "half_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "66d4e7091c7649ed30cbef2b__occ12",
+    "match_id": "66d4e7091c7649ed30cbef2b",
+    "gold_event": {
+      "t_s": 164,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KVW9yzKPKRg",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 159.0,
+    "window_end_s": 168.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"closed_guard\",\n  \"justification\": \"The bottom player has their legs wrapped around the top player's torso with their ankles crossed and locked.\"\n}",
+        "parsed": {
+          "position": "closed_guard",
+          "justification": "The bottom player has their legs wrapped around the top player's torso with their ankles crossed and locked."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 41,
+          "total_token_count": 6687
+        },
+        "latency_ms": 5899.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The top player applies a triangle choke, but the bottom player successfully defends by maintaining posture and clearing the leg, preventing the submission from being locked in.\"\n}",
+        "parsed": {
+          "action_class": "submission_choke",
+          "outcome": "unsuccessful",
+          "justification": "The top player applies a triangle choke, but the bottom player successfully defends by maintaining posture and clearing the leg, preventing the submission from being locked in."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 62,
+          "total_token_count": 6964
+        },
+        "latency_ms": 1035.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The position is not closed_guard because the top player's legs are not crossed and locked around the bottom player's torso; instead, the bottom player is in an open_guard configuration, specifically a spider guard or lasso-style setup, as evidenced by the foot on the hip and the leg wrapped around the arm. The action_class is not a submission_choke because the athlete is clearly setting up a triangle choke, which is a submission_choke, but the initial phase is a transition into the submission, and the outcome is not 'unsuccessful' as the submission is still being actively applied and tightened at the end of the clip.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_choke\",\n  \"final_outcome\": \"unclear\",\n  \"wrong_label\": \"position\",\n  \"reason\": \"The position is clearly open_guard, not closed_guard, as the bottom player's legs are not locked around the opponent's back. The outcome is 'unclear' because the submission is still in progress at the end of the clip, not 'unsuccessful'.\",\n  \"evidence\": \"At 02:46.000, the bottom player's legs are clearly not locked around the opponent's torso; one leg is over the shoulder and the other is on the hip, which defines an open_guard/triangle setup.\"\n}",
+        "parsed": {
+          "adversarial_case": "The position is not closed_guard because the top player's legs are not crossed and locked around the bottom player's torso; instead, the bottom player is in an open_guard configuration, specifically a spider guard or lasso-style setup, as evidenced by the foot on the hip and the leg wrapped around the arm. The action_class is not a submission_choke because the athlete is clearly setting up a triangle choke, which is a submission_choke, but the initial phase is a transition into the submission, and the outcome is not 'unsuccessful' as the submission is still being actively applied and tightened at the end of the clip.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_choke",
+          "final_outcome": "unclear",
+          "wrong_label": "position",
+          "reason": "The position is clearly open_guard, not closed_guard, as the bottom player's legs are not locked around the opponent's back. The outcome is 'unclear' because the submission is still in progress at the end of the clip, not 'unsuccessful'.",
+          "evidence": "At 02:46.000, the bottom player's legs are clearly not locked around the opponent's torso; one leg is over the shoulder and the other is on the hip, which defines an open_guard/triangle setup."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7185,
+          "candidates_token_count": 325,
+          "total_token_count": 7510
+        },
+        "latency_ms": 2074.9,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The position label 'closed_guard' is incorrect because the bottom player's legs are not locked around the top player's torso; they are in an open guard configuration with one leg over the shoulder and the other leg underneath, which is characteristic of a triangle setup from open guard. The action_class 'submission_choke' is also arguably incorrect as the primary action shown is the top player actively working to clear the leg and posture up to escape the triangle, which is better classified as an 'escape' or 'transition' rather than an offensive submission attempt by the top player.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"escape\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": \"position\",\n  \"reason\": \"The position is clearly open guard, not closed guard, as the legs are not locked around the torso. The action is an escape from a triangle choke.\",\n  \"evidence\": \"At 02:39.000, the bottom player has one leg over the shoulder and the other leg under the armpit, with no locked ankles, which defines an open guard triangle setup.\"\n}",
+        "parsed": {
+          "adversarial_case": "The position label 'closed_guard' is incorrect because the bottom player's legs are not locked around the top player's torso; they are in an open guard configuration with one leg over the shoulder and the other leg underneath, which is characteristic of a triangle setup from open guard. The action_class 'submission_choke' is also arguably incorrect as the primary action shown is the top player actively working to clear the leg and posture up to escape the triangle, which is better classified as an 'escape' or 'transition' rather than an offensive submission attempt by the top player.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "escape",
+          "final_outcome": "successful",
+          "wrong_label": "position",
+          "reason": "The position is clearly open guard, not closed guard, as the legs are not locked around the torso. The action is an escape from a triangle choke.",
+          "evidence": "At 02:39.000, the bottom player has one leg over the shoulder and the other leg under the armpit, with no locked ankles, which defines an open guard triangle setup."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25005,
+          "candidates_token_count": 271,
+          "total_token_count": 25276
+        },
+        "latency_ms": 5350.4,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "closed_guard",
+    "technique_label": "submission_choke",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "disagree",
+    "val_low_final_class": "submission_choke",
+    "val_high_verdict": "disagree",
+    "val_high_final_class": "submission_choke",
+    "status": "ok"
+  },
+  {
+    "window_id": "652c0e04a947037aeb7eb302__occ13",
+    "match_id": "652c0e04a947037aeb7eb302",
+    "gold_event": {
+      "t_s": 319,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=jBLehiPrM0E",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 314.0,
+    "window_end_s": 323.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player has their legs positioned between them and the top player, using their feet to control distance and initiate a sweep, which is characteristic of open guard.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player has their legs positioned between them and the top player, using their feet to control distance and initiate a sweep, which is characteristic of open guard."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 52,
+          "total_token_count": 6698
+        },
+        "latency_ms": 7666.1,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player secures a leg entanglement and applies pressure to the opponent's leg, resulting in a tap and the referee stopping the match.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The bottom player secures a leg entanglement and applies pressure to the opponent's leg, resulting in a tap and the referee stopping the match."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 60,
+          "total_token_count": 6962
+        },
+        "latency_ms": 1094.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between the top player's legs, which is a defining characteristic of half guard. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep the opponent into a dominant position, and the submission attempt is secondary or incidental to the sweep.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom player is clearly in an open guard configuration, using their legs to manipulate the top player's posture and distance. The transition into a leg entanglement (specifically an outside ashi or similar variation) leads directly to an aggressive leg lock application, which forces the opponent to tap, confirming the 'submission_leg_lock' and 'successful' outcome labels.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between the top player's legs, which is a defining characteristic of half guard. Regarding the action_class, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep the opponent into a dominant position, and the submission attempt is secondary or incidental to the sweep.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player is clearly in an open guard configuration, using their legs to manipulate the top player's posture and distance. The transition into a leg entanglement (specifically an outside ashi or similar variation) leads directly to an aggressive leg lock application, which forces the opponent to tap, confirming the 'submission_leg_lock' and 'successful' outcome labels."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7194,
+          "candidates_token_count": 253,
+          "total_token_count": 7447
+        },
+        "latency_ms": 1743.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n    \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between their own legs, specifically controlling the opponent's right leg in a way that resembles a deep half or leg entanglement. However, the overall structure is clearly an open guard engagement leading into a leg lock. The action class 'submission_leg_lock' is accurate as the bottom player is actively attacking the leg, and the outcome 'successful' is confirmed by the referee stepping in to stop the match due to the tap.\",\n    \"verdict\": \"agree\",\n    \"final_position\": \"open_guard\",\n    \"final_action_class\": \"submission_leg_lock\",\n    \"final_outcome\": \"successful\",\n    \"wrong_label\": null,\n    \"reason\": null,\n    \"evidence\": \"The bottom player is in an open guard configuration, transitions into a leg entanglement, applies pressure, and the opponent taps, causing the referee to intervene and stop the match.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one leg trapped between their own legs, specifically controlling the opponent's right leg in a way that resembles a deep half or leg entanglement. However, the overall structure is clearly an open guard engagement leading into a leg lock. The action class 'submission_leg_lock' is accurate as the bottom player is actively attacking the leg, and the outcome 'successful' is confirmed by the referee stepping in to stop the match due to the tap.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player is in an open guard configuration, transitions into a leg entanglement, applies pressure, and the opponent taps, causing the referee to intervene and stop the match."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25014,
+          "candidates_token_count": 227,
+          "total_token_count": 25241
+        },
+        "latency_ms": 5441.1,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65dfb6dba2434704339de920__occ14",
+    "match_id": "65dfb6dba2434704339de920",
+    "gold_event": {
+      "t_s": 2795,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=nDc0L96J6i4",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 2790.0,
+    "window_end_s": 2799.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player maintains control by keeping their legs between them and the top player, utilizing various open-guard configurations throughout the exchange.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player maintains control by keeping their legs between them and the top player, utilizing various open-guard configurations throughout the exchange."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 46,
+          "total_token_count": 6692
+        },
+        "latency_ms": 4695.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player secures a heel hook on the top player's leg, causing the top player to tap out.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The bottom player secures a heel hook on the top player's leg, causing the top player to tap out."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 55,
+          "total_token_count": 6957
+        },
+        "latency_ms": 1067.0,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the top player's leg is trapped between the bottom player's legs for the duration of the setup. Furthermore, one could argue the action is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep the top player, and the submission attempt is secondary or incidental to the sweep.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player clearly isolates the top player's leg, applies a heel hook grip, and the top player taps out, confirming a successful submission_leg_lock from an open_guard position.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the top player's leg is trapped between the bottom player's legs for the duration of the setup. Furthermore, one could argue the action is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep the top player, and the submission attempt is secondary or incidental to the sweep.",
+          "verdict": "agree",
+          "evidence": "The bottom player clearly isolates the top player's leg, applies a heel hook grip, and the top player taps out, confirming a successful submission_leg_lock from an open_guard position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7183,
+          "candidates_token_count": 158,
+          "total_token_count": 7341
+        },
+        "latency_ms": 1285.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one of their legs entangled between the top player's legs, which is a hallmark of half-guard configurations. Regarding the action, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or stand up, and the 'tap' is a result of the referee stopping the match due to the athlete's reaction to the pressure, not necessarily a completed submission hold.\",\n  \"verdict\": \"agree\",\n  \"evidence\": \"The bottom player is clearly in an open guard configuration (specifically a variation of butterfly or shin-to-shin) at the start, and the sequence shows the bottom player actively applying a heel hook grip on the top player's leg, which leads to the top player tapping out, confirming the submission_leg_lock.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one of their legs entangled between the top player's legs, which is a hallmark of half-guard configurations. Regarding the action, one could argue it is a 'transition' rather than a 'submission_leg_lock' because the bottom player is primarily using the leg entanglement to sweep or stand up, and the 'tap' is a result of the referee stopping the match due to the athlete's reaction to the pressure, not necessarily a completed submission hold.",
+          "verdict": "agree",
+          "evidence": "The bottom player is clearly in an open guard configuration (specifically a variation of butterfly or shin-to-shin) at the start, and the sequence shows the bottom player actively applying a heel hook grip on the top player's leg, which leads to the top player tapping out, confirming the submission_leg_lock."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25003,
+          "candidates_token_count": 209,
+          "total_token_count": 25212
+        },
+        "latency_ms": 7478.5,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "66941978a7bafe01741514db__occ15",
+    "match_id": "66941978a7bafe01741514db",
+    "gold_event": {
+      "t_s": 4318,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=rfZn0eJcPZ8",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 4313.0,
+    "window_end_s": 4322.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.1-flash-lite",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player is using their legs to control the top player's posture and legs without their ankles being locked together.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player is using their legs to control the top player's posture and legs without their ankles being locked together."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 44,
+          "total_token_count": 6690
+        },
+        "latency_ms": 4755.9,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom athlete secures a leg entanglement and applies pressure to the top athlete's leg, resulting in a tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The bottom athlete secures a leg entanglement and applies pressure to the top athlete's leg, resulting in a tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 55,
+          "total_token_count": 6957
+        },
+        "latency_ms": 977.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one of the top player's legs trapped between their own legs (a knee shield or half-guard entanglement) for a significant portion of the clip before transitioning to the leg lock. However, the primary action is clearly a leg lock entry from an open/guard-based position, and the 'open_guard' label accurately captures the initial state where the legs are not locked in a closed guard configuration.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom athlete initiates from an open guard, transitions into a leg entanglement (specifically an outside ashi/saddle variation), and applies a heel hook, which causes the top athlete to tap at 72:00.600.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom player has one of the top player's legs trapped between their own legs (a knee shield or half-guard entanglement) for a significant portion of the clip before transitioning to the leg lock. However, the primary action is clearly a leg lock entry from an open/guard-based position, and the 'open_guard' label accurately captures the initial state where the legs are not locked in a closed guard configuration.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom athlete initiates from an open guard, transitions into a leg entanglement (specifically an outside ashi/saddle variation), and applies a heel hook, which causes the top athlete to tap at 72:00.600."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7181,
+          "candidates_token_count": 236,
+          "total_token_count": 7417
+        },
+        "latency_ms": 1846.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'half_guard' rather than 'open_guard' because the bottom athlete has one leg trapped between their own legs (a common entry for leg locks like the saddle or honey hole). However, the bottom athlete is clearly in an open guard configuration at the start of the clip, and the transition to the leg entanglement happens dynamically. The submission is clearly a leg lock, and the tap is unambiguous, so the outcome is correct.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom athlete initiates from an open guard, transitions into a leg entanglement (specifically an inside sankaku/honey hole position), and applies pressure until the top athlete taps, which is confirmed by the referee stepping in.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position is 'half_guard' rather than 'open_guard' because the bottom athlete has one leg trapped between their own legs (a common entry for leg locks like the saddle or honey hole). However, the bottom athlete is clearly in an open guard configuration at the start of the clip, and the transition to the leg entanglement happens dynamically. The submission is clearly a leg lock, and the tap is unambiguous, so the outcome is correct.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom athlete initiates from an open guard, transitions into a leg entanglement (specifically an inside sankaku/honey hole position), and applies pressure until the top athlete taps, which is confirmed by the referee stepping in."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25001,
+          "candidates_token_count": 217,
+          "total_token_count": 25218
+        },
+        "latency_ms": 5374.7,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  }
+]

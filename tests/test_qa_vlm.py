@@ -84,6 +84,67 @@ def _fake_image_response(png_bytes: bytes, text: str | None = None):
     return response
 
 
+def test_youtube_stream_resolution_uses_the_same_embedded_client_as_the_qa_player(monkeypatch):
+    import yt_dlp
+
+    captured = {}
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            captured["options"] = options
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def extract_info(self, url, download):
+            captured.update(url=url, download=download)
+            return {"url": "https://media.example.test/video.mp4", "http_headers": {}}
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    resolved = qa_vlm_route._resolve_stream_url(YT_URL)
+
+    assert resolved == ("https://media.example.test/video.mp4", {})
+    assert captured["options"]["extractor_args"] == {
+        "youtube": {"player_client": ["web_embedded"]}
+    }
+
+
+def test_youtube_stream_resolution_honors_site_required_availability_wait(monkeypatch):
+    import yt_dlp
+
+    fake_time = MagicMock()
+    fake_time.time.return_value = 1000.9
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            self.options = options
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def extract_info(self, url, download):
+            return {
+                "url": "https://media.example.test/video.mp4",
+                "http_headers": {},
+                "available_at": 1005,
+            }
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(qa_vlm_route, "time", fake_time)
+
+    assert qa_vlm_route._resolve_stream_url(YT_URL) == (
+        "https://media.example.test/video.mp4",
+        {},
+    )
+    fake_time.sleep.assert_called_once_with(5)
+
+
 def _fake_client_sequence(effects: list):
     """Build a fake genai.Client whose generate_content returns/raises ``effects`` in order."""
     fake_client = MagicMock()
@@ -805,6 +866,34 @@ async def test_vlm_chat_requested_allowlisted_model_is_used(monkeypatch, client_
     assert call_kwargs["config"].thinking_config.thinking_level == "LOW"
 
 
+@pytest.mark.parametrize(
+    ("model_id", "expected_off_level"),
+    [("gemini-3.7-flash", "LOW"), ("gemini-3.6-flash", "MINIMAL")],
+)
+@pytest.mark.asyncio
+async def test_vlm_chat_new_flash_models_use_compatible_generation_config(
+    model_id, expected_off_level, monkeypatch, client_with_key,
+):
+    fake_client, _ = _fake_client("[]")
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-chat",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 10},
+            "prompt": "x", "history": [], "model": model_id, "thinking": "off",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["model"] == model_id
+    assert call_kwargs["config"].temperature is None
+    assert call_kwargs["config"].thinking_config.thinking_budget is None
+    assert call_kwargs["config"].thinking_config.thinking_level == expected_off_level
+
+
 @pytest.mark.asyncio
 async def test_vlm_chat_model_not_in_allowlist_returns_400(client_with_key):
     resp = await client_with_key.post(
@@ -957,6 +1046,33 @@ async def test_vlm_image_detect_requested_model_and_thinking_high_bumps_max_toke
     assert call_kwargs["model"] == "gemini-3.1-flash-lite"
     assert call_kwargs["config"].thinking_config.thinking_level == "HIGH"
     assert call_kwargs["config"].max_output_tokens == 8192  # bumped so thoughts don't eat the JSON budget
+
+
+@pytest.mark.parametrize("model_id", ["gemini-3.7-flash", "gemini-3.6-flash"])
+@pytest.mark.asyncio
+async def test_vlm_image_detect_new_flash_models_omit_sampling_parameters(
+    model_id, monkeypatch, client_with_key,
+):
+    frame = Image.new("RGB", (200, 150), (10, 20, 30))
+    monkeypatch.setattr(qa_vlm_route, "_extract_youtube_frame", lambda url, start_sec: frame)
+    fake_client, _ = _fake_client(json.dumps([{"box_2d": [100, 100, 900, 900], "label": "athlete"}]))
+    monkeypatch.setattr(qa_vlm_route, "_gemini_client", lambda: fake_client)
+
+    resp = await client_with_key.post(
+        "/qa/vlm-image",
+        json={
+            "youtube_id": YT_ID, "youtube_url": YT_URL,
+            "scope": {"type": "timepoint", "start_sec": 5, "end_sec": 5},
+            "prompt": "Detect athletes.", "image_task": "detect",
+            "model": model_id, "thinking": "high",
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+    call_kwargs = fake_client.aio.models.generate_content.call_args.kwargs
+    assert call_kwargs["model"] == model_id
+    assert call_kwargs["config"].temperature is None
+    assert call_kwargs["config"].thinking_config.thinking_level == "HIGH"
 
 
 @pytest.mark.asyncio

@@ -27,7 +27,7 @@ from typing import Optional
 import cv2
 from fastapi import HTTPException
 from PIL import Image
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from service.routes import state as route_state
 
@@ -40,10 +40,35 @@ QA_FRAME_COUNT = 6
 QA_PREVIEW_LONG_EDGE = 480
 
 
+class QABoundingBox(BaseModel):
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    w: int = Field(gt=0)
+    h: int = Field(gt=0)
+
+
 class QAPlayerReference(BaseModel):
     player_id: str
     player_name: str
-    image_s3_uri_or_url: str
+    image_s3_uri_or_url: Optional[str] = None
+    image_base64: Optional[str] = None
+    bounding_box: Optional[QABoundingBox] = None
+    captured_at_ms: Optional[int] = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_image_source(self):
+        external = bool((self.image_s3_uri_or_url or "").strip())
+        inline = bool((self.image_base64 or "").strip())
+        if external == inline:
+            raise ValueError(
+                "exactly one reference image source is required: "
+                "image_s3_uri_or_url or image_base64"
+            )
+        if inline and (self.bounding_box is None or self.captured_at_ms is None):
+            raise ValueError(
+                "inline reference crops require bounding_box and captured_at_ms"
+            )
+        return self
 
 
 class QAIdentityAnalyzeRequest(BaseModel):
@@ -85,6 +110,28 @@ def _fetch_bytes(source: str) -> bytes:
     raise ValueError(
         f"Unsupported source {source!r}; expected s3://bucket/key or http(s):// URL"
     )
+
+
+def _decode_inline_image(value: str) -> bytes:
+    """Decode the player-reference creation ``image_base64`` shape.
+
+    Both a JPEG/PNG/WebP data URL and bare base64 are accepted, matching the
+    existing standalone player-reference endpoint. Invalid bytes are surfaced
+    by the caller before any model call begins.
+    """
+    header, separator, payload = value.partition(",")
+    if separator:
+        if not header.startswith("data:image/") or ";base64" not in header:
+            raise ValueError("image_base64 data URL must contain a base64 image MIME type")
+    else:
+        payload = header
+    try:
+        decoded = base64.b64decode(payload, validate=True)
+    except (ValueError, TypeError) as error:
+        raise ValueError(f"invalid image_base64: {error}") from error
+    if not decoded:
+        raise ValueError("image_base64 decoded to empty bytes")
+    return decoded
 
 
 def _download_video_to_temp(source: str) -> str:
@@ -166,7 +213,11 @@ def _download_reference_images(player_references: list[QAPlayerReference]) -> li
     refs = []
     for ref in player_references:
         try:
-            data = _fetch_bytes(ref.image_s3_uri_or_url)
+            data = (
+                _decode_inline_image(ref.image_base64)
+                if ref.image_base64
+                else _fetch_bytes(ref.image_s3_uri_or_url or "")
+            )
             img = Image.open(io.BytesIO(data))
             img.load()
         except Exception as e:  # noqa: BLE001 — surface the real error
@@ -178,7 +229,12 @@ def _download_reference_images(player_references: list[QAPlayerReference]) -> li
         refs.append({
             "player_id": ref.player_id,
             "player_name": ref.player_name,
+            "image_s3_uri_or_url": ref.image_s3_uri_or_url,
             "image": img,
+            "image_bytes": data,
+            "mime_type": Image.MIME.get(img.format or "", "image/jpeg"),
+            "bounding_box": ref.bounding_box.model_dump() if ref.bounding_box else None,
+            "captured_at_ms": ref.captured_at_ms,
         })
     return refs
 

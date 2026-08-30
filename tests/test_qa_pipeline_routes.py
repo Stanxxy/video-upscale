@@ -14,10 +14,15 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from PIL import Image
 
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.pipelines import registry
+from service.pipelines.position_timeline import (
+    POSITION_SCAN_INITIAL_PROMPT,
+    POSITION_SCAN_SYSTEM_PROMPT,
+)
 from service.routes import qa_pipeline as qa_pipeline_route
 from service.routes.state import init_routes
 
@@ -32,6 +37,7 @@ def _make_app(gemini_api_key: str) -> FastAPI:
     app = FastAPI()
     app.get("/qa/pipelines")(qa_pipeline_route.list_pipelines)
     app.get("/qa/pipeline-defaults")(qa_pipeline_route.pipeline_defaults)
+    app.post("/qa/reference-frame")(qa_pipeline_route.reference_frame)
     app.post("/qa/pipeline-run")(qa_pipeline_route.pipeline_run)
     return app
 
@@ -78,6 +84,79 @@ async def test_pipeline_defaults_known_id(client_with_key):
 async def test_pipeline_defaults_unknown_id_404(client_with_key):
     resp = await client_with_key.get("/qa/pipeline-defaults", params={"id": "nope"})
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_position_timeline_defaults_expose_saved_position_scan_prompts(
+    client_with_key,
+):
+    resp = await client_with_key.get(
+        "/qa/pipeline-defaults", params={"id": "position-timeline-techniques"}
+    )
+
+    assert resp.status_code == 200
+    position_scan = next(
+        stage for stage in resp.json()["stages"] if stage["id"] == "position_scan"
+    )
+    assert position_scan["config"]["system_prompt"] == POSITION_SCAN_SYSTEM_PROMPT
+    assert position_scan["config"]["initial_prompt"] == POSITION_SCAN_INITIAL_PROMPT
+
+
+@pytest.mark.asyncio
+async def test_reference_frame_does_not_require_gemini_and_extracts_loaded_video_frame(
+    client_without_key, monkeypatch
+):
+    captured = {}
+
+    def _fake_extract(url, timestamp_s):
+        captured.update(url=url, timestamp_s=timestamp_s)
+        return Image.new("RGB", (16, 9), (12, 34, 56))
+
+    monkeypatch.setattr(qa_pipeline_route, "_extract_youtube_frame", _fake_extract)
+    resp = await client_without_key.post(
+        "/qa/reference-frame",
+        json={"youtube_id": YT_ID, "timestamp_s": 12.375},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert captured == {"url": YT_URL, "timestamp_s": 12.375}
+    assert body["frame_data_url"].startswith("data:image/jpeg;base64,")
+    assert body["captured_at_ms"] == 12_375
+    assert (body["width"], body["height"]) == (16, 9)
+
+
+@pytest.mark.asyncio
+async def test_reference_frame_surfaces_real_extraction_failure(client_with_key, monkeypatch):
+    def _fail_extract(url, timestamp_s):
+        raise RuntimeError("yt-dlp could not resolve test video")
+
+    monkeypatch.setattr(qa_pipeline_route, "_extract_youtube_frame", _fail_extract)
+    resp = await client_with_key.post(
+        "/qa/reference-frame",
+        json={"youtube_id": YT_ID, "timestamp_s": 3},
+    )
+
+    assert resp.status_code == 502
+    assert "yt-dlp could not resolve test video" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_reference_frame_rejects_non_finite_timestamp_before_extraction(
+    client_with_key, monkeypatch
+):
+    def _must_not_extract(*args):
+        raise AssertionError("non-finite timestamp must fail request validation")
+
+    monkeypatch.setattr(qa_pipeline_route, "_extract_youtube_frame", _must_not_extract)
+    resp = await client_with_key.post(
+        "/qa/reference-frame",
+        content=f'{{"youtube_id":"{YT_ID}","timestamp_s":Infinity}}',
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert resp.status_code == 400
+    assert "finite" in resp.text.lower()
 
 
 # --------------------------------------------------------------------------- #
@@ -422,3 +501,94 @@ async def test_pipeline_run_streams_ndjson_lines(client_with_key, monkeypatch):
     assert [ln["type"] for ln in lines] == [
         "run_start", "stage_start", "stage_complete", "window_result", "run_complete",
     ]
+
+
+# --------------------------------------------------------------------------- #
+# position-timeline-techniques — grounded references are a hard pre-stream gate.
+# --------------------------------------------------------------------------- #
+def _timeline_references():
+    return [
+        {
+            "player_id": "player_a",
+            "player_name": "Athlete A",
+            "image_s3_uri_or_url": "https://example.test/a.jpg",
+        },
+        {
+            "player_id": "player_b",
+            "player_name": "Athlete B",
+            "image_s3_uri_or_url": "https://example.test/b.jpg",
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_position_timeline_pipeline_requires_two_references_before_stream(
+    client_with_key, monkeypatch
+):
+    pdef = registry.get_default("position-timeline-techniques").model_dump(mode="json")
+
+    async def _must_not_run(*args, **kwargs):
+        raise AssertionError("run_pipeline must not start without grounded references")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(qa_pipeline_route, "run_pipeline", _must_not_run)
+    resp = await client_with_key.post(
+        "/qa/pipeline-run",
+        json={
+            "youtube_id": YT_ID,
+            "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 30},
+            "pipeline": pdef,
+            "player_references": [],
+        },
+    )
+    assert resp.status_code == 400
+    assert "exactly two" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_position_timeline_pipeline_loads_references_before_stream(
+    client_with_key, monkeypatch
+):
+    pdef = registry.get_default("position-timeline-techniques").model_dump(mode="json")
+    captured = {}
+
+    def _fake_download(refs):
+        return [
+            {
+                "player_id": ref.player_id,
+                "player_name": ref.player_name,
+                "image_s3_uri_or_url": ref.image_s3_uri_or_url,
+                "image": object(),
+                "image_bytes": f"bytes-{ref.player_id}".encode(),
+                "mime_type": "image/jpeg",
+            }
+            for ref in refs
+        ]
+
+    async def _fake_run_pipeline(pipeline, ctx, planned, budget_cap=None):
+        captured["refs"] = ctx.player_references
+        yield {"type": "run_start", "planned_gemini_calls": planned["planned_gemini_calls"]}
+        yield {
+            "type": "run_complete",
+            "clips": [],
+            "format": "position-technique-timeline-v1",
+        }
+
+    monkeypatch.setattr(
+        qa_pipeline_route, "_download_reference_images", _fake_download, raising=False
+    )
+    monkeypatch.setattr(qa_pipeline_route, "run_pipeline", _fake_run_pipeline)
+
+    resp = await client_with_key.post(
+        "/qa/pipeline-run",
+        json={
+            "youtube_id": YT_ID,
+            "youtube_url": YT_URL,
+            "scope": {"type": "range", "start_sec": 0, "end_sec": 30},
+            "pipeline": pdef,
+            "player_references": _timeline_references(),
+        },
+    )
+    assert resp.status_code == 200
+    assert [ref["player_id"] for ref in captured["refs"]] == ["player_a", "player_b"]

@@ -1,0 +1,82 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9cff3__w32",
+    "match_id": "650d20c745120c8433e9cff3",
+    "fps1": {
+      "call_name": "technique_fps1",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player uses a butterfly hook to elevate the top player and rotates to secure back control.\"\n}",
+      "parsed": {
+        "action_class": "back_take",
+        "outcome": "successful",
+        "justification": "The bottom player uses a butterfly hook to elevate the top player and rotates to secure back control."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 1556,
+        "candidates_token_count": 49,
+        "total_token_count": 1605
+      },
+      "latency_ms": 5263.0,
+      "ingestion_path": "files_api"
+    },
+    "fps10": {
+      "call_name": "technique_fps10",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"action_class\": \"sweep\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player uses a butterfly hook and grip on the top player's arm to elevate and roll them over, successfully reversing the position to top.\"\n}",
+      "parsed": {
+        "action_class": "sweep",
+        "outcome": "successful",
+        "justification": "The bottom player uses a butterfly hook and grip on the top player's arm to elevate and roll them over, successfully reversing the position to top."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6902,
+        "candidates_token_count": 58,
+        "total_token_count": 6960
+      },
+      "latency_ms": 1300.5,
+      "ingestion_path": "files_api"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "fps1": {
+      "call_name": "technique_fps1",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The top player has their arm wrapped around the bottom player's neck in a rear-naked choke configuration, but the bottom player is successfully defending by hand fighting and keeping their chin tucked.\"\n}",
+      "parsed": {
+        "action_class": "submission_choke",
+        "outcome": "unsuccessful",
+        "justification": "The top player has their arm wrapped around the bottom player's neck in a rear-naked choke configuration, but the bottom player is successfully defending by hand fighting and keeping their chin tucked."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 1556,
+        "candidates_token_count": 70,
+        "total_token_count": 1626
+      },
+      "latency_ms": 2976.9,
+      "ingestion_path": "files_api"
+    },
+    "fps10": {
+      "call_name": "technique_fps10",
+      "status": "ok",
+      "error": null,
+      "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The top player is applying an armbar from the mount position, but the bottom player successfully defends by clasping their hands together to prevent the extension of the arm.\"\n}",
+      "parsed": {
+        "action_class": "submission_arm_lock",
+        "outcome": "unsuccessful",
+        "justification": "The top player is applying an armbar from the mount position, but the bottom player successfully defends by clasping their hands together to prevent the extension of the arm."
+      },
+      "usage_metadata": {
+        "prompt_token_count": 6902,
+        "candidates_token_count": 66,
+        "total_token_count": 6968
+      },
+      "latency_ms": 913.4,
+      "ingestion_path": "files_api"
+    }
+  }
+]

@@ -23,5 +23,7 @@ huggingface_hub
 # QA VLM Studio (server-side YouTube frame grab for /qa/vlm-image): requires
 # system ffmpeg on PATH in addition to this package.
 yt-dlp
+# Claude Opus path for Highlight Analyze axis calls (service/pipelines/claude_frames.py).
+anthropic>=0.50.0
 # SAM2: not on PyPI — install from source:
 #   pip install "git+https://github.com/facebookresearch/sam2.git"

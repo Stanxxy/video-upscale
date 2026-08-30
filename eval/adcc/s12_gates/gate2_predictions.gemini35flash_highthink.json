@@ -1,0 +1,1906 @@
+[
+  {
+    "window_id": "66afe5ab1c62a1db7a53b80b__occ0",
+    "match_id": "66afe5ab1c62a1db7a53b80b",
+    "gold_event": {
+      "t_s": 28325,
+      "action_class": "submission_arm_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=pwGbW5GZgfc",
+    "ingestion_path": "files_api",
+    "window_start_s": 28320.0,
+    "window_end_s": 28329.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player lies on his back using his legs to frame and control the top player's hips and arms without crossing his ankles.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player lies on his back using his legs to frame and control the top player's hips and arms without crossing his ankles."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 48,
+          "total_token_count": 7238
+        },
+        "latency_ms": 4906.5,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unclear\",\n  \"justification\": \"The bottom player rolls back to entangle the top player's leg in an ashi garami position for a leg lock, but the outcome is unclear because the clip ends while the submission is still being contested.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unclear",
+          "justification": "The bottom player rolls back to entangle the top player's leg in an ashi garami position for a leg lock, but the outcome is unclear because the clip ends while the submission is still being contested."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 76,
+          "total_token_count": 7916
+        },
+        "latency_ms": 7915.3,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"For the position label, one could argue that the clip begins in closed guard from 00:02.000 to 00:03.000, as the bottom player's ankles are clearly crossed around the top player's torso. For the action_class label, one could argue that the movement is a sweep attempt because the bottom player knocks the top player down to his hip at 00:08.700.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unclear\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 00:08.000, the bottom player transitions into an ashi garami entanglement (open guard) and actively attacks the top player's leg with a leg lock from 00:09.000 to 00:10.900, with the clip ending while the submission is still being contested.\"\n}",
+        "parsed": {
+          "adversarial_case": "For the position label, one could argue that the clip begins in closed guard from 00:02.000 to 00:03.000, as the bottom player's ankles are clearly crossed around the top player's torso. For the action_class label, one could argue that the movement is a sweep attempt because the bottom player knocks the top player down to his hip at 00:08.700.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 00:08.000, the bottom player transitions into an ashi garami entanglement (open guard) and actively attacks the top player's leg with a leg lock from 00:09.000 to 00:10.900, with the clip ending while the submission is still being contested."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7205,
+          "candidates_token_count": 254,
+          "total_token_count": 9216
+        },
+        "latency_ms": 12330.6,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the starting position is closed_guard because at 00:02.000 the bottom player's legs are wrapped high around the top player's torso. However, the guard is opened by 00:03.100, and the subsequent sequence is played entirely from open_guard (specifically K-guard). For the action class, one might argue it is a sweep attempt since the bottom player rolls under the hips; however, the clear focus at 00:09.100 is the leg entanglement and heel grip, confirming a submission_leg_lock attempt. For the outcome, one could argue it is unsuccessful because no tap occurs, but the clip cuts while the leg lock is still fully locked in, making unclear the correct outcome.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unclear\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 00:09.100, the bottom player spins under the top player's leg to establish an ashi garami entanglement, and by 00:10.200, he is actively attacking the heel/foot for a leg lock, which remains contested as the clip ends.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the starting position is closed_guard because at 00:02.000 the bottom player's legs are wrapped high around the top player's torso. However, the guard is opened by 00:03.100, and the subsequent sequence is played entirely from open_guard (specifically K-guard). For the action class, one might argue it is a sweep attempt since the bottom player rolls under the hips; however, the clear focus at 00:09.100 is the leg entanglement and heel grip, confirming a submission_leg_lock attempt. For the outcome, one could argue it is unsuccessful because no tap occurs, but the clip cuts while the leg lock is still fully locked in, making unclear the correct outcome.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 00:09.100, the bottom player spins under the top player's leg to establish an ashi garami entanglement, and by 00:10.200, he is actively attacking the heel/foot for a leg lock, which remains contested as the clip ends."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25025,
+          "candidates_token_count": 312,
+          "total_token_count": 26735
+        },
+        "latency_ms": 13198.2,
+        "ingestion_path": "files_api"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unclear",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9cfdb__occ1",
+    "match_id": "650d20c745120c8433e9cfdb",
+    "gold_event": {
+      "t_s": 139,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=Wv4BRC-x1yQ",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 134.0,
+    "window_end_s": 143.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player locks a triangle choke with his legs wrapped around the top player's neck and arm from an open guard position.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player locks a triangle choke with his legs wrapped around the top player's neck and arm from an open guard position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 46,
+          "total_token_count": 7403
+        },
+        "latency_ms": 4934.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player rolls underneath to isolate the top player's leg, securing a leg lock that forces a visible tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The bottom player rolls underneath to isolate the top player's leg, securing a leg lock that forces a visible tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 56,
+          "total_token_count": 7590
+        },
+        "latency_ms": 5001.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position should be classified as closed_guard or scramble because after the roll at 02:16.000, the bottom player has his legs locked around the opponent's upper body. However, the action starts from a seated open guard at 02:14.000 where there is no torso-to-torso closure. For the technique, the original label is submission_leg_lock, but there is absolutely no leg isolation or leg lock attempt. Instead, the bottom player attacks the neck and arm, which is a classic submission_choke.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_choke\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The technique executed is a triangle choke, which is a submission_choke, not a leg lock. The bottom player wraps his legs around the opponent's neck and arm, squeezing until the opponent taps.\",\n  \"evidence\": \"At 02:15.500, the bottom player shoots his hips up and locks his legs around the top player's neck and left arm to secure a triangle choke, leading to a tap at 02:22.000.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position should be classified as closed_guard or scramble because after the roll at 02:16.000, the bottom player has his legs locked around the opponent's upper body. However, the action starts from a seated open guard at 02:14.000 where there is no torso-to-torso closure. For the technique, the original label is submission_leg_lock, but there is absolutely no leg isolation or leg lock attempt. Instead, the bottom player attacks the neck and arm, which is a classic submission_choke.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_choke",
+          "final_outcome": "successful",
+          "wrong_label": "action_class",
+          "reason": "The technique executed is a triangle choke, which is a submission_choke, not a leg lock. The bottom player wraps his legs around the opponent's neck and arm, squeezing until the opponent taps.",
+          "evidence": "At 02:15.500, the bottom player shoots his hips up and locks his legs around the top player's neck and left arm to secure a triangle choke, leading to a tap at 02:22.000."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7184,
+          "candidates_token_count": 304,
+          "total_token_count": 9056
+        },
+        "latency_ms": 11709.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position should be classified as a scramble due to the continuous rolling and inversion from 02:15.500 to 02:19.500. However, the sequence begins with Mica Galvao in a seated open guard with clear guard retention framing, and Renato Canuto standing over him. For the action class, one might argue it is a sweep because Renato is rolled over, but Mica's primary intent throughout the entire sequence is isolating the leg, culminating in a direct submission finish rather than establishing top position.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"Renato Canuto (black shirt) taps repeatedly with his hand on Mica Galvao's thigh/hip at 02:22.100 to 02:22.300, prompting the referee to step in and stop the match due to the leg lock.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position should be classified as a scramble due to the continuous rolling and inversion from 02:15.500 to 02:19.500. However, the sequence begins with Mica Galvao in a seated open guard with clear guard retention framing, and Renato Canuto standing over him. For the action class, one might argue it is a sweep because Renato is rolled over, but Mica's primary intent throughout the entire sequence is isolating the leg, culminating in a direct submission finish rather than establishing top position.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Renato Canuto (black shirt) taps repeatedly with his hand on Mica Galvao's thigh/hip at 02:22.100 to 02:22.300, prompting the referee to step in and stop the match due to the leg lock."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25004,
+          "candidates_token_count": 257,
+          "total_token_count": 26686
+        },
+        "latency_ms": 13648.9,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "disagree",
+    "val_low_final_class": "submission_choke",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65f7217fc98f78bbaa6af549__occ2",
+    "match_id": "65f7217fc98f78bbaa6af549",
+    "gold_event": {
+      "t_s": 986,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ivJyZEimZIc",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 981.0,
+    "window_end_s": 990.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"standing\",\n  \"justification\": \"Both players are upright on their feet, engaging in a hand-fight and clinch for the majority of the clip before a quick transition to the ground.\"\n}",
+        "parsed": {
+          "position": "standing",
+          "justification": "Both players are upright on their feet, engaging in a hand-fight and clinch for the majority of the clip before a quick transition to the ground."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 48,
+          "total_token_count": 7297
+        },
+        "latency_ms": 5436.9,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The athlete in the green and yellow shirt jumps for a flying armbar, trapping his opponent's arm and extending his hips to force a tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_arm_lock",
+          "outcome": "successful",
+          "justification": "The athlete in the green and yellow shirt jumps for a flying armbar, trapping his opponent's arm and extending his hips to force a tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 62,
+          "total_token_count": 7675
+        },
+        "latency_ms": 5528.1,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position label should be 'open_guard' rather than 'standing' because the submission is ultimately secured and finished on the ground (from 16:25.300 to 16:26.500) where the athlete in the green/yellow shirt is on his back with his legs over the opponent's chest in a classic armbar-from-guard configuration. Additionally, one might argue the action_class should be 'guard_pull' because the initial movement involves jumping and pulling the opponent's weight down to the mat.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"standing\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The action begins from a standing clinch at 16:23.800 when the athlete in the green and yellow shirt jumps for a flying armbar. He traps the opponent's arm, brings his leg over the head, and they transition to the ground where he fully extends his hips to secure the tap at 16:26.500, making 'standing' the correct starting position and 'submission_arm_lock' / 'successful' the correct technique call.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position label should be 'open_guard' rather than 'standing' because the submission is ultimately secured and finished on the ground (from 16:25.300 to 16:26.500) where the athlete in the green/yellow shirt is on his back with his legs over the opponent's chest in a classic armbar-from-guard configuration. Additionally, one might argue the action_class should be 'guard_pull' because the initial movement involves jumping and pulling the opponent's weight down to the mat.",
+          "verdict": "agree",
+          "final_position": "standing",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The action begins from a standing clinch at 16:23.800 when the athlete in the green and yellow shirt jumps for a flying armbar. He traps the opponent's arm, brings his leg over the head, and they transition to the ground where he fully extends his hips to secure the tap at 16:26.500, making 'standing' the correct starting position and 'submission_arm_lock' / 'successful' the correct technique call."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7192,
+          "candidates_token_count": 302,
+          "total_token_count": 8185
+        },
+        "latency_ms": 7612.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position should be labeled as 'open_guard' rather than 'standing' because the submission is ultimately secured and finished on the ground between 16:25.100 and 16:26.100, where the athlete in the green and yellow shirt is on his back. However, because the flying armbar is initiated directly from the feet at 16:23.100 while both athletes are fully upright, 'standing' is the correct starting position for this sequence.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"standing\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 16:23.100, the athlete in the green and yellow shirt jumps from a standing position to initiate the flying armbar, leading to a tap on his leg by the opponent at 16:26.100.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position should be labeled as 'open_guard' rather than 'standing' because the submission is ultimately secured and finished on the ground between 16:25.100 and 16:26.100, where the athlete in the green and yellow shirt is on his back. However, because the flying armbar is initiated directly from the feet at 16:23.100 while both athletes are fully upright, 'standing' is the correct starting position for this sequence.",
+          "verdict": "agree",
+          "final_position": "standing",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 16:23.100, the athlete in the green and yellow shirt jumps from a standing position to initiate the flying armbar, leading to a tap on his leg by the opponent at 16:26.100."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25012,
+          "candidates_token_count": 244,
+          "total_token_count": 26568
+        },
+        "latency_ms": 12769.9,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "standing",
+    "technique_label": "submission_arm_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_arm_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_arm_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65dbe62da2434704339da256__occ3",
+    "match_id": "65dbe62da2434704339da256",
+    "gold_event": {
+      "t_s": 1250,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 1245.0,
+    "window_end_s": 1254.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"turtle\",\n  \"justification\": \"The bottom player is on their knees and elbows with their head tucked in a defensive turtle position while the top player attacks from behind.\"\n}",
+        "parsed": {
+          "position": "turtle",
+          "justification": "The bottom player is on their knees and elbows with their head tucked in a defensive turtle position while the top player attacks from behind."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 44,
+          "total_token_count": 7638
+        },
+        "latency_ms": 6460.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The top player rolls over his shoulder from turtle control to pull the bottom player over, successfully securing back control with hooks and a seatbelt grip.\"\n}",
+        "parsed": {
+          "action_class": "back_take",
+          "outcome": "successful",
+          "justification": "The top player rolls over his shoulder from turtle control to pull the bottom player over, successfully securing back control with hooks and a seatbelt grip."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 59,
+          "total_token_count": 7312
+        },
+        "latency_ms": 3708.6,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the starting position is already back_control because the top player is attacking from behind, or that the action is a transition rather than a back_take. However, at 20:45.000, the bottom player is fully on his knees and elbows in a defensive turtle shell with no hooks or seatbelt established by the top player. The top player then executes a clear shoulder roll at 20:51.300 to pull the bottom player over and secure the back with hooks and a seatbelt by 20:53.000, which is the definition of a successful back take from turtle.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"turtle\",\n  \"final_action_class\": \"back_take\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 20:51.300, the top player initiates a shoulder roll, pulling the bottom player over, and by 20:53.000, secures both hooks and a seatbelt grip to establish back control.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the starting position is already back_control because the top player is attacking from behind, or that the action is a transition rather than a back_take. However, at 20:45.000, the bottom player is fully on his knees and elbows in a defensive turtle shell with no hooks or seatbelt established by the top player. The top player then executes a clear shoulder roll at 20:51.300 to pull the bottom player over and secure the back with hooks and a seatbelt by 20:53.000, which is the definition of a successful back take from turtle.",
+          "verdict": "agree",
+          "final_position": "turtle",
+          "final_action_class": "back_take",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 20:51.300, the top player initiates a shoulder roll, pulling the bottom player over, and by 20:53.000, secures both hooks and a seatbelt grip to establish back control."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7185,
+          "candidates_token_count": 265,
+          "total_token_count": 8597
+        },
+        "latency_ms": 16131.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The original judgment called this a successful back take, claiming the top player secured back control with hooks and a seatbelt grip. However, looking closely at the sequence from 20:51.200 to 20:54.000, the bottom player (Flaga) rolls under and enters a leg entanglement to attack Langaker's leg (kneebar/heel hook attempt). Langaker is defending the leg lock, and there is absolutely no back control, hooks, or seatbelt grip established by either athlete. For the position label, one could argue it should be open_guard due to the ending leg entanglement, but since the action starts and is initiated from turtle, turtle is the correct starting position.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"turtle\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The technique shown is a leg lock submission attempt rather than a back take. The bottom player rolls under to attack the leg, which the top player defends until the end of the clip, making the outcome unsuccessful.\",\n  \"evidence\": \"From 20:52.500 to 20:54.000, Flaga is on his back holding Langaker's right leg in a leg entanglement (kneebar/heel hook setup) while Langaker defends; there are no back hooks or seatbelt grips present.\"\n}",
+        "parsed": {
+          "adversarial_case": "The original judgment called this a successful back take, claiming the top player secured back control with hooks and a seatbelt grip. However, looking closely at the sequence from 20:51.200 to 20:54.000, the bottom player (Flaga) rolls under and enters a leg entanglement to attack Langaker's leg (kneebar/heel hook attempt). Langaker is defending the leg lock, and there is absolutely no back control, hooks, or seatbelt grip established by either athlete. For the position label, one could argue it should be open_guard due to the ending leg entanglement, but since the action starts and is initiated from turtle, turtle is the correct starting position.",
+          "verdict": "disagree",
+          "final_position": "turtle",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": "action_class",
+          "reason": "The technique shown is a leg lock submission attempt rather than a back take. The bottom player rolls under to attack the leg, which the top player defends until the end of the clip, making the outcome unsuccessful.",
+          "evidence": "From 20:52.500 to 20:54.000, Flaga is on his back holding Langaker's right leg in a leg entanglement (kneebar/heel hook setup) while Langaker defends; there are no back hooks or seatbelt grips present."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25005,
+          "candidates_token_count": 339,
+          "total_token_count": 28062
+        },
+        "latency_ms": 60948.4,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "turtle",
+    "technique_label": "back_take",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "back_take",
+    "val_high_verdict": "disagree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d011__occ4",
+    "match_id": "650d20c745120c8433e9d011",
+    "gold_event": {
+      "t_s": 80,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=CqO714FY4Eo",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 75.0,
+    "window_end_s": 84.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"back_control\",\n  \"justification\": \"The player in the giraffe-patterned rashguard is positioned behind his opponent with his chest to the opponent's back and his legs wrapped around the torso.\"\n}",
+        "parsed": {
+          "position": "back_control",
+          "justification": "The player in the giraffe-patterned rashguard is positioned behind his opponent with his chest to the opponent's back and his legs wrapped around the torso."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 52,
+          "total_token_count": 7286
+        },
+        "latency_ms": 4432.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The athlete in the giraffe rashguard attacks with an armbar, trapping the opponent's arm between his legs, but the opponent successfully defends his grip until the clip ends.\"\n}",
+        "parsed": {
+          "action_class": "submission_arm_lock",
+          "outcome": "unsuccessful",
+          "justification": "The athlete in the giraffe rashguard attacks with an armbar, trapping the opponent's arm between his legs, but the opponent successfully defends his grip until the clip ends."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 68,
+          "total_token_count": 7493
+        },
+        "latency_ms": 4635.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The original label identifies the position as 'back_control' and the action as 'submission_arm_lock'. While the clip starts with Rida on Cyborg's back at 01:15.000, he immediately transitions at 01:15.500 by falling to his back and throwing his leg over Cyborg's head to attack a straight armbar (juji gatame). By 01:16.000 and continuing until the end of the clip at 01:23.900, Rida is on the bottom with his legs clamping Cyborg's head and chest to isolate the arm. This configuration is a classic armbar from the bottom, which is classified as 'open_guard', not 'back_control', as there is no longer chest-to-back contact or back hooks.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": \"position\",\n  \"reason\": \"The position transitions from back control to open guard within the first second of the clip as the attacker falls back to attempt the armbar. For the remainder of the clip, the position is open guard.\",\n  \"evidence\": \"At 01:15.800, the attacker's left leg passes over the opponent's head, transitioning from the back to a bottom armbar position (open guard) which is maintained until the end of the clip at 01:23.900.\"\n}",
+        "parsed": {
+          "adversarial_case": "The original label identifies the position as 'back_control' and the action as 'submission_arm_lock'. While the clip starts with Rida on Cyborg's back at 01:15.000, he immediately transitions at 01:15.500 by falling to his back and throwing his leg over Cyborg's head to attack a straight armbar (juji gatame). By 01:16.000 and continuing until the end of the clip at 01:23.900, Rida is on the bottom with his legs clamping Cyborg's head and chest to isolate the arm. This configuration is a classic armbar from the bottom, which is classified as 'open_guard', not 'back_control', as there is no longer chest-to-back contact or back hooks.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": "position",
+          "reason": "The position transitions from back control to open guard within the first second of the clip as the attacker falls back to attempt the armbar. For the remainder of the clip, the position is open guard.",
+          "evidence": "At 01:15.800, the attacker's left leg passes over the opponent's head, transitioning from the back to a bottom armbar position (open guard) which is maintained until the end of the clip at 01:23.900."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7202,
+          "candidates_token_count": 364,
+          "total_token_count": 9675
+        },
+        "latency_ms": 16336.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"For the position label, although the clip starts with a brief back-mount entry, by frame 01:15.300 the attacking athlete rolls off the back to pursue a straight armbar. From 01:16.000 to the end of the clip, there is no chest-to-back contact, nor are there hooks or a body triangle. Instead, the attacker is on his back/side with his legs draped over the defender's head and chest in a classic armbar web configuration, which is classified as open_guard. For the action_class, one could argue it is a transition, but the persistent, active extension of the arm and grip-fighting to finish the joint lock clearly defines it as a submission_arm_lock.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": \"position\",\n  \"reason\": \"The back control is lost almost immediately at 01:15.300 as the attacker rolls to the side to attack the armbar. For the vast majority of the clip, the position is open_guard (specifically the armbar spiderweb/web position).\",\n  \"evidence\": \"At 01:16.000, the attacker's chest is no longer against the opponent's back; instead, he is lying on the mat with his legs over the opponent's head and chest, attacking the armbar while the opponent defends from a kneeling position.\"\n}",
+        "parsed": {
+          "adversarial_case": "For the position label, although the clip starts with a brief back-mount entry, by frame 01:15.300 the attacking athlete rolls off the back to pursue a straight armbar. From 01:16.000 to the end of the clip, there is no chest-to-back contact, nor are there hooks or a body triangle. Instead, the attacker is on his back/side with his legs draped over the defender's head and chest in a classic armbar web configuration, which is classified as open_guard. For the action_class, one could argue it is a transition, but the persistent, active extension of the arm and grip-fighting to finish the joint lock clearly defines it as a submission_arm_lock.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": "position",
+          "reason": "The back control is lost almost immediately at 01:15.300 as the attacker rolls to the side to attack the armbar. For the vast majority of the clip, the position is open_guard (specifically the armbar spiderweb/web position).",
+          "evidence": "At 01:16.000, the attacker's chest is no longer against the opponent's back; instead, he is lying on the mat with his legs over the opponent's head and chest, attacking the armbar while the opponent defends from a kneeling position."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25022,
+          "candidates_token_count": 361,
+          "total_token_count": 27179
+        },
+        "latency_ms": 15358.3,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "back_control",
+    "technique_label": "submission_arm_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "disagree",
+    "val_low_final_class": "submission_arm_lock",
+    "val_high_verdict": "disagree",
+    "val_high_final_class": "submission_arm_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d005__occ5",
+    "match_id": "650d20c745120c8433e9d005",
+    "gold_event": {
+      "t_s": 31,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=BmulmE8MyK4",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 26.0,
+    "window_end_s": 35.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"closed_guard\",\n  \"justification\": \"The bottom player has his legs wrapped around the top player's torso with his ankles crossed and locked behind the back.\"\n}",
+        "parsed": {
+          "position": "closed_guard",
+          "justification": "The bottom player has his legs wrapped around the top player's torso with his ankles crossed and locked behind the back."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 44,
+          "total_token_count": 7108
+        },
+        "latency_ms": 3907.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"Bottom player isolates the top player's leg in a saddle position and applies a heel hook, resulting in a tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "Bottom player isolates the top player's leg in a saddle position and applies a heel hook, resulting in a tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 56,
+          "total_token_count": 7279
+        },
+        "latency_ms": 4909.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The original position label 'closed_guard' is incorrect because the defining action of the clip\u2014the successful leg lock\u2014cannot be executed from closed guard. While the clip begins in closed guard, Craig Jones opens his guard at 00:30.000 to transition into a saddle leg entanglement (inside senkaku). The entire submission attack and the subsequent tap at 00:33.000 take place from this open guard configuration. Therefore, the position should be classified as 'open_guard' rather than 'closed_guard'.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": \"position\",\n  \"reason\": \"The submission is initiated and finished from a saddle leg entanglement, which is an open guard position, after the closed guard is opened at 00:30.000.\",\n  \"evidence\": \"At 00:30.000, the bottom player (Craig Jones) opens his closed guard, inserts his leg to entangle the opponent's leg in a saddle position, and secures the heel hook finish at 00:33.000.\"\n}",
+        "parsed": {
+          "adversarial_case": "The original position label 'closed_guard' is incorrect because the defining action of the clip\u2014the successful leg lock\u2014cannot be executed from closed guard. While the clip begins in closed guard, Craig Jones opens his guard at 00:30.000 to transition into a saddle leg entanglement (inside senkaku). The entire submission attack and the subsequent tap at 00:33.000 take place from this open guard configuration. Therefore, the position should be classified as 'open_guard' rather than 'closed_guard'.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": "position",
+          "reason": "The submission is initiated and finished from a saddle leg entanglement, which is an open guard position, after the closed guard is opened at 00:30.000.",
+          "evidence": "At 00:30.000, the bottom player (Craig Jones) opens his closed guard, inserts his leg to entangle the opponent's leg in a saddle position, and secures the heel hook finish at 00:33.000."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7182,
+          "candidates_token_count": 293,
+          "total_token_count": 8974
+        },
+        "latency_ms": 12862.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The original position label of closed_guard is incorrect. At 00:26.000, Craig Jones (bottom) has his legs wrapped around Joao Costa's left leg in a saddle/inside sankaku configuration, rather than around Costa's torso. Costa's right leg is completely free and extended, which is a classic open guard leg entanglement setup, not a closed guard.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": \"position\",\n  \"reason\": \"The position is an open guard leg entanglement (saddle) rather than closed guard, as the bottom player's legs are isolating the opponent's leg instead of wrapping around the torso.\",\n  \"evidence\": \"At 00:26.000, Craig Jones's legs are wrapped around Joao Costa's left leg in a saddle/inside sankaku configuration, with Costa's right leg free, confirming an open guard leg entanglement rather than closed guard.\"\n}",
+        "parsed": {
+          "adversarial_case": "The original position label of closed_guard is incorrect. At 00:26.000, Craig Jones (bottom) has his legs wrapped around Joao Costa's left leg in a saddle/inside sankaku configuration, rather than around Costa's torso. Costa's right leg is completely free and extended, which is a classic open guard leg entanglement setup, not a closed guard.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": "position",
+          "reason": "The position is an open guard leg entanglement (saddle) rather than closed guard, as the bottom player's legs are isolating the opponent's leg instead of wrapping around the torso.",
+          "evidence": "At 00:26.000, Craig Jones's legs are wrapped around Joao Costa's left leg in a saddle/inside sankaku configuration, with Costa's right leg free, confirming an open guard leg entanglement rather than closed guard."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25002,
+          "candidates_token_count": 256,
+          "total_token_count": 26314
+        },
+        "latency_ms": 11511.0,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "closed_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "disagree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "disagree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d022__occ6",
+    "match_id": "650d20c745120c8433e9d022",
+    "gold_event": {
+      "t_s": 8307,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 8302.0,
+    "window_end_s": 8311.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"mount\",\n  \"justification\": \"The top player is seated astride the bottom player's torso with both knees on the mat before transitioning to an armbar.\"\n}",
+        "parsed": {
+          "position": "mount",
+          "justification": "The top player is seated astride the bottom player's torso with both knees on the mat before transitioning to an armbar."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 44,
+          "total_token_count": 7153
+        },
+        "latency_ms": 4599.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"unclear\",\n  \"justification\": \"The top player transitions from S-mount to an armbar attempt by throwing her leg over the opponent's head, but the clip ends while the bottom player is still bridging and defending, leaving the final outcome unresolved.\"\n}",
+        "parsed": {
+          "action_class": "submission_arm_lock",
+          "outcome": "unclear",
+          "justification": "The top player transitions from S-mount to an armbar attempt by throwing her leg over the opponent's head, but the clip ends while the bottom player is still bridging and defending, leaving the final outcome unresolved."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 77,
+          "total_token_count": 7467
+        },
+        "latency_ms": 5430.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\"adversarial_case\": \"An opponent might argue that the position should be labeled as 'scramble' rather than 'mount' because at 138:28.000, the top player falls back to the mat and the bottom player bridges dynamically, creating a fluid, off-balance situation. Furthermore, one could argue the outcome is 'unsuccessful' because by 138:29.000, the defender has successfully bridged and rotated her hips to execute a hitchhiker-style defense, neutralizing the immediate breaking pressure of the armbar.\", \"verdict\": \"agree\", \"final_position\": \"mount\", \"final_action_class\": \"submission_arm_lock\", \"final_outcome\": \"unclear\", \"wrong_label\": null, \"reason\": null, \"evidence\": \"At 138:23.400, the top player is established in S-mount. At 138:27.200, she swings her left leg over the opponent's head to initiate the armbar (submission_arm_lock). The clip ends at 138:30.900 with the defender bridging to defend, leaving the outcome unresolved (unclear).\"}",
+        "parsed": {
+          "adversarial_case": "An opponent might argue that the position should be labeled as 'scramble' rather than 'mount' because at 138:28.000, the top player falls back to the mat and the bottom player bridges dynamically, creating a fluid, off-balance situation. Furthermore, one could argue the outcome is 'unsuccessful' because by 138:29.000, the defender has successfully bridged and rotated her hips to execute a hitchhiker-style defense, neutralizing the immediate breaking pressure of the armbar.",
+          "verdict": "agree",
+          "final_position": "mount",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 138:23.400, the top player is established in S-mount. At 138:27.200, she swings her left leg over the opponent's head to initiate the armbar (submission_arm_lock). The clip ends at 138:30.900 with the defender bridging to defend, leaving the outcome unresolved (unclear)."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7203,
+          "candidates_token_count": 264,
+          "total_token_count": 9369
+        },
+        "latency_ms": 13009.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"An opponent of the 'mount' label could argue that the position should be classified as 'open_guard' or 'scramble' because the wide angle at 138:23.400 shows the top player already sliding off the torso to attack the armbar, and by 138:24.500 she is seated on the mat with her legs over the opponent, which is a classic armbar configuration rather than a stable mount. For the action class, one could argue it is a 'transition' because the arm is never fully extended, and the bottom player's immediate bridge at 138:28.000 turns the sequence into a positional battle. However, the initial position is clearly S-mount, and the intent is a direct submission attack (armbar), making 'mount' and 'submission_arm_lock' with an 'unclear' outcome the most accurate labels.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"mount\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"unclear\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 138:23.400, the top player is in S-mount astride the bottom player's torso, then at 138:24.000 she swings her leg over the head to initiate the armbar (submission_arm_lock), which the bottom player defends by bridging from 138:28.000 to the end of the clip, leaving the outcome unclear.\"\n}",
+        "parsed": {
+          "adversarial_case": "An opponent of the 'mount' label could argue that the position should be classified as 'open_guard' or 'scramble' because the wide angle at 138:23.400 shows the top player already sliding off the torso to attack the armbar, and by 138:24.500 she is seated on the mat with her legs over the opponent, which is a classic armbar configuration rather than a stable mount. For the action class, one could argue it is a 'transition' because the arm is never fully extended, and the bottom player's immediate bridge at 138:28.000 turns the sequence into a positional battle. However, the initial position is clearly S-mount, and the intent is a direct submission attack (armbar), making 'mount' and 'submission_arm_lock' with an 'unclear' outcome the most accurate labels.",
+          "verdict": "agree",
+          "final_position": "mount",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 138:23.400, the top player is in S-mount astride the bottom player's torso, then at 138:24.000 she swings her leg over the head to initiate the armbar (submission_arm_lock), which the bottom player defends by bridging from 138:28.000 to the end of the clip, leaving the outcome unclear."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25023,
+          "candidates_token_count": 367,
+          "total_token_count": 26903
+        },
+        "latency_ms": 15353.4,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "mount",
+    "technique_label": "submission_arm_lock",
+    "outcome_label": "unclear",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_arm_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_arm_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "650d20c745120c8433e9cfd4__occ7",
+    "match_id": "650d20c745120c8433e9cfd4",
+    "gold_event": {
+      "t_s": 491,
+      "action_class": "submission_arm_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=SNe7pQwcShA",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 486.0,
+    "window_end_s": 495.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player keeps his feet active on the standing opponent's hips and legs without crossing his ankles, establishing an open guard.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player keeps his feet active on the standing opponent's hips and legs without crossing his ankles, establishing an open guard."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 46,
+          "total_token_count": 7142
+        },
+        "latency_ms": 4252.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The top player jumps into a flying armbar, trapping the bottom player's arm between his legs and extending the joint to force a tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_arm_lock",
+          "outcome": "successful",
+          "justification": "The top player jumps into a flying armbar, trapping the bottom player's arm between his legs and extending the joint to force a tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 61,
+          "total_token_count": 7354
+        },
+        "latency_ms": 4332.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the starting position should be labeled as 'standing' because Kade Ruotolo is fully upright on his feet before launching the attack, and the guard player has no closed or locked guard. For the action class, one might argue it is a transition or scramble since it involves a dynamic jump and roll. However, Lachlan Giles is clearly on his back with active open guard hooks (shin-to-shin and feet on hips) from 08:06.000 to 08:09.500, making 'open_guard' the correct starting position. The attack is a direct, intentional flying armbar entry, which is a classic arm lock submission.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_arm_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 08:09.900, Kade Ruotolo initiates a flying armbar from the open guard, securing the arm and extending it to force a clear tap from Lachlan Giles at 08:13.100.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the starting position should be labeled as 'standing' because Kade Ruotolo is fully upright on his feet before launching the attack, and the guard player has no closed or locked guard. For the action class, one might argue it is a transition or scramble since it involves a dynamic jump and roll. However, Lachlan Giles is clearly on his back with active open guard hooks (shin-to-shin and feet on hips) from 08:06.000 to 08:09.500, making 'open_guard' the correct starting position. The attack is a direct, intentional flying armbar entry, which is a classic arm lock submission.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_arm_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 08:09.900, Kade Ruotolo initiates a flying armbar from the open guard, securing the arm and extending it to force a clear tap from Lachlan Giles at 08:13.100."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7189,
+          "candidates_token_count": 280,
+          "total_token_count": 8339
+        },
+        "latency_ms": 8799.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"The original label calls this a successful flying armbar ('submission_arm_lock'). However, a close inspection of the clip starting at 08:10.100 shows Kade Ruotolo executing a rolling entry to attack Lachlan Giles's leg, not his arm. Kade isolates the leg and attempts a kneebar ('submission_leg_lock') from 08:11.000 to the end of the clip. Furthermore, there is no tap or submission finish visible within the clip, making the 'successful' outcome label incorrect.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unclear\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The technique shown is a rolling kneebar (leg lock) attempt rather than an armbar, and the submission is not completed within the video timeframe.\",\n  \"evidence\": \"At 08:10.100, the top player rolls over the bottom player's left leg, securing it between his thighs and extending the knee joint in a kneebar attempt that continues until the clip ends at 08:14.900 without a tap.\"\n}",
+        "parsed": {
+          "adversarial_case": "The original label calls this a successful flying armbar ('submission_arm_lock'). However, a close inspection of the clip starting at 08:10.100 shows Kade Ruotolo executing a rolling entry to attack Lachlan Giles's leg, not his arm. Kade isolates the leg and attempts a kneebar ('submission_leg_lock') from 08:11.000 to the end of the clip. Furthermore, there is no tap or submission finish visible within the clip, making the 'successful' outcome label incorrect.",
+          "verdict": "disagree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unclear",
+          "wrong_label": "action_class",
+          "reason": "The technique shown is a rolling kneebar (leg lock) attempt rather than an armbar, and the submission is not completed within the video timeframe.",
+          "evidence": "At 08:10.100, the top player rolls over the bottom player's left leg, securing it between his thighs and extending the knee joint in a kneebar attempt that continues until the clip ends at 08:14.900 without a tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25009,
+          "candidates_token_count": 294,
+          "total_token_count": 27155
+        },
+        "latency_ms": 17112.7,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_arm_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_arm_lock",
+    "val_high_verdict": "disagree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65e3a69da2434704339e4460__occ8",
+    "match_id": "65e3a69da2434704339e4460",
+    "gold_event": {
+      "t_s": 333,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=s02rhL-3Fvs",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 328.0,
+    "window_end_s": 337.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The player in black shorts sits back into a saddle leg entanglement, which is an open guard variant, to attack a heel hook.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The player in black shorts sits back into a saddle leg entanglement, which is an open guard variant, to attack a heel hook."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 46,
+          "total_token_count": 7456
+        },
+        "latency_ms": 5278.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unclear\",\n  \"justification\": \"The athlete in black shorts rolls back to attack the bottom athlete's leg, securing a leg entanglement for a heel hook attempt, but the clip ends before a tap or escape occurs.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unclear",
+          "justification": "The athlete in black shorts rolls back to attack the bottom athlete's leg, securing a leg entanglement for a heel hook attempt, but the clip ends before a tap or escape occurs."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 70,
+          "total_token_count": 7827
+        },
+        "latency_ms": 7107.2,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\"adversarial_case\": \"One could argue the position should be labeled as a scramble due to the dynamic rolling entry starting at 05:28.000. Additionally, the action could be argued as a sweep since the top player is brought to the bottom. However, by 05:30.000, a clear saddle leg entanglement (an open guard variant) is established, and the athlete in black shorts is solely focused on securing and finishing a heel hook, making open_guard and submission_leg_lock the most accurate classifications.\", \"verdict\": \"agree\", \"final_position\": \"open_guard\", \"final_action_class\": \"submission_leg_lock\", \"final_outcome\": \"unclear\", \"wrong_label\": null, \"reason\": null, \"evidence\": \"At 05:30.000, the athlete in black shorts fully secures the saddle leg entanglement (open_guard) and maintains a deep heel hook grip (submission_leg_lock) through the end of the clip at 05:36.900 without a tap or escape occurring (unclear).\"}",
+        "parsed": {
+          "adversarial_case": "One could argue the position should be labeled as a scramble due to the dynamic rolling entry starting at 05:28.000. Additionally, the action could be argued as a sweep since the top player is brought to the bottom. However, by 05:30.000, a clear saddle leg entanglement (an open guard variant) is established, and the athlete in black shorts is solely focused on securing and finishing a heel hook, making open_guard and submission_leg_lock the most accurate classifications.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 05:30.000, the athlete in black shorts fully secures the saddle leg entanglement (open_guard) and maintains a deep heel hook grip (submission_leg_lock) through the end of the clip at 05:36.900 without a tap or escape occurring (unclear)."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7198,
+          "candidates_token_count": 243,
+          "total_token_count": 9189
+        },
+        "latency_ms": 13933.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position should be labeled as a 'scramble' rather than 'open_guard' because both athletes are rolling dynamically on the mat from the start of the clip (05:28.000) without a traditional guard structure. Furthermore, one could argue the action class is a 'transition' rather than a 'submission_leg_lock' because the athlete in black shorts is primarily focused on maintaining the leg entanglement (saddle) rather than applying a breaking mechanism, and the outcome should be 'unsuccessful' as the opponent successfully hides her heel and prevents any submission pressure by the end of the clip (05:36.000).\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unclear\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The athlete in black shorts (Clay) sits back and establishes a clear saddle leg entanglement (an open guard variant) at 05:28.000. She actively wraps and attacks the opponent's heel for a heel hook submission attempt, with visible grip adjustments on the foot from 05:31.500 to 05:33.000. The clip ends at 05:36.900 while the leg lock attempt is still ongoing, making the outcome unclear.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position should be labeled as a 'scramble' rather than 'open_guard' because both athletes are rolling dynamically on the mat from the start of the clip (05:28.000) without a traditional guard structure. Furthermore, one could argue the action class is a 'transition' rather than a 'submission_leg_lock' because the athlete in black shorts is primarily focused on maintaining the leg entanglement (saddle) rather than applying a breaking mechanism, and the outcome should be 'unsuccessful' as the opponent successfully hides her heel and prevents any submission pressure by the end of the clip (05:36.000).",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The athlete in black shorts (Clay) sits back and establishes a clear saddle leg entanglement (an open guard variant) at 05:28.000. She actively wraps and attacks the opponent's heel for a heel hook submission attempt, with visible grip adjustments on the foot from 05:31.500 to 05:33.000. The clip ends at 05:36.900 while the leg lock attempt is still ongoing, making the outcome unclear."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25018,
+          "candidates_token_count": 333,
+          "total_token_count": 26685
+        },
+        "latency_ms": 14054.7,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unclear",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65f648c51dcf397e6900a827__occ9",
+    "match_id": "65f648c51dcf397e6900a827",
+    "gold_event": {
+      "t_s": 241,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=ivJyZEimZIc",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 236.0,
+    "window_end_s": 245.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player maintains an open guard leg entanglement around the opponent's leg throughout the exchange.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player maintains an open guard leg entanglement around the opponent's leg throughout the exchange."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 39,
+          "total_token_count": 7364
+        },
+        "latency_ms": 5509.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player in the green and yellow rash guard isolates the top player's leg and attempts a leg lock, which the top player successfully defends.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player in the green and yellow rash guard isolates the top player's leg and attempts a leg lock, which the top player successfully defends."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 63,
+          "total_token_count": 7608
+        },
+        "latency_ms": 6371.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"For the position label, one could argue the position is half_guard because the bottom player has one of the opponent's legs trapped between his own legs. However, the lack of upper-body contact and the specific leg-entanglement configuration (ashi garami/50-50 style) fits the open_guard definition much better. For the action class, one could argue the action is transition because the bottom player is holding the leg for control/retention rather than actively applying a finish, as the top player looks relaxed and is hand-fighting without showing signs of extreme danger. However, the bottom player's clasped hands around the foot/heel at 03:57.30 constitute a clear submission_leg_lock attempt.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom player in the green/yellow rash guard has his legs wrapped around the top player's leg in an open guard leg entanglement and clasps his hands around the foot/heel at 03:57.30 to attempt a leg lock, which the top player defends by hand-fighting and eventually rolling to clear the knee line at 04:03.70.\"\n}",
+        "parsed": {
+          "adversarial_case": "For the position label, one could argue the position is half_guard because the bottom player has one of the opponent's legs trapped between his own legs. However, the lack of upper-body contact and the specific leg-entanglement configuration (ashi garami/50-50 style) fits the open_guard definition much better. For the action class, one could argue the action is transition because the bottom player is holding the leg for control/retention rather than actively applying a finish, as the top player looks relaxed and is hand-fighting without showing signs of extreme danger. However, the bottom player's clasped hands around the foot/heel at 03:57.30 constitute a clear submission_leg_lock attempt.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player in the green/yellow rash guard has his legs wrapped around the top player's leg in an open guard leg entanglement and clasps his hands around the foot/heel at 03:57.30 to attempt a leg lock, which the top player defends by hand-fighting and eventually rolling to clear the knee line at 04:03.70."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7184,
+          "candidates_token_count": 318,
+          "total_token_count": 8935
+        },
+        "latency_ms": 12741.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position should be classified as a scramble due to the rolling and dynamic movement between 04:03.000 and 04:04.900, or that the action is a sweep attempt as the bottom player off-balances the top player. However, the bottom player maintains a clear leg entanglement (saddle/ashi garami) throughout, which is a standard open guard variation, and is actively gripping and attacking the opponent's heel/foot (visible at 03:57.200 and 04:01.200) to secure a heel hook, making 'open_guard' and 'submission_leg_lock' the correct labels.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom player in the green/yellow rash guard isolates the top player's leg in a saddle/ashi garami position (open guard) and actively attacks the heel/foot (visible heel hook grip at 03:57.200 and 04:01.200), which the top player defends by rolling and hiding the heel, resulting in an unsuccessful submission attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position should be classified as a scramble due to the rolling and dynamic movement between 04:03.000 and 04:04.900, or that the action is a sweep attempt as the bottom player off-balances the top player. However, the bottom player maintains a clear leg entanglement (saddle/ashi garami) throughout, which is a standard open guard variation, and is actively gripping and attacking the opponent's heel/foot (visible at 03:57.200 and 04:01.200) to secure a heel hook, making 'open_guard' and 'submission_leg_lock' the correct labels.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player in the green/yellow rash guard isolates the top player's leg in a saddle/ashi garami position (open guard) and actively attacks the heel/foot (visible heel hook grip at 03:57.200 and 04:01.200), which the top player defends by rolling and hiding the heel, resulting in an unsuccessful submission attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25004,
+          "candidates_token_count": 316,
+          "total_token_count": 26358
+        },
+        "latency_ms": 10966.7,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "6643b593532ae8f232692d70__occ10",
+    "match_id": "6643b593532ae8f232692d70",
+    "gold_event": {
+      "t_s": 2647,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 2642.0,
+    "window_end_s": 2651.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player is on his back using his legs to frame and entangle the standing opponent's leg in an open guard configuration.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player is on his back using his legs to frame and entangle the standing opponent's leg in an open guard configuration."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 48,
+          "total_token_count": 7151
+        },
+        "latency_ms": 4587.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player has the top player's right leg trapped in an entanglement and wraps his arm around the ankle to attempt a leg lock, which the top player successfully defends by slipping his foot out.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player has the top player's right leg trapped in an entanglement and wraps his arm around the ankle to attempt a leg lock, which the top player successfully defends by slipping his foot out."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 73,
+          "total_token_count": 7270
+        },
+        "latency_ms": 3613.6,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position should be classified as half_guard because the bottom player has isolated a single leg of the opponent between his own legs (Ashi Garami/Single Leg X), which structurally shares the single-leg-isolation property of half guard. Furthermore, one could argue the action_class is transition or sweep rather than submission_leg_lock because the bottom player (Hansen) never connects his hands to initiate a breaking mechanism (such as a standard ankle lock grip or heel hook grip) and instead uses the ankle wrap solely as a control vector to prevent Aly from passing, eventually attempting to elevate the hips for a sweep around 44:09.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom player (Hansen) is on his back in an open guard (specifically Single Leg X / Ashi Garami) with his left arm wrapping Aly's right ankle in a straight ankle lock setup from 44:02 to 44:09, while Aly remains standing and defends the leg lock threat, resulting in an unsuccessful submission attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position should be classified as half_guard because the bottom player has isolated a single leg of the opponent between his own legs (Ashi Garami/Single Leg X), which structurally shares the single-leg-isolation property of half guard. Furthermore, one could argue the action_class is transition or sweep rather than submission_leg_lock because the bottom player (Hansen) never connects his hands to initiate a breaking mechanism (such as a standard ankle lock grip or heel hook grip) and instead uses the ankle wrap solely as a control vector to prevent Aly from passing, eventually attempting to elevate the hips for a sweep around 44:09.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player (Hansen) is on his back in an open guard (specifically Single Leg X / Ashi Garami) with his left arm wrapping Aly's right ankle in a straight ankle lock setup from 44:02 to 44:09, while Aly remains standing and defends the leg lock threat, resulting in an unsuccessful submission attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7202,
+          "candidates_token_count": 293,
+          "total_token_count": 9133
+        },
+        "latency_ms": 14398.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the action class should be labeled as a sweep attempt rather than a submission_leg_lock, as leg entanglements like Ashi Garami are frequently used to sweep the opponent to the mat, and we do not see a tap or extreme hyperextension. Additionally, one might argue the position is a scramble due to the off-balancing nature of the leg entanglement.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"Hansen (bottom) clearly wraps his arm around Aly's right ankle/heel starting at 44:02.000 and maintains a tight grip attempting to apply breaking pressure on the foot/ankle while keeping his legs in an Ashi Garami entanglement (open_guard) until Aly manages to clear the threat, confirming an unsuccessful submission_leg_lock attempt.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the action class should be labeled as a sweep attempt rather than a submission_leg_lock, as leg entanglements like Ashi Garami are frequently used to sweep the opponent to the mat, and we do not see a tap or extreme hyperextension. Additionally, one might argue the position is a scramble due to the off-balancing nature of the leg entanglement.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Hansen (bottom) clearly wraps his arm around Aly's right ankle/heel starting at 44:02.000 and maintains a tight grip attempting to apply breaking pressure on the foot/ankle while keeping his legs in an Ashi Garami entanglement (open_guard) until Aly manages to clear the threat, confirming an unsuccessful submission_leg_lock attempt."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25022,
+          "candidates_token_count": 240,
+          "total_token_count": 26286
+        },
+        "latency_ms": 12905.9,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "66a6ff021c62a1db7a5133c0__occ11",
+    "match_id": "66a6ff021c62a1db7a5133c0",
+    "gold_event": {
+      "t_s": 12775,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=pwGbW5GZgfc",
+    "ingestion_path": "files_api",
+    "window_start_s": 12770.0,
+    "window_end_s": 12779.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player has her back on the mat with her legs open and active to control the top player who is kneeling inside her space.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player has her back on the mat with her legs open and active to control the top player who is kneeling inside her space."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 48,
+          "total_token_count": 7589
+        },
+        "latency_ms": 5962.2,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The bottom player rolls underneath to isolate and attack the top player's leg in a leg lock attempt, which the top player defends and neutralizes.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unsuccessful",
+          "justification": "The bottom player rolls underneath to isolate and attack the top player's leg in a leg lock attempt, which the top player defends and neutralizes."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 63,
+          "total_token_count": 7525
+        },
+        "latency_ms": 6147.1,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the starting position is half_guard rather than open_guard, as the bottom player appears to have the top player's leg partially trapped between her own at 00:02.500. Furthermore, the action could be classified as a sweep attempt, as rolling underneath the opponent's hips is a common mechanism for deep half sweeps. However, the bottom player's primary focus is clearly isolating the foot and ankle to establish a leg lock (visible from 00:06.500 to 00:10.000), and she remains on her back/side without attempting to come up on top, confirming the submission_leg_lock label is correct.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 00:06.500, the bottom player rolls underneath and wraps her arms securely around the top player's left foot/ankle, attempting a leg lock, which the top player defends by staying heavy and sitting back through 00:10.000.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the starting position is half_guard rather than open_guard, as the bottom player appears to have the top player's leg partially trapped between her own at 00:02.500. Furthermore, the action could be classified as a sweep attempt, as rolling underneath the opponent's hips is a common mechanism for deep half sweeps. However, the bottom player's primary focus is clearly isolating the foot and ankle to establish a leg lock (visible from 00:06.500 to 00:10.000), and she remains on her back/side without attempting to come up on top, confirming the submission_leg_lock label is correct.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 00:06.500, the bottom player rolls underneath and wraps her arms securely around the top player's left foot/ankle, attempting a leg lock, which the top player defends by staying heavy and sitting back through 00:10.000."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7192,
+          "candidates_token_count": 292,
+          "total_token_count": 8603
+        },
+        "latency_ms": 10523.2,
+        "ingestion_path": "files_api"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position is half guard rather than open guard, as the top player's leg appears partially trapped at the start (00:02.000). Additionally, the action could be interpreted as a sweep attempt because the bottom player rolls underneath the top player's hips (00:04.100). However, the bottom player quickly transitions into a clear leg entanglement, completely freeing her hips from half guard, and focuses entirely on isolating and attacking the top player's left foot/ankle from 00:07.000 to 00:10.900, confirming an open guard leg lock attempt.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 00:04.100, the bottom player rolls under the top player's hips to enter a leg entanglement. From 00:07.000 through 00:10.900, she clearly isolates the top player's left foot and ankle with both hands in a submission attempt, which the top player successfully defends without tapping.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position is half guard rather than open guard, as the top player's leg appears partially trapped at the start (00:02.000). Additionally, the action could be interpreted as a sweep attempt because the bottom player rolls underneath the top player's hips (00:04.100). However, the bottom player quickly transitions into a clear leg entanglement, completely freeing her hips from half guard, and focuses entirely on isolating and attacking the top player's left foot/ankle from 00:07.000 to 00:10.900, confirming an open guard leg lock attempt.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unsuccessful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 00:04.100, the bottom player rolls under the top player's hips to enter a leg entanglement. From 00:07.000 through 00:10.900, she clearly isolates the top player's left foot and ankle with both hands in a submission attempt, which the top player successfully defends without tapping."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25012,
+          "candidates_token_count": 303,
+          "total_token_count": 26507
+        },
+        "latency_ms": 11894.7,
+        "ingestion_path": "files_api"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unsuccessful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "66d4e7091c7649ed30cbef2b__occ12",
+    "match_id": "66d4e7091c7649ed30cbef2b",
+    "gold_event": {
+      "t_s": 164,
+      "action_class": "submission_leg_lock",
+      "outcome": "unsuccessful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KVW9yzKPKRg",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 159.0,
+    "window_end_s": 168.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player in the dark rashguard has her legs wrapped around the opponent's leg in an open guard leg entanglement to attack a leg lock.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player in the dark rashguard has her legs wrapped around the opponent's leg in an open guard leg entanglement to attack a leg lock."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 50,
+          "total_token_count": 7242
+        },
+        "latency_ms": 4535.9,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"unclear\",\n  \"justification\": \"The athlete in the dark rash guard isolates and twists the opponent's heel/foot in a leg lock attempt, but the outcome is unclear as the clip ends while the submission is still being actively contested.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "unclear",
+          "justification": "The athlete in the dark rash guard isolates and twists the opponent's heel/foot in a leg lock attempt, but the outcome is unclear as the clip ends while the submission is still being actively contested."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 74,
+          "total_token_count": 7596
+        },
+        "latency_ms": 5650.5,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position should be classified as a scramble rather than open_guard because both athletes are seated on the mat in a leg entanglement from 02:42.000 onwards, which can represent a neutral, non-guard state. For the action_class and outcome, one could argue that the heel hook attempt is unsuccessful because Aurelie Le Vern (leopard print) manages to defend her heel and prevent a tap throughout the duration of the clip.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unclear\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"Helena Crevar (dark rashguard) maintains a clear saddle/inside ashi leg entanglement (open_guard) and actively twists Aurelie Le Vern's heel in a heel hook attempt (submission_leg_lock) from 02:42.000 to 02:47.900, with the clip ending while the submission is still locked in and being defended (unclear).\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position should be classified as a scramble rather than open_guard because both athletes are seated on the mat in a leg entanglement from 02:42.000 onwards, which can represent a neutral, non-guard state. For the action_class and outcome, one could argue that the heel hook attempt is unsuccessful because Aurelie Le Vern (leopard print) manages to defend her heel and prevent a tap throughout the duration of the clip.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Helena Crevar (dark rashguard) maintains a clear saddle/inside ashi leg entanglement (open_guard) and actively twists Aurelie Le Vern's heel in a heel hook attempt (submission_leg_lock) from 02:42.000 to 02:47.900, with the clip ending while the submission is still locked in and being defended (unclear)."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7206,
+          "candidates_token_count": 266,
+          "total_token_count": 8512
+        },
+        "latency_ms": 9460.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position should be labeled as 'scramble' due to the rolling and shifting of hips around 02:43.000, or that the action_class is 'transition' as they roll. Furthermore, one might argue the outcome is 'unsuccessful' because no tap occurs before the clip cuts off.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unclear\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"Helena Crevar (dark rashguard) maintains a leg entanglement (open guard) on Aurelie Le Vern (leopard print) and actively attacks an inside heel hook from 02:41.000 to the end of the clip at 02:47.900, where the submission remains locked in and contested.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position should be labeled as 'scramble' due to the rolling and shifting of hips around 02:43.000, or that the action_class is 'transition' as they roll. Furthermore, one might argue the outcome is 'unsuccessful' because no tap occurs before the clip cuts off.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Helena Crevar (dark rashguard) maintains a leg entanglement (open guard) on Aurelie Le Vern (leopard print) and actively attacks an inside heel hook from 02:41.000 to the end of the clip at 02:47.900, where the submission remains locked in and contested."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25026,
+          "candidates_token_count": 223,
+          "total_token_count": 27181
+        },
+        "latency_ms": 15148.2,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "unclear",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "652c0e04a947037aeb7eb302__occ13",
+    "match_id": "652c0e04a947037aeb7eb302",
+    "gold_event": {
+      "t_s": 319,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=jBLehiPrM0E",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 314.0,
+    "window_end_s": 323.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player entangles the opponent's leg in an open guard variant (ashi garami) to secure a heel hook submission.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player entangles the opponent's leg in an open guard variant (ashi garami) to secure a heel hook submission."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 48,
+          "total_token_count": 7325
+        },
+        "latency_ms": 6942.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The athlete in the tiger-print shorts isolates his opponent's leg in a cross-ashi position and applies a heel hook, forcing a tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The athlete in the tiger-print shorts isolates his opponent's leg in a cross-ashi position and applies a heel hook, forcing a tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 62,
+          "total_token_count": 7459
+        },
+        "latency_ms": 79844.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position should be labeled 'scramble' due to the highly dynamic rolling and inversion between 05:15.000 and 05:17.500 where control is not fully established. Additionally, the action could be classified as a 'sweep' since Crelinsten's inversion at 05:16.500 forces Buechner to the mat. However, Crelinsten maintains continuous leg entanglement (ashi garami) which is a classic open guard variant, and the primary offensive action is the heel hook submission itself, which is successfully completed.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": \"Both labels are highly accurate. The bottom player maintains an open guard leg entanglement (cross ashi) throughout the sequence and successfully finishes a heel hook.\",\n  \"evidence\": \"At 05:18.000, the athletes settle with Crelinsten on bottom holding a cross-ashi open guard, leading directly to a heel hook finish and a tap at 05:20.000.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue the position should be labeled 'scramble' due to the highly dynamic rolling and inversion between 05:15.000 and 05:17.500 where control is not fully established. Additionally, the action could be classified as a 'sweep' since Crelinsten's inversion at 05:16.500 forces Buechner to the mat. However, Crelinsten maintains continuous leg entanglement (ashi garami) which is a classic open guard variant, and the primary offensive action is the heel hook submission itself, which is successfully completed.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": "Both labels are highly accurate. The bottom player maintains an open guard leg entanglement (cross ashi) throughout the sequence and successfully finishes a heel hook.",
+          "evidence": "At 05:18.000, the athletes settle with Crelinsten on bottom holding a cross-ashi open guard, leading directly to a heel hook finish and a tap at 05:20.000."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7191,
+          "candidates_token_count": 289,
+          "total_token_count": 8892
+        },
+        "latency_ms": 11521.7,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the initial sequence from 05:14.000 to 05:16.000 represents a dynamic 'scramble' rather than an established 'open_guard', as both athletes are actively rolling and fighting for leg position. Additionally, one might argue the submission outcome is unclear if the tap is obscured, but the referee's immediate intervention and the clear tap-out motion disprove this.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The athlete in the tiger-print shorts (Crelinsten) secures a cross-ashi leg entanglement (open guard variant) and applies a heel hook, leading to a clear tap from the opponent at 05:21.000, after which the referee stops the match.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the initial sequence from 05:14.000 to 05:16.000 represents a dynamic 'scramble' rather than an established 'open_guard', as both athletes are actively rolling and fighting for leg position. Additionally, one might argue the submission outcome is unclear if the tap is obscured, but the referee's immediate intervention and the clear tap-out motion disprove this.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The athlete in the tiger-print shorts (Crelinsten) secures a cross-ashi leg entanglement (open guard variant) and applies a heel hook, leading to a clear tap from the opponent at 05:21.000, after which the referee stops the match."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25011,
+          "candidates_token_count": 231,
+          "total_token_count": 26372
+        },
+        "latency_ms": 10385.6,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "65dfb6dba2434704339de920__occ14",
+    "match_id": "65dfb6dba2434704339de920",
+    "gold_event": {
+      "t_s": 2795,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=nDc0L96J6i4",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 2790.0,
+    "window_end_s": 2799.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player maintains an open guard leg entanglement (Ashi Garami) to control the top player's leg and secure a heel hook submission.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player maintains an open guard leg entanglement (Ashi Garami) to control the top player's leg and secure a heel hook submission."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 50,
+          "total_token_count": 7222
+        },
+        "latency_ms": 4475.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player isolates and wraps his arms around the top player's leg to apply a heel hook, resulting in a verbal tap and referee intervention.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The bottom player isolates and wraps his arms around the top player's leg to apply a heel hook, resulting in a verbal tap and referee intervention."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 62,
+          "total_token_count": 7556
+        },
+        "latency_ms": 5612.3,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position should be classified as a scramble or standing because the top player is fully standing on one leg and lifting the bottom player off the mat from 46:32.000 to 46:34.000, disrupting the typical guard structure. Additionally, one could argue the action class is a sweep because the bottom player actively knocks the top player to the mat at 46:35.000 before finalizing the submission.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": \"Both original labels are correct. The bottom player maintains an Ashi Garami leg entanglement, which is classified as an open guard, and uses it to secure a heel hook that results in a clear verbal tap and referee stoppage.\",\n  \"evidence\": \"The bottom player (R. Pereira Lima) isolates the top player's heel in an outside heel hook configuration, leading to a verbal tap and referee intervention to stop the match at 46:36.700.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position should be classified as a scramble or standing because the top player is fully standing on one leg and lifting the bottom player off the mat from 46:32.000 to 46:34.000, disrupting the typical guard structure. Additionally, one could argue the action class is a sweep because the bottom player actively knocks the top player to the mat at 46:35.000 before finalizing the submission.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": "Both original labels are correct. The bottom player maintains an Ashi Garami leg entanglement, which is classified as an open guard, and uses it to secure a heel hook that results in a clear verbal tap and referee stoppage.",
+          "evidence": "The bottom player (R. Pereira Lima) isolates the top player's heel in an outside heel hook configuration, leading to a verbal tap and referee intervention to stop the match at 46:36.700."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7194,
+          "candidates_token_count": 272,
+          "total_token_count": 8506
+        },
+        "latency_ms": 9879.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position should be labeled as 'scramble' due to the rolling exchange between 46:34.000 and 46:36.000 where both athletes are rolling to secure leg position. However, they quickly settle into a seated leg entanglement (Ashi Garami) by 46:36.500, which is classified as open_guard under the taxonomy. Furthermore, one might argue the outcome is unsuccessful or unclear if they mistake who tapped, but close inspection shows the shirtless player (originally top) successfully applying a heel hook on the black-shirted player's leg, leading to a clear verbal tap and referee stoppage at 46:38.000.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 46:38.000, the referee steps in to stop the match as the black-shirted player taps to the shirtless player's heel hook submission from the leg entanglement.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position should be labeled as 'scramble' due to the rolling exchange between 46:34.000 and 46:36.000 where both athletes are rolling to secure leg position. However, they quickly settle into a seated leg entanglement (Ashi Garami) by 46:36.500, which is classified as open_guard under the taxonomy. Furthermore, one might argue the outcome is unsuccessful or unclear if they mistake who tapped, but close inspection shows the shirtless player (originally top) successfully applying a heel hook on the black-shirted player's leg, leading to a clear verbal tap and referee stoppage at 46:38.000.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 46:38.000, the referee steps in to stop the match as the black-shirted player taps to the shirtless player's heel hook submission from the leg entanglement."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25014,
+          "candidates_token_count": 278,
+          "total_token_count": 27936
+        },
+        "latency_ms": 19793.9,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  },
+  {
+    "window_id": "66941978a7bafe01741514db__occ15",
+    "match_id": "66941978a7bafe01741514db",
+    "gold_event": {
+      "t_s": 4318,
+      "action_class": "submission_leg_lock",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=rfZn0eJcPZ8",
+    "ingestion_path": "youtube_uri",
+    "window_start_s": 4313.0,
+    "window_end_s": 4322.0,
+    "settings": {
+      "fps": 10,
+      "model": "gemini-3.5-flash",
+      "thinking": null,
+      "media_resolution": {
+        "position": null,
+        "technique": null,
+        "validator_low": "low",
+        "validator_high": "high"
+      }
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player lies on his back with his legs open and uncrossed, actively engaging the top player's legs and hips.\"\n}",
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player lies on his back with his legs open and uncrossed, actively engaging the top player's legs and hips."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6646,
+          "candidates_token_count": 46,
+          "total_token_count": 7224
+        },
+        "latency_ms": 5639.1,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"action_class\": \"submission_leg_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The top player sits back into a leg entanglement, isolating the bottom player's leg and applying a heel hook that forces a tap.\"\n}",
+        "parsed": {
+          "action_class": "submission_leg_lock",
+          "outcome": "successful",
+          "justification": "The top player sits back into a leg entanglement, isolating the bottom player's leg and applying a heel hook that forces a tap."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 6902,
+          "candidates_token_count": 59,
+          "total_token_count": 7452
+        },
+        "latency_ms": 5127.4,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_low",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position should be labeled as 'scramble' due to the highly dynamic rolling leg entry at 71:54-71:55, where both athletes are spinning and changing levels rapidly. Additionally, one might argue the action_class is a 'sweep' because the bottom player (Garry Tonon) rolls the top player (Dante Leon) onto his back at 71:59. However, the roll is a direct continuation of the leg entanglement attack initiated from the open guard, and the primary, match-ending technique is the heel hook itself rather than a positional sweep.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 72:00.400, Dante Leon (top player, black shorts) clearly taps on Garry Tonon's leg/hip as Tonon secures and twists the heel hook from the bottom open guard leg entanglement, leading to the referee's intervention at 72:00.600.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the position should be labeled as 'scramble' due to the highly dynamic rolling leg entry at 71:54-71:55, where both athletes are spinning and changing levels rapidly. Additionally, one might argue the action_class is a 'sweep' because the bottom player (Garry Tonon) rolls the top player (Dante Leon) onto his back at 71:59. However, the roll is a direct continuation of the leg entanglement attack initiated from the open guard, and the primary, match-ending technique is the heel hook itself rather than a positional sweep.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "At 72:00.400, Dante Leon (top player, black shorts) clearly taps on Garry Tonon's leg/hip as Tonon secures and twists the heel hook from the bottom open guard leg entanglement, leading to the referee's intervention at 72:00.600."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 7187,
+          "candidates_token_count": 277,
+          "total_token_count": 8634
+        },
+        "latency_ms": 11675.8,
+        "ingestion_path": "youtube_uri"
+      },
+      {
+        "call_name": "validator_high",
+        "status": "ok",
+        "error": null,
+        "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the starting position should be labeled as 'scramble' rather than 'open_guard' because the bottom player immediately rolls and initiates a highly dynamic leg entanglement sequence from the very first frame (71:53.000). Additionally, one might argue the action_class should be 'sweep' because the bottom player uses the leg entanglement to off-balance and tilt the top player. However, the top player remains upright and does not get swept to his back; instead, the bottom player maintains his bottom/seated configuration specifically to isolate the leg, making it a continuous, focused leg lock attack from open guard rather than a scramble or sweep.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"open_guard\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"The bottom player (Garry Tonon) starts in an open guard leg entanglement at 71:53.000, isolates the top player's leg, and applies a heel hook that forces a clear physical tap from the top player at 72:00.100, after which the referee steps in to stop the match.\"\n}",
+        "parsed": {
+          "adversarial_case": "One could argue that the starting position should be labeled as 'scramble' rather than 'open_guard' because the bottom player immediately rolls and initiates a highly dynamic leg entanglement sequence from the very first frame (71:53.000). Additionally, one might argue the action_class should be 'sweep' because the bottom player uses the leg entanglement to off-balance and tilt the top player. However, the top player remains upright and does not get swept to his back; instead, the bottom player maintains his bottom/seated configuration specifically to isolate the leg, making it a continuous, focused leg lock attack from open guard rather than a scramble or sweep.",
+          "verdict": "agree",
+          "final_position": "open_guard",
+          "final_action_class": "submission_leg_lock",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "The bottom player (Garry Tonon) starts in an open guard leg entanglement at 71:53.000, isolates the top player's leg, and applies a heel hook that forces a clear physical tap from the top player at 72:00.100, after which the referee steps in to stop the match."
+        },
+        "usage_metadata": {
+          "prompt_token_count": 25007,
+          "candidates_token_count": 291,
+          "total_token_count": 26289
+        },
+        "latency_ms": 10832.0,
+        "ingestion_path": "youtube_uri"
+      }
+    ],
+    "position_label": "open_guard",
+    "technique_label": "submission_leg_lock",
+    "outcome_label": "successful",
+    "val_low_verdict": "agree",
+    "val_low_final_class": "submission_leg_lock",
+    "val_high_verdict": "agree",
+    "val_high_final_class": "submission_leg_lock",
+    "status": "ok"
+  }
+]

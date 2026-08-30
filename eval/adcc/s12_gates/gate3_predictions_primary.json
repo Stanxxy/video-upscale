@@ -1,0 +1,1328 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9cff3__w32",
+    "match_id": "650d20c745120c8433e9cff3",
+    "gold_event": {
+      "t_s": 761,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "match_id": "650d20c745120c8433e9cff3",
+      "gate5_straddler": true,
+      "gold_event": {
+        "t_s": 761,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BKZ6Dt7SpYE",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 756.0,
+      "window_end_s": 765.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with a scramble leading to a guard position where the bottom player attempts a sweep and transitions into a guard retention scenario.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 3.5,\n      \"position\": \"scramble\",\n      \"actor\": \"contested\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"unclear\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 3.5,\n      \"end_s\": 8.0,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"sweep\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"Scissor sweep or similar guard reversal\",\n      \"confidence\": 0.85\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with a scramble leading to a guard position where the bottom player attempts a sweep and transitions into a guard retention scenario.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 3.5,
+                "position": "scramble",
+                "actor": "contested",
+                "action_class": "transition",
+                "outcome": "unclear",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 3.5,
+                "end_s": 8.0,
+                "position": "open_guard",
+                "actor": "bottom",
+                "action_class": "sweep",
+                "outcome": "successful",
+                "specific_technique_guess": "Scissor sweep or similar guard reversal",
+                "confidence": 0.85
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 219,
+            "total_token_count": 8462
+          },
+          "latency_ms": 5066.0,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 756.0,
+          "end_s": 759.5,
+          "action_class": "transition",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 759.5,
+          "end_s": 764.0,
+          "action_class": "sweep",
+          "confidence": 0.85
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "match_id": "650d20c745120c8433e9cff3",
+      "gate5_straddler": true,
+      "gold_event": {
+        "t_s": 761,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BKZ6Dt7SpYE",
+      "ingestion_path": "files_api",
+      "window_start_s": 756.0,
+      "window_end_s": 765.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with a scramble leading to a back take attempt by the bottom player, which is successfully defended, resulting in the top player establishing a dominant position in the bottom player's guard.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 3.0,\n      \"position\": \"scramble\",\n      \"actor\": \"contested\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"initial scramble from standing\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 3.0,\n      \"end_s\": 6.0,\n      \"position\": \"scramble\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"guillotine attempt\",\n      \"confidence\": 0.8\n    },\n    {\n      \"start_s\": 6.0,\n      \"end_s\": 8.0,\n      \"position\": \"scramble\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"back_take\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"back take attempt\",\n      \"confidence\": 0.7\n    },\n    {\n      \"start_s\": 8.0,\n      \"end_s\": 10.9,\n      \"position\": \"open_guard\",\n      \"actor\": \"top\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"passing into open guard\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with a scramble leading to a back take attempt by the bottom player, which is successfully defended, resulting in the top player establishing a dominant position in the bottom player's guard.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 3.0,
+                "position": "scramble",
+                "actor": "contested",
+                "action_class": "transition",
+                "outcome": "unclear",
+                "specific_technique_guess": "initial scramble from standing",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 3.0,
+                "end_s": 6.0,
+                "position": "scramble",
+                "actor": "bottom",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "guillotine attempt",
+                "confidence": 0.8
+              },
+              {
+                "start_s": 6.0,
+                "end_s": 8.0,
+                "position": "scramble",
+                "actor": "bottom",
+                "action_class": "back_take",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "back take attempt",
+                "confidence": 0.7
+              },
+              {
+                "start_s": 8.0,
+                "end_s": 10.9,
+                "position": "open_guard",
+                "actor": "top",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "passing into open guard",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 431,
+            "total_token_count": 8674
+          },
+          "latency_ms": 6690.8,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 756.0,
+          "end_s": 759.0,
+          "action_class": "transition",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 759.0,
+          "end_s": 762.0,
+          "action_class": "submission_choke",
+          "confidence": 0.8
+        },
+        {
+          "start_s": 762.0,
+          "end_s": 764.0,
+          "action_class": "back_take",
+          "confidence": 0.7
+        },
+        {
+          "start_s": 764.0,
+          "end_s": 766.9,
+          "action_class": "transition",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "gold_event": {
+      "t_s": 142,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "match_id": "650d20c745120c8433e9d00e",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 142,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 137.0,
+      "window_end_s": 146.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is in a ground exchange with the top player maintaining pressure from half guard, attempting to pass to side control.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 8.5,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"pressure passing from half guard\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is in a ground exchange with the top player maintaining pressure from half guard, attempting to pass to side control.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 8.5,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "guard_pass",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "pressure passing from half guard",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 153,
+            "total_token_count": 8396
+          },
+          "latency_ms": 4904.1,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 137.0,
+          "end_s": 145.5,
+          "action_class": "guard_pass",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "match_id": "650d20c745120c8433e9d00e",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 142,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+      "ingestion_path": "files_api",
+      "window_start_s": 137.0,
+      "window_end_s": 146.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with the top player in side control, transitioning into a back take attempt, and finally establishing back control.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 3.5,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"transitioning to back\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 3.5,\n      \"end_s\": 7.0,\n      \"position\": \"back_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"back_take\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"taking the back\",\n      \"confidence\": 0.95\n    },\n    {\n      \"start_s\": 7.0,\n      \"end_s\": 10.9,\n      \"position\": \"back_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"securing hooks\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with the top player in side control, transitioning into a back take attempt, and finally establishing back control.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 3.5,
+                "position": "side_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "transitioning to back",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 3.5,
+                "end_s": 7.0,
+                "position": "back_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "back_take",
+                "outcome": "successful",
+                "specific_technique_guess": "taking the back",
+                "confidence": 0.95
+              },
+              {
+                "start_s": 7.0,
+                "end_s": 10.9,
+                "position": "back_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "securing hooks",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 357,
+            "total_token_count": 8600
+          },
+          "latency_ms": 4253.6,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 137.0,
+          "end_s": 140.5,
+          "action_class": "transition",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 140.5,
+          "end_s": 144.0,
+          "action_class": "back_take",
+          "confidence": 0.95
+        },
+        {
+          "start_s": 144.0,
+          "end_s": 147.9,
+          "action_class": "transition",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "match_id": "650d20c745120c8433e9d024",
+    "gold_event": {
+      "t_s": 12624,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "match_id": "650d20c745120c8433e9d024",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with the top player in side control, transitioning into a submission attempt.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 3.0,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"side control pressure\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 3.0,\n      \"end_s\": 8.0,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"action_class\": \"submission_arm_lock\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"guillotine attempt\",\n      \"confidence\": 0.8\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with the top player in side control, transitioning into a submission attempt.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 3.0,
+                "position": "side_control",
+                "actor": "top",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "side control pressure",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 3.0,
+                "end_s": 8.0,
+                "position": "side_control",
+                "actor": "top",
+                "action_class": "submission_arm_lock",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "guillotine attempt",
+                "confidence": 0.8
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 225,
+            "total_token_count": 8468
+          },
+          "latency_ms": 1609.0,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 12619.0,
+          "end_s": 12622.0,
+          "action_class": "transition",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 12622.0,
+          "end_s": 12627.0,
+          "action_class": "submission_arm_lock",
+          "confidence": 0.8
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "match_id": "650d20c745120c8433e9d024",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "ingestion_path": "files_api",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is in the final stages. The top player is applying pressure from side control, attempting a submission, while the bottom player is defending.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 6.0,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"pressure pass to side control\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 6.0,\n      \"end_s\": 11.0,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"action_class\": \"submission_arm_lock\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"kimura / americana attempt\",\n      \"confidence\": 0.85\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is in the final stages. The top player is applying pressure from side control, attempting a submission, while the bottom player is defending.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 6.0,
+                "position": "side_control",
+                "actor": "top",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "pressure pass to side control",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 6.0,
+                "end_s": 11.0,
+                "position": "side_control",
+                "actor": "top",
+                "action_class": "submission_arm_lock",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "kimura / americana attempt",
+                "confidence": 0.85
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 242,
+            "total_token_count": 8485
+          },
+          "latency_ms": 3768.8,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 12619.0,
+          "end_s": 12625.0,
+          "action_class": "transition",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 12625.0,
+          "end_s": 12630.0,
+          "action_class": "submission_arm_lock",
+          "confidence": 0.85
+        }
+      ],
+      "status": "ok"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d031__w27",
+    "match_id": "650d20c745120c8433e9d031",
+    "gold_event": {
+      "t_s": 254,
+      "action_class": "sweep",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "SWEEP",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "650d20c745120c8433e9d031__w27",
+      "match_id": "650d20c745120c8433e9d031",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 254,
+        "action_class": "sweep",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SWEEP",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=DHLk_9vT_3g",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 249.0,
+      "window_end_s": 258.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with the athletes in an open guard exchange. The bottom player is actively working to engage the top player's legs, while the top player is attempting to pass the guard.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 8.5,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"guard engagement and leg pummeling\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with the athletes in an open guard exchange. The bottom player is actively working to engage the top player's legs, while the top player is attempting to pass the guard.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 8.5,
+                "position": "open_guard",
+                "actor": "bottom",
+                "action_class": "transition",
+                "outcome": "unclear",
+                "specific_technique_guess": "guard engagement and leg pummeling",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 155,
+            "total_token_count": 8398
+          },
+          "latency_ms": 7361.4,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 249.0,
+          "end_s": 257.5,
+          "action_class": "transition",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "650d20c745120c8433e9d031__w27",
+      "match_id": "650d20c745120c8433e9d031",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 254,
+        "action_class": "sweep",
+        "outcome": "successful",
+        "position_bucket": "open_guard",
+        "raw_sequenceType": "SWEEP",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=DHLk_9vT_3g",
+      "ingestion_path": "files_api",
+      "window_start_s": 249.0,
+      "window_end_s": 258.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with the bottom player in an open guard position, actively working to engage the top player. The top player maintains a stable posture, looking to pass the guard.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 10.9,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"active open guard engagement\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with the bottom player in an open guard position, actively working to engage the top player. The top player maintains a stable posture, looking to pass the guard.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 10.9,
+                "position": "open_guard",
+                "actor": "bottom",
+                "actor_gi_color": "black",
+                "action_class": "transition",
+                "outcome": "unclear",
+                "specific_technique_guess": "active open guard engagement",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 162,
+            "total_token_count": 8405
+          },
+          "latency_ms": 4696.0,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 249.0,
+          "end_s": 259.9,
+          "action_class": "transition",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    }
+  },
+  {
+    "window_id": "653715dad9868c25fd158a0b__w20",
+    "match_id": "653715dad9868c25fd158a0b",
+    "gold_event": {
+      "t_s": 105,
+      "action_class": "submission_choke",
+      "outcome": "successful",
+      "position_bucket": "back_control",
+      "raw_sequenceType": "SUBMISSION",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "653715dad9868c25fd158a0b__w20",
+      "match_id": "653715dad9868c25fd158a0b",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 105,
+        "action_class": "submission_choke",
+        "outcome": "successful",
+        "position_bucket": "back_control",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=VBmvEKje94s",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 100.0,
+      "window_end_s": 109.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with the top player applying pressure from a half guard position, transitioning into a more dominant side control setup.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 3.5,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"pressure passing from half guard\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 3.5,\n      \"end_s\": 8.9,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"passing to side control\",\n      \"confidence\": 0.95\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with the top player applying pressure from a half guard position, transitioning into a more dominant side control setup.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 3.5,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "pressure passing from half guard",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 3.5,
+                "end_s": 8.9,
+                "position": "side_control",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "guard_pass",
+                "outcome": "successful",
+                "specific_technique_guess": "passing to side control",
+                "confidence": 0.95
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 256,
+            "total_token_count": 8499
+          },
+          "latency_ms": 6696.0,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 100.0,
+          "end_s": 103.5,
+          "action_class": "transition",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 103.5,
+          "end_s": 108.9,
+          "action_class": "guard_pass",
+          "confidence": 0.95
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "653715dad9868c25fd158a0b__w20",
+      "match_id": "653715dad9868c25fd158a0b",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 105,
+        "action_class": "submission_choke",
+        "outcome": "successful",
+        "position_bucket": "back_control",
+        "raw_sequenceType": "SUBMISSION",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=VBmvEKje94s",
+      "ingestion_path": "files_api",
+      "window_start_s": 100.0,
+      "window_end_s": 109.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with the top player in side control, transitioning into a submission attempt.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 5.0,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"submission_choke\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"guillotine choke\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 5.0,\n      \"end_s\": 10.9,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"adjusting side control position\",\n      \"confidence\": 0.8\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with the top player in side control, transitioning into a submission attempt.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 5.0,
+                "position": "side_control",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "submission_choke",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "guillotine choke",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 5.0,
+                "end_s": 10.9,
+                "position": "side_control",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "transition",
+                "outcome": "successful",
+                "specific_technique_guess": "adjusting side control position",
+                "confidence": 0.8
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 252,
+            "total_token_count": 8495
+          },
+          "latency_ms": 3670.5,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 100.0,
+          "end_s": 105.0,
+          "action_class": "submission_choke",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 105.0,
+          "end_s": 110.9,
+          "action_class": "transition",
+          "confidence": 0.8
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "65dbd239a2434704339da0e4__w8",
+    "match_id": "65dbd239a2434704339da0e4",
+    "gold_event": {
+      "t_s": 279,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "65dbd239a2434704339da0e4__w8",
+      "match_id": "65dbd239a2434704339da0e4",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 279,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "side_control",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 274.0,
+      "window_end_s": 283.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is in the early stages with both athletes on the ground. The athlete in the top position is working to pass the guard of the athlete on the bottom.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 6.0,\n      \"position\": \"open_guard\",\n      \"actor\": \"top\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"guard pass attempt\",\n      \"confidence\": 0.9\n    },\n    {\n      \"start_s\": 6.0,\n      \"end_s\": 8.5,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"unclear\",\n      \"confidence\": 0.8\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is in the early stages with both athletes on the ground. The athlete in the top position is working to pass the guard of the athlete on the bottom.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 6.0,
+                "position": "open_guard",
+                "actor": "top",
+                "action_class": "guard_pass",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "guard pass attempt",
+                "confidence": 0.9
+              },
+              {
+                "start_s": 6.0,
+                "end_s": 8.5,
+                "position": "open_guard",
+                "actor": "bottom",
+                "action_class": "transition",
+                "outcome": "unclear",
+                "confidence": 0.8
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 224,
+            "total_token_count": 8467
+          },
+          "latency_ms": 13635.2,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 274.0,
+          "end_s": 280.0,
+          "action_class": "guard_pass",
+          "confidence": 0.9
+        },
+        {
+          "start_s": 280.0,
+          "end_s": 282.5,
+          "action_class": "transition",
+          "confidence": 0.8
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "65dbd239a2434704339da0e4__w8",
+      "match_id": "65dbd239a2434704339da0e4",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 279,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "side_control",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BvAQDVP29E0",
+      "ingestion_path": "files_api",
+      "window_start_s": 274.0,
+      "window_end_s": 283.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with both athletes in an open guard exchange. The top player is working to pass the guard while the bottom player maintains control, leading to a transition into a leg entanglement.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 5.0,\n      \"position\": \"open_guard\",\n      \"actor\": \"top\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"guard passing pressure\",\n      \"confidence\": 0.8\n    },\n    {\n      \"start_s\": 5.0,\n      \"end_s\": 10.9,\n      \"position\": \"open_guard\",\n      \"actor\": \"bottom\",\n      \"action_class\": \"submission_leg_lock\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"leg entanglement entry\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with both athletes in an open guard exchange. The top player is working to pass the guard while the bottom player maintains control, leading to a transition into a leg entanglement.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 5.0,
+                "position": "open_guard",
+                "actor": "top",
+                "action_class": "transition",
+                "outcome": "unclear",
+                "specific_technique_guess": "guard passing pressure",
+                "confidence": 0.8
+              },
+              {
+                "start_s": 5.0,
+                "end_s": 10.9,
+                "position": "open_guard",
+                "actor": "bottom",
+                "action_class": "submission_leg_lock",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "leg entanglement entry",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 246,
+            "total_token_count": 8489
+          },
+          "latency_ms": 4495.2,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 274.0,
+          "end_s": 279.0,
+          "action_class": "transition",
+          "confidence": 0.8
+        },
+        {
+          "start_s": 279.0,
+          "end_s": 284.9,
+          "action_class": "submission_leg_lock",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "65de3657a2434704339dc36b__w12",
+    "match_id": "65de3657a2434704339dc36b",
+    "gold_event": {
+      "t_s": 4898,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "half_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "65de3657a2434704339dc36b__w12",
+      "match_id": "65de3657a2434704339dc36b",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 4898,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "half_guard",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=KzYTzUD5rRA",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 4893.0,
+      "window_end_s": 4902.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with both athletes in a half-guard position, with the top player working to pass the guard.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 8.9,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"transition\",\n      \"outcome\": \"unclear\",\n      \"specific_technique_guess\": \"top player working to pass half guard\",\n      \"confidence\": 0.9\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with both athletes in a half-guard position, with the top player working to pass the guard.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 8.9,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "transition",
+                "outcome": "unclear",
+                "specific_technique_guess": "top player working to pass half guard",
+                "confidence": 0.9
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 152,
+            "total_token_count": 8395
+          },
+          "latency_ms": 5536.8,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 4893.0,
+          "end_s": 4901.9,
+          "action_class": "transition",
+          "confidence": 0.9
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "65de3657a2434704339dc36b__w12",
+      "match_id": "65de3657a2434704339dc36b",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 4898,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "position_bucket": "half_guard",
+        "raw_sequenceType": "GUARD PASS",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=KzYTzUD5rRA",
+      "ingestion_path": "files_api",
+      "window_start_s": 4893.0,
+      "window_end_s": 4902.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match begins with the top player in half guard, attempting to pass. The bottom player is defending and looking to recover guard.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 10.9,\n      \"position\": \"half_guard\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"white\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"unsuccessful\",\n      \"specific_technique_guess\": \"knee slice pass attempt\",\n      \"confidence\": 0.8\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match begins with the top player in half guard, attempting to pass. The bottom player is defending and looking to recover guard.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 10.9,
+                "position": "half_guard",
+                "actor": "top",
+                "actor_gi_color": "white",
+                "action_class": "guard_pass",
+                "outcome": "unsuccessful",
+                "specific_technique_guess": "knee slice pass attempt",
+                "confidence": 0.8
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 155,
+            "total_token_count": 8398
+          },
+          "latency_ms": 3540.2,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 4893.0,
+          "end_s": 4903.9,
+          "action_class": "guard_pass",
+          "confidence": 0.8
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": false,
+    "replaced_window_id": null,
+    "replacement_reason": null
+  },
+  {
+    "window_id": "6661e503716f12758093d038__w1",
+    "match_id": "6661e503716f12758093d038",
+    "gold_event": {
+      "t_s": 2852,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_s": {
+      "window_id": "6661e503716f12758093d038__w1",
+      "match_id": "6661e503716f12758093d038",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 2852,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "mount",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 2847.0,
+      "window_end_s": 2856.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The match is in progress with the top player having established side control after a successful guard pass.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 8.0,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"actor_gi_color\": \"black\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"guard pass to side control\",\n      \"confidence\": 0.95\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The match is in progress with the top player having established side control after a successful guard pass.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 8.0,
+                "position": "side_control",
+                "actor": "top",
+                "actor_gi_color": "black",
+                "action_class": "guard_pass",
+                "outcome": "successful",
+                "specific_technique_guess": "guard pass to side control",
+                "confidence": 0.95
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 148,
+            "total_token_count": 8391
+          },
+          "latency_ms": 1171.0,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 2847.0,
+          "end_s": 2855.0,
+          "action_class": "guard_pass",
+          "confidence": 0.95
+        }
+      ],
+      "status": "ok"
+    },
+    "files_api_arm_s": {
+      "window_id": "6661e503716f12758093d038__w1",
+      "match_id": "6661e503716f12758093d038",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 2852,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "mount",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+      "ingestion_path": "files_api",
+      "window_start_s": 2847.0,
+      "window_end_s": 2856.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": null
+      },
+      "calls": [
+        {
+          "call_name": "arm_s",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"current_context_summary\": \"The top player is in side control, having successfully passed the bottom player's guard, resulting in a score increase to 5-0.\",\n  \"clips\": [\n    {\n      \"start_s\": 0.0,\n      \"end_s\": 10.9,\n      \"position\": \"side_control\",\n      \"actor\": \"top\",\n      \"action_class\": \"guard_pass\",\n      \"outcome\": \"successful\",\n      \"specific_technique_guess\": \"guard pass to side control\",\n      \"confidence\": 0.95\n    }\n  ]\n}",
+          "parsed": {
+            "current_context_summary": "The top player is in side control, having successfully passed the bottom player's guard, resulting in a score increase to 5-0.",
+            "clips": [
+              {
+                "start_s": 0.0,
+                "end_s": 10.9,
+                "position": "side_control",
+                "actor": "top",
+                "action_class": "guard_pass",
+                "outcome": "successful",
+                "specific_technique_guess": "guard pass to side control",
+                "confidence": 0.95
+              }
+            ]
+          },
+          "usage_metadata": {
+            "prompt_token_count": 8243,
+            "candidates_token_count": 147,
+            "total_token_count": 8390
+          },
+          "latency_ms": 3515.0,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "emitted_events": [
+        {
+          "start_s": 2847.0,
+          "end_s": 2857.9,
+          "action_class": "guard_pass",
+          "confidence": 0.95
+        }
+      ],
+      "status": "ok"
+    },
+    "is_replacement": true,
+    "replaced_window_id": "650d20c745120c8433e9d059__w17",
+    "replacement_reason": "w17 (650d20c745120c8433e9d059__w17, guard_pass, video FO4jG04aGqc) was dropped from the \u00a7H.1 draw: its source video is YouTube-unavailable ('ERROR: [youtube] FO4jG04aGqc: Video unavailable. It was blocked due to the claimed content by SME.', yt-dlp-reproduced 2026-07-26) \u2014 an external, permanent failure, not a Files-API/Gemini issue. Replaced per GATES_1_2_DESIGN.md \u00a7G.2's procedure: a FRESH random.Random(gate_common.SEED_REPLACEMENT=20260727) instance sampling 1 window from the remaining 29-window eligible pool (the original 37-window \u00a7H.1-eligible set minus the 8 already drawn) selected 6661e503716f12758093d038__w1 (back_take, video dsldlavgLz4). CEO-authorized (option a), Bezos-reviewed, 2026-07-26 \u2014 never a silent substitution."
+  }
+]

@@ -7,11 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class ServiceConfig(BaseSettings):
     """Load from environment variables or .env file. Use BJJ_ prefix (e.g. BJJ_GEMINI_API_KEY).
 
-    The Gemini credential is the single exception: it is also accepted under the
-    un-prefixed ``GEMINI_API_KEY`` env var so a founder ``.env`` that uses the plain
-    name "just works". ``BJJ_GEMINI_API_KEY`` (the prefixed form) takes precedence
-    when both are set; otherwise the un-prefixed value is used. See the post-init
-    validator below.
+    Credential exceptions (also accepted un-prefixed so founder ``.env`` files
+    "just work"): ``GEMINI_API_KEY`` → ``gemini_api_key``, ``ANTHROPIC_API_KEY`` →
+    ``anthropic_api_key``. Prefixed ``BJJ_*`` forms take precedence when both are
+    set. See the post-init validators below.
     """
 
     # AWS / S3
@@ -23,6 +22,10 @@ class ServiceConfig(BaseSettings):
 
     # Gemini (credential – set in .env, do not commit)
     gemini_api_key: str = ""
+    # Anthropic (credential – set in .env, do not commit). Used by QA VLM Studio
+    # Highlight Analyze Claude axis path only (``service/pipelines/claude_frames.py``).
+    # Dual-accept: ``BJJ_ANTHROPIC_API_KEY`` (prefixed) or unprefixed ``ANTHROPIC_API_KEY``.
+    anthropic_api_key: str = ""
     # Per-request HTTP timeout for Gemini (ms). Prevents indefinite hangs on bad networks.
     gemini_request_timeout_ms: int = Field(
         default=600_000,
@@ -214,6 +217,22 @@ class ServiceConfig(BaseSettings):
             plain = self._read_env_file_value("GEMINI_API_KEY")
         if plain:
             object.__setattr__(self, "gemini_api_key", plain)
+        return self
+
+    @model_validator(mode="after")
+    def _alias_anthropic_api_key(self) -> "ServiceConfig":
+        """Populate ``anthropic_api_key`` from un-prefixed ``ANTHROPIC_API_KEY``.
+
+        Same dual-accept pattern as Gemini: ``BJJ_ANTHROPIC_API_KEY`` wins when set;
+        otherwise ``ANTHROPIC_API_KEY`` from the process env or ``.env`` file.
+        """
+        if self.anthropic_api_key:
+            return self
+        plain = os.environ.get("ANTHROPIC_API_KEY")
+        if not plain:
+            plain = self._read_env_file_value("ANTHROPIC_API_KEY")
+        if plain:
+            object.__setattr__(self, "anthropic_api_key", plain)
         return self
 
     @staticmethod

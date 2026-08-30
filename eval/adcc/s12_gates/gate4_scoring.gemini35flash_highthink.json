@@ -1,0 +1,98 @@
+{
+  "gate": "gate4",
+  "rerun": true,
+  "n_windows_total": 23,
+  "n_scored": 23,
+  "excluded_call_failed": [],
+  "sentinel_rate_with_refs": 0.0,
+  "sentinel_rate_with_refs_count": 0,
+  "sentinel_rate_without_refs": 1.0,
+  "sentinel_rate_without_refs_count": 23,
+  "identity_uncertain_rate": 0.0,
+  "identity_uncertain_count": 0,
+  "cross_highlight_flip_rate": 0.375,
+  "cross_highlight_flip_eligible_matches": 8,
+  "cross_highlight_flip_flipped_matches": 3,
+  "cross_highlight_flip_per_match_detail": {
+    "650d20c745120c8433e9d018": {
+      "n_successful_non_sentinel": 3,
+      "actors": [
+        "ref_right",
+        "ref_left",
+        "ref_left"
+      ],
+      "eligible": true,
+      "flipped": true
+    },
+    "650d20c745120c8433e9d027": {
+      "n_successful_non_sentinel": 3,
+      "actors": [
+        "ref_left",
+        "ref_left",
+        "ref_left"
+      ],
+      "eligible": true,
+      "flipped": false
+    },
+    "65396bbbb7741492b97777fc": {
+      "n_successful_non_sentinel": 3,
+      "actors": [
+        "ref_left",
+        "ref_left",
+        "ref_left"
+      ],
+      "eligible": true,
+      "flipped": false
+    },
+    "6567972aa4a13c99c4fe36ca": {
+      "n_successful_non_sentinel": 3,
+      "actors": [
+        "ref_right",
+        "ref_left",
+        "ref_right"
+      ],
+      "eligible": true,
+      "flipped": true
+    },
+    "65dbe62da2434704339da256": {
+      "n_successful_non_sentinel": 3,
+      "actors": [
+        "ref_left",
+        "ref_left",
+        "ref_left"
+      ],
+      "eligible": true,
+      "flipped": false
+    },
+    "662ae0ce532ae8f232657f96": {
+      "n_successful_non_sentinel": 3,
+      "actors": [
+        "ref_right",
+        "ref_right",
+        "ref_right"
+      ],
+      "eligible": true,
+      "flipped": false
+    },
+    "664b79b5532ae8f2326a66b7": {
+      "n_successful_non_sentinel": 3,
+      "actors": [
+        "ref_right",
+        "ref_left",
+        "ref_left"
+      ],
+      "eligible": true,
+      "flipped": true
+    },
+    "6665f04d4828f704f1b3afd8": {
+      "n_successful_non_sentinel": 2,
+      "actors": [
+        "ref_left",
+        "ref_left"
+      ],
+      "eligible": true,
+      "flipped": false
+    }
+  },
+  "accuracy_vs_gold": null
+}

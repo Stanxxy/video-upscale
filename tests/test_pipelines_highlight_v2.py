@@ -178,9 +178,86 @@ def test_critique_prompt_handles_missing_description_never_crashes():
     assert isinstance(prompt, str) and len(prompt) > 0
 
 
+def test_critique_prompt_uses_an_editable_template_with_all_runtime_values():
+    prompt = highlight_critique.build_critique_prompt(
+        window_start_sec=11.0,
+        window_end_sec=29.0,
+        critique_backpad_s=7.0,
+        critique_forwardpad_s=3.0,
+        scan_start_sec=18.0,
+        scan_end_sec=26.0,
+        description="player changes level",
+        override=(
+            "CUSTOM $window_start_sec $window_end_sec $critique_backpad_s "
+            "$critique_forwardpad_s $scan_start_sec $scan_end_sec $description"
+        ),
+    )
+
+    assert prompt == "CUSTOM 11.0 29.0 7.0 3.0 18.0 26.0 player changes level"
+
+
 # =============================================================================== #
 # executors.highlight_critique_node
 # =============================================================================== #
+@pytest.mark.asyncio
+async def test_highlight_critique_node_sends_edited_prompts_and_fps(monkeypatch):
+    captured = {}
+
+    async def _fake_analyze_chunk(
+        self, youtube_url, start_sec, end_sec, previous_context=None, **kwargs
+    ):
+        captured.update(
+            system_instruction=self.system_instruction,
+            prompt_text=kwargs["prompt_text"],
+            fps=kwargs["fps"],
+        )
+        return json.dumps(
+            {
+                "movement_confirmed": True,
+                "corrected_start_s": 20.0,
+                "corrected_end_s": 25.0,
+                "note": "confirmed",
+            }
+        )
+
+    monkeypatch.setattr(
+        simplified_tags.SimplifiedTagsTimeAnalyzer,
+        "analyze_chunk",
+        _fake_analyze_chunk,
+    )
+    monkeypatch.setattr(RunContext, "gemini_client", lambda self: MagicMock())
+    ctx = RunContext(
+        youtube_id="x",
+        youtube_url="https://y",
+        start_sec=0,
+        end_sec=100,
+        gemini_api_key="k",
+        request_timeout_ms=1000,
+    )
+    ctx.highlights = [
+        {
+            "index": 1,
+            "start_s": 20.0,
+            "end_s": 25.0,
+            "description": "player changes level",
+        }
+    ]
+    config = HighlightCritiqueConfig(
+        fps=15,
+        system_prompt="EDITED TECHNIQUE CRITIQUE SYSTEM",
+        initial_prompt="EDITED $description @ $scan_start_sec-$scan_end_sec",
+    ).model_dump()
+
+    events = [event async for event in executors.highlight_critique_node(ctx, config)]
+
+    assert any(event["type"] == "highlight_critique_result" for event in events)
+    assert captured == {
+        "system_instruction": "EDITED TECHNIQUE CRITIQUE SYSTEM",
+        "prompt_text": "EDITED player changes level @ 20.0-25.0",
+        "fps": 15,
+    }
+
+
 @pytest.mark.asyncio
 async def test_highlight_critique_node_sends_backward_padded_window_only(monkeypatch):
     """The critique window is [max(scope_start, start_s - backpad), end_s] —

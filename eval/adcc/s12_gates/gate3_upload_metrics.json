@@ -1,0 +1,102 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9cff3__w32",
+    "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/3zul1u9c24vp",
+    "file_name": "files/3zul1u9c24vp",
+    "upload_latency_ms": 1481.8945829756558,
+    "active_wait_ms": 5235.9032079111785,
+    "sec_start_s": 754.0,
+    "call_bounds": [
+      2.0,
+      11.0
+    ]
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/n2z42v8zfbu3",
+    "file_name": "files/n2z42v8zfbu3",
+    "upload_latency_ms": 1142.8480420727283,
+    "active_wait_ms": 5218.695000046864,
+    "sec_start_s": 135.0,
+    "call_bounds": [
+      2.0,
+      11.0
+    ]
+  },
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/odfxkaaqwbac",
+    "file_name": "files/odfxkaaqwbac",
+    "upload_latency_ms": 1268.702375004068,
+    "active_wait_ms": 5206.044374965131,
+    "sec_start_s": 12617.0,
+    "call_bounds": [
+      2.0,
+      11.0
+    ]
+  },
+  {
+    "window_id": "650d20c745120c8433e9d031__w27",
+    "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/vypvf6ljn958",
+    "file_name": "files/vypvf6ljn958",
+    "upload_latency_ms": 1237.1222081128508,
+    "active_wait_ms": 5206.261000130326,
+    "sec_start_s": 247.0,
+    "call_bounds": [
+      2.0,
+      11.0
+    ]
+  },
+  {
+    "window_id": "653715dad9868c25fd158a0b__w20",
+    "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/e1l711xajv9d",
+    "file_name": "files/e1l711xajv9d",
+    "upload_latency_ms": 1324.3556250818074,
+    "active_wait_ms": 5189.421917079017,
+    "sec_start_s": 98.0,
+    "call_bounds": [
+      2.0,
+      11.0
+    ],
+    "is_replacement": false
+  },
+  {
+    "window_id": "65dbd239a2434704339da0e4__w8",
+    "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/463sue0tgtwb",
+    "file_name": "files/463sue0tgtwb",
+    "upload_latency_ms": 1887.9556658212095,
+    "active_wait_ms": 5222.927999915555,
+    "sec_start_s": 272.0,
+    "call_bounds": [
+      2.0,
+      11.0
+    ],
+    "is_replacement": false
+  },
+  {
+    "window_id": "65de3657a2434704339dc36b__w12",
+    "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/r8pch0b5uxwx",
+    "file_name": "files/r8pch0b5uxwx",
+    "upload_latency_ms": 2132.5083340052515,
+    "active_wait_ms": 5254.791165934876,
+    "sec_start_s": 4891.0,
+    "call_bounds": [
+      2.0,
+      11.0
+    ],
+    "is_replacement": false
+  },
+  {
+    "window_id": "6661e503716f12758093d038__w1",
+    "file_uri": "https://generativelanguage.googleapis.com/v1beta/files/ydlthd6jgv4w",
+    "file_name": "files/ydlthd6jgv4w",
+    "upload_latency_ms": 994.4036251399666,
+    "active_wait_ms": 5420.341040939093,
+    "sec_start_s": 2845.0,
+    "call_bounds": [
+      2.0,
+      11.0
+    ],
+    "is_replacement": true
+  }
+]

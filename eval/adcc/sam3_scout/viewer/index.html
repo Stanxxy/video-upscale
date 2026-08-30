@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SAM3 Scout Eyeball Viewer</title>
+  <style>
+    :root {
+      --bg: #12141a;
+      --panel: #1c2030;
+      --text: #e8e6e1;
+      --muted: #9aa3b5;
+      --accent: #c4a574;
+      --border: #2a3144;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #24304a 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: baseline;
+      justify-content: space-between;
+    }
+    h1 { font-size: 1.15rem; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+    .sub { color: var(--muted); font-size: 0.85rem; }
+    main { padding: 1rem; max-width: 1200px; margin: 0 auto; }
+    .controls {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: 1fr;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 0.25rem; }
+    input, select, button, textarea {
+      width: 100%;
+      background: #0f121a;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.55rem 0.65rem;
+      font: inherit;
+    }
+    button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #3a455f, #2a3348);
+      border-color: #465370;
+    }
+    button:hover { filter: brightness(1.08); }
+    .grid {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 900px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+      .controls { grid-template-columns: 2fr 1fr auto; align-items: end; }
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .card h2 {
+      margin: 0;
+      padding: 0.65rem 0.8rem;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--accent);
+    }
+    video {
+      display: block;
+      width: 100%;
+      max-height: 360px;
+      background: #000;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+    }
+    .metrics {
+      margin-top: 1rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.9rem;
+      font-size: 0.85rem;
+    }
+    .metrics pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0.5rem 0 0;
+      color: var(--muted);
+    }
+    .note { color: var(--muted); font-size: 0.8rem; margin-top: 0.75rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>SAM3 Scout — eyeball viewer</h1>
+      <div class="sub">Raw · masks · Arm B crop · Arm C highlight+crop · soft advisory only (no stop-gate)</div>
+    </div>
+  </header>
+  <main>
+    <div class="controls">
+      <div>
+        <label for="manifestUrl">Run manifest JSON URL (or paste path served locally)</label>
+        <input id="manifestUrl" placeholder="clip_manifest.json or /runs/clip_id/clip_id_viewer.json" />
+      </div>
+      <div>
+        <label for="clipSelect">Clip (from loaded list)</label>
+        <select id="clipSelect"><option value="">—</option></select>
+      </div>
+      <button id="loadBtn" type="button">Load</button>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>A — Baseline (raw window)</h2>
+        <video id="vidA" controls playsinline></video>
+      </section>
+      <section class="card">
+        <h2>Masks preview</h2>
+        <video id="vidMask" controls playsinline></video>
+      </section>
+      <section class="card">
+        <h2>B — Crop + 1080 upscale</h2>
+        <video id="vidB" controls playsinline></video>
+      </section>
+      <section class="card">
+        <h2>C — Highlight + crop + upscale</h2>
+        <video id="vidC" controls playsinline></video>
+      </section>
+    </div>
+
+    <section class="metrics">
+      <strong>Soft advisory metrics</strong>
+      <pre id="metricsOut">Load a viewer manifest to see advisory coverage stats.</pre>
+      <p class="note">Advisory heuristics are non-blocking. Founder eyeball decides track usability.</p>
+    </section>
+
+    <section class="metrics">
+      <strong>Or paste a single viewer JSON</strong>
+      <textarea id="pasteJson" rows="8" placeholder='{"clip_id":"...","videos":{"A":"...","mask":"...","B":"...","C":"..."},"advisory":{...}}'></textarea>
+      <button id="pasteBtn" type="button" style="margin-top:0.5rem">Apply pasted JSON</button>
+    </section>
+  </main>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function applyViewer(data) {
+      const v = data.videos || {};
+      $("vidA").src = v.A || v.raw || "";
+      $("vidMask").src = v.mask || v.preview || "";
+      $("vidB").src = v.B || v.arm_b || "";
+      $("vidC").src = v.C || v.arm_c || "";
+      $("metricsOut").textContent = JSON.stringify(data.advisory || data.metrics || {}, null, 2);
+    }
+
+    async function loadManifest() {
+      const url = $("manifestUrl").value.trim();
+      if (!url) return;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (Array.isArray(data.clips)) {
+        const sel = $("clipSelect");
+        sel.innerHTML = "";
+        data.clips.forEach((c, i) => {
+          const opt = document.createElement("option");
+          opt.value = String(i);
+          opt.textContent = c.clip_id || `clip ${i}`;
+          sel.appendChild(opt);
+        });
+        sel.onchange = () => applyViewer(data.clips[Number(sel.value)]);
+        if (data.clips.length) applyViewer(data.clips[0]);
+      } else {
+        applyViewer(data);
+      }
+    }
+
+    $("loadBtn").addEventListener("click", () => loadManifest().catch(err => {
+      $("metricsOut").textContent = String(err);
+    }));
+    $("pasteBtn").addEventListener("click", () => {
+      try {
+        applyViewer(JSON.parse($("pasteJson").value));
+      } catch (e) {
+        $("metricsOut").textContent = String(e);
+      }
+    });
+  </script>
+</body>
+</html>

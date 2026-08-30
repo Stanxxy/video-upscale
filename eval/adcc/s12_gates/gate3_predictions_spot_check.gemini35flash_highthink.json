@@ -1,0 +1,647 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9cff3__w32",
+    "match_id": "650d20c745120c8433e9cff3",
+    "gold_event": {
+      "t_s": 761,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_t": {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "match_id": "650d20c745120c8433e9cff3",
+      "gate5_straddler": true,
+      "gold_event": {
+        "t_s": 761,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BKZ6Dt7SpYE",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 756.0,
+      "window_end_s": 765.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"back_control\",\n  \"justification\": \"The top player secures back control by wrapping his legs around the opponent's hips and establishing hooks from behind.\"\n}",
+          "parsed": {
+            "position": "back_control",
+            "justification": "The top player secures back control by wrapping his legs around the opponent's hips and establishing hooks from behind."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 41,
+            "total_token_count": 7293
+          },
+          "latency_ms": 3860.7,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The athlete in the black and white rashguard spins behind his opponent from a front headlock, rolls him over, and inserts both hooks to establish back control.\"\n}",
+          "parsed": {
+            "action_class": "back_take",
+            "outcome": "successful",
+            "justification": "The athlete in the black and white rashguard spins behind his opponent from a front headlock, rolls him over, and inserts both hooks to establish back control."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 62,
+            "total_token_count": 7864
+          },
+          "latency_ms": 9051.9,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\"adversarial_case\": \"One could argue that the action should be labeled as a transition from turtle rather than a back take, given that the defender manages to rise to his knees at 12:40.100. Additionally, one might argue the final position is a scramble because of the continuous movement. However, the attacker immediately rolls the defender at 12:42.100 and successfully inserts his hooks to secure back control by 12:43.100, confirming a successful back take.\", \"verdict\": \"agree\", \"final_position\": \"back_control\", \"final_action_class\": \"back_take\", \"final_outcome\": \"successful\", \"wrong_label\": null, \"reason\": null, \"evidence\": \"At 12:42.100, the attacker rolls the defender from turtle, and by 12:43.100, he has secured both hooks around the defender's hips, establishing back control.\"}",
+          "parsed": {
+            "adversarial_case": "One could argue that the action should be labeled as a transition from turtle rather than a back take, given that the defender manages to rise to his knees at 12:40.100. Additionally, one might argue the final position is a scramble because of the continuous movement. However, the attacker immediately rolls the defender at 12:42.100 and successfully inserts his hooks to secure back control by 12:43.100, confirming a successful back take.",
+            "verdict": "agree",
+            "final_position": "back_control",
+            "final_action_class": "back_take",
+            "final_outcome": "successful",
+            "wrong_label": null,
+            "reason": null,
+            "evidence": "At 12:42.100, the attacker rolls the defender from turtle, and by 12:43.100, he has secured both hooks around the defender's hips, establishing back control."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25006,
+            "candidates_token_count": 215,
+            "total_token_count": 27073
+          },
+          "latency_ms": 15009.7,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "final_position": "back_control",
+      "final_outcome": "successful",
+      "verdict": "agree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 756.0,
+          "end_s": 765.0,
+          "action_class": "back_take",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    },
+    "files_api_arm_t": {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "match_id": "650d20c745120c8433e9cff3",
+      "gate5_straddler": true,
+      "gold_event": {
+        "t_s": 761,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BKZ6Dt7SpYE",
+      "ingestion_path": "files_api",
+      "window_start_s": 756.0,
+      "window_end_s": 765.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"back_control\",\n  \"justification\": \"The player in the black rashguard secures back control by inserting his hooks and controlling his opponent from behind on the mat.\"\n}",
+          "parsed": {
+            "position": "back_control",
+            "justification": "The player in the black rashguard secures back control by inserting his hooks and controlling his opponent from behind on the mat."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 44,
+            "total_token_count": 7087
+          },
+          "latency_ms": 3470.5,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The top player transitions from a front headlock to spin behind his opponent, securing a seatbelt grip and inserting both hooks to establish back control.\"\n}",
+          "parsed": {
+            "action_class": "back_take",
+            "outcome": "successful",
+            "justification": "The top player transitions from a front headlock to spin behind his opponent, securing a seatbelt grip and inserting both hooks to establish back control."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 59,
+            "total_token_count": 7597
+          },
+          "latency_ms": 5246.1,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the action should be labeled as 'transition' rather than 'back_take' because the initial back take attempt starting around 00:02 is defended by Ribeiro, who escapes to his knees by 00:06.1. Furthermore, one might argue the final position is 'scramble' because Ribeiro is actively fighting the hands and the position is dynamic. However, O'Flanagan persists, rolls Ribeiro through at 00:08.1, and fully locks in a body triangle by 00:09.1, establishing clear back control by the end of the clip. Thus, 'back_take' and 'successful' are correct.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"back_control\",\n  \"final_action_class\": \"back_take\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 00:09.1, Eoghan O'Flanagan secures a body triangle over Xande Ribeiro's torso while controlling him from behind, establishing back control.\"\n}",
+          "parsed": {
+            "adversarial_case": "One could argue that the action should be labeled as 'transition' rather than 'back_take' because the initial back take attempt starting around 00:02 is defended by Ribeiro, who escapes to his knees by 00:06.1. Furthermore, one might argue the final position is 'scramble' because Ribeiro is actively fighting the hands and the position is dynamic. However, O'Flanagan persists, rolls Ribeiro through at 00:08.1, and fully locks in a body triangle by 00:09.1, establishing clear back control by the end of the clip. Thus, 'back_take' and 'successful' are correct.",
+            "verdict": "agree",
+            "final_position": "back_control",
+            "final_action_class": "back_take",
+            "final_outcome": "successful",
+            "wrong_label": null,
+            "reason": null,
+            "evidence": "At 00:09.1, Eoghan O'Flanagan secures a body triangle over Xande Ribeiro's torso while controlling him from behind, establishing back control."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25005,
+            "candidates_token_count": 262,
+            "total_token_count": 26702
+          },
+          "latency_ms": 13610.4,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "final_position": "back_control",
+      "final_outcome": "successful",
+      "verdict": "agree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 756.0,
+          "end_s": 765.0,
+          "action_class": "back_take",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "gold_event": {
+      "t_s": 142,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_t": {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "match_id": "650d20c745120c8433e9d00e",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 142,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 137.0,
+      "window_end_s": 146.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"back_control\",\n  \"justification\": \"The top player has established back control with both hooks inserted inside the bottom player's thighs while controlling him from behind.\"\n}",
+          "parsed": {
+            "position": "back_control",
+            "justification": "The top player has established back control with both hooks inserted inside the bottom player's thighs while controlling him from behind."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 44,
+            "total_token_count": 7199
+          },
+          "latency_ms": 3685.9,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The top player attempts a rear-naked choke from back control by wrapping his arm around the bottom player's neck, but the bottom player defends by tucking his chin and fighting the grips.\"\n}",
+          "parsed": {
+            "action_class": "submission_choke",
+            "outcome": "unsuccessful",
+            "justification": "The top player attempts a rear-naked choke from back control by wrapping his arm around the bottom player's neck, but the bottom player defends by tucking his chin and fighting the grips."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 71,
+            "total_token_count": 7324
+          },
+          "latency_ms": 4369.6,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\"adversarial_case\": \"One could argue the position should be labeled as mount because the top player is seated on the bottom player's torso/hips. However, because the bottom player is fully prone (face down) and the top player is controlling from behind with chest-to-back contact and hooks, this is classified as back_control. For the action, one might argue it is a transition or stall since the choke is never fully locked in. However, the top player clearly wraps his arm around the neck/chin area starting at 02:17.200, actively attempting a rear-naked choke, which constitutes a clear submission_choke attempt.\", \"verdict\": \"agree\", \"final_position\": \"back_control\", \"final_action_class\": \"submission_choke\", \"final_outcome\": \"unsuccessful\", \"wrong_label\": null, \"reason\": null, \"evidence\": \"The top player maintains chest-to-back control with hooks on the flattened bottom player (back_control) while actively wrapping his left arm around the neck/chin to attempt a rear-naked choke from 02:17.200 to 02:18.500, which the bottom player successfully defends (submission_choke, unsuccessful).\"}",
+          "parsed": {
+            "adversarial_case": "One could argue the position should be labeled as mount because the top player is seated on the bottom player's torso/hips. However, because the bottom player is fully prone (face down) and the top player is controlling from behind with chest-to-back contact and hooks, this is classified as back_control. For the action, one might argue it is a transition or stall since the choke is never fully locked in. However, the top player clearly wraps his arm around the neck/chin area starting at 02:17.200, actively attempting a rear-naked choke, which constitutes a clear submission_choke attempt.",
+            "verdict": "agree",
+            "final_position": "back_control",
+            "final_action_class": "submission_choke",
+            "final_outcome": "unsuccessful",
+            "wrong_label": null,
+            "reason": null,
+            "evidence": "The top player maintains chest-to-back control with hooks on the flattened bottom player (back_control) while actively wrapping his left arm around the neck/chin to attempt a rear-naked choke from 02:17.200 to 02:18.500, which the bottom player successfully defends (submission_choke, unsuccessful)."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25017,
+            "candidates_token_count": 273,
+            "total_token_count": 27022
+          },
+          "latency_ms": 13963.7,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "final_position": "back_control",
+      "final_outcome": "unsuccessful",
+      "verdict": "agree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 137.0,
+          "end_s": 146.0,
+          "action_class": "submission_choke",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    },
+    "files_api_arm_t": {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "match_id": "650d20c745120c8433e9d00e",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 142,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+      "ingestion_path": "files_api",
+      "window_start_s": 137.0,
+      "window_end_s": 146.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"turtle\",\n  \"justification\": \"The bottom player is on his knees and elbows in a tight defensive ball while the top player rides on his back without established hooks.\"\n}",
+          "parsed": {
+            "position": "turtle",
+            "justification": "The bottom player is on his knees and elbows in a tight defensive ball while the top player rides on his back without established hooks."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 44,
+            "total_token_count": 7424
+          },
+          "latency_ms": 5005.8,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"back_take\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The top player successfully inserts both hooks around the bottom player's thighs from behind to secure back control.\"\n}",
+          "parsed": {
+            "action_class": "back_take",
+            "outcome": "successful",
+            "justification": "The top player successfully inserts both hooks around the bottom player's thighs from behind to secure back control."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 51,
+            "total_token_count": 7236
+          },
+          "latency_ms": 3001.5,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"adversarial_case\": \"To argue against the 'turtle' position label, one might claim the position has transitioned to 'back_control' because the top player is riding the back and attempting to insert hooks. However, the bottom player remains firmly on his knees and elbows in a tight defensive ball throughout the clip, meaning the position remains 'turtle'. To argue against the 'successful' outcome of the 'back_take', we examine the hooks: a successful back take requires establishing back control (two hooks or a body triangle). Here, the top player only inserts his right hook, while his left leg remains on the outside of the bottom player's hip. Since the second hook is never established and the bottom player maintains his turtle defense, the back take is unsuccessful.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"turtle\",\n  \"final_action_class\": \"back_take\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": \"outcome\",\n  \"reason\": \"The back take is unsuccessful because the top player fails to establish both hooks to secure back control; his left leg remains on the outside of the bottom player's hip, and the bottom player successfully maintains his turtle defense.\",\n  \"evidence\": \"From 00:09.500 to 00:10.900, the top player's left foot is clearly visible resting on the outside of the bottom player's left thigh/hip, confirming that the second hook was never established to secure back control.\"\n}",
+          "parsed": {
+            "adversarial_case": "To argue against the 'turtle' position label, one might claim the position has transitioned to 'back_control' because the top player is riding the back and attempting to insert hooks. However, the bottom player remains firmly on his knees and elbows in a tight defensive ball throughout the clip, meaning the position remains 'turtle'. To argue against the 'successful' outcome of the 'back_take', we examine the hooks: a successful back take requires establishing back control (two hooks or a body triangle). Here, the top player only inserts his right hook, while his left leg remains on the outside of the bottom player's hip. Since the second hook is never established and the bottom player maintains his turtle defense, the back take is unsuccessful.",
+            "verdict": "disagree",
+            "final_position": "turtle",
+            "final_action_class": "back_take",
+            "final_outcome": "unsuccessful",
+            "wrong_label": "outcome",
+            "reason": "The back take is unsuccessful because the top player fails to establish both hooks to secure back control; his left leg remains on the outside of the bottom player's hip, and the bottom player successfully maintains his turtle defense.",
+            "evidence": "From 00:09.500 to 00:10.900, the top player's left foot is clearly visible resting on the outside of the bottom player's left thigh/hip, confirming that the second hook was never established to secure back control."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 24997,
+            "candidates_token_count": 334,
+            "total_token_count": 27543
+          },
+          "latency_ms": 19446.8,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "final_position": "turtle",
+      "final_outcome": "unsuccessful",
+      "verdict": "disagree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 137.0,
+          "end_s": 146.0,
+          "action_class": "back_take",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "match_id": "650d20c745120c8433e9d024",
+    "gold_event": {
+      "t_s": 12624,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_t": {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "match_id": "650d20c745120c8433e9d024",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"mount\",\n  \"justification\": \"The top player slides their leg over the opponent's torso to establish a clear full mount position, sitting on the chest with knees on the mat.\"\n}",
+          "parsed": {
+            "position": "mount",
+            "justification": "The top player slides their leg over the opponent's torso to establish a clear full mount position, sitting on the chest with knees on the mat."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 48,
+            "total_token_count": 7275
+          },
+          "latency_ms": 4090.0,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The top athlete wraps her arm around the bottom athlete's neck in a front headlock/guillotine grip but eventually releases the hold.\"\n}",
+          "parsed": {
+            "action_class": "submission_choke",
+            "outcome": "unsuccessful",
+            "justification": "The top athlete wraps her arm around the bottom athlete's neck in a front headlock/guillotine grip but eventually releases the hold."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 61,
+            "total_token_count": 7562
+          },
+          "latency_ms": 5965.1,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"adversarial_case\": \"One could argue that the position at the start of the clip (210:19.000) is half_guard because Guedes's left leg appears partially entangled. However, once the camera angle shifts at 210:23.100, Guedes is clearly in a fully established mount with both knees on the mat. For the action class, one could argue it is a transition as Guedes is primarily holding and adjusting her position, but the clear wrap of her arm around Campo's neck constitutes a genuine guillotine choke attempt (submission_choke) which she eventually releases, making it unsuccessful.\",\n  \"verdict\": \"agree\",\n  \"final_position\": \"mount\",\n  \"final_action_class\": \"submission_choke\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": null,\n  \"reason\": null,\n  \"evidence\": \"At 210:23.100, the camera angle clearly shows Guedes in a full mount position while actively squeezing a guillotine choke on Campo, which she eventually releases at 210:25.500.\"\n}",
+          "parsed": {
+            "adversarial_case": "One could argue that the position at the start of the clip (210:19.000) is half_guard because Guedes's left leg appears partially entangled. However, once the camera angle shifts at 210:23.100, Guedes is clearly in a fully established mount with both knees on the mat. For the action class, one could argue it is a transition as Guedes is primarily holding and adjusting her position, but the clear wrap of her arm around Campo's neck constitutes a genuine guillotine choke attempt (submission_choke) which she eventually releases, making it unsuccessful.",
+            "verdict": "agree",
+            "final_position": "mount",
+            "final_action_class": "submission_choke",
+            "final_outcome": "unsuccessful",
+            "wrong_label": null,
+            "reason": null,
+            "evidence": "At 210:23.100, the camera angle clearly shows Guedes in a full mount position while actively squeezing a guillotine choke on Campo, which she eventually releases at 210:25.500."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25011,
+            "candidates_token_count": 267,
+            "total_token_count": 26616
+          },
+          "latency_ms": 68979.5,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "final_position": "mount",
+      "final_outcome": "unsuccessful",
+      "verdict": "agree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 12619.0,
+          "end_s": 12628.0,
+          "action_class": "submission_choke",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    },
+    "files_api_arm_t": {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "match_id": "650d20c745120c8433e9d024",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "ingestion_path": "files_api",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.5-flash",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"closed_guard\",\n  \"justification\": \"The bottom player has her legs wrapped around the top player's waist with her ankles crossed and locked behind the back.\"\n}",
+          "parsed": {
+            "position": "closed_guard",
+            "justification": "The bottom player has her legs wrapped around the top player's waist with her ankles crossed and locked behind the back."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 44,
+            "total_token_count": 7359
+          },
+          "latency_ms": 4398.1,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The athlete on top wraps her arm around the opponent's neck attempting a guillotine choke, but the opponent manages to slip her head out to escape.\"\n}",
+          "parsed": {
+            "action_class": "submission_choke",
+            "outcome": "unsuccessful",
+            "justification": "The athlete on top wraps her arm around the opponent's neck attempting a guillotine choke, but the opponent manages to slip her head out to escape."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 63,
+            "total_token_count": 7376
+          },
+          "latency_ms": 3686.1,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\"adversarial_case\": \"One could argue that the position is a scramble or open guard due to the high-angle stacking by the top player. However, at 00:02.000, the bottom player's legs are clearly wrapped and locked around the top player's waist, establishing closed guard. For the technique, one might argue it is a transition, but the clear wrap of the arm around the neck from 00:06.100 to 00:09.000 represents a distinct guillotine choke attempt.\", \"verdict\": \"agree\", \"final_position\": \"closed_guard\", \"final_action_class\": \"submission_choke\", \"final_outcome\": \"unsuccessful\", \"wrong_label\": null, \"reason\": null, \"evidence\": \"At 00:02.000, the bottom player has her ankles crossed behind the top player's back (closed guard). From 00:06.100 to 00:09.500, the bottom player has a guillotine choke grip on the top player's neck, which the top player escapes by popping her head out at 00:09.500.\"}",
+          "parsed": {
+            "adversarial_case": "One could argue that the position is a scramble or open guard due to the high-angle stacking by the top player. However, at 00:02.000, the bottom player's legs are clearly wrapped and locked around the top player's waist, establishing closed guard. For the technique, one might argue it is a transition, but the clear wrap of the arm around the neck from 00:06.100 to 00:09.000 represents a distinct guillotine choke attempt.",
+            "verdict": "agree",
+            "final_position": "closed_guard",
+            "final_action_class": "submission_choke",
+            "final_outcome": "unsuccessful",
+            "wrong_label": null,
+            "reason": null,
+            "evidence": "At 00:02.000, the bottom player has her ankles crossed behind the top player's back (closed guard). From 00:06.100 to 00:09.500, the bottom player has a guillotine choke grip on the top player's neck, which the top player escapes by popping her head out at 00:09.500."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25009,
+            "candidates_token_count": 268,
+            "total_token_count": 27541
+          },
+          "latency_ms": 16681.3,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "final_position": "closed_guard",
+      "final_outcome": "unsuccessful",
+      "verdict": "agree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 12619.0,
+          "end_s": 12628.0,
+          "action_class": "submission_choke",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    }
+  }
+]

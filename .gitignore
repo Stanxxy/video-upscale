@@ -68,6 +68,10 @@ test_run_output*.txt
 working_log/baselines/*/smoke/
 working_log/baselines/*/smoke-*/
 *.jsonl
+# ADCC eval harness gold snapshot is a deliberately COMMITTED artifact (a few
+# MB of checksummed JSON, plan §6.1: "scoring never re-reads the server copy
+# -> reproducibility") — negate the bare *.jsonl ignore above for it.
+!eval/adcc/gold_snapshot/*.jsonl
 
 # macOS Finder duplicate suffix (e.g. "service 2.log", "driver 3.log")
 * 2

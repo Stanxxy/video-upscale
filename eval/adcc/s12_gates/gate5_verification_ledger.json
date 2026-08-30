@@ -1,0 +1,1138 @@
+[
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e1",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0060966,
+    "usage_metadata": {
+      "prompt_token_count": 6098,
+      "candidates_token_count": 253,
+      "total_token_count": 10161
+    },
+    "timestamp_utc": "2026-07-26T21:24:53.190942+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e1",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0261126,
+    "usage_metadata": {
+      "prompt_token_count": 42032,
+      "candidates_token_count": 79,
+      "total_token_count": 43521
+    },
+    "timestamp_utc": "2026-07-26T21:25:15.996741+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e1",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.024999,
+    "usage_metadata": {
+      "prompt_token_count": 41614,
+      "candidates_token_count": 51,
+      "total_token_count": 41665
+    },
+    "timestamp_utc": "2026-07-26T21:25:15.996747+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e1",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0020256,
+    "usage_metadata": {
+      "prompt_token_count": 2003,
+      "candidates_token_count": 109,
+      "total_token_count": 3376
+    },
+    "timestamp_utc": "2026-07-26T21:25:25.786327+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e1",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0025626,
+    "usage_metadata": {
+      "prompt_token_count": 3312,
+      "candidates_token_count": 74,
+      "total_token_count": 4271
+    },
+    "timestamp_utc": "2026-07-26T21:28:35.532186+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e1",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0017694,
+    "usage_metadata": {
+      "prompt_token_count": 2894,
+      "candidates_token_count": 55,
+      "total_token_count": 2949
+    },
+    "timestamp_utc": "2026-07-26T21:28:35.532190+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e1",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0053526,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 106,
+      "total_token_count": 8921
+    },
+    "timestamp_utc": "2026-07-26T21:28:55.037933+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e1",
+    "call_name": "taxonomy_only",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0243588,
+    "usage_metadata": {
+      "prompt_token_count": 39292,
+      "candidates_token_count": 82,
+      "total_token_count": 40598
+    },
+    "timestamp_utc": "2026-07-26T21:29:26.626366+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e1",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.009656999999999999,
+    "usage_metadata": {
+      "prompt_token_count": 6098,
+      "candidates_token_count": 103,
+      "total_token_count": 16095
+    },
+    "timestamp_utc": "2026-07-26T21:30:34.931429+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e1",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0262482,
+    "usage_metadata": {
+      "prompt_token_count": 42717,
+      "candidates_token_count": 80,
+      "total_token_count": 43747
+    },
+    "timestamp_utc": "2026-07-26T21:30:56.909036+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e1",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.02541,
+    "usage_metadata": {
+      "prompt_token_count": 42299,
+      "candidates_token_count": 51,
+      "total_token_count": 42350
+    },
+    "timestamp_utc": "2026-07-26T21:30:56.909042+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e1",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0024671999999999997,
+    "usage_metadata": {
+      "prompt_token_count": 2003,
+      "candidates_token_count": 93,
+      "total_token_count": 4112
+    },
+    "timestamp_utc": "2026-07-26T21:31:05.879671+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e1",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.007130999999999999,
+    "usage_metadata": {
+      "prompt_token_count": 11207,
+      "candidates_token_count": 75,
+      "total_token_count": 11885
+    },
+    "timestamp_utc": "2026-07-26T21:31:17.173957+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e1",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0065076,
+    "usage_metadata": {
+      "prompt_token_count": 10789,
+      "candidates_token_count": 57,
+      "total_token_count": 10846
+    },
+    "timestamp_utc": "2026-07-26T21:31:17.173970+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e1",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0054215999999999995,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 93,
+      "total_token_count": 9036
+    },
+    "timestamp_utc": "2026-07-26T21:31:27.380424+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e1",
+    "call_name": "taxonomy_only",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.027783,
+    "usage_metadata": {
+      "prompt_token_count": 44772,
+      "candidates_token_count": 86,
+      "total_token_count": 46305
+    },
+    "timestamp_utc": "2026-07-26T21:31:48.721781+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e2",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0054396,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 92,
+      "total_token_count": 9066
+    },
+    "timestamp_utc": "2026-07-26T21:32:38.592088+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e2",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0299514,
+    "usage_metadata": {
+      "prompt_token_count": 48882,
+      "candidates_token_count": 79,
+      "total_token_count": 49919
+    },
+    "timestamp_utc": "2026-07-26T21:33:02.539307+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e2",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.029115,
+    "usage_metadata": {
+      "prompt_token_count": 48464,
+      "candidates_token_count": 61,
+      "total_token_count": 48525
+    },
+    "timestamp_utc": "2026-07-26T21:33:02.539313+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e2",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0066744,
+    "usage_metadata": {
+      "prompt_token_count": 6280,
+      "candidates_token_count": 102,
+      "total_token_count": 11124
+    },
+    "timestamp_utc": "2026-07-26T21:33:30.437117+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e2",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.01728,
+    "usage_metadata": {
+      "prompt_token_count": 27647,
+      "candidates_token_count": 80,
+      "total_token_count": 28800
+    },
+    "timestamp_utc": "2026-07-26T21:36:27.709744+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e2",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0163704,
+    "usage_metadata": {
+      "prompt_token_count": 27229,
+      "candidates_token_count": 55,
+      "total_token_count": 27284
+    },
+    "timestamp_utc": "2026-07-26T21:36:27.709752+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e2",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0056327999999999994,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 97,
+      "total_token_count": 9388
+    },
+    "timestamp_utc": "2026-07-26T21:36:41.754535+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e2",
+    "call_name": "taxonomy_only",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0072461999999999995,
+    "usage_metadata": {
+      "prompt_token_count": 11207,
+      "candidates_token_count": 68,
+      "total_token_count": 12077
+    },
+    "timestamp_utc": "2026-07-26T21:38:06.834633+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e3",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.005627399999999999,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 92,
+      "total_token_count": 9379
+    },
+    "timestamp_utc": "2026-07-26T21:41:20.603564+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e3",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.010787999999999999,
+    "usage_metadata": {
+      "prompt_token_count": 16687,
+      "candidates_token_count": 72,
+      "total_token_count": 17980
+    },
+    "timestamp_utc": "2026-07-26T21:42:42.762270+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e3",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0097926,
+    "usage_metadata": {
+      "prompt_token_count": 16269,
+      "candidates_token_count": 52,
+      "total_token_count": 16321
+    },
+    "timestamp_utc": "2026-07-26T21:42:42.762276+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e3",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0041136,
+    "usage_metadata": {
+      "prompt_token_count": 5097,
+      "candidates_token_count": 103,
+      "total_token_count": 6856
+    },
+    "timestamp_utc": "2026-07-26T21:42:56.348586+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e3",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.01047,
+    "usage_metadata": {
+      "prompt_token_count": 16002,
+      "candidates_token_count": 87,
+      "total_token_count": 17450
+    },
+    "timestamp_utc": "2026-07-26T21:45:29.260992+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e3",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.009378,
+    "usage_metadata": {
+      "prompt_token_count": 15584,
+      "candidates_token_count": 46,
+      "total_token_count": 15630
+    },
+    "timestamp_utc": "2026-07-26T21:45:29.261039+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e3",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0051036,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 107,
+      "total_token_count": 8506
+    },
+    "timestamp_utc": "2026-07-26T21:45:38.268924+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e4",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0053028,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 97,
+      "total_token_count": 8838
+    },
+    "timestamp_utc": "2026-07-26T21:45:53.909889+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e4",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.034149599999999995,
+    "usage_metadata": {
+      "prompt_token_count": 54362,
+      "candidates_token_count": 83,
+      "total_token_count": 56916
+    },
+    "timestamp_utc": "2026-07-26T21:46:20.826185+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e4",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.032390999999999996,
+    "usage_metadata": {
+      "prompt_token_count": 53944,
+      "candidates_token_count": 41,
+      "total_token_count": 53985
+    },
+    "timestamp_utc": "2026-07-26T21:46:20.826192+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e4",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0041405999999999995,
+    "usage_metadata": {
+      "prompt_token_count": 5006,
+      "candidates_token_count": 100,
+      "total_token_count": 6901
+    },
+    "timestamp_utc": "2026-07-26T21:46:34.904601+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e4",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.019556999999999998,
+    "usage_metadata": {
+      "prompt_token_count": 31757,
+      "candidates_token_count": 78,
+      "total_token_count": 32595
+    },
+    "timestamp_utc": "2026-07-26T21:46:51.729899+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e4",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.018837,
+    "usage_metadata": {
+      "prompt_token_count": 31339,
+      "candidates_token_count": 56,
+      "total_token_count": 31395
+    },
+    "timestamp_utc": "2026-07-26T21:46:51.729911+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e4",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0050658,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 99,
+      "total_token_count": 8443
+    },
+    "timestamp_utc": "2026-07-26T21:47:00.085326+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e4",
+    "call_name": "taxonomy_only",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0140226,
+    "usage_metadata": {
+      "prompt_token_count": 22167,
+      "candidates_token_count": 88,
+      "total_token_count": 23371
+    },
+    "timestamp_utc": "2026-07-26T21:47:14.891724+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e5",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.007174799999999999,
+    "usage_metadata": {
+      "prompt_token_count": 6280,
+      "candidates_token_count": 126,
+      "total_token_count": 11958
+    },
+    "timestamp_utc": "2026-07-26T21:47:47.159921+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e5",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0191202,
+    "usage_metadata": {
+      "prompt_token_count": 30387,
+      "candidates_token_count": 94,
+      "total_token_count": 31867
+    },
+    "timestamp_utc": "2026-07-26T21:48:09.331843+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e5",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.018015,
+    "usage_metadata": {
+      "prompt_token_count": 29969,
+      "candidates_token_count": 56,
+      "total_token_count": 30025
+    },
+    "timestamp_utc": "2026-07-26T21:48:09.331851+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e5",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0028128,
+    "usage_metadata": {
+      "prompt_token_count": 2185,
+      "candidates_token_count": 106,
+      "total_token_count": 4688
+    },
+    "timestamp_utc": "2026-07-26T21:48:25.703002+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e5",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0083118,
+    "usage_metadata": {
+      "prompt_token_count": 12577,
+      "candidates_token_count": 77,
+      "total_token_count": 13853
+    },
+    "timestamp_utc": "2026-07-26T21:48:41.370340+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e5",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0073224,
+    "usage_metadata": {
+      "prompt_token_count": 12159,
+      "candidates_token_count": 45,
+      "total_token_count": 12204
+    },
+    "timestamp_utc": "2026-07-26T21:48:41.370350+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e5",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0060095999999999995,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 98,
+      "total_token_count": 10016
+    },
+    "timestamp_utc": "2026-07-26T21:49:06.869118+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e5",
+    "call_name": "taxonomy_only",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0211386,
+    "usage_metadata": {
+      "prompt_token_count": 33127,
+      "candidates_token_count": 77,
+      "total_token_count": 35231
+    },
+    "timestamp_utc": "2026-07-26T21:49:29.090386+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e6",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0055116,
+    "usage_metadata": {
+      "prompt_token_count": 7386,
+      "candidates_token_count": 103,
+      "total_token_count": 9186
+    },
+    "timestamp_utc": "2026-07-26T21:49:50.721376+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e6",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0247182,
+    "usage_metadata": {
+      "prompt_token_count": 39977,
+      "candidates_token_count": 71,
+      "total_token_count": 41197
+    },
+    "timestamp_utc": "2026-07-26T21:50:17.682583+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e6",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.023763,
+    "usage_metadata": {
+      "prompt_token_count": 39559,
+      "candidates_token_count": 46,
+      "total_token_count": 39605
+    },
+    "timestamp_utc": "2026-07-26T21:50:17.682593+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e6",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0051324,
+    "usage_metadata": {
+      "prompt_token_count": 5924,
+      "candidates_token_count": 113,
+      "total_token_count": 8554
+    },
+    "timestamp_utc": "2026-07-26T21:50:34.935574+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e6",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0101202,
+    "usage_metadata": {
+      "prompt_token_count": 16002,
+      "candidates_token_count": 83,
+      "total_token_count": 16867
+    },
+    "timestamp_utc": "2026-07-26T21:50:48.582908+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e6",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.009378,
+    "usage_metadata": {
+      "prompt_token_count": 15584,
+      "candidates_token_count": 46,
+      "total_token_count": 15630
+    },
+    "timestamp_utc": "2026-07-26T21:50:48.582914+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e6",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.005350199999999999,
+    "usage_metadata": {
+      "prompt_token_count": 7386,
+      "candidates_token_count": 94,
+      "total_token_count": 8917
+    },
+    "timestamp_utc": "2026-07-26T21:50:58.821255+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e6",
+    "call_name": "taxonomy_only",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0083718,
+    "usage_metadata": {
+      "prompt_token_count": 13262,
+      "candidates_token_count": 69,
+      "total_token_count": 13953
+    },
+    "timestamp_utc": "2026-07-26T21:51:08.516841+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e7",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.006174,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 103,
+      "total_token_count": 10290
+    },
+    "timestamp_utc": "2026-07-26T21:51:30.338340+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e7",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.033936,
+    "usage_metadata": {
+      "prompt_token_count": 55047,
+      "candidates_token_count": 81,
+      "total_token_count": 56560
+    },
+    "timestamp_utc": "2026-07-26T21:52:06.113612+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e7",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0328146,
+    "usage_metadata": {
+      "prompt_token_count": 54629,
+      "candidates_token_count": 62,
+      "total_token_count": 54691
+    },
+    "timestamp_utc": "2026-07-26T21:52:06.113618+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e7",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0060942,
+    "usage_metadata": {
+      "prompt_token_count": 4460,
+      "candidates_token_count": 91,
+      "total_token_count": 10157
+    },
+    "timestamp_utc": "2026-07-26T21:52:31.993487+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e7",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.011862,
+    "usage_metadata": {
+      "prompt_token_count": 18742,
+      "candidates_token_count": 85,
+      "total_token_count": 19770
+    },
+    "timestamp_utc": "2026-07-26T21:52:45.550745+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e7",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0110298,
+    "usage_metadata": {
+      "prompt_token_count": 18324,
+      "candidates_token_count": 59,
+      "total_token_count": 18383
+    },
+    "timestamp_utc": "2026-07-26T21:52:45.550752+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e7",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0069797999999999995,
+    "usage_metadata": {
+      "prompt_token_count": 7378,
+      "candidates_token_count": 102,
+      "total_token_count": 11633
+    },
+    "timestamp_utc": "2026-07-26T21:53:08.886796+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e7",
+    "call_name": "taxonomy_only",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0144462,
+    "usage_metadata": {
+      "prompt_token_count": 22852,
+      "candidates_token_count": 76,
+      "total_token_count": 24077
+    },
+    "timestamp_utc": "2026-07-26T21:53:22.907948+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e8",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0059153999999999995,
+    "usage_metadata": {
+      "prompt_token_count": 7370,
+      "candidates_token_count": 98,
+      "total_token_count": 9859
+    },
+    "timestamp_utc": "2026-07-26T21:59:53.141658+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e8",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0187866,
+    "usage_metadata": {
+      "prompt_token_count": 30387,
+      "candidates_token_count": 84,
+      "total_token_count": 31311
+    },
+    "timestamp_utc": "2026-07-26T22:00:13.852288+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_patched",
+    "event_id": "e8",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.018009,
+    "usage_metadata": {
+      "prompt_token_count": 29969,
+      "candidates_token_count": 46,
+      "total_token_count": 30015
+    },
+    "timestamp_utc": "2026-07-26T22:00:13.852294+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e8",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.004443,
+    "usage_metadata": {
+      "prompt_token_count": 4813,
+      "candidates_token_count": 106,
+      "total_token_count": 7405
+    },
+    "timestamp_utc": "2026-07-26T22:02:27.548296+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e8",
+    "call_name": "taxonomy",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.012830999999999999,
+    "usage_metadata": {
+      "prompt_token_count": 20112,
+      "candidates_token_count": 78,
+      "total_token_count": 21385
+    },
+    "timestamp_utc": "2026-07-26T22:02:44.239651+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "b_pre_patch",
+    "event_id": "e8",
+    "call_name": "actor",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0118482,
+    "usage_metadata": {
+      "prompt_token_count": 19694,
+      "candidates_token_count": 53,
+      "total_token_count": 19747
+    },
+    "timestamp_utc": "2026-07-26T22:02:44.239657+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e8",
+    "call_name": "critique",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0043403999999999995,
+    "usage_metadata": {
+      "prompt_token_count": 3647,
+      "candidates_token_count": 91,
+      "total_token_count": 7234
+    },
+    "timestamp_utc": "2026-07-26T22:11:03.991439+00:00"
+  },
+  {
+    "gate": "gate5_verification",
+    "config": "a_dedup_stress",
+    "event_id": "e8",
+    "call_name": "taxonomy_only",
+    "model_id": "gemini-3.5-flash",
+    "thinking_level": "high",
+    "status": "ok",
+    "cost_usd": 0.0076181999999999995,
+    "usage_metadata": {
+      "prompt_token_count": 11892,
+      "candidates_token_count": 88,
+      "total_token_count": 12697
+    },
+    "timestamp_utc": "2026-07-26T22:11:25.564900+00:00"
+  }
+]

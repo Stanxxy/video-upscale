@@ -45,22 +45,34 @@ from PIL import Image
 from pydantic import BaseModel
 
 from service.pipelines import gemini_retry
+from service.pipelines.gemini_model_compat import LATEST_FLASH_MODELS, generation_sampling_kwargs
 from service.routes import state as route_state
 
 logger = logging.getLogger("service.routes")
 
 # --------------------------------------------------------------------------- #
-# Per-task model allowlists (live-verified) — this is a model-comparison
+# Per-task model allowlists (provider-documented; request compatibility tested)
+# — this is a model-comparison
 # tool, so callers may request any model on their task's list; the request
 # is REJECTED (400) for anything off-list, never silently swapped for a
 # default. Module-level singular constants below are the task DEFAULTS used
 # when a request omits ``model``.
 # --------------------------------------------------------------------------- #
-EVENT_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"]
-CHAT_MODEL = EVENT_MODELS[0]  # default for /qa/vlm-chat
+EVENT_MODELS = [
+    *LATEST_FLASH_MODELS,
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-pro-preview",
+]
+CHAT_MODEL = "gemini-3.5-flash"  # default for /qa/vlm-chat remains unchanged
 
-DETECT_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"]
-DETECT_MODEL = DETECT_MODELS[0]  # default box-only detect tier
+DETECT_MODELS = [
+    *LATEST_FLASH_MODELS,
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-pro-preview",
+]
+DETECT_MODEL = "gemini-3.5-flash"  # default box-only detect tier remains unchanged
 # 404/model-unavailable falls back once to this fixed tier, regardless of
 # which allowlisted model the caller requested (unrelated to user choice).
 DETECT_MODEL_FALLBACK = "gemini-3.1-flash-lite"
@@ -229,15 +241,18 @@ def thinking_config_for(model_id: str, ui_level: Optional[str]) -> Optional[type
     """Map a UI thinking level to a Gemini ``ThinkingConfig`` for ``model_id``.
 
     Image models reject any thinking config outright (always ``None``).
-    ``gemini-3.1-pro-preview`` cannot disable thinking at all — "off" is
-    honored as its lowest available level (``thinking_level="low"``) rather
-    than a budget/level combination it would 400 on. Never set both
+    Gemini 3.6/3.7 require level-based thinking: Studio ``off`` maps to
+    ``minimal`` for 3.6 and the lowest supported level, ``low``, for 3.7.
+    ``gemini-3.1-pro-preview`` likewise cannot disable thinking, so ``off``
+    maps to ``low``. Never set both
     ``thinking_level`` and ``thinking_budget`` on the same config.
     """
     if model_id in IMAGE_MODELS:
         return None
     if ui_level in (None, "off"):
-        if model_id == "gemini-3.1-pro-preview":
+        if model_id == "gemini-3.6-flash":
+            return types.ThinkingConfig(thinking_level="minimal")
+        if model_id in {"gemini-3.7-flash", "gemini-3.1-pro-preview"}:
             return types.ThinkingConfig(thinking_level="low")
         return types.ThinkingConfig(thinking_budget=0)
     return types.ThinkingConfig(thinking_level=ui_level)
@@ -356,7 +371,7 @@ async def vlm_chat(body: QAVLMChatRequest):
                 model=model,
                 contents=contents,
                 config=types.GenerateContentConfig(
-                    temperature=0.2,
+                    **generation_sampling_kwargs(model, temperature=0.2),
                     response_mime_type="application/json",
                     response_schema=_event_schema(),
                     thinking_config=thinking_cfg,
@@ -412,24 +427,47 @@ def _resolve_stream_url(youtube_url: str) -> tuple[str, dict]:
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        # VLM Studio renders the same video through YouTube's embedded player.
+        # Pinning yt-dlp to that client avoids the default android_vr client,
+        # whose GVS URLs are currently rejected with HTTP 403 without a PO
+        # token. A video that forbids embedding cannot be used in the Studio
+        # player either, so this keeps playback and frame extraction aligned.
+        "extractor_args": {
+            "youtube": {"player_client": ["web_embedded"]},
+        },
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(youtube_url, download=False)
 
     url = info.get("url")
     headers = info.get("http_headers") or {}
+    available_at = info.get("available_at")
     if not url:
         for fmt in reversed(info.get("formats") or []):
             if fmt.get("url"):
                 url = fmt["url"]
                 headers = fmt.get("http_headers") or headers
+                available_at = fmt.get("available_at") or available_at
                 break
     if not url:
         raise RuntimeError(f"yt-dlp could not resolve a direct stream URL for {youtube_url!r}")
+
+    # Some YouTube responses deliberately sign a URL a few seconds before it
+    # becomes playable. yt-dlp's own downloader waits for this exact
+    # ``available_at`` timestamp; consumers of the extracted URL must do the
+    # same or ffmpeg receives a deterministic 403 on affected videos.
+    if isinstance(available_at, (int, float)):
+        required_wait_s = available_at - int(time.time())
+        if required_wait_s > 0:
+            logger.info(
+                "Waiting %.2fs for YouTube stream availability as required by the site",
+                required_wait_s,
+            )
+            time.sleep(required_wait_s)
     return url, headers
 
 
-def _grab_frame_via_ffmpeg(stream_url: str, headers: dict, start_sec: int) -> bytes:
+def _grab_frame_via_ffmpeg(stream_url: str, headers: dict, start_sec: float) -> bytes:
     """Extract ONE PNG frame at ``start_sec`` from a resolved stream URL via ffmpeg.
 
     Raises RuntimeError with ffmpeg's real stderr on failure — no placeholder frame.
@@ -453,7 +491,7 @@ def _grab_frame_via_ffmpeg(stream_url: str, headers: dict, start_sec: int) -> by
     return proc.stdout
 
 
-def _extract_youtube_frame(youtube_url: str, start_sec: int) -> Image.Image:
+def _extract_youtube_frame(youtube_url: str, start_sec: float) -> Image.Image:
     stream_url, headers = _resolve_stream_url(youtube_url)
     png_bytes = _grab_frame_via_ffmpeg(stream_url, headers, start_sec)
     img = Image.open(io.BytesIO(png_bytes))
@@ -600,11 +638,11 @@ async def _run_detect(
     caller turns that into a 502/error event, never a fabricated result.
     """
     if thinking_config is None:
-        thinking_config = types.ThinkingConfig(thinking_budget=0)
+        thinking_config = thinking_config_for(model, "off")
     if retry_config is None:
         retry_config = _default_retry_config()
     config = types.GenerateContentConfig(
-        temperature=0.0,
+        **generation_sampling_kwargs(model, temperature=0.0),
         response_mime_type="application/json",
         thinking_config=thinking_config,
         max_output_tokens=max_output_tokens,

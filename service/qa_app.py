@@ -9,7 +9,8 @@ that startup hard-fails with ``cassandra.cluster.NoHostAvailable`` before the
 process ever binds a port.
 
 This module mounts ONLY the QA routes (``/qa/vlm-chat``, ``/qa/vlm-image``,
-``/qa/identity-analyze``) plus a trivial ``/health``, with the SAME CORS
+``/qa/identity-analyze``, ``/qa/reference-frame``, and the pipeline runner)
+plus a trivial ``/health``, with the SAME CORS
 policy as ``service.app``. It deliberately imports the route callables
 directly from their leaf modules (``service.routes.qa_vlm``, ``service.routes.qa``)
 rather than via the ``service.routes`` package barrel — the barrel eagerly
@@ -18,7 +19,7 @@ imports ``service.routes.jobs``/``human_loop``/``health`` (which pull in
 
 Only requirement to run: ``BJJ_GEMINI_API_KEY``/``GEMINI_API_KEY`` in the
 engine ``.env`` (loaded via ``service.config.ServiceConfig``), plus yt-dlp +
-ffmpeg on PATH for ``/qa/vlm-image``'s frame extraction.
+ffmpeg on PATH for the image and reference-frame extraction routes.
 
 Production ``service/app.py`` is UNCHANGED by this file — it is a fully
 separate app, not a modification of the existing one.
@@ -39,7 +40,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
 from service.routes.qa import identity_analyze
-from service.routes.qa_pipeline import list_pipelines, pipeline_defaults, pipeline_run
+from service.routes.qa_pipeline import (
+    list_pipelines,
+    pipeline_defaults,
+    pipeline_run,
+    reference_frame,
+)
 from service.routes.qa_vlm import vlm_chat, vlm_image
 from service.routes.state import init_routes
 
@@ -94,6 +100,7 @@ def create_qa_app() -> FastAPI:
     # Pipeline DAG runner (build plan 2026-07-03) — QA-only, streaming NDJSON.
     app.get("/qa/pipelines")(list_pipelines)
     app.get("/qa/pipeline-defaults")(pipeline_defaults)
+    app.post("/qa/reference-frame")(reference_frame)
     app.post("/qa/pipeline-run")(pipeline_run)
 
     return app

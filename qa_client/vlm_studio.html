@@ -62,12 +62,17 @@
     font-family: inherit;
   }
   input:focus, textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
   .row { display: flex; gap: 10px; flex-wrap: wrap; }
   .row > * { flex: 1; min-width: 120px; }
 
   .field-inline { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
   .field-inline input { flex: 1; min-width: 0; }
   .field-inline button { flex-shrink: 0; }
+  .v2-thinking-quality-row { align-items: flex-end; gap: 16px; min-width: 0; }
+  .v2-thinking-quality-row > .tabs { min-width: 0; }
 
   /* Buttons */
   .btn {
@@ -369,6 +374,69 @@
   .v2-axis-card-label { font-weight: 600; font-size: 0.82rem; margin-bottom: 4px; }
   details.v2-axis-details summary { cursor: pointer; color: var(--text-dim); font-size: 0.82rem; margin-top: 8px; }
   details.v2-validator-summary summary { cursor: pointer; font-size: 0.78rem; color: var(--accent); }
+
+  /* Grounded position timeline experiment. */
+  .reference-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .reference-person { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px; min-width: 0; }
+  .reference-person input { min-height: 44px; }
+  .reference-capture { margin-top: 12px; }
+  .reference-capture .btn { min-height: 44px; margin-top: 0; }
+  .reference-capture-ready { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 10px; align-items: center; }
+  .reference-capture-ready[hidden], .reference-capture-empty[hidden] { display: none; }
+  .reference-capture-preview { width: 88px; height: 88px; object-fit: cover; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+  .reference-capture-meta { min-width: 0; }
+  .reference-capture-meta strong { display: block; color: var(--green); font-size: 0.8rem; }
+  .reference-capture-meta span { display: block; color: var(--text-dim); font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.74rem; margin-top: 3px; }
+  .reference-capture-meta .btn { width: auto; margin-top: 8px; }
+  .reference-capture-error { color: var(--red); font-size: 0.75rem; min-height: 1em; margin-top: 7px; }
+  .reference-crop-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,0.88); }
+  .reference-crop-modal[hidden] { display: none; }
+  .reference-crop-dialog { width: min(100%, 1040px); max-height: calc(100vh - 32px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .reference-crop-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .reference-crop-header h2 { color: var(--text); margin-bottom: 3px; }
+  .reference-crop-header p { color: var(--text-dim); font-size: 0.8rem; }
+  .reference-crop-close { flex: 0 0 44px; width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); cursor: pointer; font-size: 1.25rem; }
+  .reference-crop-body { flex: 1; min-height: 0; overflow: auto; padding: 14px; }
+  .reference-crop-frame-wrap { display: flex; justify-content: center; width: 100%; }
+  .reference-crop-stage { position: relative; display: inline-block; max-width: 100%; cursor: crosshair; touch-action: none; user-select: none; line-height: 0; overflow: hidden; border-radius: 8px; background: #000; }
+  .reference-crop-stage img { display: block; max-width: 100%; max-height: 62vh; width: auto; height: auto; pointer-events: none; }
+  .reference-crop-box { position: absolute; display: none; border: 2px dashed var(--red); background: rgba(248,113,113,0.08); box-shadow: 0 0 0 9999px rgba(0,0,0,0.46); pointer-events: none; }
+  .reference-crop-instruction { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; color: #fff; font-size: 0.85rem; line-height: 1.4; text-align: center; pointer-events: none; }
+  .reference-crop-instruction span { padding: 8px 12px; border-radius: 999px; background: rgba(0,0,0,0.72); }
+  .reference-crop-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
+  .reference-crop-actions .btn { width: auto; min-height: 44px; margin-top: 0; }
+  body.reference-crop-open { overflow: hidden; }
+  .position-timeline-bar { position: relative; min-height: 76px; margin-top: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .position-segment { position: absolute; top: 5px; height: 44px; overflow: hidden; border: 0; border-right: 1px solid var(--bg); color: #fff; padding: 4px; font-size: 0.68rem; cursor: pointer; text-align: left; }
+  .position-segment:nth-child(5n+1) { background: #4768d8; }
+  .position-segment:nth-child(5n+2) { background: #347b5b; }
+  .position-segment:nth-child(5n+3) { background: #8a6230; }
+  .position-segment:nth-child(5n+4) { background: #754da1; }
+  .position-segment:nth-child(5n) { background: #2d7181; }
+  .position-segment.inactive { background: #343744; border: 1px dashed var(--text-dim); color: var(--text-dim); }
+  .technique-marker { position: absolute; bottom: 4px; width: 14px; height: 18px; min-height: 18px; padding: 0; margin-left: -7px; border: 2px solid var(--surface); border-radius: 7px 7px 2px 2px; background: var(--yellow); cursor: pointer; }
+  .timeline-legend { display: flex; gap: 10px; flex-wrap: wrap; color: var(--text-dim); font-size: 0.74rem; margin-top: 8px; }
+  .timeline-legend-key { display: inline-flex; align-items: center; gap: 5px; }
+  .timeline-swatch { width: 12px; height: 12px; border-radius: 3px; background: var(--accent); }
+  .timeline-swatch.inactive { background: #343744; border: 1px dashed var(--text-dim); }
+  .timeline-swatch.technique { background: var(--yellow); border-radius: 50%; }
+  .timeline-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .timeline-stat-panel { min-width: 0; }
+  .timeline-stat-panel h3 { font-size: 0.86rem; margin-bottom: 6px; }
+  .timeline-stat-panel .msg-table-wrap { border: 1px solid var(--border); border-radius: 8px; }
+  @media (max-width: 640px) {
+    .container { padding: 12px; }
+    .v2-thinking-quality-row { display: block; }
+    .v2-thinking-quality-row > .tabs { width: 100%; }
+    .reference-grid, .timeline-stat-grid { grid-template-columns: 1fr; }
+    .reference-person { padding: 10px; }
+    .reference-crop-modal { padding: 0; }
+    .reference-crop-dialog { width: 100%; height: 100%; max-height: none; border-radius: 0; }
+    .reference-crop-stage img { max-height: 58vh; }
+    .reference-crop-actions { flex-wrap: wrap; }
+    .reference-crop-actions .btn { flex: 1 1 140px; }
+    .position-segment { font-size: 0; }
+  }
 </style>
 </head>
 <body>
@@ -379,7 +447,7 @@
   <div class="card">
     <h2>Config</h2>
     <label>Backend URL</label>
-    <input id="backend-url" value="http://localhost:8000" placeholder="http://localhost:8000">
+    <input id="backend-url" value="http://127.0.0.1:8020" placeholder="http://127.0.0.1:8020">
 
     <label>YouTube URL or ID</label>
     <div class="field-inline">
@@ -450,6 +518,56 @@
     <div class="selection-badges" id="cost-estimate-badge" style="display:none;"></div>
 
     <button class="btn btn-primary" id="btn-run-pipeline" onclick="runPipeline()">&#9654; Run pipeline</button>
+  </div>
+
+  <div class="card" id="timeline-reference-card" style="display:none;">
+    <h2>Grounded athletes</h2>
+    <p class="reasoning" style="margin-top:0;">Seek the loaded video to a clear view of each athlete, then capture and crop that frame. Stable IDs are used in position roles, technique actors, and duration statistics.</p>
+    <div class="reference-grid">
+      <div class="reference-person">
+        <strong>Player A</strong>
+        <label for="ref-a-id">Stable player ID</label>
+        <input id="ref-a-id" value="player_a" oninput="updateReferenceValidation()">
+        <label for="ref-a-name">Display name</label>
+        <input id="ref-a-name" placeholder="Athlete name" oninput="updateReferenceValidation()">
+        <div class="reference-capture">
+          <div class="reference-capture-empty" id="ref-a-capture-empty">
+            <button type="button" class="btn btn-primary" id="ref-a-capture-button" onclick="beginReferenceCapture('a')">Capture current frame</button>
+          </div>
+          <div class="reference-capture-ready" id="ref-a-capture-ready" hidden>
+            <img class="reference-capture-preview" id="ref-a-preview" alt="Player A cropped reference">
+            <div class="reference-capture-meta">
+              <strong>Crop ready</strong>
+              <span id="ref-a-captured-at">Captured at —</span>
+              <button type="button" class="btn btn-sm" onclick="beginReferenceCapture('a')">Retake</button>
+            </div>
+          </div>
+          <div class="reference-capture-error" id="ref-a-capture-error" role="alert"></div>
+        </div>
+      </div>
+      <div class="reference-person">
+        <strong>Player B</strong>
+        <label for="ref-b-id">Stable player ID</label>
+        <input id="ref-b-id" value="player_b" oninput="updateReferenceValidation()">
+        <label for="ref-b-name">Display name</label>
+        <input id="ref-b-name" placeholder="Athlete name" oninput="updateReferenceValidation()">
+        <div class="reference-capture">
+          <div class="reference-capture-empty" id="ref-b-capture-empty">
+            <button type="button" class="btn btn-primary" id="ref-b-capture-button" onclick="beginReferenceCapture('b')">Capture current frame</button>
+          </div>
+          <div class="reference-capture-ready" id="ref-b-capture-ready" hidden>
+            <img class="reference-capture-preview" id="ref-b-preview" alt="Player B cropped reference">
+            <div class="reference-capture-meta">
+              <strong>Crop ready</strong>
+              <span id="ref-b-captured-at">Captured at —</span>
+              <button type="button" class="btn btn-sm" onclick="beginReferenceCapture('b')">Retake</button>
+            </div>
+          </div>
+          <div class="reference-capture-error" id="ref-b-capture-error" role="alert"></div>
+        </div>
+      </div>
+    </div>
+    <div class="err-line" id="reference-validation"></div>
   </div>
 
   <!-- ===================== CANVAS: single-shot (today's EXACT surface, zero regression) ===================== -->
@@ -674,6 +792,12 @@
        untouched by Task 3 — the rail above is an index, not a replacement. -->
   <div id="chunk-map-host"></div>
 
+  <div class="card" id="timeline-results-card" style="display:none;" aria-live="polite">
+    <h2>Position timeline + objective statistics</h2>
+    <div id="position-timeline-body"></div>
+    <div id="position-statistics-body"></div>
+  </div>
+
   <!-- Final deduped clip list — the full detail table (audit surface,
        untouched by Task 3; the rail above is the click-to-seek index over
        this same deduped list, not a replacement for it). -->
@@ -692,6 +816,32 @@
   </div>
 </div>
 
+<div class="reference-crop-modal" id="reference-crop-modal" role="dialog" aria-modal="true" aria-labelledby="reference-crop-title" hidden>
+  <div class="reference-crop-dialog">
+    <div class="reference-crop-header">
+      <div>
+        <h2 id="reference-crop-title">Crop athlete reference</h2>
+        <p id="reference-crop-subtitle">Drag a box around the athlete.</p>
+      </div>
+      <button type="button" class="reference-crop-close" onclick="closeReferenceCropModal()" aria-label="Cancel reference crop">&times;</button>
+    </div>
+    <div class="reference-crop-body">
+      <div class="reference-crop-frame-wrap">
+        <div class="reference-crop-stage" id="reference-crop-stage" role="group" tabindex="0" aria-label="Athlete crop box" aria-describedby="reference-crop-help" onpointerdown="startReferenceCrop(event)" onpointermove="moveReferenceCrop(event)" onpointerup="finishReferenceCrop(event)" onpointercancel="cancelReferenceCropDrag(event)" onkeydown="adjustReferenceCropWithKeyboard(event)">
+          <img id="reference-crop-frame" alt="Frozen video frame for athlete crop">
+          <div class="reference-crop-box" id="reference-crop-box"></div>
+          <div class="reference-crop-instruction" id="reference-crop-instruction"><span id="reference-crop-help">Drag or touch to draw a tight box. Keyboard: Enter starts a centered box; arrows move it; Shift + arrows resize it.</span></div>
+        </div>
+      </div>
+      <div class="reference-capture-error" id="reference-crop-error" role="alert"></div>
+    </div>
+    <div class="reference-crop-actions">
+      <button type="button" class="btn" onclick="closeReferenceCropModal()">Cancel</button>
+      <button type="button" class="btn btn-success" id="reference-crop-confirm" onclick="confirmReferenceCrop()" disabled>Confirm crop</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // Global state
@@ -706,6 +856,11 @@ let currentTime = 0;
 let currentVideoId = null;
 let currentVideoUrl = '';
 let seekIntent = null;  // { startSec, endSec, armed } while an active pill's playback is pending a snap-pause
+const playerReferenceCaptures = { a: null, b: null };
+let activeReferenceSlot = null;
+let activeReferenceFrame = null;
+let referenceCropStart = null;
+let referenceCropBox = null;
 
 let currentScopeType = 'timepoint'; // 'timepoint' | 'range'
 let currentMode = 'event';          // 'event' | 'image'
@@ -713,11 +868,11 @@ let currentImageTask = 'generate';  // 'generate' | 'detect' | 'segment'
 let currentThinkingLevel = null;    // 'off' | 'low' | 'medium' | 'high' | null (task has no thinking control)
 let sending = false;
 
-// Frozen, live-verified model ids per task. Task key = 'event' when
+// Provider-documented model ids per task. Task key = 'event' when
 // currentMode === 'event', else currentImageTask ('generate' | 'detect' | 'segment').
 const TASK_CONFIG = {
-  event:    { models: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'low' },
-  detect:   { models: ['gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'off' },
+  event:    { models: ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'low' },
+  detect:   { models: ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'off' },
   segment:  { models: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'], defaultModel: 'gemini-3.1-flash-image', thinking: false, defaultThinking: null },
   generate: { models: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'], defaultModel: 'gemini-3.1-flash-image', thinking: false, defaultThinking: null },
 };
@@ -840,8 +995,10 @@ function loadVideo() {
     return;
   }
   errEl.style.display = 'none';
+  const videoChanged = currentVideoId !== res.id;
   currentVideoId = res.id;
   currentVideoUrl = 'https://www.youtube.com/watch?v=' + res.id;
+  if (videoChanged) resetPlayerReferenceCaptures();
   duration = 0;
   currentTime = 0;
   seekIntent = null;
@@ -1570,9 +1727,99 @@ function renderHighlightTimelineV2() {
 // TABLE (renderChunkMap(), untouched) — gated on currentPipelineId so this
 // repurposing never fires for chunk-segment-tags/vision-mimic.
 function renderChunkMapHost() {
+  if (currentPipelineId === 'position-timeline-techniques') {
+    const host = document.getElementById('chunk-map-host');
+    if (host) host.innerHTML = '';
+    return;
+  }
   if (currentPipelineId === 'highlight-scan-critique-analyze') { renderHighlightTimelineV2(); return; }
   if (currentPipelineId === 'highlight-scan-analyze') { renderHighlightTimeline(); return; }
   renderChunkMap();
+}
+
+function renderPositionTimelineResults() {
+  const card = document.getElementById('timeline-results-card');
+  const timelineBody = document.getElementById('position-timeline-body');
+  const statsBody = document.getElementById('position-statistics-body');
+  if (!card || !timelineBody || !statsBody) return;
+  if (currentPipelineId !== 'position-timeline-techniques' || !runState || !runState.positionIntervals.length) {
+    card.style.display = 'none';
+    timelineBody.innerHTML = '';
+    statsBody.innerHTML = '';
+    return;
+  }
+  card.style.display = 'block';
+  const intervals = runState.positionIntervals;
+  const events = runState.techniqueEvents || [];
+  const start = intervals[0].start_s;
+  const end = intervals[intervals.length - 1].end_s;
+  const span = Math.max(end - start, 0.001);
+  const refs = validatePlayerReferences().references || [];
+  const names = Object.fromEntries(refs.map(ref => [ref.player_id, ref.player_name || ref.player_id]));
+  const segments = intervals.map(interval => {
+    const left = clamp(((interval.start_s - start) / span) * 100, 0, 100);
+    const width = Math.max(0.45, ((interval.end_s - interval.start_s) / span) * 100);
+    const roles = Object.entries(interval.player_roles || {}).map(([id, role]) => (names[id] || id) + ': ' + role).join(' · ');
+    const note = interval.position_note || interval.inactive_reason || '';
+    const title = secToMmss(interval.start_s) + ' → ' + secToMmss(interval.end_s) + ' · ' + interval.position + ' · ' + roles + (note ? ' · ' + note : '');
+    return '<button type="button" class="position-segment' + (interval.position === 'inactive' ? ' inactive' : '') + '" style="left:' + left.toFixed(3) + '%;width:' + width.toFixed(3) + '%" title="' + escHtml(title) + '" aria-label="' + escHtml(title) + '" onclick="handlePillClick(' + interval.start_s + ',' + interval.end_s + ',this)">' + escHtml(interval.position.replace(/_/g, ' ')) + '</button>';
+  }).join('');
+  const markers = events.map(event => {
+    const midpoint = (event.start_s + event.end_s) / 2;
+    const left = clamp(((midpoint - start) / span) * 100, 0, 100);
+    const actor = names[event.actor_player_id] || event.actor_player_id || 'unclear';
+    const label = event.specific_technique_guess || event.action_class || 'Technique';
+    const title = secToMmss(event.start_s) + ' → ' + secToMmss(event.end_s) + ' · ' + label + ' · ' + actor + ' · ' + (event.outcome || 'unclear');
+    return '<button type="button" class="technique-marker" style="left:' + left.toFixed(3) + '%" title="' + escHtml(title) + '" aria-label="' + escHtml(title) + '" onclick="handlePillClick(' + event.start_s + ',' + event.end_s + ',this)"></button>';
+  }).join('');
+  timelineBody.innerHTML = '<div class="reasoning" style="margin-top:0;">Every second is assigned to one position or an explicit inactive interval. Technique markers are independent sparse events.</div>' +
+    '<div class="position-timeline-bar">' + segments + markers + '</div>' +
+    '<div class="timeline-legend"><span class="timeline-legend-key"><span class="timeline-swatch"></span>active position</span><span class="timeline-legend-key"><span class="timeline-swatch inactive"></span>inactive/reset</span><span class="timeline-legend-key"><span class="timeline-swatch technique"></span>technique event</span></div>';
+
+  const stats = runState.statistics || {};
+  const positionRows = Object.entries(stats.by_position || {}).map(([position, data]) =>
+    '<tr><td>' + escHtml(position.replace(/_/g, ' ')) + '</td><td>' + Number(data.duration_s || 0).toFixed(1) + 's</td></tr>'
+  ).join('');
+  const playerRows = Object.entries(stats.by_player || {}).map(([playerId, data]) => {
+    const roles = data.role_totals || {};
+    const techniqueCount = (stats.techniques_by_player || {})[playerId] || 0;
+    return '<tr><td>' + escHtml(names[playerId] || playerId) + '</td><td>' + Number(roles.top_s || 0).toFixed(1) + 's</td><td>' + Number(roles.bottom_s || 0).toFixed(1) + 's</td><td>' + Number(roles.neutral_s || 0).toFixed(1) + 's</td><td>' + techniqueCount + '</td></tr>';
+  }).join('');
+  const playerPositionRows = Object.entries(stats.by_player || {}).flatMap(([playerId, data]) =>
+    Object.entries(data.by_position || {}).map(([position, roles]) =>
+      '<tr><td>' + escHtml(names[playerId] || playerId) + '</td><td>' + escHtml(position.replace(/_/g, ' ')) + '</td><td>' + Number(roles.top_s || 0).toFixed(1) + 's</td><td>' + Number(roles.bottom_s || 0).toFixed(1) + 's</td><td>' + Number(roles.neutral_s || 0).toFixed(1) + 's</td></tr>'
+    )
+  ).join('');
+  const intervalRows = intervals.map(interval => {
+    const roles = Object.entries(interval.player_roles || {}).map(([id, role]) => (names[id] || id) + ': ' + role).join(' · ');
+    const detail = interval.position === 'inactive' ? interval.inactive_reason : interval.position_note;
+    return '<tr><td>' + eventPillHtml(secToMmss(interval.start_s), secToMmss(interval.end_s)) + '</td><td>' + escHtml(interval.position.replace(/_/g, ' ')) + '</td><td>' + escHtml(roles) + '</td><td>' + escHtml(detail || '—') + '</td></tr>';
+  }).join('');
+  const techniqueRows = events.map(event => '<tr><td>' + eventPillHtml(secToMmss(event.start_s), secToMmss(event.end_s)) + '</td><td>' + escHtml(event.specific_technique_guess || event.action_class || '—') + '</td><td>' + escHtml(names[event.actor_player_id] || event.actor_player_id || 'unclear') + '</td><td>' + escHtml(event.outcome || 'unclear') + '</td><td>' + escHtml((event.position || '—').replace(/_/g, ' ')) + (event.position_note ? '<div class="reasoning">' + escHtml(event.position_note) + '</div>' : '') + '</td></tr>').join('');
+  const nodeCosts = Array.isArray(runState.nodeCosts) ? runState.nodeCosts : [];
+  const costSummary = runState.costSummary || null;
+  const fmtTokens = value => Number(value || 0).toLocaleString('en-US');
+  const fmtUsd = value => value == null ? 'unavailable' : ('$' + Number(value).toFixed(6));
+  const costRows = nodeCosts.map(cost => {
+    const usd = cost.estimated_usd == null
+      ? '<span class="badge badge-hint">unavailable</span>'
+      : '<span class="badge badge-neutral">' + fmtUsd(cost.estimated_usd) + '</span>';
+    return '<tr><td>' + escHtml(cost.label || cost.stage_id || '—') + '</td><td>' + escHtml(cost.model || 'deterministic') + '</td><td>' + fmtTokens(cost.call_count) + '</td><td>' + fmtTokens(cost.prompt_token_count) + '</td><td>' + fmtTokens(cost.cached_content_token_count) + '</td><td>' + fmtTokens(cost.candidates_token_count) + '</td><td>' + fmtTokens(cost.thoughts_token_count) + '</td><td>' + fmtTokens(cost.total_token_count) + '</td><td>' + usd + '</td></tr>';
+  }).join('');
+  const costHtml = nodeCosts.length
+    ? '<h3 style="font-size:0.86rem;margin:16px 0 6px;">DAG node cost</h3>' +
+      '<div class="selection-badges"><span class="badge badge-a">Total ' + fmtUsd(costSummary && costSummary.estimated_usd) + '</span><span class="badge badge-neutral">' + fmtTokens(costSummary && costSummary.call_count) + ' measured call(s)</span></div>' +
+      '<div class="reasoning" style="margin-top:6px;">Standard paid-tier estimate from actual Gemini usage metadata; thinking tokens are output-billed. ' +
+        ((costSummary && costSummary.rate_valid_through) ? ('Current rate card valid through ' + escHtml(costSummary.rate_valid_through) + '. ') : '') +
+        'Free-tier usage, credits, taxes, or a different inference tier can change the invoice. <a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noopener noreferrer">Google pricing</a>.</div>' +
+      '<div class="msg-table-wrap"><table class="clips"><thead><tr><th>Node</th><th>Model</th><th>Calls</th><th>Input</th><th>Cached input</th><th>Response</th><th>Thinking</th><th>Total tokens</th><th>Est. USD</th></tr></thead><tbody>' + costRows + '</tbody></table></div>'
+    : '<h3 style="font-size:0.86rem;margin:16px 0 6px;">DAG node cost</h3><p class="reasoning">Real backend runs report measured node costs at completion; mock runs do not fabricate spend.</p>';
+  statsBody.innerHTML = '<div class="selection-badges"><span class="badge badge-a">Active ' + Number(stats.active_duration_s || 0).toFixed(1) + 's</span><span class="badge badge-neutral">Excluded inactive ' + Number(stats.inactive_duration_s || 0).toFixed(1) + 's</span></div>' +
+    '<div class="timeline-stat-grid"><div class="timeline-stat-panel"><h3>Time by position</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Position</th><th>Duration</th></tr></thead><tbody>' + positionRows + '</tbody></table></div></div>' +
+    '<div class="timeline-stat-panel"><h3>Objective player totals</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Player</th><th>Top</th><th>Bottom</th><th>Neutral</th><th>Techniques</th></tr></thead><tbody>' + playerRows + '</tbody></table></div></div></div>' +
+    '<h3 style="font-size:0.86rem;margin:16px 0 6px;">Player time by position and role</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Player</th><th>Position</th><th>Top</th><th>Bottom</th><th>Neutral</th></tr></thead><tbody>' + playerPositionRows + '</tbody></table></div>' +
+    '<h3 style="font-size:0.86rem;margin:16px 0 6px;">Position interval details</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Range</th><th>Position/state</th><th>Player roles</th><th>Subposition or inactive reason</th></tr></thead><tbody>' + intervalRows + '</tbody></table></div>' +
+    '<h3 style="font-size:0.86rem;margin:16px 0 6px;">Technique events</h3><div class="msg-table-wrap"><table class="clips"><thead><tr><th>Time</th><th>Technique</th><th>Actor</th><th>Outcome</th><th>Attached position</th></tr></thead><tbody>' + (techniqueRows || '<tr><td colspan="5">No technique events found.</td></tr>') + '</tbody></table></div>' + costHtml;
 }
 
 function renderSimplifiedTagsTable(tags) {
@@ -2053,9 +2300,9 @@ function mockVisionMimicDefault(id, label, agentMode) {
     description: 'Gemini-only mimic of the production vision engine: frame-sample -> per-frame role-labeled detect+crop-to-athletes -> sliding window -> analyze -> context-chain -> dedup. No tracking model, no upscale.',
     stages: [
       { id: 'frame_sample', type: 'frame_sample', label: 'Sample', enabled: true, config: { sample_fps: 5.0 } },
-      { id: 'detect_crop', type: 'detect_crop', label: 'Detect + Crop', enabled: true, config: { model: 'gemini-3.5-flash', padding: 0.2, single_athlete_padding: 0.5, min_crop_fraction: 0.4, ema_alpha: 0.6, hysteresis_margin: 0.15, hysteresis_frames: 3, crop_target_size: 768 } },
+      { id: 'detect_crop', type: 'detect_crop', label: 'Detect + Crop', enabled: true, config: { model: 'gemini-3.7-flash', padding: 0.2, single_athlete_padding: 0.5, min_crop_fraction: 0.4, ema_alpha: 0.6, hysteresis_margin: 0.15, hysteresis_frames: 3, crop_target_size: 768 } },
       { id: 'window', type: 'window', label: 'Window', enabled: true, config: { window_size: 30, stride: 15 } },
-      { id: 'analyze', type: 'analyze', label: 'Analyze', enabled: true, config: { agent_mode: agentMode, model: 'gemini-3.1-flash-lite', thinking: null, return_format: 'clips-v1', system_instruction: null } },
+      { id: 'analyze', type: 'analyze', label: 'Analyze', enabled: true, config: { agent_mode: agentMode, model: 'gemini-3.7-flash', thinking: null, return_format: 'clips-v1', system_instruction: null } },
       { id: 'context_chain', type: 'context_chain', label: 'Context Chain', enabled: true, config: {} },
       { id: 'dedup', type: 'dedup', label: 'Dedup', enabled: true, config: { key_by: 'actor_player_id' } }
     ]
@@ -2084,8 +2331,8 @@ function mockChunkSegmentTagsDefault() {
     description: 'YouTube-native two-pass pipeline: one cheap Gemini scan segments the scope into chunks (match_action/restart_reset/stoppage/pre_match/broadcast), then a SEQUENTIAL per-chunk native-video analyze pass tags only the worthy (match_action) chunks with the time-keyed 4-axis simplified taxonomy. No frame sampling, no tracking model, no upscale.',
     stages: [
       { id: 'video_window', type: 'video_window', label: 'Video Window', enabled: true, config: {} },
-      { id: 'chunk_segment', type: 'chunk_segment', label: 'Chunk Segment', enabled: true, config: { model: 'gemini-3.1-flash-lite', min_chunk_s: 5.0, max_chunk_s: 60.0, rough_fps: 1.0, analyze_all: false } },
-      { id: 'chunk_analyze', type: 'chunk_analyze', label: 'Chunk Analyze', enabled: true, config: { model: 'gemini-3.1-flash-lite', thinking: null, overlap_s: 5.0 } },
+      { id: 'chunk_segment', type: 'chunk_segment', label: 'Chunk Segment', enabled: true, config: { model: 'gemini-3.7-flash', min_chunk_s: 5.0, max_chunk_s: 60.0, rough_fps: 1.0, analyze_all: false } },
+      { id: 'chunk_analyze', type: 'chunk_analyze', label: 'Chunk Analyze', enabled: true, config: { model: 'gemini-3.7-flash', thinking: null, overlap_s: 5.0 } },
       { id: 'context_chain', type: 'context_chain', label: 'Context Chain', enabled: true, config: {} },
       { id: 'dedup', type: 'dedup', label: 'Dedup', enabled: true, config: { key_by: 'actor_player_id' } }
     ]
@@ -2093,12 +2340,142 @@ function mockChunkSegmentTagsDefault() {
 }
 const CHUNK_SEGMENT_TAGS_DEFAULT = mockChunkSegmentTagsDefault();
 
+const POSITION_SCAN_DEFAULT_SYSTEM_PROMPT = `You reconstruct the continuous Brazilian Jiu-Jitsu positional state of two
+target athletes in arbitrary source footage. The source may be a formal
+competition, an in-house match, open mat or live sparring, a technique drill,
+or uncontrolled phone footage from a random gym. Track exactly the two target
+athletes identified by the labelled reference images. Ignore every other pair,
+coach, referee, spectator, and athlete who enters the frame. Never identify the
+targets from rashguard or gi color, corner color, scoreboard text, commentary,
+or reference-image order alone.
+
+Return the state at the requested scope start and every later instant where
+the position, either athlete's geometric top/bottom/neutral role, or the
+active/inactive status changes. Return transition boundaries, never
+independently invented ranges. Exactly one state covers every instant in the
+scope. Do not judge which athlete is dominant, controlling, winning, or more
+effective.
+
+Use only these active positions: standing, closed_guard, open_guard,
+half_guard, side_control, mount, back_control, turtle, scramble, other. Use
+neutral roles when neither athlete has an established geometric top/bottom
+relationship, including ordinary standing and unresolved scrambles. Use other
+for a real subposition outside the list and describe it precisely in
+position_note, for example 50/50, north-south, knee-on-belly, ashi garami,
+saddle, or single-leg X. Do not collapse a clearly visible named leg entanglement
+into generic open_guard. Use open_guard only when no more specific
+outside-taxonomy configuration is visibly established.
+
+Preserve the last established active state through brief occlusion, camera
+motion, or a person crossing the frame when the same exchange visibly
+continues and there is no reset cue. Use inactive only for a real interruption:
+a referee stoppage or reset, a mutual training reset or full disengagement, a
+round break, coach instruction or drill pause, replay, hard edit, camera cut
+away from the target pair, pre/post-round footage, or a span where the target
+pair is not engaged and no BJJ position can truthfully be assigned. Training
+footage does not require a referee cue; a visible partner reset, round timer,
+coach pause, or drill restart is sufficient. For inactive, set both roles to
+not_applicable and give a concrete inactive_reason.
+
+Ground every boundary in visible body relationship or a visible interruption
+cue. When evidence is ambiguous, prefer the last visibly established state
+until a new state or interruption is established; never invent a transition
+from an expected BJJ sequence.`;
+
+const POSITION_SCAN_DEFAULT_INITIAL_PROMPT = `Analyze the native BJJ source footage from absolute source-video second
+$start_sec through $end_sec. The first state must describe exactly $start_sec,
+and every transition timestamp must be an ABSOLUTE source-video second on that
+same clock. Do not assume the scope begins at a round boundary: infer the state
+already established at $start_sec from the visible relationship and immediate
+context.
+
+Athlete A is the player_id on the first labelled reference and Athlete B is
+the player_id on the second labelled reference. Track only those two targets,
+even if other athletes or simultaneous rolling pairs are visible. Apply the
+competition/training interruption rules from the system instruction. Return
+only the required structured JSON.`;
+
+const POSITION_CRITIQUE_DEFAULT_SYSTEM_PROMPT = `You verify one proposed boundary in a continuous BJJ position timeline. Use
+the labelled reference images to preserve athlete identity. Decide whether a
+real change of position, athlete role, or active/inactive state happens in the
+provided local window. If confirmed, report the earliest absolute match
+second at which the new state is visibly established. Do not judge dominance
+or control. Use other only with a precise subposition note; use inactive only
+with an explicit interruption reason.
+
+Search anywhere in the provided local window, not only at the proposed frame.
+If the real transition occurs earlier or later than the rough timestamp, set
+confirmed=true and correct corrected_at_s to that visible boundary. Reject only
+when the proposed state change never becomes established anywhere in the
+window.`;
+
+const POSITION_CRITIQUE_DEFAULT_INITIAL_PROMPT = `This native-video window spans absolute seconds $window_start_s to
+$window_end_s. PROPOSED TRANSITION: the rough scan placed a boundary at
+$proposed_at_s. The state immediately before it was $state_before_json. The
+rough proposed state after it was $state_after_json.
+
+Confirm or reject that state change. If confirmed, correct corrected_at_s on
+the absolute match clock and return the complete state_after. If rejected,
+set confirmed=false; still return the best visible state_after required by
+the schema, but it will not be used. Return only structured JSON.
+
+The rough timestamp is only a search anchor. A matching change later in this
+window is a confirmed transition with a later corrected_at_s, not a rejection.`;
+
+const TECHNIQUE_CRITIQUE_DEFAULT_SYSTEM_PROMPT = `You are correcting timestamp drift on a BJJ highlight clip. A prior rough scan reported a span of live grappling action, but that scanner reliably LATCHES ONTO THE MOST VISUALLY SALIENT MOMENT — the tap, the sweep landing, the pin settling — and reports that moment's neighborhood as the "start." The TRUE start of the action is almost always 2-6 seconds EARLIER, at the quiet SETUP CUE that a viewer's eye skips past: a level change, a grip break, an underhook plus a hip-shift, a new control-grip being established, a stance narrowing before a shot. Your job is to find that earlier moment, not to confirm the scanner's guess.
+
+You will receive: (1) a video clip that extends BACKWARD in time beyond the scanner's reported start (so the true setup cue should be visible somewhere inside it), and (2) the scanner's plain-language description of the body movement it saw (no technique names, no position names — just what moved).
+
+Do TWO things, in this order:
+
+1. CONFIRM THE CLIP MATCHES THE DESCRIPTION. Does this clip actually show the described body movement at all? If the description clearly does not match anything visible in this clip, say so plainly — do not force a fit.
+
+2. SEARCH BACKWARD FOR THE TRUE START. Starting from the scanner's reported start and working backward through the clip, find the earliest moment where you can see the deliberate setup for the described movement beginning — NOT the moment it resolves. Concretely:
+   - Look for: a level change (dropping levels for a shot), a grip being broken or changed, an underhook or overhook being secured, a hip-shift that commits weight, a control grip (collar, sleeve, pant, wrist) being newly established, a stance narrowing.
+   - Do NOT anchor on: the tap, the finish, the landing of a sweep/takedown, the moment a pass completes, or any other resolution — those are LATE, not the start.
+   - The true END must include the visible outcome, not merely the last attacking motion. For a successful action, include the finish and the resulting control/position visibly settling. For an unsuccessful action, include the defense, escape, reversal of the attempt, or clear abandonment. When the outcome remains unclear, include all available evidence through the last relevant frame and say that it is unclear. A viewer watching only corrected_start_s through corrected_end_s must be able to judge successful, unsuccessful, or unclear. Do not extend into an unrelated later exchange.
+
+If the true setup cue appears to begin AT OR BEFORE the very start of the video you were given (i.e. you cannot see it begin at all — the clip itself starts too late), say so explicitly in your note. That is a real, useful signal, not a failure on your part.
+
+Report both corrected timestamps in ABSOLUTE match seconds (the same clock given to you below), never relative to this clip's own 0:00.`;
+
+const TECHNIQUE_CRITIQUE_DEFAULT_INITIAL_PROMPT = `This clip runs from $window_start_sec s to $window_end_sec s (ABSOLUTE match seconds) — it was extended $critique_backpad_s s BACKWARD from the scanner's originally reported start of $scan_start_sec s and $critique_forwardpad_s s FORWARD from its reported end of $scan_end_sec s. The scanner's original reported span was $scan_start_sec s to $scan_end_sec s.
+
+SCANNER'S DESCRIPTION OF THE BODY MOVEMENT (no technique/position names — just what moved): "$description"
+
+1. Does this clip actually contain the described movement? If not, explain the mismatch plainly.
+2. Find the TRUE start — the setup cue — by searching BACKWARD from $scan_start_sec s. Report it in ABSOLUTE match seconds. If the setup cue is not fully visible even at the earliest point of this clip ($window_start_sec s), set corrected_start_s = $window_start_sec and say so in your note (this tells us the backward padding needs to be larger).
+3. Find the TRUE end only after the visible outcome is established: finish/control settles for successful, defense/escape/abandonment for unsuccessful, or the last relevant available evidence for unclear. Report it in ABSOLUTE match seconds. Do not stop merely because the attack motion ends.
+
+Return ONLY valid JSON matching this shape — no prose:
+{
+    "movement_confirmed": true,
+    "corrected_start_s": 0.0,
+    "corrected_end_s": 0.0,
+    "note": "string — one or two sentences: what you found, and flag any mismatch or insufficient backward padding"
+}`;
+
+const POSITION_TIMELINE_DEFAULT = {
+  schema_version: 1, id: 'position-timeline-techniques', label: 'Position timeline + technique events (native)',
+  description: 'Grounded continuous position ranges plus sparse technique events and objective per-player duration statistics. Requires exactly two labelled reference images; produces no subjective dominance judgment.',
+  stages: [
+    { id: 'video_window', type: 'video_window', label: 'Video Window', enabled: true, config: {} },
+    { id: 'position_scan', type: 'position_scan', label: 'Position Scan', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', rough_fps: 1, min_transition_gap_s: 1, system_prompt: POSITION_SCAN_DEFAULT_SYSTEM_PROMPT, initial_prompt: POSITION_SCAN_DEFAULT_INITIAL_PROMPT } },
+    { id: 'position_critique', type: 'position_critique', label: 'Position Critique', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', backpad_s: 4, forwardpad_s: 6, fps: 10, system_prompt: POSITION_CRITIQUE_DEFAULT_SYSTEM_PROMPT, initial_prompt: POSITION_CRITIQUE_DEFAULT_INITIAL_PROMPT } },
+    { id: 'highlight_scan', type: 'highlight_scan', label: 'Technique Scan', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', rough_fps: 1, min_highlight_s: 3, max_highlight_s: 30, system_prompt: 'Find sparse intentional BJJ technique events; return one intentional technique event per highlight and use separate highlights for sequential or overlapping actions.', initial_prompt: 'Scan $start_sec through $end_sec for intentional technique events. Return one intentional technique event per highlight with absolute bounds and visible movement evidence.' } },
+    { id: 'highlight_critique', type: 'highlight_critique', label: 'Technique Critique', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', fps: 1, critique_backpad_s: 6, critique_forwardpad_s: 4, system_prompt: TECHNIQUE_CRITIQUE_DEFAULT_SYSTEM_PROMPT, initial_prompt: TECHNIQUE_CRITIQUE_DEFAULT_INITIAL_PROMPT } },
+    { id: 'technique_analyze', type: 'technique_analyze', label: 'Technique Analyze', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', fps: 10, preroll_s: 5, postroll_s: 4, validator_thinking: 'high', validator_media_resolution: 'high' } },
+    { id: 'timeline_reconcile', type: 'timeline_reconcile', label: 'Timeline + Statistics', enabled: true, config: {} }
+  ]
+};
+
 const MOCK_PIPELINES = [
   { id: 'single-shot', label: 'Single-shot', description: SINGLE_SHOT_DEFAULT.description },
   { id: 'vision-mimic', label: 'Vision-engine mimic', description: VISION_MIMIC_DEFAULT.description },
   { id: 'vision-mimic-multi', label: 'Vision-engine mimic (multi-agent)', description: VISION_MIMIC_MULTI_DEFAULT.description },
   { id: 'vision-mimic-simplified', label: 'Vision-engine mimic (simplified taxonomy)', description: VISION_MIMIC_SIMPLIFIED_DEFAULT.description },
-  { id: 'chunk-segment-tags', label: 'Chunk segment + tag (native)', description: CHUNK_SEGMENT_TAGS_DEFAULT.description }
+  { id: 'chunk-segment-tags', label: 'Chunk segment + tag (native)', description: CHUNK_SEGMENT_TAGS_DEFAULT.description },
+  { id: 'position-timeline-techniques', label: 'Position timeline + technique events (native)', description: POSITION_TIMELINE_DEFAULT.description }
 ];
 
 // Structural (non-toggleable, position-locked) node types — union across all
@@ -2107,8 +2484,8 @@ const MOCK_PIPELINES = [
 // flat set — rather than a per-pipeline-id map — stays correct for a future
 // data-driven Nth pipeline without needing a new map entry, since no pipeline
 // mixes in a structural type from "another" pipeline's set.
-const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze', 'highlight_scan', 'highlight_analyze', 'highlight_critique']);
-const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎', highlight_scan: '🔦', highlight_analyze: '🔬', highlight_critique: '🧐' };
+const STRUCTURAL_TYPES = new Set(['video_window', 'frame_sample', 'window', 'analyze', 'chunk_segment', 'chunk_analyze', 'highlight_scan', 'highlight_analyze', 'highlight_critique', 'position_scan', 'position_critique', 'technique_analyze', 'timeline_reconcile']);
+const NODE_GLYPH = { frame_sample: '🏞', detect_crop: '✂', window: '🪟', analyze: '🤖', context_chain: '🔗', dedup: '🗂', video_window: '🎬', chunk_segment: '🧩', chunk_analyze: '🔎', highlight_scan: '🔦', highlight_analyze: '🔬', highlight_critique: '🧐', position_scan: '🧭', position_critique: '🎯', technique_analyze: '🥋', timeline_reconcile: '📊' };
 
 function mockPipelineDefaults(id) {
   if (id === 'single-shot') return JSON.parse(JSON.stringify(SINGLE_SHOT_DEFAULT));
@@ -2116,6 +2493,7 @@ function mockPipelineDefaults(id) {
   if (id === 'vision-mimic-multi') return JSON.parse(JSON.stringify(VISION_MIMIC_MULTI_DEFAULT));
   if (id === 'vision-mimic-simplified') return JSON.parse(JSON.stringify(VISION_MIMIC_SIMPLIFIED_DEFAULT));
   if (id === 'chunk-segment-tags') return JSON.parse(JSON.stringify(CHUNK_SEGMENT_TAGS_DEFAULT));
+  if (id === 'position-timeline-techniques') return JSON.parse(JSON.stringify(POSITION_TIMELINE_DEFAULT));
   return null;
 }
 
@@ -2159,10 +2537,11 @@ function setPipeline(id) {
   // chunk-segment-tags/highlight-scan-analyze/highlight-scan-critique-analyze
   // have no `analyze` node/agent_mode field at all — the single/multi top-bar
   // toggle would be a dead control.
-  const hasAgentMode = !isSingleShot && id !== 'chunk-segment-tags' && id !== 'highlight-scan-analyze' && id !== 'highlight-scan-critique-analyze';
+  const hasAgentMode = !isSingleShot && id !== 'chunk-segment-tags' && id !== 'highlight-scan-analyze' && id !== 'highlight-scan-critique-analyze' && id !== 'position-timeline-techniques';
   document.getElementById('agent-mode-row').style.display = hasAgentMode ? 'block' : 'none';
+  document.getElementById('timeline-reference-card').style.display = id === 'position-timeline-techniques' ? 'block' : 'none';
   loadPipelineDefaults(id);
-  updateRunButtonState();
+  updateReferenceValidation();
 }
 
 async function loadPipelineDefaults(id) {
@@ -2243,8 +2622,12 @@ function nodeKeyValues(stage) {
     case 'chunk_segment': return [c.model, 'min ' + c.min_chunk_s + 's / max ' + c.max_chunk_s + 's'];
     case 'chunk_analyze': return [c.model, 'overlap ' + c.overlap_s + 's'];
     case 'highlight_scan': return [c.model, 'min ' + c.min_highlight_s + 's / max ' + c.max_highlight_s + 's'];
-    case 'highlight_critique': return [c.model, 'backpad ' + c.critique_backpad_s + 's'];
+    case 'highlight_critique': return [c.model, 'back ' + c.critique_backpad_s + 's / forward ' + c.critique_forwardpad_s + 's'];
     case 'highlight_analyze': return [c.model, 'fps ' + c.fps, 'pre ' + c.preroll_s + 's / post ' + c.postroll_s + 's'];
+    case 'position_scan': return [c.model, 'rough fps ' + c.rough_fps];
+    case 'position_critique': return [c.model, 'fps ' + c.fps];
+    case 'technique_analyze': return [c.model, 'fps ' + c.fps];
+    case 'timeline_reconcile': return ['deterministic'];
     default: return [];
   }
 }
@@ -2323,6 +2706,9 @@ function reorderNode(index, dir) {
 
 // ---- Node-config panel (per node type)
 const NODE_MODELS = TASK_CONFIG.event.models; // same frozen model list used by single-shot's Event task
+// Highlight Analyze only — Claude Opus is playground A/B for axis calls; do NOT
+// put Claude on scan/critique/chunk selectors (backend allowlist rejects them).
+const HIGHLIGHT_ANALYZE_MODELS = NODE_MODELS.concat(['claude-opus-4-8']);
 
 // Per-node-type widget hints, keyed by the EXACT config field name the
 // backend's Pydantic model uses (service/pipelines/models.py). This drives
@@ -2353,10 +2739,10 @@ const CONFIG_FIELD_ORDER = {
   // generic-field handling for these two keys (unaffected by this reorder;
   // see nodeConfigFieldsHtml's gate).
   highlight_scan: ['thinking', 'media_resolution', 'model', 'rough_fps', 'min_highlight_s', 'max_highlight_s', 'system_prompt', 'initial_prompt'],
-  // NEW v2 node type (HighlightCritiqueConfig) — only ever present on the
-  // highlight-scan-critique-analyze pipeline's stage set; never reached for
-  // any other pipeline.
-  highlight_critique: ['thinking', 'media_resolution', 'model', 'critique_backpad_s'],
+  // Shared critique node used by the legacy v2 DAG and Position Timeline's
+  // technique lane. Every runtime field, including FPS and both prompt
+  // layers, is deliberately listed for prompt/parameter engineering.
+  highlight_critique: ['thinking', 'media_resolution', 'model', 'fps', 'critique_backpad_s', 'critique_forwardpad_s', 'system_prompt', 'initial_prompt'],
   // `position`/`technique`/`validator`/`max_validator_iterations` are v2
   // additions to the SAME shared HighlightAnalyzeConfig model consumed by
   // BOTH highlight-scan-analyze and highlight-scan-critique-analyze (see
@@ -2368,6 +2754,10 @@ const CONFIG_FIELD_ORDER = {
   // raw "[object Object]"/number dump via the generic-field fallback — see
   // that gate's comment for why this is not new v1 behavior).
   highlight_analyze: ['model', 'fps', 'thinking', 'preroll_s', 'postroll_s', 'position', 'technique', 'validator', 'max_validator_iterations']
+  ,position_scan: ['thinking', 'media_resolution', 'model', 'rough_fps', 'min_transition_gap_s', 'system_prompt', 'initial_prompt']
+  ,position_critique: ['thinking', 'media_resolution', 'model', 'backpad_s', 'forwardpad_s', 'fps', 'system_prompt', 'initial_prompt']
+  ,technique_analyze: ['thinking', 'media_resolution', 'model', 'fps', 'preroll_s', 'postroll_s', 'validator_thinking', 'validator_media_resolution']
+  ,timeline_reconcile: []
 };
 const CONFIG_FIELD_HINTS = {
   detect_crop: {
@@ -2404,7 +2794,7 @@ const CONFIG_FIELD_HINTS = {
     model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
     overlap_s: { widget: 'number', step: 1, label: 'Overlap (s)' }
   },
-  // fps/system_prompt/initial_prompt get bespoke widgets (segmented {1,10}
+  // fps/system_prompt/initial_prompt get bespoke widgets (segmented {1,10,15}
   // choice / prompt-card textareas) in nodeConfigFieldsHtml — no hint entry
   // needed for those here (never reached; bespoke branches `return` first).
   highlight_scan: {
@@ -2414,7 +2804,10 @@ const CONFIG_FIELD_HINTS = {
     max_highlight_s: { widget: 'number', step: 1, label: 'Max highlight (s)' }
   },
   highlight_analyze: {
-    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    // Claude Opus is Highlight-Analyze-only (HIGHLIGHT_ANALYZE_MODELS); v2 real
+    // calls use position/technique/validator.model — setNodeConfigValue cascades
+    // top-level model into those three so this dropdown is not a no-op.
+    model: { widget: 'select', options: HIGHLIGHT_ANALYZE_MODELS, label: 'Model' },
     // fps=5 is strictly dominated by fps=10 at the same accuracy gain over
     // fps=1 (build plan "Experiment Findings") and stays excluded; fps=15
     // was added later per an explicit founder ask — the backend's
@@ -2428,7 +2821,25 @@ const CONFIG_FIELD_HINTS = {
   // row (nodeConfigFieldsHtml) — no hint entry needed for those here.
   highlight_critique: {
     model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
-    critique_backpad_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Critique backward pad' }
+    critique_backpad_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Critique backward pad' },
+    critique_forwardpad_s: { widget: 'range', min: 0, max: 10, step: 0.5, unit: 's', label: 'Outcome forward pad' }
+  },
+  position_scan: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    rough_fps: { widget: 'number', step: 0.5, label: 'Rough FPS' },
+    min_transition_gap_s: { widget: 'number', step: 0.5, label: 'Min transition gap for budget bound (s)' }
+  },
+  position_critique: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    backpad_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Backward pad' },
+    forwardpad_s: { widget: 'range', min: 0, max: 30, step: 0.5, unit: 's', label: 'Forward pad' }
+  },
+  technique_analyze: {
+    model: { widget: 'select', options: NODE_MODELS, label: 'Model' },
+    preroll_s: { widget: 'range', min: 0, max: 15, step: 0.5, unit: 's', label: 'Pre-roll' },
+    postroll_s: { widget: 'range', min: 0, max: 10, step: 0.5, unit: 's', label: 'Post-roll' },
+    validator_thinking: { widget: 'select', options: ['off', 'low', 'medium', 'high'], label: 'Validator thinking' },
+    validator_media_resolution: { widget: 'select', options: ['low', 'medium', 'high'], label: 'Validator media quality' }
   }
 };
 
@@ -2511,6 +2922,17 @@ function setNodeConfigValue(key, value) {
   if (selectedNodeIndex == null) return;
   const stage = currentPipelineDef.stages[selectedNodeIndex];
   stage.config[key] = value;
+  // v2: top-level Highlight Analyze `model` is unused by the executor for
+  // Gemini (axes own model). Cascade into position/technique/validator so
+  // selecting Claude (or any model) from the Model dropdown actually drives
+  // the three axis calls and keeps saved pipeline JSON coherent.
+  if (stage.type === 'highlight_analyze' && key === 'model') {
+    ['position', 'technique', 'validator'].forEach(axis => {
+      if (stage.config[axis] && typeof stage.config[axis] === 'object') {
+        stage.config[axis].model = value;
+      }
+    });
+  }
   renderDag();
   renderCostBadge(); // cheap no-op unless the v2 pipeline + max_validator_iterations changed
 }
@@ -2586,7 +3008,7 @@ function v2CustomBadgeHtml(target) {
 // above, plus the custom badge.
 function v2ThinkingQualityRowHtml(stage) {
   const c = stage.config;
-  return '<div class="field-inline" style="align-items:flex-end; gap:16px;">' +
+  return '<div class="field-inline v2-thinking-quality-row">' +
       thinkingTabsField(c.thinking) + qualityChoiceField(c.media_resolution) +
     '</div>' + v2CustomBadgeHtml(c);
 }
@@ -2604,7 +3026,7 @@ function v2AxisConfigsHtml(stage) {
     const t = c[a.key] || {};
     return '<div class="v2-axis-card">' +
       '<div class="v2-axis-card-label">' + escHtml(a.label) + v2CustomBadgeHtml(t) + '</div>' +
-      '<div class="field-inline" style="align-items:flex-end; gap:16px;">' +
+      '<div class="field-inline v2-thinking-quality-row">' +
         axisThinkingTabsField(a.key, t.thinking) + axisQualityChoiceField(a.key, t.media_resolution) +
       '</div>' +
     '</div>';
@@ -2757,10 +3179,10 @@ function nodePromptCardHtml(stage, key, label, placeholder) {
   const fileName = nodeSchemaFileNames[nameKey];
   return '<div class="card" style="margin-top:12px; background:var(--bg);">' +
     '<h2 style="font-size:0.95rem;">' + escHtml(label) + '</h2>' +
-    '<textarea rows="5" placeholder="' + escHtml(placeholder) + '" oninput="onNodePromptInput(\'' + key + '\', this.value)">' + escHtml(text) + '</textarea>' +
+    '<textarea rows="5" aria-label="' + escHtml(label) + '" placeholder="' + escHtml(placeholder) + '" oninput="onNodePromptInput(\'' + key + '\', this.value)">' + escHtml(text) + '</textarea>' +
     '<div class="field-inline" style="margin-top:8px;">' +
-      '<input type="file" accept=".md,.markdown,.json,.txt" onchange="onNodePromptFileChange(\'' + key + '\', event)">' +
-      '<button type="button" class="btn btn-sm" onclick="clearNodePrompt(\'' + key + '\')">Clear</button>' +
+      '<input type="file" aria-label="Load ' + escHtml(label) + ' from file" accept=".md,.markdown,.json,.txt" onchange="onNodePromptFileChange(\'' + key + '\', event)">' +
+      '<button type="button" class="btn btn-sm" aria-label="Clear ' + escHtml(label) + '" onclick="clearNodePrompt(\'' + key + '\')">Clear</button>' +
     '</div>' +
     '<div class="selection-badges">' +
       (fileName ? '<span class="badge badge-neutral" id="node-prompt-file-chip-' + key + '">' + escHtml(fileName) + '</span>' : '') +
@@ -2831,6 +3253,10 @@ function nodeConfigFieldsHtml(stage) {
   }
 
   const isFrameBased = currentPipelineDef && currentPipelineDef.stages.some(s => s.type === 'window');
+  const highlightScanUsesThinkingQualityTabs = [
+    'highlight-scan-critique-analyze',
+    'position-timeline-techniques',
+  ].includes(currentPipelineId);
 
   keys.forEach(key => {
     // analyze's agent_mode/thinking/system_instruction get bespoke widgets;
@@ -2872,26 +3298,60 @@ function nodeConfigFieldsHtml(stage) {
       );
       return;
     }
-    // v2 ONLY (highlight-scan-critique-analyze) — highlight_scan's own
-    // thinking/media_resolution (ThinkingQualityMixin, additive to the
-    // pre-existing HighlightScanConfig fields above). Gated on
-    // currentPipelineId so highlight-scan-analyze (SAME node type, same
-    // config fields present in its fetched defaults too) falls through
-    // UNCHANGED to the generic hint-driven fallback below — exactly the
-    // pre-existing behavior for these two keys before this v2 UI build.
-    if (stage.type === 'highlight_scan' && key === 'thinking' && currentPipelineId === 'highlight-scan-critique-analyze') {
+    // The v2 and Position Timeline DAGs expose highlight_scan's own
+    // thinking/media_resolution as the shared tab row. Keep legacy
+    // highlight-scan-analyze (same node type) on its existing generic fields.
+    if (stage.type === 'highlight_scan' && key === 'thinking' && highlightScanUsesThinkingQualityTabs) {
       html += v2ThinkingQualityRowHtml(stage);
       return;
     }
-    if (stage.type === 'highlight_scan' && key === 'media_resolution' && currentPipelineId === 'highlight-scan-critique-analyze') {
+    if (stage.type === 'highlight_scan' && key === 'media_resolution' && highlightScanUsesThinkingQualityTabs) {
       return; // rendered by the 'thinking' branch above (one combined row) — no-op here
     }
-    // NEW v2 node type — highlight_critique only ever appears on
-    // highlight-scan-critique-analyze's stage set, so no pipeline-id gate
-    // is needed here (unlike highlight_scan/highlight_analyze above, which
-    // are genuinely shared node types).
+    // Shared Highlight Critique / Technique Critique node. Its stage label
+    // names the prompt cards correctly in either DAG.
     if (stage.type === 'highlight_critique' && key === 'thinking') { html += v2ThinkingQualityRowHtml(stage); return; }
     if (stage.type === 'highlight_critique' && key === 'media_resolution') { return; } // combined into the 'thinking' row above
+    if (stage.type === 'highlight_critique' && key === 'fps') { html += fpsChoiceField(c.fps); return; }
+    if (stage.type === 'highlight_critique' && key === 'system_prompt') {
+      html += nodePromptCardHtml(
+        stage, 'system_prompt', 'System prompt (' + stage.label + ')',
+        'Full replacement. Empty resets to the bundled critique system prompt.',
+      );
+      return;
+    }
+    if (stage.type === 'highlight_critique' && key === 'initial_prompt') {
+      html += nodePromptCardHtml(
+        stage, 'initial_prompt', 'Initial prompt template (' + stage.label + ')',
+        'Per-event template. Supported variables: $window_start_sec, $window_end_sec, $critique_backpad_s, $critique_forwardpad_s, $scan_start_sec, $scan_end_sec, $description. Empty resets to the bundled template.',
+      );
+      return;
+    }
+    if (['position_scan', 'position_critique', 'technique_analyze'].includes(stage.type) && key === 'thinking') {
+      html += v2ThinkingQualityRowHtml(stage); return;
+    }
+    if (['position_scan', 'position_critique', 'technique_analyze'].includes(stage.type) && key === 'media_resolution') return;
+    if (['position_critique', 'technique_analyze'].includes(stage.type) && key === 'fps') { html += fpsChoiceField(c.fps); return; }
+    if (stage.type === 'position_scan' && key === 'system_prompt') {
+      html += nodePromptCardHtml(stage, 'system_prompt', 'System prompt (Position Scan)', 'Optional full replacement. Empty uses the bundled continuous-position prompt.'); return;
+    }
+    if (stage.type === 'position_scan' && key === 'initial_prompt') {
+      html += nodePromptCardHtml(stage, 'initial_prompt', 'Initial prompt (Position Scan)', 'Optional template override; $start_sec and $end_sec are supported.'); return;
+    }
+    if (stage.type === 'position_critique' && key === 'system_prompt') {
+      html += nodePromptCardHtml(
+        stage, 'system_prompt', 'System prompt (Position Critique)',
+        'Full replacement. Empty resets to the bundled position-boundary critique system prompt.',
+      );
+      return;
+    }
+    if (stage.type === 'position_critique' && key === 'initial_prompt') {
+      html += nodePromptCardHtml(
+        stage, 'initial_prompt', 'Initial prompt template (Position Critique)',
+        'Per-boundary template. Supported variables: $window_start_s, $window_end_s, $proposed_at_s, $state_before_json, $state_after_json. Empty resets to the bundled template.',
+      );
+      return;
+    }
     // highlight_analyze's fps is a real backend Literal[1, 10, 15] (fps=5
     // strictly dominated — build plan "Experiment Findings" — stays
     // excluded; fps=15 added per explicit founder ask) — a segmented
@@ -3032,6 +3492,306 @@ function useCurrentForRun(which) {
   updateRunScopeUi();
 }
 
+function collectPlayerReferences() {
+  return ['a', 'b'].map(slot => {
+    const capture = playerReferenceCaptures[slot];
+    const reference = {
+      player_id: document.getElementById('ref-' + slot + '-id').value.trim(),
+      player_name: document.getElementById('ref-' + slot + '-name').value.trim()
+    };
+    if (capture) {
+      reference.image_base64 = capture.imageBase64;
+      reference.bounding_box = capture.boundingBox;
+      reference.captured_at_ms = capture.capturedAtMs;
+    }
+    return reference;
+  });
+}
+
+function validatePlayerReferences() {
+  if (currentPipelineId !== 'position-timeline-techniques') return { valid: true, references: [] };
+  const references = collectPlayerReferences();
+  if (references.some(ref => !ref.player_id || !ref.player_name)) {
+    return { valid: false, reason: 'Both players need a stable ID and display name.', references };
+  }
+  if (references.some(ref => !ref.image_base64 || !ref.bounding_box || ref.captured_at_ms == null)) {
+    return { valid: false, reason: 'Capture and crop both athletes from the loaded video.', references };
+  }
+  if (references[0].player_id === references[1].player_id) {
+    return { valid: false, reason: 'Player IDs must be distinct.', references };
+  }
+  return { valid: true, references };
+}
+
+function updateReferenceValidation() {
+  const result = validatePlayerReferences();
+  const el = document.getElementById('reference-validation');
+  if (el) el.textContent = result.valid ? '' : result.reason;
+  updateRunButtonState();
+}
+
+function renderReferenceCapture(slot) {
+  const capture = playerReferenceCaptures[slot];
+  const empty = document.getElementById('ref-' + slot + '-capture-empty');
+  const ready = document.getElementById('ref-' + slot + '-capture-ready');
+  const preview = document.getElementById('ref-' + slot + '-preview');
+  const capturedAt = document.getElementById('ref-' + slot + '-captured-at');
+  if (!empty || !ready || !preview || !capturedAt) return;
+  empty.hidden = !!capture;
+  ready.hidden = !capture;
+  if (capture) {
+    preview.src = capture.imageBase64;
+    capturedAt.textContent = 'Captured at ' + secToMmss(capture.capturedAtMs / 1000);
+  } else {
+    preview.removeAttribute('src');
+    capturedAt.textContent = 'Captured at —';
+  }
+}
+
+function resetPlayerReferenceCaptures() {
+  playerReferenceCaptures.a = null;
+  playerReferenceCaptures.b = null;
+  renderReferenceCapture('a');
+  renderReferenceCapture('b');
+  updateReferenceValidation();
+}
+
+function playerLabelForSlot(slot) {
+  const configuredName = document.getElementById('ref-' + slot + '-name').value.trim();
+  return configuredName || (slot === 'a' ? 'Player A' : 'Player B');
+}
+
+async function beginReferenceCapture(slot) {
+  const errorEl = document.getElementById('ref-' + slot + '-capture-error');
+  const button = document.getElementById('ref-' + slot + '-capture-button');
+  errorEl.textContent = '';
+  if (!currentVideoId || !ytReady) {
+    errorEl.textContent = 'Load the tested video and wait for the player before capturing.';
+    return;
+  }
+
+  let timestampS = currentTime;
+  try {
+    timestampS = ytPlayer.getCurrentTime();
+    ytPlayer.pauseVideo();
+  } catch (error) {
+    errorEl.textContent = 'The video player is not ready: ' + error.message;
+    return;
+  }
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Extracting frame…';
+  }
+  try {
+    const response = await fetch(backendUrl() + '/qa/reference-frame', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtube_id: currentVideoId, timestamp_s: timestampS })
+    });
+    if (!response.ok) {
+      const raw = await response.text();
+      let message = raw;
+      try {
+        const parsed = JSON.parse(raw);
+        message = parsed.detail || raw;
+      } catch (_) {
+        // The HTTP status and unparsed response remain visible below.
+      }
+      throw new Error('HTTP ' + response.status + ': ' + message);
+    }
+    const frame = await response.json();
+    if (!frame.frame_data_url || !frame.width || !frame.height || frame.captured_at_ms == null) {
+      throw new Error('Backend returned an incomplete reference frame');
+    }
+    openReferenceCropModal(slot, frame);
+  } catch (error) {
+    errorEl.textContent = 'Could not extract this frame: ' + error.message;
+    logMsg('Reference frame extraction failed: ' + error.message, 'log-err');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = 'Capture current frame';
+    }
+  }
+}
+
+function openReferenceCropModal(slot, frame) {
+  activeReferenceSlot = slot;
+  activeReferenceFrame = frame;
+  referenceCropStart = null;
+  referenceCropBox = null;
+  document.getElementById('reference-crop-title').textContent = 'Crop ' + playerLabelForSlot(slot);
+  document.getElementById('reference-crop-subtitle').textContent = 'Frozen at ' + secToMmss(frame.captured_at_ms / 1000) + ' — draw a tight box around this athlete.';
+  document.getElementById('reference-crop-frame').src = frame.frame_data_url;
+  document.getElementById('reference-crop-error').textContent = '';
+  document.getElementById('reference-crop-modal').hidden = false;
+  document.body.classList.add('reference-crop-open');
+  renderReferenceCropBox();
+}
+
+function closeReferenceCropModal() {
+  document.getElementById('reference-crop-modal').hidden = true;
+  document.body.classList.remove('reference-crop-open');
+  document.getElementById('reference-crop-frame').removeAttribute('src');
+  activeReferenceSlot = null;
+  activeReferenceFrame = null;
+  referenceCropStart = null;
+  referenceCropBox = null;
+  renderReferenceCropBox();
+}
+
+function referenceCropPoint(event) {
+  const rect = document.getElementById('reference-crop-stage').getBoundingClientRect();
+  return {
+    x: clamp(event.clientX - rect.left, 0, rect.width),
+    y: clamp(event.clientY - rect.top, 0, rect.height)
+  };
+}
+
+function startReferenceCrop(event) {
+  if (!activeReferenceFrame) return;
+  event.preventDefault();
+  const stage = document.getElementById('reference-crop-stage');
+  if (stage.setPointerCapture) stage.setPointerCapture(event.pointerId);
+  referenceCropStart = referenceCropPoint(event);
+  referenceCropBox = { x: referenceCropStart.x, y: referenceCropStart.y, w: 0, h: 0 };
+  renderReferenceCropBox();
+}
+
+function moveReferenceCrop(event) {
+  if (!referenceCropStart) return;
+  event.preventDefault();
+  const point = referenceCropPoint(event);
+  referenceCropBox = {
+    x: Math.min(referenceCropStart.x, point.x),
+    y: Math.min(referenceCropStart.y, point.y),
+    w: Math.abs(point.x - referenceCropStart.x),
+    h: Math.abs(point.y - referenceCropStart.y)
+  };
+  renderReferenceCropBox();
+}
+
+function finishReferenceCrop(event) {
+  if (!referenceCropStart) return;
+  moveReferenceCrop(event);
+  referenceCropStart = null;
+  const stage = document.getElementById('reference-crop-stage');
+  if (stage.releasePointerCapture && stage.hasPointerCapture && stage.hasPointerCapture(event.pointerId)) {
+    stage.releasePointerCapture(event.pointerId);
+  }
+}
+
+function cancelReferenceCropDrag(event) {
+  referenceCropStart = null;
+  const stage = document.getElementById('reference-crop-stage');
+  if (stage.releasePointerCapture && stage.hasPointerCapture && stage.hasPointerCapture(event.pointerId)) {
+    stage.releasePointerCapture(event.pointerId);
+  }
+}
+
+function adjustReferenceCropWithKeyboard(event) {
+  const supported = ['Enter', ' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+  if (!activeReferenceFrame || !supported.includes(event.key)) return;
+  event.preventDefault();
+  const rect = document.getElementById('reference-crop-stage').getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  if (!referenceCropBox) {
+    referenceCropBox = {
+      x: rect.width * 0.25,
+      y: rect.height * 0.2,
+      w: rect.width * 0.5,
+      h: rect.height * 0.6
+    };
+    renderReferenceCropBox();
+    if (event.key === 'Enter' || event.key === ' ') return;
+  }
+
+  const step = 4;
+  if (event.shiftKey) {
+    if (event.key === 'ArrowLeft') referenceCropBox.w = Math.max(12, referenceCropBox.w - step);
+    if (event.key === 'ArrowRight') referenceCropBox.w = Math.min(rect.width - referenceCropBox.x, referenceCropBox.w + step);
+    if (event.key === 'ArrowUp') referenceCropBox.h = Math.max(12, referenceCropBox.h - step);
+    if (event.key === 'ArrowDown') referenceCropBox.h = Math.min(rect.height - referenceCropBox.y, referenceCropBox.h + step);
+  } else {
+    if (event.key === 'ArrowLeft') referenceCropBox.x = Math.max(0, referenceCropBox.x - step);
+    if (event.key === 'ArrowRight') referenceCropBox.x = Math.min(rect.width - referenceCropBox.w, referenceCropBox.x + step);
+    if (event.key === 'ArrowUp') referenceCropBox.y = Math.max(0, referenceCropBox.y - step);
+    if (event.key === 'ArrowDown') referenceCropBox.y = Math.min(rect.height - referenceCropBox.h, referenceCropBox.y + step);
+  }
+  renderReferenceCropBox();
+}
+
+function renderReferenceCropBox() {
+  const boxEl = document.getElementById('reference-crop-box');
+  const instruction = document.getElementById('reference-crop-instruction');
+  const confirm = document.getElementById('reference-crop-confirm');
+  if (!boxEl || !instruction || !confirm) return;
+  const valid = !!referenceCropBox && referenceCropBox.w >= 12 && referenceCropBox.h >= 12;
+  boxEl.style.display = referenceCropBox ? 'block' : 'none';
+  if (referenceCropBox) {
+    boxEl.style.left = referenceCropBox.x + 'px';
+    boxEl.style.top = referenceCropBox.y + 'px';
+    boxEl.style.width = referenceCropBox.w + 'px';
+    boxEl.style.height = referenceCropBox.h + 'px';
+  }
+  instruction.style.display = referenceCropBox ? 'none' : 'flex';
+  confirm.disabled = !valid;
+}
+
+function sourceCropFromDisplayBox(box, displayW, displayH, sourceW, sourceH) {
+  const scaleX = sourceW / displayW;
+  const scaleY = sourceH / displayH;
+  const x = Math.max(0, Math.round(box.x * scaleX));
+  const y = Math.max(0, Math.round(box.y * scaleY));
+  return {
+    x,
+    y,
+    w: Math.min(sourceW - x, Math.max(1, Math.round(box.w * scaleX))),
+    h: Math.min(sourceH - y, Math.max(1, Math.round(box.h * scaleY)))
+  };
+}
+
+function confirmReferenceCrop() {
+  const errorEl = document.getElementById('reference-crop-error');
+  if (!activeReferenceSlot || !activeReferenceFrame || !referenceCropBox) return;
+  const stage = document.getElementById('reference-crop-stage');
+  const image = document.getElementById('reference-crop-frame');
+  const rect = stage.getBoundingClientRect();
+  if (!rect.width || !rect.height || !image.naturalWidth || !image.naturalHeight) {
+    errorEl.textContent = 'The frozen frame is not ready. Wait a moment and try again.';
+    return;
+  }
+
+  const crop = sourceCropFromDisplayBox(
+    referenceCropBox, rect.width, rect.height, image.naturalWidth, image.naturalHeight
+  );
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = crop.w;
+    canvas.height = crop.h;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Canvas is unavailable');
+    context.drawImage(image, crop.x, crop.y, crop.w, crop.h, 0, 0, crop.w, crop.h);
+    playerReferenceCaptures[activeReferenceSlot] = {
+      imageBase64: canvas.toDataURL('image/jpeg', 0.85),
+      boundingBox: crop,
+      capturedAtMs: activeReferenceFrame.captured_at_ms
+    };
+    const completedSlot = activeReferenceSlot;
+    closeReferenceCropModal();
+    renderReferenceCapture(completedSlot);
+    updateReferenceValidation();
+  } catch (error) {
+    errorEl.textContent = 'Could not create the crop: ' + error.message;
+  }
+}
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && activeReferenceSlot) closeReferenceCropModal();
+});
+
 // Run pipeline works for EVERY pipeline, including single-shot: the backend
 // runs single-shot through the exact same /qa/pipeline-run contract (its
 // PipelineDef is just video_window+analyze), so this is a genuinely separate,
@@ -3047,6 +3807,8 @@ function updateRunButtonState() {
   if (!scope.valid) reasons.push(scope.reason);
   if (!currentPipelineDef) reasons.push('pipeline definition not loaded');
   if (activeRunController) reasons.push('a run is already in progress');
+  const references = validatePlayerReferences();
+  if (!references.valid) reasons.push(references.reason);
   btn.disabled = reasons.length > 0;
   btn.title = reasons.length ? ('Disabled: ' + reasons.join('; ')) : '';
   renderCostBadge();
@@ -3122,7 +3884,9 @@ function resetRunView() {
     // window_result/chunk_result/error(chunk_index) events arrive — swapped
     // out for the real deduped list once run_complete arrives (see
     // renderDedupRail()).
-    liveEvents: []
+    liveEvents: [],
+    positionInitialState: null, positionTransitions: [], positionIntervals: [],
+    techniqueEvents: [], statistics: null, nodeCosts: [], costSummary: null
   };
   stopRunElapsedTimer();
   const errLine = document.getElementById('run-error-line');
@@ -3135,6 +3899,7 @@ function resetRunView() {
   renderWindowCards();
   renderDedupedClips();
   renderDedupRail();
+  renderPositionTimelineResults();
   renderCostBadge();
 }
 
@@ -3385,6 +4150,10 @@ function windowCardHtml(w) {
       body += (Array.isArray(w.clips) && w.clips.length)
         ? renderTimeTagsTable(w.clips)
         : '<p style="color:var(--text-dim); font-size:0.8rem;">' + (w.status === 'running' ? 'Running…' : 'No tags in this chunk.') + '</p>';
+    } else if (w.format === 'position-technique-timeline-v1') {
+      body += (Array.isArray(w.clips) && w.clips.length)
+        ? '<div class="msg-table-wrap"><table class="clips"><thead><tr><th>Time</th><th>Technique</th><th>Actor</th><th>Outcome</th><th>Evidence</th></tr></thead><tbody>' + w.clips.map(event => '<tr><td>' + eventPillHtml(secToMmss(event.start_s), secToMmss(event.end_s)) + '</td><td>' + escHtml(event.specific_technique_guess || event.action_class || '—') + '</td><td>' + escHtml(event.actor_player_id || 'unclear') + '</td><td>' + escHtml(event.outcome || 'unclear') + '</td><td>' + escHtml(event.evidence || '—') + '</td></tr>').join('') + '</tbody></table></div>'
+        : '<p style="color:var(--text-dim); font-size:0.8rem;">' + (w.status === 'running' ? 'Running…' : 'No confirmed technique in this highlight.') + '</p>';
     } else if (Array.isArray(w.clips) && w.clips.length) {
       body += renderEventsTable(normalizeClipsToEvents(w.clips));
     } else {
@@ -3563,7 +4332,7 @@ function renderDedupedClips() {
   // nothing is silently dropped, only this specific "deduped" framing is
   // withheld since it would be a lie for these pipelines. Every OTHER
   // pipeline's behavior here is unchanged.
-  if (currentPipelineId === 'highlight-scan-analyze' || currentPipelineId === 'highlight-scan-critique-analyze') { card.style.display = 'none'; return; }
+  if (currentPipelineId === 'highlight-scan-analyze' || currentPipelineId === 'highlight-scan-critique-analyze' || currentPipelineId === 'position-timeline-techniques') { card.style.display = 'none'; return; }
   if (!runState || !Array.isArray(runState.dedupedClips)) { card.style.display = 'none'; return; }
   card.style.display = 'block';
   if (runState.format === 'simplified-tags-v1') {
@@ -3605,6 +4374,23 @@ function renderDedupedClips() {
 // disabled-pill fallback.
 function toRailRow(item, format) {
   item = item || {};
+  if (format === 'position-technique-timeline-v1') {
+    const seekable = item.start_s != null && item.end_s != null;
+    return {
+      seekable,
+      startSec: seekable ? item.start_s : null,
+      endSec: seekable ? item.end_s : null,
+      timeLabel: seekable ? (secToMmss(item.start_s) + ' → ' + secToMmss(item.end_s)) : '—',
+      primaryLabel: item.specific_technique_guess || item.action_class || 'Technique',
+      actorLabel: item.actor_player_id || null,
+      giColor: null,
+      confidence: item.confidence != null ? item.confidence : null,
+      positionLabel: item.position || null,
+      outcome: item.outcome || null,
+      captionText: item.position_note || item.evidence || null,
+      errored: false
+    };
+  }
   if (format === 'simplified-tags-time-v1') {
     const seekable = item.start_s != null && item.end_s != null;
     return {
@@ -3851,6 +4637,15 @@ function renderDedupRail() {
   const titleEl = document.getElementById('dedup-rail-title');
   if (!listEl) return;
 
+  if (currentPipelineId === 'position-timeline-techniques') {
+    if (titleEl) titleEl.textContent = 'Technique events';
+    const events = runState && Array.isArray(runState.techniqueEvents) ? runState.techniqueEvents : [];
+    listEl.innerHTML = events.length
+      ? events.map(event => railRowHtml(toRailRow(event, 'position-technique-timeline-v1'))).join('')
+      : '<div class="rail-empty">No confirmed technique events yet.</div>';
+    return;
+  }
+
   // Gate on currentPipelineId — every other pipeline (chunk-segment-tags,
   // vision-mimic, single-shot) keeps the EXACT "Deduped Events" rail below,
   // untouched.
@@ -3937,6 +4732,11 @@ function handlePipelineEvent(evt) {
         (evt.frame_index != null ? (' (frame ' + evt.frame_index + (evt.degraded ? (', ' + evt.degraded) : '') + ')') : ''), 'log-in');
       break;
     case 'stage_complete':
+      if (evt.cost) {
+        const existingIndex = runState.nodeCosts.findIndex(cost => cost.stage_id === evt.cost.stage_id);
+        if (existingIndex >= 0) runState.nodeCosts[existingIndex] = evt.cost;
+        else runState.nodeCosts.push(evt.cost);
+      }
       logMsg('stage_complete: ' + evt.stage_id + (evt.skipped ? ' [skipped]' : ' ' + timingLine(evt.timing || {})), 'log-in');
       break;
     case 'crops': { // dedicated event, once per window, right before window_start
@@ -3997,6 +4797,20 @@ function handlePipelineEvent(evt) {
     case 'highlight_map': // highlight-scan-analyze/highlight-scan-critique-analyze PASS 1 — the finalized highlight list (drives the timeline bar + highlights rail, NOT a table)
       runState.highlights = evt.highlights || [];
       break;
+    case 'position_map':
+      runState.positionInitialState = evt.initial_state || null;
+      runState.positionTransitions = evt.transitions || [];
+      break;
+    case 'position_critique_result': {
+      const transition = (runState.positionTransitions || []).find(item => item.index === evt.transition_index);
+      if (transition) {
+        transition.confirmed = evt.confirmed;
+        transition.corrected_at_s = evt.corrected_at_s;
+        transition.state_after = evt.state_after;
+        transition.critique_note = evt.critique_note;
+      }
+      break;
+    }
     // v2 (highlight-scan-critique-analyze) ONLY — highlight_critique stage
     // events (NEW node type; never emitted for any other pipeline's stage
     // set). Mutates the matching runState.highlights entry IN PLACE with the
@@ -4057,6 +4871,21 @@ function handlePipelineEvent(evt) {
       // — see renderDedupRail()'s currentPipelineId gate.
       break;
     }
+    case 'technique_result': {
+      const w = findOrCreateWindow(evt.highlight_index);
+      w.status = 'complete';
+      w.format = 'position-technique-timeline-v1';
+      w.ditchStatus = evt.status || null;
+      w.ditchReason = evt.ditch_reason || null;
+      w.clips = evt.event ? [evt.event] : [];
+      if (evt.event) runState.techniqueEvents.push(evt.event);
+      break;
+    }
+    case 'timeline_result':
+      runState.positionIntervals = evt.position_intervals || [];
+      runState.techniqueEvents = evt.technique_events || [];
+      runState.statistics = evt.statistics || null;
+      break;
     case 'run_complete':
       runState.sawRunComplete = true;
       runState.dedupedClips = evt.clips || [];
@@ -4067,6 +4896,11 @@ function handlePipelineEvent(evt) {
       runState.degradedCounts = evt.degraded_counts || null;
       runState.perStageTiming = evt.per_stage_timing || null;
       runState.totalMs = evt.timing && evt.timing.total_ms;
+      if (Array.isArray(evt.position_intervals)) runState.positionIntervals = evt.position_intervals;
+      if (Array.isArray(evt.technique_events)) runState.techniqueEvents = evt.technique_events;
+      if (evt.statistics) runState.statistics = evt.statistics;
+      if (Array.isArray(evt.node_costs)) runState.nodeCosts = evt.node_costs;
+      if (evt.cost_summary) runState.costSummary = evt.cost_summary;
       break;
     case 'error':
       // Advisory, not fatal — the run loop keeps going past one bad frame/window
@@ -4141,6 +4975,7 @@ function handlePipelineEvent(evt) {
   renderWindowCards();
   renderDedupedClips();
   renderDedupRail();
+  renderPositionTimelineResults();
   renderCostBadge(); // e.g. highlight_map arriving updates N for the live-run estimate
 }
 
@@ -4378,10 +5213,97 @@ async function mockChunkSegmentTagsStream(body, signal, onEvent) {
   }, 150);
 }
 
+function mockPositionTimelineStatistics(intervals, events, playerIds) {
+  const stats = {
+    active_duration_s: 0, inactive_duration_s: 0, by_position: {}, by_player: {},
+    techniques_by_player: Object.fromEntries(playerIds.map(id => [id, 0]))
+  };
+  playerIds.forEach(id => {
+    stats.by_player[id] = { by_position: {}, role_totals: { top_s: 0, bottom_s: 0, neutral_s: 0 } };
+  });
+  intervals.forEach(interval => {
+    if (interval.position === 'inactive') { stats.inactive_duration_s += interval.duration_s; return; }
+    stats.active_duration_s += interval.duration_s;
+    if (!stats.by_position[interval.position]) stats.by_position[interval.position] = { duration_s: 0 };
+    stats.by_position[interval.position].duration_s += interval.duration_s;
+    playerIds.forEach(id => {
+      const role = interval.player_roles[id];
+      if (!stats.by_player[id].by_position[interval.position]) stats.by_player[id].by_position[interval.position] = { top_s: 0, bottom_s: 0, neutral_s: 0 };
+      stats.by_player[id].by_position[interval.position][role + '_s'] += interval.duration_s;
+      stats.by_player[id].role_totals[role + '_s'] += interval.duration_s;
+    });
+  });
+  events.forEach(event => {
+    const actor = event.actor_player_id || 'unclear';
+    stats.techniques_by_player[actor] = (stats.techniques_by_player[actor] || 0) + 1;
+  });
+  return stats;
+}
+
+async function mockPositionTimelineStream(body, signal, onEvent) {
+  const def = body.pipeline;
+  const emit = (event, delayMs) => sleepAbortable(delayMs, signal).then(() => onEvent(event));
+  const start = body.scope.start_sec, end = body.scope.end_sec;
+  const span = Math.max(end - start, 0.001);
+  const boundary1 = start + span * 0.28;
+  const boundary2 = start + span * 0.58;
+  const boundary3 = start + span * 0.68;
+  const refs = body.player_references || [];
+  const playerIds = [refs[0] && refs[0].player_id || 'player_a', refs[1] && refs[1].player_id || 'player_b'];
+  const state = (position, roleA, roleB, positionNote, inactiveReason) => ({
+    position, player_a_role: roleA, player_b_role: roleB,
+    position_note: positionNote || '', inactive_reason: inactiveReason || '',
+    confidence: 0.86, evidence: 'Mock visible body relationship'
+  });
+  const initial = state('standing', 'neutral', 'neutral');
+  const transitions = [
+    { index: 0, at_s: boundary1, state_after: state('half_guard', 'top', 'bottom'), scan_evidence: 'leg becomes trapped', confirmed: null, corrected_at_s: null, critique_note: null },
+    { index: 1, at_s: boundary2, state_after: state('inactive', 'not_applicable', 'not_applicable', '', 'referee reset'), scan_evidence: 'referee separates athletes', confirmed: null, corrected_at_s: null, critique_note: null },
+    { index: 2, at_s: boundary3, state_after: state('other', 'bottom', 'top', 'north-south with player B circling above the shoulders'), scan_evidence: 'restart settles north-south', confirmed: null, corrected_at_s: null, critique_note: null },
+  ];
+  const highlight = { index: 0, start_s: boundary1 + span * 0.05, end_s: Math.min(boundary2, boundary1 + span * 0.16), description: 'Player A drives the knee line forward', reasoning: 'intentional hip and knee drive' };
+  const event = {
+    start_s: highlight.start_s, end_s: highlight.end_s,
+    position: 'half_guard', position_note: '', position_interval_index: 1,
+    actor_player_id: playerIds[0], identity_uncertain: false,
+    action_class: 'guard_pass', outcome: 'unsuccessful', specific_technique_guess: 'knee cut',
+    confidence: 0.81, evidence: 'Player A drives the knee through but the trapped leg remains',
+    original_bounds: [highlight.start_s, highlight.end_s], corrected_bounds: null,
+    scan_description: highlight.description, scan_reasoning: highlight.reasoning,
+    critique_note: 'mock boundary confirmed', validator_verdict: 'agree', validator_reason: 'labels survive review'
+  };
+  const intervals = [
+    { start_s: start, end_s: boundary1, duration_s: boundary1 - start, position: 'standing', player_roles: { [playerIds[0]]: 'neutral', [playerIds[1]]: 'neutral' }, position_note: '', inactive_reason: '', confidence: 0.86, evidence: 'standing engagement', boundary_provenance: null },
+    { start_s: boundary1, end_s: boundary2, duration_s: boundary2 - boundary1, position: 'half_guard', player_roles: { [playerIds[0]]: 'top', [playerIds[1]]: 'bottom' }, position_note: '', inactive_reason: '', confidence: 0.87, evidence: 'one leg trapped', boundary_provenance: { original_at_s: boundary1, corrected_at_s: boundary1, critique_note: 'confirmed' } },
+    { start_s: boundary2, end_s: boundary3, duration_s: boundary3 - boundary2, position: 'inactive', player_roles: { [playerIds[0]]: 'not_applicable', [playerIds[1]]: 'not_applicable' }, position_note: '', inactive_reason: 'referee reset', confidence: 0.94, evidence: 'referee separates athletes', boundary_provenance: { original_at_s: boundary2, corrected_at_s: boundary2, critique_note: 'confirmed' } },
+    { start_s: boundary3, end_s: end, duration_s: end - boundary3, position: 'other', player_roles: { [playerIds[0]]: 'bottom', [playerIds[1]]: 'top' }, position_note: 'north-south with player B circling above the shoulders', inactive_reason: '', confidence: 0.82, evidence: 'chest orientation is perpendicular', boundary_provenance: { original_at_s: boundary3, corrected_at_s: boundary3, critique_note: 'confirmed' } },
+  ];
+  const statistics = mockPositionTimelineStatistics(intervals, [event], playerIds);
+
+  await emit({ type: 'run_start', pipeline_id: def.id, planned_frames: 0, planned_windows: 4, planned_gemini_calls: 9 }, 80);
+  for (const stage of def.stages) {
+    await emit({ type: 'stage_start', stage_id: stage.id, stage_type: stage.type, skipped: false }, 40);
+    if (stage.type === 'position_scan') await emit({ type: 'position_map', initial_state: initial, transitions, player_ids: playerIds }, 80);
+    if (stage.type === 'position_critique') {
+      for (const transition of transitions) await emit({ type: 'position_critique_result', transition_index: transition.index, original_at_s: transition.at_s, confirmed: true, corrected_at_s: transition.at_s, state_after: transition.state_after, critique_note: 'mock boundary confirmed' }, 30);
+    }
+    if (stage.type === 'highlight_scan') await emit({ type: 'highlight_map', highlights: [highlight] }, 80);
+    if (stage.type === 'highlight_critique') await emit({ type: 'highlight_critique_result', highlight_index: 0, movement_confirmed: true, corrected_start_s: highlight.start_s, corrected_end_s: highlight.end_s, critique_note: 'mock event confirmed', applied: true }, 50);
+    if (stage.type === 'technique_analyze') {
+      await emit({ type: 'highlight_start', highlight_index: 0, scope: [highlight.start_s, highlight.end_s], highlight_bounds: [highlight.start_s, highlight.end_s], authoritative_bounds: [highlight.start_s, highlight.end_s] }, 30);
+      await emit({ type: 'technique_result', highlight_index: 0, status: 'analyzed', ditch_reason: null, event }, 80);
+    }
+    if (stage.type === 'timeline_reconcile') await emit({ type: 'timeline_result', player_ids: playerIds, position_intervals: intervals, technique_events: [event], statistics }, 60);
+    await emit({ type: 'stage_complete', stage_id: stage.id, skipped: false, timing: { stage_ms: 120 } }, 30);
+  }
+  await emit({ type: 'run_complete', clips: [event], format: 'position-technique-timeline-v1', position_intervals: intervals, technique_events: [event], statistics, dedup_applied: false, dedup_skip_reason: null, degraded_counts: {}, per_stage_timing: {}, timing: { total_ms: 1200 } }, 60);
+}
+
 async function mockPipelineRunStream(body, signal, onEvent) {
   const def = body.pipeline;
   const stageByType = {};
   def.stages.forEach(s => { stageByType[s.type] = s; });
+  if (def.id === 'position-timeline-techniques') return mockPositionTimelineStream(body, signal, onEvent);
   if (stageByType.chunk_segment) return mockChunkSegmentTagsStream(body, signal, onEvent);
   const analyzeStage = stageByType.analyze;
   const isMulti = !!(analyzeStage && analyzeStage.config.agent_mode === 'multi');
@@ -4491,6 +5413,8 @@ async function runPipeline() {
   if (!scope.valid) { logMsg('Invalid run scope: ' + scope.reason, 'log-err'); return; }
   if (activeRunController) { logMsg('A run is already in progress', 'log-err'); return; }
   if (!currentPipelineDef) { logMsg('No pipeline definition loaded', 'log-err'); return; }
+  const referenceResult = validatePlayerReferences();
+  if (!referenceResult.valid) { logMsg('Invalid player references: ' + referenceResult.reason, 'log-err'); return; }
 
   resetRunView();
   runState.status = 'running';
@@ -4510,6 +5434,7 @@ async function runPipeline() {
     scope: { type: 'range', start_sec: scope.startSec, end_sec: scope.endSec },
     pipeline: currentPipelineDef
   };
+  if (currentPipelineId === 'position-timeline-techniques') body.player_references = referenceResult.references;
   const budgetCapRaw = (document.getElementById('budget-cap').value || '').trim();
   if (budgetCapRaw !== '') {
     const n = Number(budgetCapRaw);
@@ -4678,6 +5603,10 @@ async function sendMessage() {
     setSending(false);
   }
 }
+
+document.getElementById('backend-url').addEventListener('change', async () => {
+  await loadPipelines();
+});
 
 // ============================================================
 // Init

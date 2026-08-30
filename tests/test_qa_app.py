@@ -23,6 +23,7 @@ def test_qa_app_imports_without_cassandra_and_health_ok():
     body = resp.json()
     assert body["status"] == "ok"
     assert body["mode"] == "qa-standalone"
+    assert "/qa/reference-frame" in app.openapi()["paths"]
 
 
 def test_qa_app_boots_even_if_cassandra_connect_would_raise():

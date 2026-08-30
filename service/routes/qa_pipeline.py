@@ -33,19 +33,30 @@ Mirrors ``qa_vlm.py``'s no-fabrication discipline:
 """
 from __future__ import annotations
 
+import asyncio
+import base64
+import io
 import json
 import logging
+import math
 from typing import Optional
 
 from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from PIL import Image
 
-from service.pipelines import chunk_segment, gemini_retry, registry
+from service.pipelines import chunk_segment, gemini_retry, position_timeline, registry
 from service.pipelines.executors import DEFAULT_BUDGET_CAP, RunContext, estimate_run_plan, run_pipeline
 from service.pipelines.models import PipelineDef
 from service.routes import state as route_state
-from service.routes.qa_vlm import QAVLMScope, _effective_window, _require_gemini_key
+from service.routes.qa import QAPlayerReference, _download_reference_images
+from service.routes.qa_vlm import (
+    QAVLMScope,
+    _effective_window,
+    _extract_youtube_frame,
+    _require_gemini_key,
+)
 
 logger = logging.getLogger("service.routes")
 
@@ -58,6 +69,44 @@ class PipelineRunRequest(BaseModel):
     # Optional override of DEFAULT_BUDGET_CAP for this run only (e.g. a test
     # harness intentionally exercising a larger scope). Omitted -> the default.
     budget_cap: Optional[int] = None
+    # Additive: ignored by existing pipelines; the continuous position
+    # pipeline requires exactly two and loads them before streaming starts.
+    player_references: list[QAPlayerReference] = Field(default_factory=list)
+
+
+class ReferenceFrameRequest(BaseModel):
+    youtube_id: str = Field(pattern=r"^[A-Za-z0-9_-]{11}$")
+    timestamp_s: float = Field(ge=0)
+
+
+def _jpeg_data_url(image: Image.Image) -> str:
+    buffer = io.BytesIO()
+    image.convert("RGB").save(buffer, format="JPEG", quality=92)
+    payload = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{payload}"
+
+
+async def reference_frame(body: ReferenceFrameRequest):
+    """Extract a truthful crop source frame from the loaded YouTube video."""
+    # Python's JSON decoder accepts the non-standard Infinity token. Guard it
+    # explicitly here so malformed callers receive a serializable 400 instead
+    # of reaching yt-dlp or overflowing when captured_at_ms is rounded.
+    if not math.isfinite(body.timestamp_s):
+        raise HTTPException(400, "timestamp_s must be a finite number")
+    youtube_url = f"https://www.youtube.com/watch?v={body.youtube_id}"
+    try:
+        image = await asyncio.to_thread(
+            _extract_youtube_frame, youtube_url, body.timestamp_s
+        )
+    except Exception as error:  # noqa: BLE001 — QA caller needs the real extraction failure
+        logger.error("reference-frame extraction failed: %s", error, exc_info=True)
+        raise HTTPException(502, f"Reference frame extraction failed: {error}") from error
+    return {
+        "frame_data_url": _jpeg_data_url(image),
+        "captured_at_ms": round(body.timestamp_s * 1000),
+        "width": image.width,
+        "height": image.height,
+    }
 
 
 async def list_pipelines():
@@ -88,6 +137,20 @@ async def pipeline_run(body: PipelineRunRequest, request: Request):
 
     is_chunk_segment_pipeline = any(s.type == "chunk_segment" for s in body.pipeline.stages)
     is_highlight_scan_pipeline = any(s.type == "highlight_scan" for s in body.pipeline.stages)
+    is_position_timeline_pipeline = body.pipeline.id == "position-timeline-techniques"
+
+    loaded_player_references: list[dict] = []
+    if is_position_timeline_pipeline:
+        try:
+            position_timeline.validate_player_references(body.player_references)
+        except position_timeline.TimelineValidationError as error:
+            raise HTTPException(400, str(error)) from error
+        # Reference download/decode is deliberately pre-stream: a missing
+        # image produces a real HTTP error and never silently weakens identity
+        # grounding after the response has already become 200 NDJSON.
+        loaded_player_references = await asyncio.to_thread(
+            _download_reference_images, body.player_references
+        )
 
     # v1 hard scope cap for chunk-segment-tags (fail-closed, no silent
     # truncation, no pre-slice-and-stitch) — checked BEFORE the budget guard
@@ -146,6 +209,8 @@ async def pipeline_run(body: PipelineRunRequest, request: Request):
         gemini_api_key=config.gemini_api_key,
         request_timeout_ms=config.gemini_request_timeout_ms,
         retry_config=gemini_retry.GeminiRetryConfig.from_service_config(config),
+        anthropic_api_key=config.anthropic_api_key,
+        player_references=loaded_player_references,
     )
 
     logger.info(

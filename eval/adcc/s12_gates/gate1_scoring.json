@@ -1,0 +1,2231 @@
+{
+  "gate": "gate1",
+  "label": "",
+  "design_margin_reference": {
+    "hit_delta": 4,
+    "n": 38
+  },
+  "required_margin_core30": 4,
+  "scopes": {
+    "core30": {
+      "n_windows_in_scope": 30,
+      "n_scored_arm_s": 30,
+      "n_scored_arm_t": 30,
+      "excluded_arm_s_call_failed_or_unrun": [],
+      "excluded_arm_t_call_failed_or_unrun": [],
+      "hit_s": 13,
+      "hit_t": 12,
+      "hit_delta": -1,
+      "fp_dup_rate_s": 0.06451612903225806,
+      "fp_dup_rate_t": 0.0,
+      "sign_test": {
+        "n_plus_t_wins": 4,
+        "n_minus_s_wins": 5,
+        "n_ties_excluded": 21,
+        "n_unpaired_excluded": 0,
+        "n_effective": 9,
+        "p_value": 1.0
+      },
+      "summary_arm_s": {
+        "totals": {
+          "tp": 13,
+          "fn": 17,
+          "fp": 18,
+          "gold_count": 30,
+          "pred_count": 31
+        },
+        "event_count_ratio": 1.0333333333333334,
+        "micro": {
+          "precision": 0.41935483870967744,
+          "recall": 0.43333333333333335,
+          "f1": 0.4262295081967213
+        },
+        "macro": {
+          "precision": 0.23778602350030922,
+          "recall": 0.5492424242424242,
+          "f1": 0.36363636363636365
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 7,
+            "recall": 0.0,
+            "f1": null
+          },
+          "escape": {
+            "tp_for_precision": 0,
+            "fp": 3,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 6,
+            "fp": 5,
+            "precision": 0.5454545454545454,
+            "tp_for_recall": 6,
+            "fn": 5,
+            "recall": 0.5454545454545454,
+            "f1": 0.5454545454545454
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 1,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.0
+          },
+          "submission_choke": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 1,
+            "fn": 3,
+            "recall": 0.25,
+            "f1": 0.0
+          },
+          "submission_leg_lock": {
+            "tp_for_precision": 5,
+            "fp": 1,
+            "precision": 0.8333333333333334,
+            "tp_for_recall": 3,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.9090909090909091
+          },
+          "sweep": {
+            "tp_for_precision": 2,
+            "fp": 5,
+            "precision": 0.2857142857142857,
+            "tp_for_recall": 2,
+            "fn": 2,
+            "recall": 0.5,
+            "f1": 0.36363636363636365
+          },
+          "takedown_attempt": {
+            "tp_for_precision": 0,
+            "fp": 2,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "sweep": {
+            "sweep": 2,
+            "NO_MATCH": 1,
+            "takedown_attempt": 1
+          },
+          "NO_MATCH": {
+            "submission_leg_lock": 1,
+            "sweep": 5,
+            "guard_pass": 5,
+            "submission_arm_lock": 1,
+            "submission_choke": 1,
+            "escape": 3,
+            "takedown_attempt": 2
+          },
+          "submission_arm_lock": {
+            "submission_leg_lock": 1
+          },
+          "guard_pass": {
+            "guard_pass": 6,
+            "sweep": 1,
+            "NO_MATCH": 3,
+            "takedown_attempt": 1
+          },
+          "back_take": {
+            "guard_pass": 2,
+            "submission_arm_lock": 1,
+            "submission_choke": 1,
+            "sweep": 2,
+            "escape": 1
+          },
+          "submission_choke": {
+            "NO_MATCH": 2,
+            "guard_pass": 1,
+            "submission_leg_lock": 1
+          },
+          "submission_leg_lock": {
+            "submission_leg_lock": 3
+          }
+        },
+        "fn_breakdown": {
+          "silent": 6,
+          "misclassified": 11,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 16,
+          "duplicate": 2
+        }
+      },
+      "summary_arm_t": {
+        "totals": {
+          "tp": 12,
+          "fn": 18,
+          "fp": 15,
+          "gold_count": 30,
+          "pred_count": 27
+        },
+        "event_count_ratio": 0.9,
+        "micro": {
+          "precision": 0.4444444444444444,
+          "recall": 0.4,
+          "f1": 0.4210526315789474
+        },
+        "macro": {
+          "precision": 0.40714285714285714,
+          "recall": 0.587121212121212,
+          "f1": 0.572063492063492
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 7,
+            "recall": 0.0,
+            "f1": null
+          },
+          "escape": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 3,
+            "fp": 1,
+            "precision": 0.75,
+            "tp_for_recall": 3,
+            "fn": 8,
+            "recall": 0.2727272727272727,
+            "f1": 0.39999999999999997
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 2,
+            "fp": 0,
+            "precision": 1.0,
+            "tp_for_recall": 1,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "submission_choke": {
+            "tp_for_precision": 2,
+            "fp": 3,
+            "precision": 0.4,
+            "tp_for_recall": 4,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.5714285714285715
+          },
+          "submission_leg_lock": {
+            "tp_for_precision": 4,
+            "fp": 4,
+            "precision": 0.5,
+            "tp_for_recall": 3,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.6666666666666666
+          },
+          "sweep": {
+            "tp_for_precision": 1,
+            "fp": 4,
+            "precision": 0.2,
+            "tp_for_recall": 1,
+            "fn": 3,
+            "recall": 0.25,
+            "f1": 0.22222222222222224
+          },
+          "takedown_attempt": {
+            "tp_for_precision": 0,
+            "fp": 2,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "sweep": {
+            "submission_leg_lock": 2,
+            "sweep": 1,
+            "takedown_attempt": 1
+          },
+          "NO_MATCH": {
+            "submission_leg_lock": 4,
+            "sweep": 4,
+            "submission_choke": 3,
+            "takedown_attempt": 2,
+            "escape": 1,
+            "guard_pass": 1
+          },
+          "submission_arm_lock": {
+            "submission_arm_lock": 1
+          },
+          "guard_pass": {
+            "guard_pass": 3,
+            "sweep": 2,
+            "submission_leg_lock": 1,
+            "NO_MATCH": 3,
+            "submission_choke": 1,
+            "takedown_attempt": 1
+          },
+          "back_take": {
+            "submission_leg_lock": 1,
+            "submission_choke": 2,
+            "sweep": 2,
+            "escape": 1,
+            "guard_pass": 1
+          },
+          "submission_choke": {
+            "submission_choke": 2,
+            "submission_arm_lock": 1,
+            "submission_leg_lock": 1
+          },
+          "submission_leg_lock": {
+            "submission_leg_lock": 3
+          }
+        },
+        "fn_breakdown": {
+          "silent": 3,
+          "misclassified": 15,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 15,
+          "duplicate": 0
+        }
+      },
+      "baselines": {
+        "whole_match": {
+          "totals": {
+            "tp": 0,
+            "fn": 30,
+            "fp": 30,
+            "gold_count": 30,
+            "pred_count": 30
+          },
+          "event_count_ratio": 1.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 7,
+              "recall": 0.0,
+              "f1": null
+            },
+            "guard_pass": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 11,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 30,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            },
+            "submission_arm_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_choke": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_leg_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "f1": null
+            },
+            "sweep": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "sweep": {
+              "highlight": 4
+            },
+            "NO_MATCH": {
+              "highlight": 30
+            },
+            "submission_arm_lock": {
+              "highlight": 1
+            },
+            "guard_pass": {
+              "highlight": 11
+            },
+            "back_take": {
+              "highlight": 7
+            },
+            "submission_choke": {
+              "highlight": 4
+            },
+            "submission_leg_lock": {
+              "highlight": 3
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 30,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 30,
+            "duplicate": 0
+          }
+        },
+        "uniform_span": {
+          "totals": {
+            "tp": 0,
+            "fn": 30,
+            "fp": 60,
+            "gold_count": 30,
+            "pred_count": 60
+          },
+          "event_count_ratio": 2.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 7,
+              "recall": 0.0,
+              "f1": null
+            },
+            "guard_pass": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 11,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 60,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            },
+            "submission_arm_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_choke": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_leg_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "f1": null
+            },
+            "sweep": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "sweep": {
+              "highlight": 4
+            },
+            "NO_MATCH": {
+              "highlight": 60
+            },
+            "submission_arm_lock": {
+              "highlight": 1
+            },
+            "guard_pass": {
+              "highlight": 11
+            },
+            "back_take": {
+              "highlight": 7
+            },
+            "submission_choke": {
+              "highlight": 4
+            },
+            "submission_leg_lock": {
+              "highlight": 3
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 30,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 60,
+            "duplicate": 0
+          }
+        }
+      }
+    },
+    "full38": {
+      "n_windows_in_scope": 38,
+      "n_scored_arm_s": 38,
+      "n_scored_arm_t": 38,
+      "excluded_arm_s_call_failed_or_unrun": [],
+      "excluded_arm_t_call_failed_or_unrun": [],
+      "hit_s": 16,
+      "hit_t": 12,
+      "hit_delta": -4,
+      "fp_dup_rate_s": 0.046511627906976744,
+      "fp_dup_rate_t": 0.0,
+      "sign_test": {
+        "n_plus_t_wins": 4,
+        "n_minus_s_wins": 8,
+        "n_ties_excluded": 26,
+        "n_unpaired_excluded": 0,
+        "n_effective": 12,
+        "p_value": 0.3876953125
+      },
+      "summary_arm_s": {
+        "totals": {
+          "tp": 16,
+          "fn": 22,
+          "fp": 27,
+          "gold_count": 38,
+          "pred_count": 43
+        },
+        "event_count_ratio": 1.131578947368421,
+        "micro": {
+          "precision": 0.37209302325581395,
+          "recall": 0.42105263157894735,
+          "f1": 0.3950617283950617
+        },
+        "macro": {
+          "precision": 0.3224206349206349,
+          "recall": 0.5465617715617715,
+          "f1": 0.315662732329399
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 1,
+            "fp": 0,
+            "precision": 1.0,
+            "tp_for_recall": 1,
+            "fn": 10,
+            "recall": 0.09090909090909091,
+            "f1": 0.16666666666666669
+          },
+          "escape": {
+            "tp_for_precision": 0,
+            "fp": 4,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 7,
+            "fp": 7,
+            "precision": 0.5,
+            "tp_for_recall": 7,
+            "fn": 6,
+            "recall": 0.5384615384615384,
+            "f1": 0.5185185185185186
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 3,
+            "precision": 0.0,
+            "tp_for_recall": 2,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.0
+          },
+          "submission_choke": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 1,
+            "fn": 3,
+            "recall": 0.25,
+            "f1": 0.0
+          },
+          "submission_leg_lock": {
+            "tp_for_precision": 6,
+            "fp": 1,
+            "precision": 0.8571428571428571,
+            "tp_for_recall": 3,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.923076923076923
+          },
+          "sweep": {
+            "tp_for_precision": 2,
+            "fp": 7,
+            "precision": 0.2222222222222222,
+            "tp_for_recall": 2,
+            "fn": 3,
+            "recall": 0.4,
+            "f1": 0.2857142857142857
+          },
+          "takedown_attempt": {
+            "tp_for_precision": 0,
+            "fp": 4,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "submission_arm_lock": {
+            "submission_leg_lock": 2
+          },
+          "NO_MATCH": {
+            "takedown_attempt": 4,
+            "escape": 4,
+            "sweep": 7,
+            "submission_leg_lock": 1,
+            "guard_pass": 7,
+            "submission_arm_lock": 3,
+            "submission_choke": 1
+          },
+          "guard_pass": {
+            "escape": 1,
+            "guard_pass": 7,
+            "sweep": 1,
+            "NO_MATCH": 3,
+            "takedown_attempt": 1
+          },
+          "back_take": {
+            "sweep": 4,
+            "guard_pass": 2,
+            "submission_arm_lock": 1,
+            "submission_choke": 1,
+            "NO_MATCH": 1,
+            "back_take": 1,
+            "escape": 1
+          },
+          "sweep": {
+            "sweep": 2,
+            "NO_MATCH": 1,
+            "takedown_attempt": 1,
+            "guard_pass": 1
+          },
+          "submission_choke": {
+            "NO_MATCH": 2,
+            "guard_pass": 1,
+            "submission_leg_lock": 1
+          },
+          "submission_leg_lock": {
+            "submission_leg_lock": 3
+          }
+        },
+        "fn_breakdown": {
+          "silent": 7,
+          "misclassified": 15,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 25,
+          "duplicate": 2
+        }
+      },
+      "summary_arm_t": {
+        "totals": {
+          "tp": 12,
+          "fn": 26,
+          "fp": 22,
+          "gold_count": 38,
+          "pred_count": 34
+        },
+        "event_count_ratio": 0.8947368421052632,
+        "micro": {
+          "precision": 0.35294117647058826,
+          "recall": 0.3157894736842105,
+          "f1": 0.33333333333333337
+        },
+        "macro": {
+          "precision": 0.3095238095238095,
+          "recall": 0.4884615384615385,
+          "f1": 0.42028520499108735
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 11,
+            "recall": 0.0,
+            "f1": null
+          },
+          "escape": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 3,
+            "fp": 1,
+            "precision": 0.75,
+            "tp_for_recall": 3,
+            "fn": 10,
+            "recall": 0.23076923076923078,
+            "f1": 0.3529411764705882
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 2,
+            "fp": 2,
+            "precision": 0.5,
+            "tp_for_recall": 1,
+            "fn": 1,
+            "recall": 0.5,
+            "f1": 0.5
+          },
+          "submission_choke": {
+            "tp_for_precision": 2,
+            "fp": 6,
+            "precision": 0.25,
+            "tp_for_recall": 4,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.4
+          },
+          "submission_leg_lock": {
+            "tp_for_precision": 4,
+            "fp": 4,
+            "precision": 0.5,
+            "tp_for_recall": 3,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.6666666666666666
+          },
+          "sweep": {
+            "tp_for_precision": 1,
+            "fp": 5,
+            "precision": 0.16666666666666666,
+            "tp_for_recall": 1,
+            "fn": 4,
+            "recall": 0.2,
+            "f1": 0.1818181818181818
+          },
+          "takedown_attempt": {
+            "tp_for_precision": 0,
+            "fp": 3,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "submission_arm_lock": {
+            "NO_MATCH": 1,
+            "submission_arm_lock": 1
+          },
+          "guard_pass": {
+            "sweep": 3,
+            "guard_pass": 3,
+            "submission_leg_lock": 1,
+            "submission_arm_lock": 1,
+            "NO_MATCH": 3,
+            "submission_choke": 1,
+            "takedown_attempt": 1
+          },
+          "NO_MATCH": {
+            "sweep": 5,
+            "submission_choke": 6,
+            "submission_leg_lock": 4,
+            "submission_arm_lock": 2,
+            "takedown_attempt": 3,
+            "escape": 1,
+            "guard_pass": 1
+          },
+          "back_take": {
+            "submission_choke": 5,
+            "submission_leg_lock": 1,
+            "sweep": 2,
+            "takedown_attempt": 1,
+            "escape": 1,
+            "guard_pass": 1
+          },
+          "sweep": {
+            "submission_leg_lock": 2,
+            "sweep": 1,
+            "takedown_attempt": 1,
+            "submission_arm_lock": 1
+          },
+          "submission_choke": {
+            "submission_choke": 2,
+            "submission_arm_lock": 1,
+            "submission_leg_lock": 1
+          },
+          "submission_leg_lock": {
+            "submission_leg_lock": 3
+          }
+        },
+        "fn_breakdown": {
+          "silent": 4,
+          "misclassified": 22,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 22,
+          "duplicate": 0
+        }
+      },
+      "baselines": {
+        "whole_match": {
+          "totals": {
+            "tp": 0,
+            "fn": 38,
+            "fp": 38,
+            "gold_count": 38,
+            "pred_count": 38
+          },
+          "event_count_ratio": 1.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 11,
+              "recall": 0.0,
+              "f1": null
+            },
+            "guard_pass": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 13,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 38,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            },
+            "submission_arm_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_choke": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_leg_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "f1": null
+            },
+            "sweep": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 5,
+              "recall": 0.0,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "submission_arm_lock": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 38
+            },
+            "guard_pass": {
+              "highlight": 13
+            },
+            "back_take": {
+              "highlight": 11
+            },
+            "sweep": {
+              "highlight": 5
+            },
+            "submission_choke": {
+              "highlight": 4
+            },
+            "submission_leg_lock": {
+              "highlight": 3
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 38,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 38,
+            "duplicate": 0
+          }
+        },
+        "uniform_span": {
+          "totals": {
+            "tp": 0,
+            "fn": 38,
+            "fp": 76,
+            "gold_count": 38,
+            "pred_count": 76
+          },
+          "event_count_ratio": 2.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 11,
+              "recall": 0.0,
+              "f1": null
+            },
+            "guard_pass": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 13,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 76,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            },
+            "submission_arm_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_choke": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_leg_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "f1": null
+            },
+            "sweep": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 5,
+              "recall": 0.0,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "submission_arm_lock": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 76
+            },
+            "guard_pass": {
+              "highlight": 13
+            },
+            "back_take": {
+              "highlight": 11
+            },
+            "sweep": {
+              "highlight": 5
+            },
+            "submission_choke": {
+              "highlight": 4
+            },
+            "submission_leg_lock": {
+              "highlight": 3
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 38,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 76,
+            "duplicate": 0
+          }
+        }
+      }
+    },
+    "core30_excl_files_api": {
+      "n_windows_in_scope": 30,
+      "n_scored_arm_s": 30,
+      "n_scored_arm_t": 30,
+      "excluded_arm_s_call_failed_or_unrun": [],
+      "excluded_arm_t_call_failed_or_unrun": [],
+      "hit_s": 13,
+      "hit_t": 12,
+      "hit_delta": -1,
+      "fp_dup_rate_s": 0.06451612903225806,
+      "fp_dup_rate_t": 0.0,
+      "sign_test": {
+        "n_plus_t_wins": 4,
+        "n_minus_s_wins": 5,
+        "n_ties_excluded": 21,
+        "n_unpaired_excluded": 0,
+        "n_effective": 9,
+        "p_value": 1.0
+      },
+      "summary_arm_s": {
+        "totals": {
+          "tp": 13,
+          "fn": 17,
+          "fp": 18,
+          "gold_count": 30,
+          "pred_count": 31
+        },
+        "event_count_ratio": 1.0333333333333334,
+        "micro": {
+          "precision": 0.41935483870967744,
+          "recall": 0.43333333333333335,
+          "f1": 0.4262295081967213
+        },
+        "macro": {
+          "precision": 0.23778602350030922,
+          "recall": 0.5492424242424242,
+          "f1": 0.36363636363636365
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 7,
+            "recall": 0.0,
+            "f1": null
+          },
+          "escape": {
+            "tp_for_precision": 0,
+            "fp": 3,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 6,
+            "fp": 5,
+            "precision": 0.5454545454545454,
+            "tp_for_recall": 6,
+            "fn": 5,
+            "recall": 0.5454545454545454,
+            "f1": 0.5454545454545454
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 1,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.0
+          },
+          "submission_choke": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 1,
+            "fn": 3,
+            "recall": 0.25,
+            "f1": 0.0
+          },
+          "submission_leg_lock": {
+            "tp_for_precision": 5,
+            "fp": 1,
+            "precision": 0.8333333333333334,
+            "tp_for_recall": 3,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.9090909090909091
+          },
+          "sweep": {
+            "tp_for_precision": 2,
+            "fp": 5,
+            "precision": 0.2857142857142857,
+            "tp_for_recall": 2,
+            "fn": 2,
+            "recall": 0.5,
+            "f1": 0.36363636363636365
+          },
+          "takedown_attempt": {
+            "tp_for_precision": 0,
+            "fp": 2,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "sweep": {
+            "sweep": 2,
+            "NO_MATCH": 1,
+            "takedown_attempt": 1
+          },
+          "NO_MATCH": {
+            "submission_leg_lock": 1,
+            "sweep": 5,
+            "guard_pass": 5,
+            "submission_arm_lock": 1,
+            "submission_choke": 1,
+            "escape": 3,
+            "takedown_attempt": 2
+          },
+          "submission_arm_lock": {
+            "submission_leg_lock": 1
+          },
+          "guard_pass": {
+            "guard_pass": 6,
+            "sweep": 1,
+            "NO_MATCH": 3,
+            "takedown_attempt": 1
+          },
+          "back_take": {
+            "guard_pass": 2,
+            "submission_arm_lock": 1,
+            "submission_choke": 1,
+            "sweep": 2,
+            "escape": 1
+          },
+          "submission_choke": {
+            "NO_MATCH": 2,
+            "guard_pass": 1,
+            "submission_leg_lock": 1
+          },
+          "submission_leg_lock": {
+            "submission_leg_lock": 3
+          }
+        },
+        "fn_breakdown": {
+          "silent": 6,
+          "misclassified": 11,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 16,
+          "duplicate": 2
+        }
+      },
+      "summary_arm_t": {
+        "totals": {
+          "tp": 12,
+          "fn": 18,
+          "fp": 15,
+          "gold_count": 30,
+          "pred_count": 27
+        },
+        "event_count_ratio": 0.9,
+        "micro": {
+          "precision": 0.4444444444444444,
+          "recall": 0.4,
+          "f1": 0.4210526315789474
+        },
+        "macro": {
+          "precision": 0.40714285714285714,
+          "recall": 0.587121212121212,
+          "f1": 0.572063492063492
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 7,
+            "recall": 0.0,
+            "f1": null
+          },
+          "escape": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 3,
+            "fp": 1,
+            "precision": 0.75,
+            "tp_for_recall": 3,
+            "fn": 8,
+            "recall": 0.2727272727272727,
+            "f1": 0.39999999999999997
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 2,
+            "fp": 0,
+            "precision": 1.0,
+            "tp_for_recall": 1,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "submission_choke": {
+            "tp_for_precision": 2,
+            "fp": 3,
+            "precision": 0.4,
+            "tp_for_recall": 4,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.5714285714285715
+          },
+          "submission_leg_lock": {
+            "tp_for_precision": 4,
+            "fp": 4,
+            "precision": 0.5,
+            "tp_for_recall": 3,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.6666666666666666
+          },
+          "sweep": {
+            "tp_for_precision": 1,
+            "fp": 4,
+            "precision": 0.2,
+            "tp_for_recall": 1,
+            "fn": 3,
+            "recall": 0.25,
+            "f1": 0.22222222222222224
+          },
+          "takedown_attempt": {
+            "tp_for_precision": 0,
+            "fp": 2,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "sweep": {
+            "submission_leg_lock": 2,
+            "sweep": 1,
+            "takedown_attempt": 1
+          },
+          "NO_MATCH": {
+            "submission_leg_lock": 4,
+            "sweep": 4,
+            "submission_choke": 3,
+            "takedown_attempt": 2,
+            "escape": 1,
+            "guard_pass": 1
+          },
+          "submission_arm_lock": {
+            "submission_arm_lock": 1
+          },
+          "guard_pass": {
+            "guard_pass": 3,
+            "sweep": 2,
+            "submission_leg_lock": 1,
+            "NO_MATCH": 3,
+            "submission_choke": 1,
+            "takedown_attempt": 1
+          },
+          "back_take": {
+            "submission_leg_lock": 1,
+            "submission_choke": 2,
+            "sweep": 2,
+            "escape": 1,
+            "guard_pass": 1
+          },
+          "submission_choke": {
+            "submission_choke": 2,
+            "submission_arm_lock": 1,
+            "submission_leg_lock": 1
+          },
+          "submission_leg_lock": {
+            "submission_leg_lock": 3
+          }
+        },
+        "fn_breakdown": {
+          "silent": 3,
+          "misclassified": 15,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 15,
+          "duplicate": 0
+        }
+      },
+      "baselines": {
+        "whole_match": {
+          "totals": {
+            "tp": 0,
+            "fn": 30,
+            "fp": 30,
+            "gold_count": 30,
+            "pred_count": 30
+          },
+          "event_count_ratio": 1.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 7,
+              "recall": 0.0,
+              "f1": null
+            },
+            "guard_pass": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 11,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 30,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            },
+            "submission_arm_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_choke": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_leg_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "f1": null
+            },
+            "sweep": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "sweep": {
+              "highlight": 4
+            },
+            "NO_MATCH": {
+              "highlight": 30
+            },
+            "submission_arm_lock": {
+              "highlight": 1
+            },
+            "guard_pass": {
+              "highlight": 11
+            },
+            "back_take": {
+              "highlight": 7
+            },
+            "submission_choke": {
+              "highlight": 4
+            },
+            "submission_leg_lock": {
+              "highlight": 3
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 30,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 30,
+            "duplicate": 0
+          }
+        },
+        "uniform_span": {
+          "totals": {
+            "tp": 0,
+            "fn": 30,
+            "fp": 60,
+            "gold_count": 30,
+            "pred_count": 60
+          },
+          "event_count_ratio": 2.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 7,
+              "recall": 0.0,
+              "f1": null
+            },
+            "guard_pass": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 11,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 60,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            },
+            "submission_arm_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 1,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_choke": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_leg_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "f1": null
+            },
+            "sweep": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "sweep": {
+              "highlight": 4
+            },
+            "NO_MATCH": {
+              "highlight": 60
+            },
+            "submission_arm_lock": {
+              "highlight": 1
+            },
+            "guard_pass": {
+              "highlight": 11
+            },
+            "back_take": {
+              "highlight": 7
+            },
+            "submission_choke": {
+              "highlight": 4
+            },
+            "submission_leg_lock": {
+              "highlight": 3
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 30,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 60,
+            "duplicate": 0
+          }
+        }
+      }
+    },
+    "full38_excl_files_api": {
+      "n_windows_in_scope": 37,
+      "n_scored_arm_s": 37,
+      "n_scored_arm_t": 37,
+      "excluded_arm_s_call_failed_or_unrun": [],
+      "excluded_arm_t_call_failed_or_unrun": [],
+      "hit_s": 16,
+      "hit_t": 12,
+      "hit_delta": -4,
+      "fp_dup_rate_s": 0.04878048780487805,
+      "fp_dup_rate_t": 0.0,
+      "sign_test": {
+        "n_plus_t_wins": 4,
+        "n_minus_s_wins": 8,
+        "n_ties_excluded": 25,
+        "n_unpaired_excluded": 0,
+        "n_effective": 12,
+        "p_value": 0.3876953125
+      },
+      "summary_arm_s": {
+        "totals": {
+          "tp": 16,
+          "fn": 21,
+          "fp": 25,
+          "gold_count": 37,
+          "pred_count": 41
+        },
+        "event_count_ratio": 1.1081081081081081,
+        "micro": {
+          "precision": 0.3902439024390244,
+          "recall": 0.43243243243243246,
+          "f1": 0.4102564102564103
+        },
+        "macro": {
+          "precision": 0.32589285714285715,
+          "recall": 0.548076923076923,
+          "f1": 0.3218509885176552
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 1,
+            "fp": 0,
+            "precision": 1.0,
+            "tp_for_recall": 1,
+            "fn": 9,
+            "recall": 0.1,
+            "f1": 0.18181818181818182
+          },
+          "escape": {
+            "tp_for_precision": 0,
+            "fp": 4,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 7,
+            "fp": 7,
+            "precision": 0.5,
+            "tp_for_recall": 7,
+            "fn": 6,
+            "recall": 0.5384615384615384,
+            "f1": 0.5185185185185186
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 0,
+            "fp": 2,
+            "precision": 0.0,
+            "tp_for_recall": 2,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.0
+          },
+          "submission_choke": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 1,
+            "fn": 3,
+            "recall": 0.25,
+            "f1": 0.0
+          },
+          "submission_leg_lock": {
+            "tp_for_precision": 6,
+            "fp": 1,
+            "precision": 0.8571428571428571,
+            "tp_for_recall": 3,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.923076923076923
+          },
+          "sweep": {
+            "tp_for_precision": 2,
+            "fp": 6,
+            "precision": 0.25,
+            "tp_for_recall": 2,
+            "fn": 3,
+            "recall": 0.4,
+            "f1": 0.3076923076923077
+          },
+          "takedown_attempt": {
+            "tp_for_precision": 0,
+            "fp": 4,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "submission_arm_lock": {
+            "submission_leg_lock": 2
+          },
+          "NO_MATCH": {
+            "takedown_attempt": 4,
+            "escape": 4,
+            "sweep": 6,
+            "submission_leg_lock": 1,
+            "guard_pass": 7,
+            "submission_arm_lock": 2,
+            "submission_choke": 1
+          },
+          "guard_pass": {
+            "escape": 1,
+            "guard_pass": 7,
+            "sweep": 1,
+            "NO_MATCH": 3,
+            "takedown_attempt": 1
+          },
+          "back_take": {
+            "sweep": 3,
+            "guard_pass": 2,
+            "submission_arm_lock": 1,
+            "submission_choke": 1,
+            "NO_MATCH": 1,
+            "back_take": 1,
+            "escape": 1
+          },
+          "sweep": {
+            "sweep": 2,
+            "NO_MATCH": 1,
+            "takedown_attempt": 1,
+            "guard_pass": 1
+          },
+          "submission_choke": {
+            "NO_MATCH": 2,
+            "guard_pass": 1,
+            "submission_leg_lock": 1
+          },
+          "submission_leg_lock": {
+            "submission_leg_lock": 3
+          }
+        },
+        "fn_breakdown": {
+          "silent": 7,
+          "misclassified": 14,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 23,
+          "duplicate": 2
+        }
+      },
+      "summary_arm_t": {
+        "totals": {
+          "tp": 12,
+          "fn": 25,
+          "fp": 21,
+          "gold_count": 37,
+          "pred_count": 33
+        },
+        "event_count_ratio": 0.8918918918918919,
+        "micro": {
+          "precision": 0.36363636363636365,
+          "recall": 0.32432432432432434,
+          "f1": 0.34285714285714286
+        },
+        "macro": {
+          "precision": 0.31462585034013607,
+          "recall": 0.4884615384615385,
+          "f1": 0.42917409387997624
+        },
+        "per_class": {
+          "back_take": {
+            "tp_for_precision": 0,
+            "fp": 0,
+            "precision": null,
+            "tp_for_recall": 0,
+            "fn": 10,
+            "recall": 0.0,
+            "f1": null
+          },
+          "escape": {
+            "tp_for_precision": 0,
+            "fp": 1,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          },
+          "guard_pass": {
+            "tp_for_precision": 3,
+            "fp": 1,
+            "precision": 0.75,
+            "tp_for_recall": 3,
+            "fn": 10,
+            "recall": 0.23076923076923078,
+            "f1": 0.3529411764705882
+          },
+          "submission_arm_lock": {
+            "tp_for_precision": 2,
+            "fp": 2,
+            "precision": 0.5,
+            "tp_for_recall": 1,
+            "fn": 1,
+            "recall": 0.5,
+            "f1": 0.5
+          },
+          "submission_choke": {
+            "tp_for_precision": 2,
+            "fp": 5,
+            "precision": 0.2857142857142857,
+            "tp_for_recall": 4,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.4444444444444445
+          },
+          "submission_leg_lock": {
+            "tp_for_precision": 4,
+            "fp": 4,
+            "precision": 0.5,
+            "tp_for_recall": 3,
+            "fn": 0,
+            "recall": 1.0,
+            "f1": 0.6666666666666666
+          },
+          "sweep": {
+            "tp_for_precision": 1,
+            "fp": 5,
+            "precision": 0.16666666666666666,
+            "tp_for_recall": 1,
+            "fn": 4,
+            "recall": 0.2,
+            "f1": 0.1818181818181818
+          },
+          "takedown_attempt": {
+            "tp_for_precision": 0,
+            "fp": 3,
+            "precision": 0.0,
+            "tp_for_recall": 0,
+            "fn": 0,
+            "recall": null,
+            "f1": null
+          }
+        },
+        "confusion_matrix": {
+          "submission_arm_lock": {
+            "NO_MATCH": 1,
+            "submission_arm_lock": 1
+          },
+          "guard_pass": {
+            "sweep": 3,
+            "guard_pass": 3,
+            "submission_leg_lock": 1,
+            "submission_arm_lock": 1,
+            "NO_MATCH": 3,
+            "submission_choke": 1,
+            "takedown_attempt": 1
+          },
+          "NO_MATCH": {
+            "sweep": 5,
+            "submission_choke": 5,
+            "submission_leg_lock": 4,
+            "submission_arm_lock": 2,
+            "takedown_attempt": 3,
+            "escape": 1,
+            "guard_pass": 1
+          },
+          "back_take": {
+            "submission_choke": 4,
+            "submission_leg_lock": 1,
+            "sweep": 2,
+            "takedown_attempt": 1,
+            "escape": 1,
+            "guard_pass": 1
+          },
+          "sweep": {
+            "submission_leg_lock": 2,
+            "sweep": 1,
+            "takedown_attempt": 1,
+            "submission_arm_lock": 1
+          },
+          "submission_choke": {
+            "submission_choke": 2,
+            "submission_arm_lock": 1,
+            "submission_leg_lock": 1
+          },
+          "submission_leg_lock": {
+            "submission_leg_lock": 3
+          }
+        },
+        "fn_breakdown": {
+          "silent": 4,
+          "misclassified": 21,
+          "competed_away": 0
+        },
+        "fp_breakdown": {
+          "hallucinated": 21,
+          "duplicate": 0
+        }
+      },
+      "baselines": {
+        "whole_match": {
+          "totals": {
+            "tp": 0,
+            "fn": 37,
+            "fp": 37,
+            "gold_count": 37,
+            "pred_count": 37
+          },
+          "event_count_ratio": 1.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 10,
+              "recall": 0.0,
+              "f1": null
+            },
+            "guard_pass": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 13,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 37,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            },
+            "submission_arm_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_choke": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_leg_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "f1": null
+            },
+            "sweep": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 5,
+              "recall": 0.0,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "submission_arm_lock": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 37
+            },
+            "guard_pass": {
+              "highlight": 13
+            },
+            "back_take": {
+              "highlight": 10
+            },
+            "sweep": {
+              "highlight": 5
+            },
+            "submission_choke": {
+              "highlight": 4
+            },
+            "submission_leg_lock": {
+              "highlight": 3
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 37,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 37,
+            "duplicate": 0
+          }
+        },
+        "uniform_span": {
+          "totals": {
+            "tp": 0,
+            "fn": 37,
+            "fp": 74,
+            "gold_count": 37,
+            "pred_count": 74
+          },
+          "event_count_ratio": 2.0,
+          "micro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "macro": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": null
+          },
+          "per_class": {
+            "back_take": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 10,
+              "recall": 0.0,
+              "f1": null
+            },
+            "guard_pass": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 13,
+              "recall": 0.0,
+              "f1": null
+            },
+            "highlight": {
+              "tp_for_precision": 0,
+              "fp": 74,
+              "precision": 0.0,
+              "tp_for_recall": 0,
+              "fn": 0,
+              "recall": null,
+              "f1": null
+            },
+            "submission_arm_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 2,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_choke": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 4,
+              "recall": 0.0,
+              "f1": null
+            },
+            "submission_leg_lock": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 3,
+              "recall": 0.0,
+              "f1": null
+            },
+            "sweep": {
+              "tp_for_precision": 0,
+              "fp": 0,
+              "precision": null,
+              "tp_for_recall": 0,
+              "fn": 5,
+              "recall": 0.0,
+              "f1": null
+            }
+          },
+          "confusion_matrix": {
+            "submission_arm_lock": {
+              "highlight": 2
+            },
+            "NO_MATCH": {
+              "highlight": 74
+            },
+            "guard_pass": {
+              "highlight": 13
+            },
+            "back_take": {
+              "highlight": 10
+            },
+            "sweep": {
+              "highlight": 5
+            },
+            "submission_choke": {
+              "highlight": 4
+            },
+            "submission_leg_lock": {
+              "highlight": 3
+            }
+          },
+          "fn_breakdown": {
+            "silent": 0,
+            "misclassified": 37,
+            "competed_away": 0
+          },
+          "fp_breakdown": {
+            "hallucinated": 74,
+            "duplicate": 0
+          }
+        }
+      }
+    }
+  },
+  "own_verdict": "NO_GO",
+  "own_verdict_reasons": [
+    "hit_T-hit_S=-1 < required_margin=4 (n=30)"
+  ],
+  "verdict": "NO_GO",
+  "coupling_note": "own_verdict is not PASS \u2014 coupling check does not apply.",
+  "files_api_dual_reporting": {
+    "files_api_window_ids": [
+      "66b009481c62a1db7a53d504__w37"
+    ],
+    "n_files_api_in_core30": 0,
+    "own_verdict_excl_files_api": "NO_GO",
+    "own_verdict_excl_files_api_reasons": [
+      "hit_T-hit_S=-1 < required_margin=4 (n=30)"
+    ],
+    "verdict_flips_on_exclusion": false,
+    "verdict_sensitivity_note": "NO-OP: the core-30 headline contains ZERO files_api-ingested windows (Gate 1's only \u00a7G.1 reroute, w37, is a gate5_straddler \u2014 already outside the core-30 by construction). own_verdict is therefore identical with/without exclusion: 'NO_GO'. Verdict does NOT flip on exclusion (trivially \u2014 there was nothing to exclude)."
+  },
+  "gate5_addendum_data": {
+    "n_straddlers_total": 8,
+    "n_straddlers_scored": 8,
+    "excluded_straddlers": [],
+    "straddler_arm_t_hit_rate": 0.0,
+    "n_core_scored": 30,
+    "core_arm_t_hit_rate": 0.4,
+    "gap_pp_core_minus_straddler": 40.0,
+    "flip_threshold_pp": 25.0,
+    "path": "primary",
+    "flip_to_no_go": true
+  }
+}

@@ -1,0 +1,462 @@
+{
+  "clips": [
+    {
+      "clip_id": "6470211a_submission_arm_lock_727",
+      "match_id": "6470211a3ec8dca9d1a32710",
+      "stratum": "submission",
+      "occlusion_heavy": true,
+      "gold": {
+        "t_s": 727.0,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "match_id": "6470211a3ec8dca9d1a32710",
+        "compat": [
+          "submission_arm_lock"
+        ],
+        "clip_id": "6470211a_submission_arm_lock_727",
+        "occlusion_heavy": true,
+        "stratum": "submission"
+      },
+      "arms": {
+        "A": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "B": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "C": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        }
+      }
+    },
+    {
+      "clip_id": "650d20c7_submission_arm_lock_8767",
+      "match_id": "650d20c745120c8433e9cfb2",
+      "stratum": "submission",
+      "occlusion_heavy": true,
+      "gold": {
+        "t_s": 8767.0,
+        "action_class": "submission_arm_lock",
+        "outcome": "successful",
+        "match_id": "650d20c745120c8433e9cfb2",
+        "compat": [
+          "submission_arm_lock"
+        ],
+        "clip_id": "650d20c7_submission_arm_lock_8767",
+        "occlusion_heavy": true,
+        "stratum": "submission"
+      },
+      "arms": {
+        "A": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "B": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "C": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        }
+      }
+    },
+    {
+      "clip_id": "650d20c7_sweep_3512",
+      "match_id": "650d20c745120c8433e9cfbb",
+      "stratum": "sweep_back_take",
+      "occlusion_heavy": false,
+      "gold": {
+        "t_s": 3512.0,
+        "action_class": "sweep",
+        "outcome": "successful",
+        "match_id": "650d20c745120c8433e9cfbb",
+        "compat": [
+          "sweep"
+        ],
+        "clip_id": "650d20c7_sweep_3512",
+        "occlusion_heavy": false,
+        "stratum": "sweep_back_take"
+      },
+      "arms": {
+        "A": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "B": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "C": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        }
+      }
+    },
+    {
+      "clip_id": "650d20c7_sweep_169",
+      "match_id": "650d20c745120c8433e9cfde",
+      "stratum": "sweep_back_take",
+      "occlusion_heavy": false,
+      "gold": {
+        "t_s": 169.0,
+        "action_class": "sweep",
+        "outcome": "successful",
+        "match_id": "650d20c745120c8433e9cfde",
+        "compat": [
+          "sweep"
+        ],
+        "clip_id": "650d20c7_sweep_169",
+        "occlusion_heavy": false,
+        "stratum": "sweep_back_take"
+      },
+      "arms": {
+        "A": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "B": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "C": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        }
+      }
+    },
+    {
+      "clip_id": "650d20c7_guard_pass_171",
+      "match_id": "650d20c745120c8433e9cfd7",
+      "stratum": "guard_pass",
+      "occlusion_heavy": false,
+      "gold": {
+        "t_s": 171.0,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "match_id": "650d20c745120c8433e9cfd7",
+        "compat": [
+          "guard_pass"
+        ],
+        "clip_id": "650d20c7_guard_pass_171",
+        "occlusion_heavy": false,
+        "stratum": "guard_pass"
+      },
+      "arms": {
+        "A": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "B": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "C": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        }
+      }
+    },
+    {
+      "clip_id": "650d20c7_guard_pass_3873",
+      "match_id": "650d20c745120c8433e9cfda",
+      "stratum": "guard_pass",
+      "occlusion_heavy": false,
+      "gold": {
+        "t_s": 3873.0,
+        "action_class": "guard_pass",
+        "outcome": "successful",
+        "match_id": "650d20c745120c8433e9cfda",
+        "compat": [
+          "guard_pass"
+        ],
+        "clip_id": "650d20c7_guard_pass_3873",
+        "occlusion_heavy": false,
+        "stratum": "guard_pass"
+      },
+      "arms": {
+        "A": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "B": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "C": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        }
+      }
+    },
+    {
+      "clip_id": "6470211a_escape_384",
+      "match_id": "6470211a3ec8dca9d1a32710",
+      "stratum": "scramble_transition",
+      "occlusion_heavy": false,
+      "gold": {
+        "t_s": 384.0,
+        "action_class": "escape",
+        "outcome": "successful",
+        "match_id": "6470211a3ec8dca9d1a32710",
+        "compat": [
+          "escape"
+        ],
+        "clip_id": "6470211a_escape_384",
+        "occlusion_heavy": false,
+        "stratum": "scramble_transition"
+      },
+      "arms": {
+        "A": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "B": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "C": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        }
+      }
+    },
+    {
+      "clip_id": "650d20c7_escape_8372",
+      "match_id": "650d20c745120c8433e9cfb2",
+      "stratum": "scramble_transition",
+      "occlusion_heavy": false,
+      "gold": {
+        "t_s": 8372.0,
+        "action_class": "escape",
+        "outcome": "successful",
+        "match_id": "650d20c745120c8433e9cfb2",
+        "compat": [
+          "escape"
+        ],
+        "clip_id": "650d20c7_escape_8372",
+        "occlusion_heavy": false,
+        "stratum": "scramble_transition"
+      },
+      "arms": {
+        "A": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "B": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        },
+        "C": {
+          "detected": false,
+          "action_class_ok": false,
+          "outcome_ok": false,
+          "tp": [],
+          "fn_silent": [
+            0
+          ],
+          "fn_misclassified": [],
+          "fp_hallucinated": [],
+          "pred": null
+        }
+      }
+    }
+  ],
+  "decision": {
+    "verdict": "no-go",
+    "reason": "Arms B and C both \u2264 Arm A on hard subset and no lift elsewhere",
+    "n_clips": 8,
+    "n_hard": 2,
+    "b_beats_a": 0,
+    "c_beats_a": 0,
+    "both_le_on_hard": true,
+    "note": "Eyeball unusable athlete separation forces no-go regardless of scores."
+  }
+}

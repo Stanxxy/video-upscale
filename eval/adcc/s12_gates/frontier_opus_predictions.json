@@ -1,0 +1,551 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "match_id": "650d20c745120c8433e9d024",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 12624,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+    "window_start_s": 12619.0,
+    "window_end_s": 12628.0,
+    "settings": {
+      "fps": 10,
+      "model": "claude-opus-4-8",
+      "provider_route": "direct_anthropic",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "turtle",
+          "justification": "Bottom player is down on knees/elbows in a turtled ball while the top player sprawls over the back and head throughout most of the frames."
+        },
+        "latency_ms": 6582.839749986306,
+        "cost_usd": 0.040260000000000004,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "sweep",
+          "outcome": "successful",
+          "justification": "The initially-bottom player scrambles out of the front-headlock/turtle control and comes up to establish top position by the final frames, completing a reversal."
+        },
+        "latency_ms": 8969.227666966617,
+        "cost_usd": 0.04531,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "The 'sweep/reversal' claim requires the initially-bottom (turtled) player to come up on top. But tracking the athletes by kit, the top player wears the black 'Zenith' rashguard throughout, while the bottom turtle player shows yellow/tan legs with a purple ankle band (frames 1-9). In the roll sequence (frames 10-13) it is the BLACK Zenith-rashguard player \u2014 i.e. the TOP player \u2014 doing the forward somersault, and after the roll (frames 14-20) that same black-rashguard, light-braided-hair athlete is STILL on top controlling the dark-haired opponent's head. No swap of top/bottom occurred, so the reversal premise fails. This looks instead like a top-side front-headlock/turtle attack where the top player rolls through to consolidate top control \u2014 a transition, not a sweep by the bottom player. For position, the front-headlock/turtle sprawl dominates frames 1-9 so 'turtle' holds, though the ending frames drift toward top control/half guard.",
+          "verdict": "disagree",
+          "final_position": "turtle",
+          "final_action_class": "transition",
+          "final_outcome": "successful",
+          "wrong_label": "action_class",
+          "reason": "No reversal occurred: the same athlete (black Zenith rashguard, light braided hair) is on top before the roll (frames 1-9), executes the forward roll herself (frames 10-13), and remains on top afterward (frames 14-20). Because top/bottom never swapped, 'sweep' is incorrect \u2014 this is a top-player scramble/roll that consolidates top control, a transition. Not a ditch: a clear roll and position consolidation happened.",
+          "evidence": "Frames 10-13 show the BLACK Zenith-rashguard (top) player somersaulting; frames 17-20 show that same black-rashguard, light-braid athlete still on top controlling the dark-haired opponent's head \u2014 bottom turtle player (yellow legs, purple ankle band, frames 1-9) never comes up on top."
+        },
+        "latency_ms": 55141.5959589649,
+        "cost_usd": 0.122255,
+        "model_id": "claude-opus-4-8"
+      }
+    ],
+    "final_position": "turtle",
+    "final_outcome": "successful",
+    "verdict": "disagree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 12619.0,
+        "end_s": 12628.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6661e503716f12758093d038__w1",
+    "match_id": "6661e503716f12758093d038",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2852,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=dsldlavgLz4",
+    "window_start_s": 2847.0,
+    "window_end_s": 2856.0,
+    "settings": {
+      "fps": 10,
+      "model": "claude-opus-4-8",
+      "provider_route": "direct_anthropic",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "mount",
+          "justification": "The top player is seated astride the bottom player's torso with knees framing the hips and no legs trapped, consistent with full mount."
+        },
+        "latency_ms": 2943.272833013907,
+        "cost_usd": 0.03556,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "justification": "Top player (Crelinsten) works over a flattened opponent and consolidates chest-to-chest top control, with the score jumping from 2 to 5 indicating points awarded for the pass."
+        },
+        "latency_ms": 5917.362416163087,
+        "cost_usd": 0.041435,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against POSITION 'mount': across the consolidation frames (0:15\u20130:13) the top player (Crelinsten) is lying chest-to-chest and crossways over a flattened opponent with an arm cinched around the head/shoulder and legs posted/bunched to one side rather than symmetrically straddling the torso \u2014 that body configuration reads as side_control (crossbody pin), not full mount. Also, the score jumps exactly 3 (2\u21925), which in ADCC is the single award for a guard pass; a true mount would typically carry additional mount points, supporting a pass-into-side-control ending rather than mount. Against ACTION/OUTCOME 'guard_pass/successful': one could argue it's just a stall/pin with no clear guard being cleared; however the earlier frames show the top player working over legs and then flattening the opponent, and the +3 scoreboard change is decisive evidence a pass was scored, so the action_class survives.",
+          "verdict": "disagree",
+          "final_position": "side_control",
+          "final_action_class": "guard_pass",
+          "final_outcome": "successful",
+          "wrong_label": "position",
+          "reason": "The ending pin is a crossbody chest-to-chest control with head/arm encirclement and legs posted to one side, consistent with side_control rather than a straddling mount; the single 3-point ADCC jump (2\u21925) is the guard-pass award, not additional mount points.",
+          "evidence": "Frames at 0:15\u20130:13 show top player laid across a flattened opponent, chest-to-chest and crossways with an arm wrapped around the head and no symmetric leg straddle; scoreboard changes 2\u21925 (a single 3-point guard-pass score)."
+        },
+        "latency_ms": 38574.26383299753,
+        "cost_usd": 0.094665,
+        "model_id": "claude-opus-4-8"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "successful",
+    "verdict": "disagree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2847.0,
+        "end_s": 2856.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6643b593532ae8f232692d70__w2",
+    "match_id": "6643b593532ae8f232692d70",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2559,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=KoPxgjLbJmA",
+    "window_start_s": 2554.0,
+    "window_end_s": 2563.0,
+    "settings": {
+      "fps": 10,
+      "model": "claude-opus-4-8",
+      "provider_route": "direct_anthropic",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "half_guard",
+          "justification": "The bottom player (Hansen) is on his back with the top player's leg trapped between his legs while the top player postures over him in a bottom-half-guard configuration."
+        },
+        "latency_ms": 3575.829999987036,
+        "cost_usd": 0.035885,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "transition",
+          "outcome": "unclear",
+          "justification": "Top player stays inside bottom player's guard applying head/upper-body pressure and stacking, with no clearly visible submission grip or pass completion; whether any choke was locked is hidden by the stacked bodies and collapsed head position."
+        },
+        "latency_ms": 12131.61408295855,
+        "cost_usd": 0.05101000000000001,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Opposing position: one could argue closed_guard rather than half_guard \u2014 in the early frames (2:25-2:23) the top player is postured up inside the bottom player's legs with the hips fairly square, which could read as closed guard rather than a single leg trapped. Opposing action: rather than a neutral 'transition,' the progressive stacking and the top player collapsing his head toward the mat in the final frames (2:18-2:17) could be read as an active guard-pass attempt (stack pass) or even a submission attempt (guillotine/front-headlock) hidden by the collapsed bodies. However, the late frames show the top player's knee/leg still clearly threaded between the bottom player's legs while he stacks, which supports half_guard over closed_guard, and no locked pass or visible submission grip resolves, so 'transition/unclear' holds over 'guard_pass' or a submission call.",
+          "verdict": "agree",
+          "final_position": "half_guard",
+          "final_action_class": "transition",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Throughout the clip the top player's leg stays threaded between the bottom player's legs (bottom-half configuration) while he postures and progressively stacks; final frames (2:18-2:17) show heavy forward drive with head collapsing toward the mat but no locked pass completion or visible submission grip. Clear weight/hip changes (stacking, forward pressure) mean this is not a non-event \u2014 ditch test fails; movement is present but unresolved, consistent with transition/unclear."
+        },
+        "latency_ms": 16619.139875052497,
+        "cost_usd": 0.063365,
+        "model_id": "claude-opus-4-8"
+      }
+    ],
+    "final_position": "half_guard",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2554.0,
+        "end_s": 2563.0,
+        "action_class": "transition",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "6580c285827346aa0335a86b__w3",
+    "match_id": "6580c285827346aa0335a86b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 840,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "side_control",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=SDWG9WMbvl0",
+    "window_start_s": 835.0,
+    "window_end_s": 844.0,
+    "settings": {
+      "fps": 10,
+      "model": "claude-opus-4-8",
+      "provider_route": "direct_anthropic",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "half_guard",
+          "justification": "Top player is chest-to-chest working from a pinning position while the bottom player retains one leg entangled/trapped around the top player's leg, consistent with half guard rather than fully cleared side control."
+        },
+        "latency_ms": 4551.757083972916,
+        "cost_usd": 0.036125,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "sweep",
+          "outcome": "unclear",
+          "justification": "Mid-sequence shows a rolling reversal with the bottom player elevating legs and flipping the exchange (frames with legs in the air), but the final settled top-position credit is ambiguous as bodies scramble and re-consolidate without a clear point-scoring reversal read."
+        },
+        "latency_ms": 14893.320750212297,
+        "cost_usd": 0.0553,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against 'half_guard': in the early frames (0:59-1:01) the top player is chest-to-chest with heavy crossface and the bottom player's legs look largely cleared/underneath, which could read as side_control rather than half guard. Against 'sweep': the clip could be read as guard retention/scramble ending with the same player on top (frames 11-20 show consolidation on top), so it might be a 'transition' rather than a true sweep. However, frame 7 (0:58) shows a distinct rolling reversal \u2014 both legs elevated in the air with bodies flipping \u2014 which is an unmistakable elevation/reversal mechanic, not a passive retention, and the earlier frames clearly show one leg of the bottom player wrapping/trapping the top player's leg (half guard), not a cleared pin.",
+          "verdict": "agree",
+          "final_position": "half_guard",
+          "final_action_class": "sweep",
+          "final_outcome": "unclear",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frame at 0:58 shows legs elevated in the air mid-roll (reversal/sweep mechanic); frames 0:59-1:01 show bottom player's leg entangled around top player's leg consistent with half guard; post-scramble frames 0:53-0:56 show re-consolidation without a clean point-scoring read, supporting outcome=unclear. This is a real reversal attempt, not a non-event, so it fails the strict ditch test; half_guard x sweep is a compatible combination."
+        },
+        "latency_ms": 16894.472499843687,
+        "cost_usd": 0.061485,
+        "model_id": "claude-opus-4-8"
+      }
+    ],
+    "final_position": "half_guard",
+    "final_outcome": "unclear",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 835.0,
+        "end_s": 844.0,
+        "action_class": "sweep",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "654152332d513512a36b6212__w4",
+    "match_id": "654152332d513512a36b6212",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 2052,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "mount",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=5ix4aFb5Xiw",
+    "window_start_s": 2047.0,
+    "window_end_s": 2056.0,
+    "settings": {
+      "fps": 10,
+      "model": "claude-opus-4-8",
+      "provider_route": "direct_anthropic",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "side_control",
+          "justification": "The red-shirted top player lies chest-to-chest across the supine bottom player's torso with legs sprawled out to the side and no leg entanglement, characteristic of side control."
+        },
+        "latency_ms": 3611.980125075206,
+        "cost_usd": 0.035960000000000006,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "technique",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "action_class": "guard_pass",
+          "outcome": "successful",
+          "justification": "Top red player moves from a stacked/near-side position and establishes chest-to-chest side control with the bottom player flattened out and legs extended, clearing the guard."
+        },
+        "latency_ms": 3638.396792113781,
+        "cost_usd": 0.03846,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "validator",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "adversarial_case": "Against the position: in several mid-clip frames (5-9) the top red player's hips ride high and square over the bottom player with the head cinched, which could be argued as an approach toward mount or a front-headlock/turtle-break rather than clean side_control. Against the action: one could argue no guard was ever visibly passed \u2014 the bottom player is already flattened in the opening frames (1-4), so this might be maintenance of an existing pin (transition) or even a head-and-arm submission setup given the top player's arm wrapping the neck in frames 16-20. However, tracking the sequence, the top player clearly progresses from a stacked/high position over the legs to full chest-to-chest control with the bottom player's legs extended flat and no entanglement, which is a completed pass, not mere maintenance, and no submission finish is shown.",
+          "verdict": "agree",
+          "final_position": "side_control",
+          "final_action_class": "guard_pass",
+          "final_outcome": "successful",
+          "wrong_label": null,
+          "reason": null,
+          "evidence": "Frames 8-14 show the red top player chest-to-chest across the supine opponent, legs sprawled to the side with no leg entanglement, and the bottom player's legs extended flat \u2014 clearing the guard and establishing side_control. Progression from the stacked position in frames 1-5 confirms an intentional advancing pass (not a non-event, so no ditch); guard_pass ending in side_control is the expected success pairing, so no contradiction."
+        },
+        "latency_ms": 21677.50058392994,
+        "cost_usd": 0.06437999999999999,
+        "model_id": "claude-opus-4-8"
+      }
+    ],
+    "final_position": "side_control",
+    "final_outcome": "successful",
+    "verdict": "agree",
+    "ditch_reason": null,
+    "emitted_events": [
+      {
+        "start_s": 2047.0,
+        "end_s": 2056.0,
+        "action_class": "guard_pass",
+        "confidence": null
+      }
+    ],
+    "status": "analyzed"
+  },
+  {
+    "window_id": "65dfbed6a2434704339de9a3__w5",
+    "match_id": "65dfbed6a2434704339de9a3",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 3544,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=nDc0L96J6i4",
+    "window_start_s": 3539.0,
+    "window_end_s": 3548.0,
+    "settings": {
+      "fps": 10,
+      "model": "",
+      "provider_route": "",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "call_failed",
+        "error": "ffprobe fps probe failed (rc=1): FgpsPbSychNsBmdAJ5UUD46B9coAD6Q&itag=18&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&met=1785090694%2C&mh=Xh&mm=31%2C26&mn=sn-8xgp1vo-xfgl%2Csn-2op5q5-5f&ms=au%2Conr&mv=m&mvi=5&pl=41&rms=au%2Cau&initcwndbps=4095000&bui=AZFlqhPDPGNtzuEdBDfNgP-wakNTFXIzl5vk7GHaM0_qkOwnE0k8JdSEku7mM8e-CzvqXJeNmX8u9qDP&spc=SQ-umrGx9YdiZWl_8Aky93Yxbh3kVAcbg-zyyyzgbYIJAo6GjA&vprv=1&svpuc=1&mime=video%2Fmp4&rqh=1&cnr=14&ratebypass=yes&dur=3744.008&lmt=1751089212571156&mt=1785090300&fvip=3&fexp=51565116%2C51946838%2C51992867&c=ANDROID_VR&txp=8208224&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Crqh%2Ccnr%2Cratebypass%2Cdur%2Clmt&sig=AE0s2JYwRAIgUG9AArvTze4cxQk4Dpl5U4BsP6v5qqmceDfkyNDs6FYCIFdCJh6NCGurjLGy_tdIAcI3eZf8O-aDLhJz7lraDQRd&lsparams=met%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRAIgcSSx7GbMU2jN_pEHsl1hT-I1sbyw0fDU5MwQPxIhh3ICIGQoKcOWEVIRo8c1AHw4Wdo-7R5gT75RQmCMUHud8JCd: Server returned 403 Forbidden (access denied)\n",
+        "parsed": null,
+        "latency_ms": 0.0,
+        "cost_usd": 0.0,
+        "model_id": "claude-opus-4-8"
+      }
+    ],
+    "final_position": null,
+    "final_outcome": null,
+    "verdict": null,
+    "ditch_reason": null,
+    "emitted_events": [],
+    "status": "call_failed"
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 142,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+    "window_start_s": 137.0,
+    "window_end_s": 146.0,
+    "settings": {
+      "fps": 10,
+      "model": "",
+      "provider_route": "",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "half_guard",
+          "justification": "The blue bottom player has the top player's leg trapped between his thighs while the top player is chest-to-chest attempting to pass, consistent with half guard."
+        },
+        "latency_ms": 4765.353124821559,
+        "cost_usd": 0.0358,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "technique",
+        "status": "call_failed",
+        "error": "anthropic_direct: Claude non-JSON response: Extra data: line 6 column 1 (char 300); raw='{\\n    \"action_class\": \"guard_pass\",\\n    \"justification\": \"Top player in white is working from inside the blue player\\'s half/closed guard, chest pressure and posture consistent throughout, but the bottom player\\'s knee/leg remains interposed keeping guard intact rather than reaching side control.\"\\n}\\n\\nWait, the outcome field is required.\\n\\n{\\n    \"action_class\": \"guard_pass\",\\n    \"outcome\": \"unsuccessful\",\\n    \"justification\": \"Top player maintains heavy chest pressure and posture over the bottom pla'",
+        "parsed": null,
+        "latency_ms": 0.0,
+        "cost_usd": 0.0,
+        "model_id": "claude-opus-4-8"
+      }
+    ],
+    "final_position": null,
+    "final_outcome": null,
+    "verdict": null,
+    "ditch_reason": null,
+    "emitted_events": [],
+    "status": "call_failed"
+  },
+  {
+    "window_id": "66138fe05da956d5ef54f21b__w7",
+    "match_id": "66138fe05da956d5ef54f21b",
+    "gate5_straddler": false,
+    "gold_event": {
+      "t_s": 1058,
+      "action_class": "guard_pass",
+      "outcome": "successful",
+      "position_bucket": "open_guard",
+      "raw_sequenceType": "GUARD PASS",
+      "track": "hard",
+      "scoreable": true
+    },
+    "video_url_watch": "https://www.youtube.com/watch?v=h2ucDfTaypI",
+    "window_start_s": 1053.0,
+    "window_end_s": 1062.0,
+    "settings": {
+      "fps": 10,
+      "model": "",
+      "provider_route": "",
+      "thinking": "high"
+    },
+    "calls": [
+      {
+        "call_name": "position",
+        "status": "ok",
+        "error": null,
+        "parsed": {
+          "position": "open_guard",
+          "justification": "The bottom player is on his back with both feet/legs actively framing against the top player who is standing/passing, with no leg trapped and legs not locked, indicating an open guard passing exchange."
+        },
+        "latency_ms": 3855.0860420800745,
+        "cost_usd": 0.036085000000000006,
+        "model_id": "claude-opus-4-8"
+      },
+      {
+        "call_name": "technique",
+        "status": "call_failed",
+        "error": "ffprobe fps probe failed (rc=1): G_EWXnKyyzUFGPZg&itag=18&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&met=1785090715%2C&mh=j3&mm=31%2C26&mn=sn-8xgp1vo-ab5r%2Csn-p5qlsn7d&ms=au%2Conr&mv=m&mvi=4&pl=41&rms=au%2Cau&initcwndbps=3975000&bui=AZFlqhNB8bWBw8RIWVq4QQck7cOIDTJ0g9CQMzvfyMTW6lzsHuN1vxRKYDBOUpn1KImX9_Et_z62F4tJ&spc=SQ-umqJNtmKTWuf9VkfoWhrCScwOwG2sf2BLvkHzILO5x6pLKQ&vprv=1&svpuc=1&mime=video%2Fmp4&rqh=1&cnr=14&ratebypass=yes&dur=2278.806&lmt=1752017183977214&mt=1785090300&fvip=1&fexp=51565116%2C51946838%2C51992868&c=ANDROID_VR&txp=5309224&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Crqh%2Ccnr%2Cratebypass%2Cdur%2Clmt&sig=AE0s2JYwRQIhAOYdO3yjhD9RXjZ2g27amDNJfUHk30mizEHPnXEQKjCrAiAWbHhG5imW0l2P-3dkNv2cTUKvRisv8oE1EM2O1CB1Lg%3D%3D&lsparams=met%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRQIhAOH9LVNMF3wAzwA82p_SBfeSwYAe3Iv6C7pnVpfB8zQjAiAZsN5LqpDey6zQgLb-RZLDbn5zYyg67CEoJESLFYL7ZA%3D%3D: Server returned 403 Forbidden (access denied)\n",
+        "parsed": null,
+        "latency_ms": 0.0,
+        "cost_usd": 0.0,
+        "model_id": "claude-opus-4-8"
+      }
+    ],
+    "final_position": null,
+    "final_outcome": null,
+    "verdict": null,
+    "ditch_reason": null,
+    "emitted_events": [],
+    "status": "call_failed"
+  }
+]

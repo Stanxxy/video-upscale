@@ -36,6 +36,7 @@ import logging
 import math
 import time
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import AsyncIterator, Optional
 
 from google import genai
@@ -46,11 +47,14 @@ from analyzer import BJJMultiAgentAnalyzer, BJJTechniqueAnalyzer
 from pipeline import deduplicate_clips
 from service.pipelines import (
     chunk_segment,
+    claude_frames,
     frame_source,
+    gemini_cost,
     gemini_retry,
     highlight_axes,
     highlight_critique,
     highlight_scan,
+    position_timeline,
     simplified_tags,
     time_dedup,
 )
@@ -65,8 +69,13 @@ from service.pipelines.models import (
     HighlightCritiqueConfig,
     HighlightScanConfig,
     PipelineDef,
+    PositionCritiqueConfig,
+    PositionScanConfig,
+    TechniqueAnalyzeConfig,
+    TimelineReconcileConfig,
     WindowConfig,
 )
+from service.pipelines.gemini_model_compat import generation_sampling_kwargs
 from service.routes.qa_vlm import (
     _clean_system_instruction,
     _event_schema,
@@ -101,6 +110,8 @@ class RunContext:
     gemini_api_key: str
     request_timeout_ms: int
     taxonomy_path: Optional[str] = None
+    # Anthropic key for Claude highlight_analyze axis path (empty = not configured).
+    anthropic_api_key: str = ""
 
     # Transient-error retry-with-backoff policy for every QA-layer Gemini call
     # this RunContext drives (detect_crop, analyze, chunk_segment,
@@ -143,6 +154,18 @@ class RunContext:
     # "entirely native-video, ``native_fps`` stays None" discipline as
     # ``chunks`` above — this pipeline never samples frames either.
     highlights: list = field(default_factory=list)
+
+    # Grounded inputs and outputs for ``position-timeline-techniques``.
+    # References are loaded before streaming starts; the model never receives
+    # an unlabelled image or fabricates a player identity.
+    player_references: list = field(default_factory=list)
+    position_initial_state: Optional[dict] = None
+    position_transitions: list = field(default_factory=list)
+    position_intervals: list = field(default_factory=list)
+    technique_events: list = field(default_factory=list)
+    objective_statistics: dict = field(default_factory=dict)
+    pipeline_error: Optional[str] = None
+    highlight_scan_failed: bool = False
 
     current_context: str = "Start of match."
     raw_results: list = field(default_factory=list)  # [{"window":, "frames":, "analysis":}]
@@ -219,7 +242,7 @@ async def detect_crop_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]
         alpha=cfg.ema_alpha, margin=cfg.hysteresis_margin, min_streak=cfg.hysteresis_frames,
     )
     survivors: list = []
-    thinking_off = types.ThinkingConfig(thinking_budget=0)
+    thinking_off = thinking_config_for(cfg.model, "off")
 
     for i, crop in enumerate(ctx.crops):
         img_w, img_h = crop.image.size
@@ -402,7 +425,9 @@ async def _analyze_video_window(ctx: RunContext, cfg: AnalyzeConfig) -> AsyncIte
             "in chronological order with approximate MM:SS timestamps."
         )
         gen_config = types.GenerateContentConfig(
-            temperature=0.2, thinking_config=thinking_cfg, system_instruction=system_instruction,
+            **generation_sampling_kwargs(model, temperature=0.2),
+            thinking_config=thinking_cfg,
+            system_instruction=system_instruction,
         )
     else:
         prompt_text = (
@@ -412,7 +437,8 @@ async def _analyze_video_window(ctx: RunContext, cfg: AnalyzeConfig) -> AsyncIte
             "matching the response schema — no prose."
         )
         gen_config = types.GenerateContentConfig(
-            temperature=0.2, response_mime_type="application/json",
+            **generation_sampling_kwargs(model, temperature=0.2),
+            response_mime_type="application/json",
             response_schema=_event_schema(), thinking_config=thinking_cfg,
             system_instruction=system_instruction,
         )
@@ -486,7 +512,7 @@ async def analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
 async def chunk_segment_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
     cfg = ChunkSegmentConfig.model_validate(config)
     client = ctx.gemini_client()
-    thinking_off = types.ThinkingConfig(thinking_budget=0)
+    thinking_off = thinking_config_for(cfg.model, "off")
 
     video_part = types.Part(
         file_data=types.FileData(file_uri=ctx.youtube_url),
@@ -495,7 +521,7 @@ async def chunk_segment_node(ctx: RunContext, config: dict) -> AsyncIterator[dic
         ),
     )
     gen_config = types.GenerateContentConfig(
-        temperature=0.0,
+        **generation_sampling_kwargs(cfg.model, temperature=0.0),
         response_mime_type="application/json",
         response_schema=chunk_segment.build_chunk_segment_schema(),
         thinking_config=thinking_off,
@@ -717,10 +743,9 @@ async def highlight_scan_node(ctx: RunContext, config: dict) -> AsyncIterator[di
     cfg = HighlightScanConfig.model_validate(config)
     client = ctx.gemini_client()
     # v2 (ThinkingQualityMixin): cfg.thinking/cfg.media_resolution default
-    # None -> thinking_config_for(..., None) == ThinkingConfig(thinking_budget=0)
-    # and simplified_tags.media_resolution_enum(None) == MEDIA_RESOLUTION_LOW,
-    # i.e. BYTE-IDENTICAL to this node's prior hardcoded values — now
-    # overridable per the build plan's per-node thinking+quality decision.
+    # For the unchanged default model, None preserves the prior budget-zero
+    # behavior. Newer level-only models resolve to their lowest supported
+    # level; media_resolution None still resolves to MEDIA_RESOLUTION_LOW.
     thinking_cfg = thinking_config_for(cfg.model, cfg.thinking)
 
     video_part = types.Part(
@@ -730,7 +755,7 @@ async def highlight_scan_node(ctx: RunContext, config: dict) -> AsyncIterator[di
         ),
     )
     gen_config = types.GenerateContentConfig(
-        temperature=0.0,
+        **generation_sampling_kwargs(cfg.model, temperature=0.0),
         response_mime_type="application/json",
         response_schema=highlight_scan.build_highlight_schema(),
         thinking_config=thinking_cfg,
@@ -751,6 +776,7 @@ async def highlight_scan_node(ctx: RunContext, config: dict) -> AsyncIterator[di
             retry_config=ctx.retry_config,
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error
+        ctx.highlight_scan_failed = True
         yield {"type": "error", "stage_id": "highlight_scan", "message": str(e)}
         ctx.highlights = []
         return
@@ -759,8 +785,18 @@ async def highlight_scan_node(ctx: RunContext, config: dict) -> AsyncIterator[di
     raw_text = response.text or ""
     try:
         data = json.loads(raw_text)
-        raw_highlights = data.get("highlights", []) if isinstance(data, dict) else []
+        if not isinstance(data, dict) or not isinstance(data.get("highlights"), list):
+            ctx.highlight_scan_failed = True
+            yield {
+                "type": "error",
+                "stage_id": "highlight_scan",
+                "message": "structured response requires a highlights array",
+            }
+            raw_highlights = []
+        else:
+            raw_highlights = data["highlights"]
     except (ValueError, TypeError) as e:
+        ctx.highlight_scan_failed = True
         yield {"type": "error", "stage_id": "highlight_scan", "message": f"non-JSON response: {e}"}
         raw_highlights = []
 
@@ -790,11 +826,12 @@ async def highlight_scan_node(ctx: RunContext, config: dict) -> AsyncIterator[di
 
 
 # --------------------------------------------------------------------------- #
-# highlight_critique — NEW v2 stage (highlight-scan-critique-analyze ONLY),
-# sitting between highlight_scan and highlight_analyze. Per scanned
-# highlight, sends a BACKWARD-padded native-video window and asks Gemini to
-# confirm the scan's description and locate the highlight's TRUE (possibly
-# earlier) start + a corrected end. Mutates ctx.highlights IN PLACE, adding
+# highlight_critique — shared by highlight-scan-critique-analyze v2 and the
+# Position Timeline technique lane. Per scanned
+# highlight, sends a backward-padded and optionally forward-padded native-video
+# window and asks Gemini to confirm the scan's description, locate the TRUE
+# (possibly earlier) start, and retain the visible outcome in the corrected
+# end. Mutates ctx.highlights IN PLACE, adding
 # corrected_start_s/corrected_end_s/critique_note — ADDITIVE ONLY, never
 # overwrites start_s/end_s (see service/pipelines/highlight_critique.py).
 # --------------------------------------------------------------------------- #
@@ -813,16 +850,23 @@ async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterato
     thinking_cfg = thinking_config_for(cfg.model, cfg.thinking)
     analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
         ctx.gemini_client(), model_id=cfg.model, thinking_config=thinking_cfg,
-        system_instruction=highlight_critique.DEFAULT_CRITIQUE_SYSTEM_PROMPT,
+        system_instruction=(
+            cfg.system_prompt.strip()
+            if cfg.system_prompt and cfg.system_prompt.strip()
+            else highlight_critique.DEFAULT_CRITIQUE_SYSTEM_PROMPT
+        ),
         retry_config=ctx.retry_config,
     )
     critique_schema = highlight_critique.build_critique_schema()
 
     for highlight in ctx.highlights:
-        # BACKWARD-padded window only (Gracie: search for the earlier true
-        # setup cue) — never extends past the highlight's own scanned end.
+        # Backward context finds the setup; optional forward context lets the
+        # corrected clip include the visible outcome. Legacy v2 keeps a zero
+        # forward default, while Position Timeline opts into four seconds.
         window_start = round(max(ctx.start_sec, highlight["start_s"] - cfg.critique_backpad_s), 3)
-        window_end = round(highlight["end_s"], 3)
+        window_end = round(
+            min(ctx.end_sec, highlight["end_s"] + cfg.critique_forwardpad_s), 3
+        )
 
         yield {
             "type": "highlight_critique_start", "highlight_index": highlight["index"],
@@ -833,6 +877,8 @@ async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterato
         # the existing highlight_analyze_node fix) — never send Gemini an
         # inverted or zero-length native-video offset.
         if window_start >= window_end:
+            highlight["_critique_status"] = "failed"
+            highlight["critique_note"] = "computed critique window is invalid"
             yield {
                 "type": "error", "stage_id": "highlight_critique",
                 "message": (
@@ -862,12 +908,16 @@ async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterato
                     # regression guard.
                     window_start_sec=window_start, window_end_sec=window_end,
                     critique_backpad_s=cfg.critique_backpad_s,
+                    critique_forwardpad_s=cfg.critique_forwardpad_s,
                     scan_start_sec=highlight["start_s"], scan_end_sec=highlight["end_s"],
                     description=highlight.get("description"),
+                    override=cfg.initial_prompt,
                 ),
-                fps=1, media_resolution=cfg.media_resolution,
+                fps=cfg.fps, media_resolution=cfg.media_resolution,
             )
         except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error, no fabrication
+            highlight["_critique_status"] = "failed"
+            highlight["critique_note"] = str(e)
             yield {
                 "type": "error", "stage_id": "highlight_critique",
                 "message": f"highlight {highlight['index']}: {e}",
@@ -879,6 +929,8 @@ async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterato
         try:
             result_data = json.loads(result_str)
         except (ValueError, TypeError) as e:
+            highlight["_critique_status"] = "failed"
+            highlight["critique_note"] = f"non-JSON response: {e}"
             yield {
                 "type": "error", "stage_id": "highlight_critique",
                 "message": f"highlight {highlight['index']}: non-JSON response: {e}",
@@ -887,6 +939,8 @@ async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterato
             continue
 
         if isinstance(result_data, dict) and "error" in result_data:
+            highlight["_critique_status"] = "failed"
+            highlight["critique_note"] = str(result_data["error"])
             yield {
                 "type": "error", "stage_id": "highlight_critique",
                 "message": f"highlight {highlight['index']}: PASS-2 Gemini call failed: {result_data['error']}",
@@ -922,20 +976,28 @@ async def highlight_critique_node(ctx: RunContext, config: dict) -> AsyncIterato
             highlight["critique_note"] = (
                 result_data.get("note") or "movement_confirmed=false — original bounds kept, correction not applied"
             )
+            highlight["_critique_status"] = "rejected"
         elif isinstance(raw_start, (int, float)) and isinstance(raw_end, (int, float)):
             # Sanity clamp (engineering decision, not spec-mandated): a
-            # correction must land within [window_start, highlight's own
-            # end_s] and have positive duration, else it is DROPPED (never
+            # correction must land within [window_start, window_end] and have
+            # positive duration, else it is DROPPED (never
             # fabricated/coerced into a plausible-looking value) — the
             # highlight then falls back to its original start_s/end_s in
             # highlight_analyze_node (corrected_* stays absent).
-            corrected_start = max(window_start, min(float(raw_start), highlight["end_s"]))
-            corrected_end = min(highlight["end_s"], float(raw_end))
+            corrected_start = max(window_start, min(float(raw_start), window_end))
+            corrected_end = min(window_end, float(raw_end))
             if corrected_end > corrected_start:
                 highlight["corrected_start_s"] = corrected_start
                 highlight["corrected_end_s"] = corrected_end
                 highlight["critique_note"] = result_data.get("note")
+                highlight["_critique_status"] = "confirmed" if movement_confirmed is True else "failed"
                 applied = True
+            else:
+                highlight["_critique_status"] = "failed"
+                highlight["critique_note"] = result_data.get("note") or "invalid corrected critique bounds"
+        else:
+            highlight["_critique_status"] = "failed"
+            highlight["critique_note"] = result_data.get("note") or "critique did not return valid corrected bounds"
 
         yield {
             "type": "highlight_critique_result", "highlight_index": highlight["index"],
@@ -1027,21 +1089,68 @@ def _clip_events_to_highlight_bounds(
 
 
 async def _call_axis_json(
-    analyzer: "simplified_tags.SimplifiedTagsTimeAnalyzer", youtube_url: str,
+    analyzer: Optional["simplified_tags.SimplifiedTagsTimeAnalyzer"], youtube_url: str,
     window_start: float, window_end: float, *,
-    response_schema, prompt_text: str, fps: int, media_resolution: Optional[str],
+    response_schema, prompt_text: str, fps: float, media_resolution: Optional[str],
+    ctx: Optional[RunContext] = None,
+    model_id: Optional[str] = None,
+    system_instruction: Optional[str] = None,
+    thinking: Optional[str] = None,
+    extra_parts: Optional[list[types.Part]] = None,
 ) -> tuple[Optional[dict], Optional[str]]:
     """Shared call+parse+error-check for the position/technique/validator
     axis calls in ``highlight_analyze_node`` — DRYs up the exact
     transport-exception / non-JSON / swallowed-``{"error": ...}`` pattern
     already used by every other Gemini-calling node in this module (never a
     fourth hand-copy of the same three checks). Returns ``(data, None)`` on
-    success or ``(None, error_message)`` — never raises."""
+    success or ``(None, error_message)`` — never raises.
+
+    When ``model_id`` is a Claude model, routes through
+    ``claude_frames.analyze_axis_json`` (frame sample ≤20 images) instead of
+    Gemini native video. ``media_resolution`` is Gemini-only and ignored on
+    the Claude path.
+    """
+    if model_id and claude_frames.is_claude_model(model_id):
+        if ctx is None:
+            return None, "Claude axis call requires RunContext (missing)"
+        try:
+            data, raw_text = await claude_frames.analyze_axis_json(
+                ctx,
+                model_id=model_id,
+                window_start=window_start,
+                window_end=window_end,
+                prompt_text=prompt_text,
+                system_instruction=system_instruction or "",
+                fps=fps,
+                thinking=thinking,
+            )
+        except Exception as e:  # noqa: BLE001 — surface real yt-dlp/ffmpeg/Anthropic errors
+            return None, str(e)
+        if isinstance(data, dict) and "error" in data:
+            return None, f"PASS-2 Claude call failed: {data['error']}"
+        # Mirror SimplifiedTagsTimeAnalyzer.last_* so highlight_result.axis_calls
+        # still carries raw JSON for the playground validator summary (Claude
+        # has no Gemini analyzer instance — we write onto the telemetry holder).
+        if analyzer is not None:
+            analyzer.last_prompt_text = prompt_text
+            analyzer.last_raw_response_text = raw_text
+            analyzer.last_usage_metadata = None
+        return data, None
+
+    if analyzer is None:
+        return None, "Gemini axis call requires SimplifiedTagsTimeAnalyzer (missing)"
     try:
+        call_kwargs = {
+            "response_schema": response_schema,
+            "prompt_text": prompt_text,
+            "fps": fps,
+            "media_resolution": media_resolution,
+        }
+        if extra_parts is not None:
+            call_kwargs["extra_parts"] = extra_parts
         result_str = await analyzer.analyze_chunk(
             youtube_url, window_start, window_end, None,
-            response_schema=response_schema, prompt_text=prompt_text,
-            fps=fps, media_resolution=media_resolution,
+            **call_kwargs,
         )
     except Exception as e:  # noqa: BLE001 — surface the real Gemini/transport error, no fabrication
         return None, str(e)
@@ -1052,6 +1161,15 @@ async def _call_axis_json(
     if isinstance(data, dict) and "error" in data:
         return None, f"PASS-2 Gemini call failed: {data['error']}"
     return data, None
+
+
+def _effective_highlight_axis_model(cfg: HighlightAnalyzeConfig, axis_model: str) -> str:
+    """Top-level Highlight Analyze ``model`` drives all three axis calls when
+    it is a Claude id (UI Model dropdown). Otherwise keep per-axis models
+    (Gemini playground defaults / independent overrides)."""
+    if claude_frames.is_claude_model(cfg.model):
+        return cfg.model
+    return axis_model
 
 
 async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
@@ -1154,25 +1272,48 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
         ctx.final_clips = []
         return
 
-    # Three independent analyzers, one per axis — each with its OWN
-    # thinking/media_resolution/model (mixin sub-configs). Built ONCE, reused
-    # across every highlight/iteration (same discipline as the single
-    # `analyzer` instance the pre-v2 version of this function built once).
-    position_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
-        ctx.gemini_client(), model_id=cfg.position.model,
-        thinking_config=thinking_config_for(cfg.position.model, cfg.position.thinking),
-        system_instruction=highlight_axes.POSITION_SYSTEM_PROMPT, retry_config=ctx.retry_config,
-    )
-    technique_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
-        ctx.gemini_client(), model_id=cfg.technique.model,
-        thinking_config=thinking_config_for(cfg.technique.model, cfg.technique.thinking),
-        system_instruction=highlight_axes.TECHNIQUE_SYSTEM_PROMPT, retry_config=ctx.retry_config,
-    )
-    validator_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
-        ctx.gemini_client(), model_id=cfg.validator.model,
-        thinking_config=thinking_config_for(cfg.validator.model, cfg.validator.thinking),
-        system_instruction=highlight_axes.VALIDATOR_SYSTEM_PROMPT, retry_config=ctx.retry_config,
-    )
+    # Three independent Gemini analyzers when axes use Gemini; Claude models
+    # skip SimplifiedTagsTimeAnalyzer (native YouTube video) and route through
+    # claude_frames instead. Top-level cfg.model, when Claude, overrides all
+    # three axes so the UI Model dropdown is not a no-op (v2 axes own model).
+    # Claude still gets a lightweight telemetry holder (same last_* attrs the
+    # highlight_result.axis_calls emission reads) so the UI validator summary
+    # is not empty — see "No structured validator/axis output captured".
+    pos_model = _effective_highlight_axis_model(cfg, cfg.position.model)
+    tech_model = _effective_highlight_axis_model(cfg, cfg.technique.model)
+    val_model = _effective_highlight_axis_model(cfg, cfg.validator.model)
+
+    def _claude_axis_telem():
+        return SimpleNamespace(
+            last_prompt_text=None,
+            last_raw_response_text=None,
+            last_usage_metadata=None,
+        )
+
+    if claude_frames.is_claude_model(pos_model):
+        position_analyzer = _claude_axis_telem()
+    else:
+        position_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+            ctx.gemini_client(), model_id=pos_model,
+            thinking_config=thinking_config_for(pos_model, cfg.position.thinking),
+            system_instruction=highlight_axes.POSITION_SYSTEM_PROMPT, retry_config=ctx.retry_config,
+        )
+    if claude_frames.is_claude_model(tech_model):
+        technique_analyzer = _claude_axis_telem()
+    else:
+        technique_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+            ctx.gemini_client(), model_id=tech_model,
+            thinking_config=thinking_config_for(tech_model, cfg.technique.thinking),
+            system_instruction=highlight_axes.TECHNIQUE_SYSTEM_PROMPT, retry_config=ctx.retry_config,
+        )
+    if claude_frames.is_claude_model(val_model):
+        validator_analyzer = _claude_axis_telem()
+    else:
+        validator_analyzer = simplified_tags.SimplifiedTagsTimeAnalyzer(
+            ctx.gemini_client(), model_id=val_model,
+            thinking_config=thinking_config_for(val_model, cfg.validator.thinking),
+            system_instruction=highlight_axes.VALIDATOR_SYSTEM_PROMPT, retry_config=ctx.retry_config,
+        )
     position_schema = highlight_axes.build_position_schema()
     technique_schema = highlight_axes.build_technique_schema()
     validator_schema = highlight_axes.build_validator_schema()
@@ -1291,6 +1432,9 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
             position_analyzer, ctx.youtube_url, window_start, window_end,
             response_schema=position_schema, prompt_text=highlight_axes.build_position_prompt(description),
             fps=cfg.fps, media_resolution=cfg.position.media_resolution,
+            ctx=ctx, model_id=pos_model,
+            system_instruction=highlight_axes.POSITION_SYSTEM_PROMPT,
+            thinking=cfg.position.thinking,
         )
         model_ms_total += (time.perf_counter() - t0) * 1000
         if pos_err is not None:
@@ -1306,6 +1450,9 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
             technique_analyzer, ctx.youtube_url, window_start, window_end,
             response_schema=technique_schema, prompt_text=highlight_axes.build_technique_prompt(description),
             fps=cfg.fps, media_resolution=cfg.technique.media_resolution,
+            ctx=ctx, model_id=tech_model,
+            system_instruction=highlight_axes.TECHNIQUE_SYSTEM_PROMPT,
+            thinking=cfg.technique.thinking,
         )
         model_ms_total += (time.perf_counter() - t0) * 1000
         if tech_err is not None:
@@ -1338,6 +1485,9 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
                     technique_justification=technique_justification,
                 ),
                 fps=cfg.fps, media_resolution=cfg.validator.media_resolution,
+                ctx=ctx, model_id=val_model,
+                system_instruction=highlight_axes.VALIDATOR_SYSTEM_PROMPT,
+                thinking=cfg.validator.thinking,
             )
             model_ms_total += (time.perf_counter() - t0) * 1000
             if val_err is not None:
@@ -1487,6 +1637,546 @@ async def highlight_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator
 
 
 # --------------------------------------------------------------------------- #
+# position-timeline-techniques — grounded continuous state + sparse events.
+# --------------------------------------------------------------------------- #
+def _timeline_player_ids(ctx: RunContext) -> tuple[str, str]:
+    return position_timeline.validate_player_references(ctx.player_references)
+
+
+def _timeline_analyzer(
+    ctx: RunContext,
+    *,
+    model_id: str,
+    thinking: Optional[str],
+    system_instruction: str,
+) -> simplified_tags.SimplifiedTagsTimeAnalyzer:
+    return simplified_tags.SimplifiedTagsTimeAnalyzer(
+        ctx.gemini_client(),
+        model_id=model_id,
+        thinking_config=thinking_config_for(model_id, thinking),
+        system_instruction=system_instruction,
+        retry_config=ctx.retry_config,
+    )
+
+
+def _set_pipeline_error(ctx: RunContext, stage_id: str, message: str) -> dict:
+    ctx.pipeline_error = message
+    return {"type": "error", "stage_id": stage_id, "message": message}
+
+
+async def position_scan_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
+    """One whole-scope call producing an initial state + transition boundaries."""
+    cfg = PositionScanConfig.model_validate(config)
+    try:
+        player_ids = _timeline_player_ids(ctx)
+        reference_parts = position_timeline.build_reference_parts(ctx.player_references)
+    except position_timeline.TimelineValidationError as error:
+        yield _set_pipeline_error(ctx, "position_scan", str(error))
+        return
+
+    analyzer = _timeline_analyzer(
+        ctx,
+        model_id=cfg.model,
+        thinking=cfg.thinking,
+        system_instruction=(
+            cfg.system_prompt.strip()
+            if cfg.system_prompt and cfg.system_prompt.strip()
+            else position_timeline.POSITION_SCAN_SYSTEM_PROMPT
+        ),
+    )
+    data, error = await _call_axis_json(
+        analyzer,
+        ctx.youtube_url,
+        ctx.start_sec,
+        ctx.end_sec,
+        response_schema=position_timeline.build_position_scan_schema(),
+        prompt_text=position_timeline.build_position_scan_prompt(
+            ctx.start_sec, ctx.end_sec, cfg.initial_prompt
+        ),
+        fps=cfg.rough_fps,
+        media_resolution=cfg.media_resolution,
+        ctx=ctx,
+        model_id=cfg.model,
+        system_instruction=position_timeline.POSITION_SCAN_SYSTEM_PROMPT,
+        thinking=cfg.thinking,
+        extra_parts=reference_parts,
+    )
+    if error is not None:
+        yield _set_pipeline_error(ctx, "position_scan", f"position scan call failed: {error}")
+        return
+    if not isinstance(data, dict) or not isinstance(data.get("transitions"), list):
+        yield _set_pipeline_error(
+            ctx,
+            "position_scan",
+            "position scan response requires initial_state and a transitions array",
+        )
+        return
+
+    transitions = []
+    for index, item in enumerate(data["transitions"]):
+        if not isinstance(item, dict):
+            yield _set_pipeline_error(
+                ctx, "position_scan", f"position scan transition[{index}] must be an object"
+            )
+            return
+        transitions.append(
+            {
+                "index": index,
+                "at_s": item.get("at_s"),
+                "state_after": item.get("state_after"),
+                "scan_evidence": item.get("evidence"),
+                "confirmed": None,
+                "corrected_at_s": None,
+                "critique_note": None,
+            }
+        )
+
+    # Validate the rough map before spending per-transition critique calls.
+    rough_transitions = [
+        {
+            "at_s": item["at_s"],
+            "corrected_at_s": item["at_s"],
+            "confirmed": True,
+            "state_after": item["state_after"],
+        }
+        for item in transitions
+    ]
+    try:
+        position_timeline.build_position_intervals(
+            ctx.start_sec,
+            ctx.end_sec,
+            data.get("initial_state") or {},
+            rough_transitions,
+            player_ids=player_ids,
+        )
+    except position_timeline.TimelineValidationError as validation_error:
+        yield _set_pipeline_error(
+            ctx, "position_scan", f"invalid position scan response: {validation_error}"
+        )
+        return
+
+    ctx.position_initial_state = dict(data["initial_state"])
+    ctx.position_transitions = transitions
+    yield {
+        "type": "position_map",
+        "initial_state": ctx.position_initial_state,
+        "transitions": copy.deepcopy(ctx.position_transitions),
+        "player_ids": list(player_ids),
+        "timing": {},
+        "prompt_text": getattr(analyzer, "last_prompt_text", None),
+        "raw_response_text": getattr(analyzer, "last_raw_response_text", None),
+        "usage_metadata": getattr(analyzer, "last_usage_metadata", None),
+    }
+
+
+async def position_critique_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
+    """Confirm/correct each proposed position boundary without inventing ranges."""
+    cfg = PositionCritiqueConfig.model_validate(config)
+    if ctx.position_initial_state is None:
+        yield _set_pipeline_error(
+            ctx, "position_critique", "position_critique requires a successful position_scan"
+        )
+        return
+    try:
+        player_ids = _timeline_player_ids(ctx)
+        reference_parts = position_timeline.build_reference_parts(ctx.player_references)
+    except position_timeline.TimelineValidationError as error:
+        yield _set_pipeline_error(ctx, "position_critique", str(error))
+        return
+
+    system_instruction = (
+        cfg.system_prompt.strip()
+        if cfg.system_prompt and cfg.system_prompt.strip()
+        else position_timeline.POSITION_CRITIQUE_SYSTEM_PROMPT
+    )
+    analyzer = _timeline_analyzer(
+        ctx,
+        model_id=cfg.model,
+        thinking=cfg.thinking,
+        system_instruction=system_instruction,
+    )
+    state_before = dict(ctx.position_initial_state)
+    for transition in ctx.position_transitions:
+        proposed_at = round(float(transition["at_s"]), 3)
+        window_start = round(max(ctx.start_sec, proposed_at - cfg.backpad_s), 3)
+        window_end = round(min(ctx.end_sec, proposed_at + cfg.forwardpad_s), 3)
+        if window_start >= window_end:
+            yield _set_pipeline_error(
+                ctx,
+                "position_critique",
+                f"transition {transition['index']} has an invalid critique window",
+            )
+            return
+        data, error = await _call_axis_json(
+            analyzer,
+            ctx.youtube_url,
+            window_start,
+            window_end,
+            response_schema=position_timeline.build_position_critique_schema(),
+            prompt_text=position_timeline.build_position_critique_prompt(
+                window_start_s=window_start,
+                window_end_s=window_end,
+                proposed_at_s=proposed_at,
+                state_before=state_before,
+                state_after=transition["state_after"],
+                override=cfg.initial_prompt,
+            ),
+            fps=cfg.fps,
+            media_resolution=cfg.media_resolution,
+            ctx=ctx,
+            model_id=cfg.model,
+            system_instruction=system_instruction,
+            thinking=cfg.thinking,
+            extra_parts=reference_parts,
+        )
+        if error is not None:
+            yield _set_pipeline_error(
+                ctx,
+                "position_critique",
+                f"transition {transition['index']} critique call failed: {error}",
+            )
+            return
+        if not isinstance(data, dict) or not isinstance(data.get("confirmed"), bool):
+            yield _set_pipeline_error(
+                ctx,
+                "position_critique",
+                f"transition {transition['index']} critique returned an invalid object",
+            )
+            return
+
+        confirmed = data["confirmed"]
+        transition["confirmed"] = confirmed
+        transition["critique_note"] = str(data.get("note") or "").strip()
+        if confirmed:
+            corrected_at = data.get("corrected_at_s")
+            if not isinstance(corrected_at, (int, float)) or isinstance(corrected_at, bool):
+                yield _set_pipeline_error(
+                    ctx,
+                    "position_critique",
+                    f"transition {transition['index']} confirmed without numeric corrected_at_s",
+                )
+                return
+            corrected_at = round(float(corrected_at), 3)
+            if not window_start <= corrected_at <= window_end:
+                yield _set_pipeline_error(
+                    ctx,
+                    "position_critique",
+                    f"transition {transition['index']} corrected_at_s lies outside its critique window",
+                )
+                return
+            transition["corrected_at_s"] = corrected_at
+            transition["state_after"] = data.get("state_after")
+            state_before = dict(transition["state_after"] or {})
+
+        yield {
+            "type": "position_critique_result",
+            "transition_index": transition["index"],
+            "original_at_s": transition["at_s"],
+            "confirmed": confirmed,
+            "corrected_at_s": transition["corrected_at_s"],
+            "state_after": transition["state_after"],
+            "critique_note": transition["critique_note"],
+            "prompt_text": getattr(analyzer, "last_prompt_text", None),
+            "raw_response_text": getattr(analyzer, "last_raw_response_text", None),
+            "usage_metadata": getattr(analyzer, "last_usage_metadata", None),
+        }
+
+    try:
+        position_timeline.build_position_intervals(
+            ctx.start_sec,
+            ctx.end_sec,
+            ctx.position_initial_state,
+            ctx.position_transitions,
+            player_ids=player_ids,
+        )
+    except position_timeline.TimelineValidationError as validation_error:
+        yield _set_pipeline_error(
+            ctx, "position_critique", f"invalid corrected position map: {validation_error}"
+        )
+
+
+def _validated_technique_payload(
+    data: dict,
+    *,
+    player_ids: tuple[str, str],
+    context: str,
+) -> dict:
+    allowed_actors = {*player_ids, *position_timeline.TECHNIQUE_ACTOR_SENTINELS}
+    actor = data.get("actor_player_id")
+    if actor not in allowed_actors:
+        raise position_timeline.TimelineValidationError(
+            f"{context}: actor_player_id must be grounded to {sorted(allowed_actors)}"
+        )
+    action = data.get("action_class")
+    if action not in simplified_tags.ACTION_CLASS_VALUES:
+        raise position_timeline.TimelineValidationError(
+            f"{context}: unsupported action_class {action!r}"
+        )
+    outcome = data.get("outcome")
+    if outcome not in simplified_tags.OUTCOME_VALUES:
+        raise position_timeline.TimelineValidationError(
+            f"{context}: unsupported outcome {outcome!r}"
+        )
+    confidence = data.get("confidence")
+    if not isinstance(confidence, (int, float)) or isinstance(confidence, bool):
+        raise position_timeline.TimelineValidationError(f"{context}: confidence must be numeric")
+    confidence = float(confidence)
+    if not 0.0 <= confidence <= 1.0:
+        raise position_timeline.TimelineValidationError(
+            f"{context}: confidence must be between 0 and 1"
+        )
+    if not isinstance(data.get("identity_uncertain"), bool):
+        raise position_timeline.TimelineValidationError(
+            f"{context}: identity_uncertain must be boolean"
+        )
+    return {
+        "actor_player_id": actor,
+        "identity_uncertain": data["identity_uncertain"],
+        "action_class": action,
+        "outcome": outcome,
+        "specific_technique_guess": str(data.get("specific_technique_guess") or "").strip(),
+        "confidence": confidence,
+        "evidence": str(data.get("evidence") or "").strip(),
+    }
+
+
+async def technique_analyze_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
+    """Ground each critiqued highlight as a sparse technique-only event."""
+    cfg = TechniqueAnalyzeConfig.model_validate(config)
+    try:
+        player_ids = _timeline_player_ids(ctx)
+        reference_parts = position_timeline.build_reference_parts(ctx.player_references)
+    except position_timeline.TimelineValidationError as error:
+        yield _set_pipeline_error(ctx, "technique_analyze", str(error))
+        return
+
+    analyzer = _timeline_analyzer(
+        ctx,
+        model_id=cfg.model,
+        thinking=cfg.thinking,
+        system_instruction=position_timeline.TECHNIQUE_SYSTEM_PROMPT,
+    )
+    validator = _timeline_analyzer(
+        ctx,
+        model_id=cfg.model,
+        thinking=cfg.validator_thinking,
+        system_instruction=position_timeline.TECHNIQUE_VALIDATOR_SYSTEM_PROMPT,
+    )
+    technique_schema = position_timeline.build_technique_schema(player_ids)
+    validator_schema = position_timeline.build_technique_validator_schema(player_ids)
+    ctx.technique_events = []
+
+    for highlight in ctx.highlights:
+        critique_status = highlight.get("_critique_status")
+        if critique_status == "rejected":
+            yield {
+                "type": "technique_result",
+                "highlight_index": highlight["index"],
+                "status": "ditched",
+                "ditch_reason": highlight.get("critique_note") or "technique critique rejected the scanned movement",
+                "event": None,
+            }
+            continue
+        if critique_status == "failed":
+            yield _set_pipeline_error(
+                ctx,
+                "technique_analyze",
+                f"highlight {highlight['index']} has no valid critique result: "
+                f"{highlight.get('critique_note') or 'unknown critique failure'}",
+            )
+            return
+        original_start = float(highlight["start_s"])
+        original_end = float(highlight["end_s"])
+        authoritative_start = float(highlight.get("corrected_start_s", original_start))
+        authoritative_end = float(highlight.get("corrected_end_s", original_end))
+        if authoritative_end <= authoritative_start:
+            yield _set_pipeline_error(
+                ctx,
+                "technique_analyze",
+                f"highlight {highlight['index']} has non-positive authoritative bounds",
+            )
+            return
+        window_start = round(max(ctx.start_sec, authoritative_start - cfg.preroll_s), 3)
+        window_end = round(min(ctx.end_sec, authoritative_end + cfg.postroll_s), 3)
+        yield {
+            "type": "highlight_start",
+            "highlight_index": highlight["index"],
+            "scope": [window_start, window_end],
+            "highlight_bounds": [original_start, original_end],
+            "authoritative_bounds": [authoritative_start, authoritative_end],
+        }
+        prompt = position_timeline.build_technique_prompt(
+            highlight.get("description"),
+            start_s=authoritative_start,
+            end_s=authoritative_end,
+            player_ids=player_ids,
+        )
+        data, error = await _call_axis_json(
+            analyzer,
+            ctx.youtube_url,
+            window_start,
+            window_end,
+            response_schema=technique_schema,
+            prompt_text=prompt,
+            fps=cfg.fps,
+            media_resolution=cfg.media_resolution,
+            ctx=ctx,
+            model_id=cfg.model,
+            system_instruction=position_timeline.TECHNIQUE_SYSTEM_PROMPT,
+            thinking=cfg.thinking,
+            extra_parts=reference_parts,
+        )
+        if error is not None:
+            yield _set_pipeline_error(
+                ctx,
+                "technique_analyze",
+                f"highlight {highlight['index']} technique call failed: {error}",
+            )
+            return
+        try:
+            proposed = _validated_technique_payload(
+                data or {}, player_ids=player_ids, context=f"highlight {highlight['index']} analysis"
+            )
+        except position_timeline.TimelineValidationError as validation_error:
+            yield _set_pipeline_error(ctx, "technique_analyze", str(validation_error))
+            return
+
+        validated, error = await _call_axis_json(
+            validator,
+            ctx.youtube_url,
+            window_start,
+            window_end,
+            response_schema=validator_schema,
+            prompt_text=position_timeline.build_technique_validator_prompt(
+                highlight.get("description"), proposed
+            ),
+            fps=cfg.fps,
+            media_resolution=cfg.validator_media_resolution,
+            ctx=ctx,
+            model_id=cfg.model,
+            system_instruction=position_timeline.TECHNIQUE_VALIDATOR_SYSTEM_PROMPT,
+            thinking=cfg.validator_thinking,
+            extra_parts=reference_parts,
+        )
+        if error is not None:
+            yield _set_pipeline_error(
+                ctx,
+                "technique_analyze",
+                f"highlight {highlight['index']} validator call failed: {error}",
+            )
+            return
+        try:
+            verdict, intentional_visible = (
+                position_timeline.validate_technique_validator_decision(
+                    validated if isinstance(validated, dict) else {},
+                    context=f"highlight {highlight['index']}",
+                )
+            )
+        except position_timeline.TimelineValidationError as validation_error:
+            yield _set_pipeline_error(ctx, "technique_analyze", str(validation_error))
+            return
+        axis_calls = {
+            "technique": {
+                "prompt_text": getattr(analyzer, "last_prompt_text", None),
+                "raw_response_text": getattr(analyzer, "last_raw_response_text", None),
+                "usage_metadata": getattr(analyzer, "last_usage_metadata", None),
+            },
+            "validator": {
+                "prompt_text": getattr(validator, "last_prompt_text", None),
+                "raw_response_text": getattr(validator, "last_raw_response_text", None),
+                "usage_metadata": getattr(validator, "last_usage_metadata", None),
+            },
+        }
+        if verdict == "ditch":
+            yield {
+                "type": "technique_result",
+                "highlight_index": highlight["index"],
+                "status": "ditched",
+                "ditch_reason": str(validated.get("reason") or "validator found no technique event"),
+                "event": None,
+                "axis_calls": axis_calls,
+            }
+            continue
+        try:
+            final_payload = _validated_technique_payload(
+                validated,
+                player_ids=player_ids,
+                context=f"highlight {highlight['index']} validator",
+            )
+        except position_timeline.TimelineValidationError as validation_error:
+            yield _set_pipeline_error(ctx, "technique_analyze", str(validation_error))
+            return
+
+        event = {
+            "start_s": round(authoritative_start, 3),
+            "end_s": round(authoritative_end, 3),
+            "position": None,
+            "position_note": "",
+            **final_payload,
+            "original_bounds": [round(original_start, 3), round(original_end, 3)],
+            "corrected_bounds": (
+                [round(authoritative_start, 3), round(authoritative_end, 3)]
+                if "corrected_start_s" in highlight or "corrected_end_s" in highlight
+                else None
+            ),
+            "scan_description": highlight.get("description"),
+            "scan_reasoning": highlight.get("reasoning"),
+            "critique_note": highlight.get("critique_note"),
+            "validator_verdict": verdict,
+            "validator_reason": str(validated.get("reason") or "").strip(),
+        }
+        ctx.technique_events.append(event)
+        yield {
+            "type": "technique_result",
+            "highlight_index": highlight["index"],
+            "status": "analyzed",
+            "ditch_reason": None,
+            "event": copy.deepcopy(event),
+            "axis_calls": axis_calls,
+        }
+
+
+async def timeline_reconcile_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
+    """Build exact intervals, attach sparse events, and aggregate objective time."""
+    TimelineReconcileConfig.model_validate(config)
+    if ctx.position_initial_state is None:
+        yield _set_pipeline_error(
+            ctx, "timeline_reconcile", "timeline reconciliation requires position scan output"
+        )
+        return
+    try:
+        player_ids = _timeline_player_ids(ctx)
+        ctx.position_intervals = position_timeline.build_position_intervals(
+            ctx.start_sec,
+            ctx.end_sec,
+            ctx.position_initial_state,
+            ctx.position_transitions,
+            player_ids=player_ids,
+        )
+        ctx.technique_events = position_timeline.attach_techniques_to_intervals(
+            ctx.technique_events, ctx.position_intervals
+        )
+        ctx.objective_statistics = position_timeline.build_objective_statistics(
+            ctx.position_intervals,
+            ctx.technique_events,
+            player_ids=player_ids,
+        )
+    except position_timeline.TimelineValidationError as validation_error:
+        yield _set_pipeline_error(ctx, "timeline_reconcile", str(validation_error))
+        return
+
+    ctx.final_format = "position-technique-timeline-v1"
+    ctx.final_clips = copy.deepcopy(ctx.technique_events)
+    yield {
+        "type": "timeline_result",
+        "player_ids": list(player_ids),
+        "position_intervals": copy.deepcopy(ctx.position_intervals),
+        "technique_events": copy.deepcopy(ctx.technique_events),
+        "statistics": copy.deepcopy(ctx.objective_statistics),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # context_chain — no-op marker node (its enabled flag is read by `analyze`)
 # --------------------------------------------------------------------------- #
 async def context_chain_node(ctx: RunContext, config: dict) -> AsyncIterator[dict]:
@@ -1586,6 +2276,10 @@ NODE_EXECUTORS = {
     "highlight_scan": highlight_scan_node,
     "highlight_analyze": highlight_analyze_node,
     "highlight_critique": highlight_critique_node,
+    "position_scan": position_scan_node,
+    "position_critique": position_critique_node,
+    "technique_analyze": technique_analyze_node,
+    "timeline_reconcile": timeline_reconcile_node,
 }
 
 
@@ -1609,6 +2303,9 @@ def _highlight_per_highlight_call_factor(stage_by_type: dict) -> int:
     if "highlight_analyze" in stage_by_type:
         ha_cfg = HighlightAnalyzeConfig.model_validate(stage_by_type["highlight_analyze"].config)
         factor += 2 + ha_cfg.max_validator_iterations
+    if "technique_analyze" in stage_by_type:
+        # One grounded technique call + one single-pass technique validator.
+        factor += 2
     return max(1, factor)
 
 
@@ -1625,6 +2322,20 @@ def estimate_run_plan(pipeline: PipelineDef, duration_sec: float) -> dict:
     count below the estimate below, never exceed it.
     """
     stage_by_type = {s.type: s for s in pipeline.stages}
+
+    if "position_scan" in stage_by_type and "technique_analyze" in stage_by_type:
+        ps_cfg = PositionScanConfig.model_validate(stage_by_type["position_scan"].config)
+        hs_cfg = HighlightScanConfig.model_validate(stage_by_type["highlight_scan"].config)
+        max_transitions = max(1, math.ceil(duration_sec / ps_cfg.min_transition_gap_s))
+        max_highlights = max(1, math.ceil(duration_sec / hs_cfg.min_highlight_s))
+        per_highlight_factor = _highlight_per_highlight_call_factor(stage_by_type)
+        return {
+            "planned_frames": 0,
+            "planned_windows": max_transitions + max_highlights,
+            "planned_gemini_calls": (
+                1 + max_transitions + 1 + max_highlights * per_highlight_factor
+            ),
+        }
 
     if "chunk_segment" in stage_by_type:
         # Brooks budget-guard seam: a REAL upper bound for this pipeline
@@ -1714,6 +2425,14 @@ async def run_pipeline(
     total_t0 = time.perf_counter()
     ctx.stage_enabled = {s.type: s.enabled for s in pipeline.stages}
     stage_by_type = {s.type: s for s in pipeline.stages}
+    # Position Timeline exposes a backend-authoritative per-node ledger. The
+    # runner is the only layer that can reliably attribute repeated and nested
+    # call telemetry to the DAG stage that owns it.
+    cost_accumulators = (
+        {stage.id: gemini_cost.new_node_accumulator(stage) for stage in pipeline.stages}
+        if pipeline.id == "position-timeline-techniques"
+        else None
+    )
 
     yield {
         "type": "run_start", "pipeline_id": pipeline.id,
@@ -1724,22 +2443,118 @@ async def run_pipeline(
 
     per_stage_timing: dict[str, float] = {}
     for stage in pipeline.stages:
+        if (
+            pipeline.id == "position-timeline-techniques"
+            and stage.type in {"highlight_critique", "technique_analyze"}
+            and not ctx.highlights
+            and not ctx.highlight_scan_failed
+        ):
+            per_stage_timing[stage.id] = 0.0
+            yield {
+                "type": "stage_start",
+                "stage_id": stage.id,
+                "stage_type": stage.type,
+                "skipped": True,
+                "reason": "technique scan found zero highlights",
+            }
+            yield {
+                "type": "stage_complete",
+                "stage_id": stage.id,
+                "skipped": True,
+                "timing": {"stage_ms": 0.0},
+                **(
+                    {
+                        "cost": gemini_cost.node_cost_snapshot(
+                            cost_accumulators[stage.id]
+                        )
+                    }
+                    if cost_accumulators is not None
+                    else {}
+                ),
+            }
+            continue
         if not stage.enabled:
             per_stage_timing[stage.id] = 0.0
             if stage.type == "dedup":
                 ctx.dedup_skip_reason = "stage disabled"
             yield {"type": "stage_start", "stage_id": stage.id, "stage_type": stage.type, "skipped": True}
-            yield {"type": "stage_complete", "stage_id": stage.id, "skipped": True, "timing": {"stage_ms": 0.0}}
+            yield {
+                "type": "stage_complete",
+                "stage_id": stage.id,
+                "skipped": True,
+                "timing": {"stage_ms": 0.0},
+                **(
+                    {
+                        "cost": gemini_cost.node_cost_snapshot(
+                            cost_accumulators[stage.id]
+                        )
+                    }
+                    if cost_accumulators is not None
+                    else {}
+                ),
+            }
             continue
 
         yield {"type": "stage_start", "stage_id": stage.id, "stage_type": stage.type, "skipped": False}
         stage_t0 = time.perf_counter()
         executor = NODE_EXECUTORS[stage.type]
         async for event in executor(ctx, stage.config):
+            if cost_accumulators is not None:
+                gemini_cost.record_event_usage(cost_accumulators[stage.id], event)
             yield event
         stage_ms = (time.perf_counter() - stage_t0) * 1000
         per_stage_timing[stage.id] = round(stage_ms, 1)
-        yield {"type": "stage_complete", "stage_id": stage.id, "skipped": False, "timing": {"stage_ms": round(stage_ms, 1)}}
+        yield {
+            "type": "stage_complete",
+            "stage_id": stage.id,
+            "skipped": False,
+            "timing": {"stage_ms": round(stage_ms, 1)},
+            **(
+                {
+                    "cost": gemini_cost.node_cost_snapshot(
+                        cost_accumulators[stage.id]
+                    )
+                }
+                if cost_accumulators is not None
+                else {}
+            ),
+        }
+
+        if ctx.pipeline_error is not None:
+            return
+
+        if pipeline.id == "position-timeline-techniques" and stage.type == "highlight_scan" and ctx.highlight_scan_failed:
+            return
+
+        if pipeline.id == "position-timeline-techniques" and stage.type == "highlight_critique":
+            failed = [h for h in ctx.highlights if h.get("_critique_status") == "failed"]
+            if failed:
+                yield {
+                    "type": "error",
+                    "stage_id": "highlight_critique",
+                    "message": (
+                        f"Technique critique failed for {len(failed)} highlight(s); aborting before "
+                        "technique analysis so uncritiqued scan bounds are never substituted."
+                    ),
+                }
+                return
+
+        if stage.type == "position_scan" and budget_cap is not None:
+            # One position scan has already run; each proposed boundary costs
+            # one critique, and one later technique scan call is guaranteed.
+            position_lane_calls = 1 + len(ctx.position_transitions) + 1
+            if position_lane_calls > budget_cap:
+                yield {
+                    "type": "error",
+                    "stage_id": "position_critique",
+                    "message": (
+                        f"Position scan found {len(ctx.position_transitions)} transition(s): "
+                        f"1 scan + {len(ctx.position_transitions)} critiques + 1 technique scan "
+                        f"= {position_lane_calls} calls, exceeding budget cap {budget_cap}. "
+                        "Aborting before position critiques. Narrow the scope or raise the cap."
+                    ),
+                }
+                return
 
         if stage.type == "chunk_segment" and budget_cap is not None:
             worthy_count = sum(1 for c in ctx.chunks if c.get("worth_analysis"))
@@ -1776,13 +2591,23 @@ async def run_pipeline(
             # calls, not 1 — the plan explicitly forbids that.
             highlight_count = len(ctx.highlights)
             per_highlight_factor = _highlight_per_highlight_call_factor(stage_by_type)
-            real_call_count = highlight_count * per_highlight_factor
+            if pipeline.id == "position-timeline-techniques":
+                real_call_count = (
+                    1
+                    + len(ctx.position_transitions)
+                    + 1
+                    + highlight_count * per_highlight_factor
+                )
+            else:
+                real_call_count = highlight_count * per_highlight_factor
             if real_call_count > budget_cap:
                 yield {
-                    "type": "error", "stage_id": "highlight_analyze",
+                    "type": "error", "stage_id": (
+                        "technique_analyze" if pipeline.id == "position-timeline-techniques" else "highlight_analyze"
+                    ),
                     "message": (
-                        f"Actual highlight count ({highlight_count}) x per-highlight call factor "
-                        f"({per_highlight_factor}) = {real_call_count} exceeds the budget cap "
+                        f"Actual run call count for {highlight_count} highlight(s) at per-highlight "
+                        f"factor {per_highlight_factor} is {real_call_count}, exceeding the budget cap "
                         f"({budget_cap}) — aborting BEFORE the deep per-highlight analysis loop "
                         "(zero Gemini calls spent on highlight_critique/highlight_analyze). Raise "
                         "min_highlight_s (fewer, larger highlights), lower max_validator_iterations, "
@@ -1797,7 +2622,7 @@ async def run_pipeline(
                 return
 
     total_ms = (time.perf_counter() - total_t0) * 1000
-    yield {
+    run_complete_event = {
         "type": "run_complete",
         "clips": ctx.final_clips,
         "format": ctx.final_format,
@@ -1808,3 +2633,18 @@ async def run_pipeline(
         "per_stage_timing": per_stage_timing,
         "timing": {"total_ms": round(total_ms, 1)},
     }
+    if ctx.final_format == "position-technique-timeline-v1":
+        node_costs = [
+            gemini_cost.node_cost_snapshot(cost_accumulators[stage.id])
+            for stage in pipeline.stages
+        ]
+        run_complete_event.update(
+            {
+                "position_intervals": copy.deepcopy(ctx.position_intervals),
+                "technique_events": copy.deepcopy(ctx.technique_events),
+                "statistics": copy.deepcopy(ctx.objective_statistics),
+                "node_costs": node_costs,
+                "cost_summary": gemini_cost.summarize_node_costs(node_costs),
+            }
+        )
+    yield run_complete_event

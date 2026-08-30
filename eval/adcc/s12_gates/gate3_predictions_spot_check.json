@@ -1,0 +1,647 @@
+[
+  {
+    "window_id": "650d20c745120c8433e9cff3__w32",
+    "match_id": "650d20c745120c8433e9cff3",
+    "gold_event": {
+      "t_s": 761,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_t": {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "match_id": "650d20c745120c8433e9cff3",
+      "gate5_straddler": true,
+      "gold_event": {
+        "t_s": 761,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BKZ6Dt7SpYE",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 756.0,
+      "window_end_s": 765.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"back_control\",\n  \"justification\": \"The top player has established back control with their legs hooked around the bottom player's waist.\"\n}",
+          "parsed": {
+            "position": "back_control",
+            "justification": "The top player has established back control with their legs hooked around the bottom player's waist."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 39,
+            "total_token_count": 6685
+          },
+          "latency_ms": 1615.2,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"escape\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player uses a technical stand-up and hip movement to break the top player's control and return to a neutral position.\"\n}",
+          "parsed": {
+            "action_class": "escape",
+            "outcome": "successful",
+            "justification": "The bottom player uses a technical stand-up and hip movement to break the top player's control and return to a neutral position."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 55,
+            "total_token_count": 6957
+          },
+          "latency_ms": 840.1,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"adversarial_case\": \"The position label 'back_control' is accurate as the top player has hooks in and is controlling the back. However, the action_class 'escape' is incorrect because the bottom player is not performing an escape; they are actually the one in the dominant position (back control) and are actively attacking with a submission (a rear-naked choke attempt). The bottom player is not 'escaping' but rather 'attacking' or 'transitioning' to finish the submission. The original label 'escape' implies the bottom player is in danger and is getting out, but the visual evidence shows the bottom player is the one applying the pressure and control.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"back_control\",\n  \"final_action_class\": \"submission_choke\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The bottom player is in the dominant position (back control) and is applying a rear-naked choke, not escaping. The action is a submission attempt.\",\n  \"evidence\": \"At 12:37.300, the bottom player has the top player's back and is locking in a rear-naked choke grip, which is a clear submission attempt, not an escape.\"\n}",
+          "parsed": {
+            "adversarial_case": "The position label 'back_control' is accurate as the top player has hooks in and is controlling the back. However, the action_class 'escape' is incorrect because the bottom player is not performing an escape; they are actually the one in the dominant position (back control) and are actively attacking with a submission (a rear-naked choke attempt). The bottom player is not 'escaping' but rather 'attacking' or 'transitioning' to finish the submission. The original label 'escape' implies the bottom player is in danger and is getting out, but the visual evidence shows the bottom player is the one applying the pressure and control.",
+            "verdict": "disagree",
+            "final_position": "back_control",
+            "final_action_class": "submission_choke",
+            "final_outcome": "unsuccessful",
+            "wrong_label": "action_class",
+            "reason": "The bottom player is in the dominant position (back control) and is applying a rear-naked choke, not escaping. The action is a submission attempt.",
+            "evidence": "At 12:37.300, the bottom player has the top player's back and is locking in a rear-naked choke grip, which is a clear submission attempt, not an escape."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 24996,
+            "candidates_token_count": 289,
+            "total_token_count": 25285
+          },
+          "latency_ms": 5479.3,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "final_position": "back_control",
+      "final_outcome": "successful",
+      "verdict": "disagree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 756.0,
+          "end_s": 765.0,
+          "action_class": "submission_choke",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    },
+    "files_api_arm_t": {
+      "window_id": "650d20c745120c8433e9cff3__w32",
+      "match_id": "650d20c745120c8433e9cff3",
+      "gate5_straddler": true,
+      "gold_event": {
+        "t_s": 761,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=BKZ6Dt7SpYE",
+      "ingestion_path": "files_api",
+      "window_start_s": 756.0,
+      "window_end_s": 765.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"open_guard\",\n  \"justification\": \"The bottom player has their legs wrapped around the top player's torso and hips without their ankles crossed, which is characteristic of an open guard.\"\n}",
+          "parsed": {
+            "position": "open_guard",
+            "justification": "The bottom player has their legs wrapped around the top player's torso and hips without their ankles crossed, which is characteristic of an open guard."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 49,
+            "total_token_count": 6695
+          },
+          "latency_ms": 1390.5,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"sweep\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The bottom player uses a butterfly hook to elevate the top player and rotate them over, successfully reversing the position to gain top control.\"\n}",
+          "parsed": {
+            "action_class": "sweep",
+            "outcome": "successful",
+            "justification": "The bottom player uses a butterfly hook to elevate the top player and rotate them over, successfully reversing the position to gain top control."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 54,
+            "total_token_count": 6956
+          },
+          "latency_ms": 1406.1,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n    \"adversarial_case\": \"The position label 'open_guard' is technically incorrect because the bottom player is in a 'half_guard' position, as evidenced by their leg being trapped between the top player's legs (0:02.000). The action_class 'sweep' is also questionable; while the bottom player does initiate a reversal, the primary action is a 'transition' or 'escape' from a dominant top position (side control/north-south) back into a neutral or guard position, rather than a classic sweep from a set guard.\",\n    \"verdict\": \"disagree\",\n    \"final_position\": \"half_guard\",\n    \"final_action_class\": \"transition\",\n    \"final_outcome\": \"successful\",\n    \"wrong_label\": \"position\",\n    \"reason\": \"The bottom player is clearly in a half-guard position with their leg entangled with the opponent's leg, not an open guard. The action is better classified as a transition/escape from a compromised position rather than a sweep.\",\n    \"evidence\": \"At 0:02.000, the bottom player's right leg is clearly hooked inside the top player's legs, defining the position as half-guard.\"\n}",
+          "parsed": {
+            "adversarial_case": "The position label 'open_guard' is technically incorrect because the bottom player is in a 'half_guard' position, as evidenced by their leg being trapped between the top player's legs (0:02.000). The action_class 'sweep' is also questionable; while the bottom player does initiate a reversal, the primary action is a 'transition' or 'escape' from a dominant top position (side control/north-south) back into a neutral or guard position, rather than a classic sweep from a set guard.",
+            "verdict": "disagree",
+            "final_position": "half_guard",
+            "final_action_class": "transition",
+            "final_outcome": "successful",
+            "wrong_label": "position",
+            "reason": "The bottom player is clearly in a half-guard position with their leg entangled with the opponent's leg, not an open guard. The action is better classified as a transition/escape from a compromised position rather than a sweep.",
+            "evidence": "At 0:02.000, the bottom player's right leg is clearly hooked inside the top player's legs, defining the position as half-guard."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25005,
+            "candidates_token_count": 273,
+            "total_token_count": 25278
+          },
+          "latency_ms": 6671.0,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "final_position": "half_guard",
+      "final_outcome": "successful",
+      "verdict": "disagree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 756.0,
+          "end_s": 765.0,
+          "action_class": "sweep",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d00e__w6",
+    "match_id": "650d20c745120c8433e9d00e",
+    "gold_event": {
+      "t_s": 142,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_t": {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "match_id": "650d20c745120c8433e9d00e",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 142,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 137.0,
+      "window_end_s": 146.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"back_control\",\n  \"justification\": \"The top player has both hooks inserted inside the bottom player's thighs while maintaining control of their back.\"\n}",
+          "parsed": {
+            "position": "back_control",
+            "justification": "The top player has both hooks inserted inside the bottom player's thighs while maintaining control of their back."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 41,
+            "total_token_count": 6687
+          },
+          "latency_ms": 887.5,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The top player isolates the bottom player's arm and extends their hips to apply pressure, but the bottom player successfully defends by clasping their hands together to prevent the joint lock.\"\n}",
+          "parsed": {
+            "action_class": "submission_arm_lock",
+            "outcome": "unsuccessful",
+            "justification": "The top player isolates the bottom player's arm and extends their hips to apply pressure, but the bottom player successfully defends by clasping their hands together to prevent the joint lock."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 69,
+            "total_token_count": 6971
+          },
+          "latency_ms": 1261.6,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"adversarial_case\": \"The position is not back_control because the top player does not have both hooks in; one leg is over the top player's own leg in a body triangle configuration, and the other is not clearly securing the bottom player's hip. The action_class is not a submission_arm_lock because the top player is clearly attacking a leg (specifically, a leg entanglement/leg lock setup), not an arm. The bottom player is defending a leg attack, not clasping hands to defend an arm lock.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"back_control\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The action_class was misidentified as an arm lock. The visual evidence clearly shows the top player attacking the bottom player's legs, specifically working towards a leg entanglement/leg lock, not an arm lock.\",\n  \"evidence\": \"At 02:17.400, the top player's hands are focused on the bottom player's lower body/legs, and throughout the clip, the top player is actively manipulating the bottom player's legs to secure a leg lock position, not an arm lock.\"\n}",
+          "parsed": {
+            "adversarial_case": "The position is not back_control because the top player does not have both hooks in; one leg is over the top player's own leg in a body triangle configuration, and the other is not clearly securing the bottom player's hip. The action_class is not a submission_arm_lock because the top player is clearly attacking a leg (specifically, a leg entanglement/leg lock setup), not an arm. The bottom player is defending a leg attack, not clasping hands to defend an arm lock.",
+            "verdict": "disagree",
+            "final_position": "back_control",
+            "final_action_class": "submission_leg_lock",
+            "final_outcome": "unsuccessful",
+            "wrong_label": "action_class",
+            "reason": "The action_class was misidentified as an arm lock. The visual evidence clearly shows the top player attacking the bottom player's legs, specifically working towards a leg entanglement/leg lock, not an arm lock.",
+            "evidence": "At 02:17.400, the top player's hands are focused on the bottom player's lower body/legs, and throughout the clip, the top player is actively manipulating the bottom player's legs to secure a leg lock position, not an arm lock."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25012,
+            "candidates_token_count": 292,
+            "total_token_count": 25304
+          },
+          "latency_ms": 5841.5,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "final_position": "back_control",
+      "final_outcome": "unsuccessful",
+      "verdict": "disagree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 137.0,
+          "end_s": 146.0,
+          "action_class": "submission_leg_lock",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    },
+    "files_api_arm_t": {
+      "window_id": "650d20c745120c8433e9d00e__w6",
+      "match_id": "650d20c745120c8433e9d00e",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 142,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=zMKSVP1ZgtY",
+      "ingestion_path": "files_api",
+      "window_start_s": 137.0,
+      "window_end_s": 146.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"back_control\",\n  \"justification\": \"The top player has both hooks inserted inside the bottom player's thighs while maintaining control from behind.\"\n}",
+          "parsed": {
+            "position": "back_control",
+            "justification": "The top player has both hooks inserted inside the bottom player's thighs while maintaining control from behind."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 40,
+            "total_token_count": 6686
+          },
+          "latency_ms": 836.6,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"unsuccessful\",\n  \"justification\": \"The top player isolates the bottom player's arm and extends it, but the bottom player successfully defends by clasping their hands together to prevent the joint lock.\"\n}",
+          "parsed": {
+            "action_class": "submission_arm_lock",
+            "outcome": "unsuccessful",
+            "justification": "The top player isolates the bottom player's arm and extends it, but the bottom player successfully defends by clasping their hands together to prevent the joint lock."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 65,
+            "total_token_count": 6967
+          },
+          "latency_ms": 908.6,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"adversarial_case\": \"The position is clearly back control, as the top player has both hooks in and is behind the opponent. However, the action is not an arm lock. The top player is attacking the bottom player's leg/ankle (specifically, a leg entanglement/leg lock entry). The bottom player is defending by controlling the top player's leg/hip. The label 'submission_arm_lock' is incorrect because there is no isolation or extension of the arm; the focus is entirely on the lower body.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"back_control\",\n  \"final_action_class\": \"submission_leg_lock\",\n  \"final_outcome\": \"unsuccessful\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The action is a leg lock attempt, not an arm lock. The top player is attacking the bottom player's legs, and there is no arm isolation present.\",\n  \"evidence\": \"Throughout the clip, the top player's hands and the bottom player's defensive focus are on the lower body/legs, not the arms.\"\n}",
+          "parsed": {
+            "adversarial_case": "The position is clearly back control, as the top player has both hooks in and is behind the opponent. However, the action is not an arm lock. The top player is attacking the bottom player's leg/ankle (specifically, a leg entanglement/leg lock entry). The bottom player is defending by controlling the top player's leg/hip. The label 'submission_arm_lock' is incorrect because there is no isolation or extension of the arm; the focus is entirely on the lower body.",
+            "verdict": "disagree",
+            "final_position": "back_control",
+            "final_action_class": "submission_leg_lock",
+            "final_outcome": "unsuccessful",
+            "wrong_label": "action_class",
+            "reason": "The action is a leg lock attempt, not an arm lock. The top player is attacking the bottom player's legs, and there is no arm isolation present.",
+            "evidence": "Throughout the clip, the top player's hands and the bottom player's defensive focus are on the lower body/legs, not the arms."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25007,
+            "candidates_token_count": 250,
+            "total_token_count": 25257
+          },
+          "latency_ms": 4569.9,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "final_position": "back_control",
+      "final_outcome": "unsuccessful",
+      "verdict": "disagree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 137.0,
+          "end_s": 146.0,
+          "action_class": "submission_leg_lock",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    }
+  },
+  {
+    "window_id": "650d20c745120c8433e9d024__w0",
+    "match_id": "650d20c745120c8433e9d024",
+    "gold_event": {
+      "t_s": 12624,
+      "action_class": "back_take",
+      "outcome": "successful",
+      "position_bucket": "turtle",
+      "raw_sequenceType": "POSITION ENTRY",
+      "track": "hard",
+      "scoreable": true
+    },
+    "youtube_arm_t": {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "match_id": "650d20c745120c8433e9d024",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "ingestion_path": "youtube_uri",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"side_control\",\n  \"justification\": \"The top player is positioned across the bottom player's torso, pinning them to the mat with chest-to-chest contact.\"\n}",
+          "parsed": {
+            "position": "side_control",
+            "justification": "The top player is positioned across the bottom player's torso, pinning them to the mat with chest-to-chest contact."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 46,
+            "total_token_count": 6692
+          },
+          "latency_ms": 970.6,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"submission_arm_lock\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The top player isolates the bottom player's arm and extends it over her own leg to secure the armbar, resulting in a tap.\"\n}",
+          "parsed": {
+            "action_class": "submission_arm_lock",
+            "outcome": "successful",
+            "justification": "The top player isolates the bottom player's arm and extends it over her own leg to secure the armbar, resulting in a tap."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 60,
+            "total_token_count": 6962
+          },
+          "latency_ms": 1006.5,
+          "ingestion_path": "youtube_uri"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"adversarial_case\": \"One could argue the position is 'mount' rather than 'side_control' because the top player's legs are positioned over the bottom player's torso, which is a hallmark of the mount position. Furthermore, the action is clearly a 'submission_choke' (specifically a guillotine) rather than an 'arm_lock', as the top player's arms are wrapped around the bottom player's neck and head, not isolating an arm for an extension.\",\n  \"verdict\": \"disagree\",\n  \"final_position\": \"mount\",\n  \"final_action_class\": \"submission_choke\",\n  \"final_outcome\": \"successful\",\n  \"wrong_label\": \"action_class\",\n  \"reason\": \"The technique is a guillotine choke, not an armbar. The top player has their arms wrapped around the opponent's neck, not isolating an arm for an extension.\",\n  \"evidence\": \"At 210:23.200, the top player's arms are clearly locked around the bottom player's neck, and the bottom player taps shortly after, confirming a successful choke.\"\n}",
+          "parsed": {
+            "adversarial_case": "One could argue the position is 'mount' rather than 'side_control' because the top player's legs are positioned over the bottom player's torso, which is a hallmark of the mount position. Furthermore, the action is clearly a 'submission_choke' (specifically a guillotine) rather than an 'arm_lock', as the top player's arms are wrapped around the bottom player's neck and head, not isolating an arm for an extension.",
+            "verdict": "disagree",
+            "final_position": "mount",
+            "final_action_class": "submission_choke",
+            "final_outcome": "successful",
+            "wrong_label": "action_class",
+            "reason": "The technique is a guillotine choke, not an armbar. The top player has their arms wrapped around the opponent's neck, not isolating an arm for an extension.",
+            "evidence": "At 210:23.200, the top player's arms are clearly locked around the bottom player's neck, and the bottom player taps shortly after, confirming a successful choke."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 25008,
+            "candidates_token_count": 255,
+            "total_token_count": 25263
+          },
+          "latency_ms": 2091.6,
+          "ingestion_path": "youtube_uri"
+        }
+      ],
+      "final_position": "side_control",
+      "final_outcome": "successful",
+      "verdict": "disagree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 12619.0,
+          "end_s": 12628.0,
+          "action_class": "submission_choke",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    },
+    "files_api_arm_t": {
+      "window_id": "650d20c745120c8433e9d024__w0",
+      "match_id": "650d20c745120c8433e9d024",
+      "gate5_straddler": false,
+      "gold_event": {
+        "t_s": 12624,
+        "action_class": "back_take",
+        "outcome": "successful",
+        "position_bucket": "turtle",
+        "raw_sequenceType": "POSITION ENTRY",
+        "track": "hard",
+        "scoreable": true
+      },
+      "video_url_watch": "https://www.youtube.com/watch?v=n_dkNnfjx4s",
+      "ingestion_path": "files_api",
+      "window_start_s": 12619.0,
+      "window_end_s": 12628.0,
+      "settings": {
+        "fps": 10,
+        "model": "gemini-3.1-flash-lite",
+        "thinking": null,
+        "media_resolution": {
+          "position": null,
+          "technique": null,
+          "validator": "high"
+        }
+      },
+      "calls": [
+        {
+          "call_name": "position",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"position\": \"side_control\",\n  \"justification\": \"The top player has established a stable position across the bottom player's torso with chest-to-chest contact and no legs entangled.\"\n}",
+          "parsed": {
+            "position": "side_control",
+            "justification": "The top player has established a stable position across the bottom player's torso with chest-to-chest contact and no legs entangled."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6646,
+            "candidates_token_count": 48,
+            "total_token_count": 6694
+          },
+          "latency_ms": 958.3,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "technique",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n  \"action_class\": \"submission_choke\",\n  \"outcome\": \"successful\",\n  \"justification\": \"The top player secures a guillotine choke, forcing the bottom player to tap.\"\n}",
+          "parsed": {
+            "action_class": "submission_choke",
+            "outcome": "successful",
+            "justification": "The top player secures a guillotine choke, forcing the bottom player to tap."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 6902,
+            "candidates_token_count": 48,
+            "total_token_count": 6950
+          },
+          "latency_ms": 907.0,
+          "ingestion_path": "files_api"
+        },
+        {
+          "call_name": "validator",
+          "status": "ok",
+          "error": null,
+          "raw_response_text": "{\n    \"adversarial_case\": \"The position is not side control because the top player's legs are clearly entangled with the bottom player's legs, specifically in a half-guard configuration where the top player is pinning the bottom player's leg. The action is not a guillotine choke; the top player is applying a kimura (arm lock) on the bottom player's isolated arm, which is clearly visible as they rotate the wrist and shoulder joint.\",\n    \"verdict\": \"disagree\",\n    \"final_position\": \"half_guard\",\n    \"final_action_class\": \"submission_arm_lock\",\n    \"final_outcome\": \"successful\",\n    \"wrong_label\": \"position\",\n    \"reason\": \"The position is half-guard, not side control, due to the leg entanglement. The technique is a kimura (arm lock), not a guillotine choke.\",\n    \"evidence\": \"At 00:09.500, the top player's arm is clearly locked in a kimura grip on the bottom player's left arm, and the bottom player's leg is trapped between the top player's legs, confirming half-guard.\"\n}",
+          "parsed": {
+            "adversarial_case": "The position is not side control because the top player's legs are clearly entangled with the bottom player's legs, specifically in a half-guard configuration where the top player is pinning the bottom player's leg. The action is not a guillotine choke; the top player is applying a kimura (arm lock) on the bottom player's isolated arm, which is clearly visible as they rotate the wrist and shoulder joint.",
+            "verdict": "disagree",
+            "final_position": "half_guard",
+            "final_action_class": "submission_arm_lock",
+            "final_outcome": "successful",
+            "wrong_label": "position",
+            "reason": "The position is half-guard, not side control, due to the leg entanglement. The technique is a kimura (arm lock), not a guillotine choke.",
+            "evidence": "At 00:09.500, the top player's arm is clearly locked in a kimura grip on the bottom player's left arm, and the bottom player's leg is trapped between the top player's legs, confirming half-guard."
+          },
+          "usage_metadata": {
+            "prompt_token_count": 24996,
+            "candidates_token_count": 259,
+            "total_token_count": 25255
+          },
+          "latency_ms": 4291.3,
+          "ingestion_path": "files_api"
+        }
+      ],
+      "final_position": "half_guard",
+      "final_outcome": "successful",
+      "verdict": "disagree",
+      "ditch_reason": null,
+      "emitted_events": [
+        {
+          "start_s": 12619.0,
+          "end_s": 12628.0,
+          "action_class": "submission_choke",
+          "confidence": null
+        }
+      ],
+      "status": "analyzed"
+    }
+  }
+]

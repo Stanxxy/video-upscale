@@ -61,6 +61,7 @@ scriptBody = scriptBody.slice(0, initMarkerIndex);
 // ---- Minimal inert DOM stub (identical idiom to the sibling v1 harness) ---
 const elementsById = new Map();
 function makeElementStub() {
+  const listeners = new Map();
   return {
     value: '', textContent: '', innerHTML: '', className: '',
     style: {}, scrollTop: 0, scrollHeight: 0, clientHeight: 0,
@@ -69,7 +70,8 @@ function makeElementStub() {
     querySelector() { return null; },
     getAttribute() { return null; },
     setAttribute() {},
-    addEventListener() {},
+    addEventListener(type, handler) { listeners.set(type, handler); },
+    listeners,
     appendChild() {},
   };
 }
@@ -118,7 +120,67 @@ function check(name, fn) {
   }
 }
 
+async function checkAsync(name, fn) {
+  try {
+    await fn();
+    console.log('  ok   - ' + name);
+  } catch (e) {
+    failures += 1;
+    console.error('  FAIL - ' + name + ': ' + e.message);
+  }
+}
+
 console.log('handle_pipeline_event_v2.node-harness.mjs — highlight-scan-critique-analyze (v2) coverage\n');
+
+// ============================================================================
+// 0. Backend URL change reloads the live pipeline catalog.
+//
+// Break caught: after the page initially loads against a non-DAG backend,
+// changing Backend URL leaves PIPELINES empty forever because startup is the
+// only loadPipelines() call. A URL change must re-fetch the catalog and render
+// its tabs, so a user can point a running page at the local QA server.
+// ============================================================================
+await checkAsync('Backend URL change reloads pipeline tabs from the selected server', async () => {
+  const backendUrlInput = getElementById('backend-url');
+  backendUrlInput.value = 'http://127.0.0.1:8020';
+  const reloadHandler = backendUrlInput.listeners.get('change');
+  assert.equal(typeof reloadHandler, 'function', 'Backend URL needs a change handler that reloads pipelines');
+
+  const requestedUrls = [];
+  sandbox.fetch = async (url) => {
+    requestedUrls.push(url);
+    if (url === 'http://127.0.0.1:8020/qa/pipelines') {
+      return {
+        ok: true,
+        async json() {
+          return {
+            pipelines: [{
+              id: 'highlight-scan-critique-analyze',
+              label: 'Highlight scan + critique + analyze (native, v2)',
+              description: 'Native DAG',
+            }],
+          };
+        },
+      };
+    }
+    if (url === 'http://127.0.0.1:8020/qa/pipeline-defaults?id=highlight-scan-critique-analyze') {
+      return {
+        ok: true,
+        async json() {
+          return freshV2PipelineDef(1);
+        },
+      };
+    }
+    throw new Error('Unexpected request: ' + url);
+  };
+
+  await reloadHandler();
+  assert.deepEqual(requestedUrls, [
+    'http://127.0.0.1:8020/qa/pipelines',
+    'http://127.0.0.1:8020/qa/pipeline-defaults?id=highlight-scan-critique-analyze',
+  ]);
+  assert.match(getElementById('pipeline-tabs').innerHTML, /Highlight scan \+ critique \+ analyze/);
+});
 
 // A real-shaped v2 PipelineDef fixture — field names/defaults transcribed
 // from service/pipelines/models.py's HighlightScanConfig/
@@ -142,7 +204,13 @@ function freshV2PipelineDef(maxValidatorIterations) {
       },
       {
         id: 'highlight_critique', type: 'highlight_critique', label: 'Highlight Critique', enabled: true,
-        config: { model: 'gemini-3.1-flash-lite', critique_backpad_s: 6.0, thinking: null, media_resolution: null },
+        config: {
+          model: 'gemini-3.1-flash-lite', fps: 1,
+          critique_backpad_s: 6.0, critique_forwardpad_s: 0.0,
+          system_prompt: 'CANONICAL CRITIQUE SYSTEM',
+          initial_prompt: 'CANONICAL $description at $scan_start_sec-$scan_end_sec',
+          thinking: null, media_resolution: null,
+        },
       },
       {
         id: 'highlight_analyze', type: 'highlight_analyze', label: 'Highlight Analyze', enabled: true,
@@ -165,6 +233,15 @@ function freshV2PipelineDef(maxValidatorIterations) {
 //    two `yield {"type": "highlight_critique_result", ...}` outcomes.
 // ============================================================================
 run("currentPipelineId = 'highlight-scan-critique-analyze'; currentPipelineDef = " + JSON.stringify(freshV2PipelineDef(1)) + "; resetRunView(); runState.status = 'running';");
+
+check('Highlight Critique config exposes saved prompts and FPS in the legacy v2 DAG', () => {
+  const configHtml = run("nodeConfigFieldsHtml(currentPipelineDef.stages.find(stage => stage.id === 'highlight_critique'))");
+  assert.match(configHtml, /System prompt \(Highlight Critique\)/);
+  assert.match(configHtml, /Initial prompt template \(Highlight Critique\)/);
+  assert.match(configHtml, /CANONICAL CRITIQUE SYSTEM/);
+  assert.match(configHtml, /\$description/);
+  assert.match(configHtml, /FPS/);
+});
 
 run(`handlePipelineEvent({ type: 'highlight_map', highlights: [
   { index: 1, start_s: 20, end_s: 34, adjustment: null, start_is_synthetic: false, end_is_synthetic: false, description: 'guard pass attempt' },

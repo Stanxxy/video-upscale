@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PORT="${QA_BACKEND_PORT:-8000}"
+PORT="${QA_BACKEND_PORT:-8020}"
 PYTHON="${QA_BACKEND_PYTHON:-/Users/stanliu/bjj-proj/whole-video-analysis/venv/bin/python}"
 
 cd "$ROOT"

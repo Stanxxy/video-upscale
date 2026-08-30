@@ -498,10 +498,18 @@ async def test_time_analyzer_non_transient_404_fails_fast_no_retry():
 # --------------------------------------------------------------------------- #
 def test_extract_usage_metadata_reads_real_fields():
     response = SimpleNamespace(usage_metadata=SimpleNamespace(
-        prompt_token_count=100, candidates_token_count=20, total_token_count=120,
+        prompt_token_count=100,
+        candidates_token_count=20,
+        thoughts_token_count=40,
+        cached_content_token_count=5,
+        total_token_count=160,
     ))
     assert simplified_tags.extract_usage_metadata(response) == {
-        "prompt_token_count": 100, "candidates_token_count": 20, "total_token_count": 120,
+        "prompt_token_count": 100,
+        "candidates_token_count": 20,
+        "total_token_count": 160,
+        "thoughts_token_count": 40,
+        "cached_content_token_count": 5,
     }
 
 

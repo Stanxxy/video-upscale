@@ -1,0 +1,274 @@
+# ADCC gold -> simplified-tags-time-v1 taxonomy mapping (Gracie's ruling + CEO
+# spot-check corrections), v1.
+#
+# Versioned, checked-in artifact — see
+# working_log/plans/2026-07-12-adcc-eval-harness-precision-plan.md §4.
+# Consumed as PURE DATA by eval/adcc/data_prep/apply_gracie_mapping.py; that
+# module contains zero hardcoded taxonomy rulings — every raw-value list and
+# rule threshold here is auditable/reviewable independent of code.
+#
+# Every raw sequenceType/position/movements VALUE referenced below is listed
+# for completeness (so the mapping table is exhaustive/auditable for corpus
+# growth), and was checked against the real 258-match / 3,260-event corpus at
+# authoring time (2026-07-12) via a direct read of metadata_and_events.json on
+# bjj-server — but NOT ALL listed submission-subtype values are actually
+# OBSERVED in the current corpus (see §4.2's CALF SLICER / BOW-AND-ARROW /
+# D'ARCE / ANACONDA / EZEKIEL / BASEBALL CHOKE / NORTH SOUTH CHOKE / WRISTLOCK,
+# which fire 0x today). "Verified" below means "checked to see whether/how it
+# occurs," not "confirmed present." An unmapped sequenceType is a HARD ERROR
+# at prep time (never silently dropped or guessed) — see
+# apply_gracie_mapping.UnknownSequenceTypeError.
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# §4.1 sequenceType -> action_class (+ outcome, scoreable)
+#
+# `action_class` is either a literal simplified-tags action_class value, or
+# one of two split markers telling apply_gracie_mapping.py to run a dedicated
+# sub-router instead of a flat 1:1 mapping:
+#   - "SPLIT:submission_subtype" -> resolve_submission_subtype() (§4.2)
+#   - "SPLIT:position_entry"     -> resolve_position_entry() (§4.3)
+#
+# `outcome_rule` (only present for SUBMISSION): "attempt_prefix" means
+# outcome = "unsuccessful" if movements startswith "ATTEMPT (" (case-
+# insensitive), else "successful". All other rows carry a literal `outcome`.
+#
+# Verified sequenceType distribution (3,260 events / 258 matches):
+# POSITION ENTRY 2091, POSITION ESCAPE 953, SUBMISSION 336, GUARD RETENTION
+# 258, GUARD PASS 193, TAKEDOWN 163, TAKEDOWN DEFENSE 150, SWEEP 92. These 8
+# keys are EXHAUSTIVE for the corpus — any 9th value at apply time is a hard
+# error, never a silent skip.
+# ---------------------------------------------------------------------------
+sequence_type_map:
+  "SUBMISSION":
+    action_class: "SPLIT:submission_subtype"
+    outcome_rule: "attempt_prefix"
+    scoreable: true
+    track: "hard"
+  "GUARD PASS":
+    action_class: "guard_pass"
+    outcome: "successful"
+    scoreable: true
+    track: "hard"
+  "SWEEP":
+    action_class: "sweep"
+    outcome: "successful"
+    scoreable: true
+    track: "hard"
+  "TAKEDOWN":
+    action_class: "takedown_attempt"
+    outcome: "successful"
+    scoreable: true
+    track: "hard"
+  "POSITION ESCAPE":
+    action_class: "escape"
+    outcome: "successful"
+    scoreable: true
+    track: "hard"
+  "GUARD RETENTION":
+    action_class: "guard_pass"
+    outcome: "unsuccessful"
+    scoreable: true
+    track: "hard"
+    note: >
+      CEO spot-check correction to Gracie's initial ruling: verified only
+      ~5% of GUARD RETENTION rows sit adjacent to a GUARD PASS row for the
+      same match — this is a STANDALONE defensive event, not a double-logged
+      duplicate of an attacker's pass. Kept (not EXCLUDED), mapped to the
+      unsuccessful state of the same underlying action_class (guard_pass).
+  "TAKEDOWN DEFENSE":
+    action_class: "takedown_attempt"
+    outcome: "unsuccessful"
+    scoreable: true
+    track: "hard"
+    note: >
+      Same spot-check correction as GUARD RETENTION above: verified only
+      ~10% sit adjacent to a TAKEDOWN row. Standalone, kept, mapped to the
+      unsuccessful state of takedown_attempt.
+  "POSITION ENTRY":
+    action_class: "SPLIT:position_entry"
+    scoreable: "partial"   # resolved per-row by resolve_position_entry() — see §4.3 below
+    track: "partial"       # resolved per-row (back_take/guard_pass/sweep = hard; transition = soft)
+
+# ---------------------------------------------------------------------------
+# §4.2 Submission subtype — deterministic lookup on endingPosition.
+#
+# For SUBMISSION rows, endingPosition names the submission directly. Checked
+# in this priority order: exact endingPosition lookup (near-100% reliable,
+# spot-checked) -> movements keyword fallback (for "OTHER", 12 in corpus, and
+# any endingPosition not in the three lists) -> "unclear" (soft-tier, matched
+# at the submission_* FAMILY level only, never claimed as a confident subtype
+# label — see §5.1: match feasibility for ANY SUBMISSION-sequenceType row is
+# family-wide regardless of subtype resolution; `track: soft` here only
+# affects confusion-matrix/reporting granularity, never TP/FN determination).
+# ---------------------------------------------------------------------------
+# NOTE (TWISTER, out-of-taxonomy): TWISTER is a spinal/neck-crank submission
+# (a compression lock through cervical rotation), not an arm lock — it does
+# not fit our 3-bucket {choke, arm_lock, leg_lock} taxonomy at all. It is
+# deliberately ABSENT from every list below (it was previously miscategorized
+# under arm_lock in a prior draft of this table — fixed). An endingPosition or
+# movements text of "TWISTER" falls through both the exact-lookup and the
+# keyword fallback and lands on resolve_submission_subtype's final
+# `("submission_unclear", "soft")` return — the same out-of-taxonomy/soft path
+# an unlisted submission takes (§4.2). It fires 0x in the current 258-match
+# corpus (latent-correctness fix, not an observed behavior change).
+submission_subtype:
+  choke:
+    ["RNC", "GUILLOTINE", "TRIANGLE", "KATAGATAME", "NORTH SOUTH CHOKE",
+     "BASEBALL CHOKE", "SMOTHER", "EZEKIEL", "D'ARCE", "ANACONDA", "BOW-AND-ARROW"]
+  arm_lock:
+    ["ARM BAR", "KIMURA", "AMERICANA", "OMOPLATA", "WRISTLOCK"]
+  leg_lock:
+    ["INSIDE HEEL HOOK", "OUTSIDE HEEL HOOK", "STRAIGHT ANKLE", "KNEE BAR",
+     "TOE HOLD", "Z-LOCK", "SLICER", "CALF SLICER"]
+  # Fallback keyword scan over `movements` free text, only consulted when
+  # endingPosition isn't in one of the three lists above (verified: 12/336
+  # SUBMISSION rows have endingPosition == "OTHER"; movements text for those
+  # 12 is: 8x "N/A", "DIG", "ATTEMPT (WRIST LOCK)", "SPIN (INSIDE), GRIP
+  # (HEEL EXPOSURE)", "TRIP (OUTSIDE)", "KNEE CUT (CROSS)", "ATTEMPT
+  # (TRIANGLE)" — only 2 of the 12 resolve via keyword; the other 10 fall
+  # through to "unclear").
+  movements_keyword_fallback:
+    choke: ["GUILLOTINE", "TRIANGLE", "RNC", "REAR NAKED", "EZEKIEL", "DARCE", "D'ARCE", "ANACONDA", "CHOKE"]
+    arm_lock: ["ARM BAR", "ARMBAR", "KIMURA", "AMERICANA", "OMOPLATA", "WRIST LOCK", "WRISTLOCK"]
+    leg_lock: ["HEEL HOOK", "ANKLE LOCK", "STRAIGHT ANKLE", "KNEE BAR", "TOE HOLD", "Z-LOCK", "SLICER"]
+
+# ---------------------------------------------------------------------------
+# §4.3 POSITION ENTRY split — priority-ordered rules (checked top to bottom,
+# first match wins). 64% of the gold corpus (2,091/3,260 events); the
+# annotators' catch-all for position-state crossings with no dedicated
+# sequenceType.
+#
+# Rule order (matches plan §4.3 exactly, A1-corrected 2026-07-12 — see
+# working_log/plans/2026-07-12-adcc-eval-harness-precision-plan.md Part A1):
+#   1. endingPosition == BACK                                -> back_take
+#      De-dup: if the IMMEDIATELY PRIOR gold event in this match (any
+#      sequenceType, chronological order) already had endingPosition == BACK,
+#      do not mint a second back_take (suppresses hook-adjustment/"still
+#      riding the back" rows re-logged with a fresh movements description —
+#      verified: 340 raw POSITION ENTRY->BACK rows, 133 suppressed as
+#      immediate-repeat, 207 real mints).
+#   2. startingPosition == endingPosition AND movements administrative
+#                                                             -> drop (no event)
+#   3. endingPosition in leg_entanglement_ending_positions    -> transition (soft, non-scoreable)
+#   4. endingPosition in top_pin_target_ending_positions — a GUARD PASS
+#      requires the TOP player to be COMPLETING a pass, i.e. genuinely
+#      INITIATING from a guard-family position. So:
+#        a. startingPosition == endingPosition (same-position dedup,
+#           analogous to the back_take immediate-repeat dedup in rule 1 —
+#           start==end can never be "completing a pass") -> transition
+#        b. startingPosition NOT IN guard_family_starting_positions ->
+#           transition (soft, non-scoreable). FIX (A1, was previously
+#           misrouted to guard_pass — a BLOCKING over-generalization bug):
+#           a pin-ending row whose start is already a top-pin/back/turtle/
+#           scramble position is pin-CONSOLIDATION, base-recovery, or
+#           turtle-breakdown, never a pass. Explicitly excluded starts (none
+#           of these are in guard_family_starting_positions, so this is a
+#           by-construction consequence of (b), spelled out here for
+#           auditability): SIDE CONTROL, MOUNT, NORTH SOUTH, TURTLE, BACK,
+#           FRONT HEADLOCK, STACK, SMASH PASS, STANDING, DOGFIGHT, CRAB RIDE.
+#           Concretely this un-mints the false guard_passes that the prior
+#           over-generalized rule minted for MOUNT->MOUNT, SIDE CONTROL->
+#           MOUNT, NORTH SOUTH->NORTH SOUTH, BACK->MOUNT, TURTLE->MOUNT,
+#           FRONT HEADLOCK->SIDE CONTROL, STACK->NORTH SOUTH (all real rows
+#           in the corpus) — these route to transition instead.
+#        c. startingPosition IN guard_family_starting_positions (the ONLY
+#           case that can be a real pass or sweep):
+#             movements matches a sweep keyword -> sweep
+#             else (default)                    -> guard_pass
+#      (Verified against the 53 guard-family-starting / pin-target-ending
+#      rows in the corpus: only 1 contains an explicit sweep-naming
+#      movements string ("SIT DOWN, SWEEP (YOKO SUMI GAESHI)"); the other 52
+#      are pass-grip/pass-footwork vocabulary — LOOSE PASSING, KNEE CUT,
+#      LEG DRAG, GRIP scoops, THROW BY, KNEE PULL, etc. Defaulting to
+#      guard_pass absent an explicit sweep signal is evidence-based, not a
+#      coin flip.)
+#   5. anything else (genuine un-named shift, or SP==EP with non-
+#      administrative movements)                             -> transition (soft, non-scoreable)
+#
+# Per founder decision (plan §8.2): re-derived back_take/guard_pass/sweep are
+# scored at FULL STRICTNESS (track: hard) alongside their native siblings.
+# Residual `transition` is shown in the confusion matrix as a soft/context
+# tier (track: soft) — visible, never silently hard-scored — because the
+# text-mining split here carries real interpretive risk that must not be
+# laundered into a hard precision number.
+# ---------------------------------------------------------------------------
+position_entry_split:
+  back_take_ending_positions: ["BACK"]
+
+  administrative_movements: ["N/A", "", "NONE", "N A", "N.A.", "NA"]
+
+  leg_entanglement_ending_positions:
+    ["K-GUARD", "50-50", "IRIMI ASHI", "CROSS ASHI", "INSIDE ASHI", "OUTSIDE ASHI",
+     "X-GUARD", "SPIDERWEB", "STRAIGHT HAMSTRING", "CROSS HAMSTRING",
+     "FLANK", "WEDGE", "CLAMP"]
+
+  top_pin_target_ending_positions:
+    ["SIDE CONTROL", "MOUNT", "NORTH SOUTH", "SMASH PASS", "STACK"]
+
+  guard_family_starting_positions:
+    ["CLOSED GUARD", "OPEN GUARD", "HALF GUARD",
+     "K-GUARD", "IRIMI ASHI", "CROSS ASHI", "INSIDE ASHI", "OUTSIDE ASHI",
+     "50-50", "X-GUARD", "SPIDERWEB", "STRAIGHT HAMSTRING", "CROSS HAMSTRING",
+     "FLANK", "WEDGE", "CLAMP"]
+
+  sweep_movement_keywords:
+    ["SWEEP", "BERIMBOLO", "REVERSAL", "ELEVATOR", "PENDULUM", "SCISSOR SWEEP",
+     "FLOWER SWEEP", "TOMOE", "HELICOPTER", "HOOK SWEEP", "WHIP"]
+
+# ---------------------------------------------------------------------------
+# §4.4 Position vocab -> 9 POSITION_VALUES buckets.
+#
+# Every raw startingPosition/endingPosition value actually observed in the
+# 258-match corpus is enumerated below (verified at v1 authoring time via a
+# full-corpus scan). `apply_gracie_mapping.bucket_position()` looks this table
+# up first; a raw value NOT in any list here falls through to a documented,
+# LOGGED generalization heuristic (never a silent guess) per the plan's
+# forward-looking "Generalization principle for unseen values" — this exists
+# for corpus growth (future ADCC events added later), not because today's
+# table is incomplete; today's table is exhaustive for the current 258
+# matches (zero-firing in the current test suite's non-synthetic paths).
+#
+# Submission-named endingPositions (ARM BAR, RNC, heel hooks, etc.) are NOT
+# listed here — they are never looked up as a position at all; the event's
+# own startingPosition field (verified non-submission-shaped for all 336
+# SUBMISSION rows in the corpus) is bucketed instead. See
+# apply_gracie_mapping.resolve_event_position().
+# ---------------------------------------------------------------------------
+position_buckets:
+  standing: ["STANDING", "SINGLE LEG", "STANDING AT DISTANCE"]
+  closed_guard: ["CLOSED GUARD"]
+  open_guard:
+    ["OPEN GUARD", "K-GUARD", "IRIMI ASHI", "CROSS ASHI", "INSIDE ASHI",
+     "OUTSIDE ASHI", "50-50", "X-GUARD", "SPIDERWEB", "STRAIGHT HAMSTRING",
+     "CROSS HAMSTRING", "FLANK", "WEDGE", "CLAMP"]
+  half_guard: ["HALF GUARD"]
+  side_control: ["SIDE CONTROL", "NORTH SOUTH", "SMASH PASS", "STACK"]
+  mount: ["MOUNT"]
+  back_control: ["BACK"]
+  turtle: ["TURTLE", "CRAB RIDE"]
+  scramble: ["FRONT HEADLOCK", "DOGFIGHT"]
+
+# ---------------------------------------------------------------------------
+# §5.1 Match feasibility compat sets.
+#
+# For every gold event EXCEPT one whose raw sequenceType == "SUBMISSION", the
+# compat set is the singleton {resolved action_class} (exact-class match
+# required). SUBMISSION is the ONE explicit many-to-many case in the plan
+# (§5.1: "SUBMISSION accepts any submission_*") — a gold submission event is
+# feasible against ANY of the three submission_* prediction classes,
+# regardless of which subtype §4.2 resolved (this is what makes an
+# "unclear"-subtype gold submission still fully matchable/scoreable: subtype
+# resolution affects reporting granularity, never TP/FN determination).
+# ---------------------------------------------------------------------------
+match_compat:
+  family_by_raw_sequence_type:
+    "SUBMISSION": ["submission_choke", "submission_arm_lock", "submission_leg_lock"]
+
+# ---------------------------------------------------------------------------
+# §5.3 Track B (scoreable subset) — non-scoreable prediction action_class
+# values dropped from BOTH gold and predictions before matching
+# (filter-then-match, never filter-after-match).
+# ---------------------------------------------------------------------------
+non_scoreable_prediction_classes: ["transition", "guard_pull"]
