@@ -897,8 +897,8 @@ let sending = false;
 // Provider-documented model ids per task. Task key = 'event' when
 // currentMode === 'event', else currentImageTask ('generate' | 'detect' | 'segment').
 const TASK_CONFIG = {
-  event:    { models: ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'low' },
-  detect:   { models: ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'off' },
+  event:    { models: ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'low' },
+  detect:   { models: ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'], defaultModel: 'gemini-3.5-flash', thinking: true,  defaultThinking: 'off' },
   segment:  { models: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'], defaultModel: 'gemini-3.1-flash-image', thinking: false, defaultThinking: null },
   generate: { models: ['gemini-3.1-flash-image', 'gemini-3.1-flash-lite-image', 'gemini-3-pro-image'], defaultModel: 'gemini-3.1-flash-image', thinking: false, defaultThinking: null },
 };

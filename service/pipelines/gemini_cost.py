@@ -15,7 +15,12 @@ PRICING_SOURCE_URL = "https://ai.google.dev/gemini-api/docs/pricing"
 PRICING_TIER = "standard_paid"
 
 _PROMOTIONAL_END = date(2026, 12, 31)
-_LATEST_FLASH_MODELS = frozenset({"gemini-3.7-flash", "gemini-3.6-flash"})
+_PROMOTIONAL_EFFECTIVE_FROM_BY_MODEL = {
+    "gemini-3.8-flash": "2026-09-02",
+    "gemini-3.7-flash": "2026-08-26",
+    "gemini-3.6-flash": "2026-08-26",
+}
+_LATEST_FLASH_MODELS = frozenset(_PROMOTIONAL_EFFECTIVE_FROM_BY_MODEL)
 
 
 def _rate_for(model: Optional[str], on_date: date) -> Optional[dict]:
@@ -27,7 +32,7 @@ def _rate_for(model: Optional[str], on_date: date) -> Optional[dict]:
             "input_usd_per_million": 0.75,
             "output_usd_per_million": 3.75,
             "cached_input_usd_per_million": 0.075,
-            "rate_effective_from": "2026-08-26",
+            "rate_effective_from": _PROMOTIONAL_EFFECTIVE_FROM_BY_MODEL[model],
             "rate_valid_through": "2026-12-31",
         }
     return {

@@ -433,6 +433,35 @@ def test_position_node_cost_fails_closed_when_usage_is_missing_and_tracks_future
     assert future_row["estimated_usd"] == pytest.approx(0.000375)
 
 
+def test_gemini_38_flash_cost_uses_its_published_introductory_rate():
+    stage = next(
+        stage
+        for stage in registry.get_default("position-timeline-techniques").stages
+        if stage.id == "position_scan"
+    )
+    stage.config["model"] = "gemini-3.8-flash"
+    metered = gemini_cost.new_node_accumulator(stage)
+    gemini_cost.record_event_usage(
+        metered,
+        {
+            "usage_metadata": {
+                "prompt_token_count": 100,
+                "candidates_token_count": 10,
+                "thoughts_token_count": 20,
+                "total_token_count": 130,
+            }
+        },
+    )
+
+    row = gemini_cost.node_cost_snapshot(metered, on_date=date(2026, 9, 5))
+
+    assert row["pricing_status"] == "priced"
+    assert row["input_usd_per_million"] == 0.75
+    assert row["output_usd_per_million"] == 3.75
+    assert row["rate_effective_from"] == "2026-09-02"
+    assert row["estimated_usd"] == pytest.approx(0.0001875)
+
+
 def test_technique_scan_requires_one_atomic_event_per_highlight():
     for prompt in (TECHNIQUE_SCAN_SYSTEM_PROMPT, TECHNIQUE_SCAN_INITIAL_PROMPT):
         assert "one intentional technique event per highlight" in prompt

@@ -241,8 +241,8 @@ def thinking_config_for(model_id: str, ui_level: Optional[str]) -> Optional[type
     """Map a UI thinking level to a Gemini ``ThinkingConfig`` for ``model_id``.
 
     Image models reject any thinking config outright (always ``None``).
-    Gemini 3.6/3.7 require level-based thinking: Studio ``off`` maps to
-    ``minimal`` for 3.6 and the lowest supported level, ``low``, for 3.7.
+    Gemini 3.6+ require level-based thinking: Studio ``off`` maps to
+    ``minimal`` for 3.6 and the lowest supported level, ``low``, for 3.7/3.8.
     ``gemini-3.1-pro-preview`` likewise cannot disable thinking, so ``off``
     maps to ``low``. Never set both
     ``thinking_level`` and ``thinking_budget`` on the same config.
@@ -252,7 +252,11 @@ def thinking_config_for(model_id: str, ui_level: Optional[str]) -> Optional[type
     if ui_level in (None, "off"):
         if model_id == "gemini-3.6-flash":
             return types.ThinkingConfig(thinking_level="minimal")
-        if model_id in {"gemini-3.7-flash", "gemini-3.1-pro-preview"}:
+        if model_id in {
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-3.1-pro-preview",
+        }:
             return types.ThinkingConfig(thinking_level="low")
         return types.ThinkingConfig(thinking_budget=0)
     return types.ThinkingConfig(thinking_level=ui_level)

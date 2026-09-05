@@ -868,7 +868,11 @@ async def test_vlm_chat_requested_allowlisted_model_is_used(monkeypatch, client_
 
 @pytest.mark.parametrize(
     ("model_id", "expected_off_level"),
-    [("gemini-3.7-flash", "LOW"), ("gemini-3.6-flash", "MINIMAL")],
+    [
+        ("gemini-3.8-flash", "LOW"),
+        ("gemini-3.7-flash", "LOW"),
+        ("gemini-3.6-flash", "MINIMAL"),
+    ],
 )
 @pytest.mark.asyncio
 async def test_vlm_chat_new_flash_models_use_compatible_generation_config(
@@ -1048,7 +1052,10 @@ async def test_vlm_image_detect_requested_model_and_thinking_high_bumps_max_toke
     assert call_kwargs["config"].max_output_tokens == 8192  # bumped so thoughts don't eat the JSON budget
 
 
-@pytest.mark.parametrize("model_id", ["gemini-3.7-flash", "gemini-3.6-flash"])
+@pytest.mark.parametrize(
+    "model_id",
+    ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"],
+)
 @pytest.mark.asyncio
 async def test_vlm_image_detect_new_flash_models_omit_sampling_parameters(
     model_id, monkeypatch, client_with_key,

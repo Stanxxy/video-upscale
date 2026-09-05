@@ -1,4 +1,4 @@
-"""Gemini 3.6/3.7 selection and request-compatibility contracts for VLM Studio."""
+"""Latest Gemini Flash selection and request-compatibility contracts."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,7 +10,11 @@ from service.pipelines.registry import get_default, validate_pipeline_def
 from service.routes.qa_vlm import DETECT_MODELS, EVENT_MODELS, IMAGE_MODELS, thinking_config_for
 
 
-NEW_FLASH_MODELS = ("gemini-3.7-flash", "gemini-3.6-flash")
+NEW_FLASH_MODELS = (
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+)
 
 
 @pytest.mark.parametrize("model_id", NEW_FLASH_MODELS)
@@ -46,6 +50,7 @@ def test_new_flash_models_validate_in_every_pipeline_model_slot(model_id):
 def test_new_flash_models_use_supported_level_based_thinking_for_off():
     assert thinking_config_for("gemini-3.6-flash", "off").thinking_level == "MINIMAL"
     assert thinking_config_for("gemini-3.7-flash", "off").thinking_level == "LOW"
+    assert thinking_config_for("gemini-3.8-flash", "off").thinking_level == "LOW"
 
 
 @pytest.mark.parametrize("model_id", NEW_FLASH_MODELS)
