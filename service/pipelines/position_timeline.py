@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 import io
+import re
 from string import Template
 from typing import Iterable, Mapping, Sequence
 
@@ -34,6 +35,55 @@ TIMELINE_POSITIONS: tuple[str, ...] = ACTIVE_POSITIONS + ("inactive",)
 PLAYER_ROLES: tuple[str, ...] = ("top", "bottom", "neutral", "not_applicable")
 TECHNIQUE_ACTOR_SENTINELS: tuple[str, ...] = ("contested", "unclear")
 
+# A bare event name or an alias of an existing core position cannot explain
+# the geometry of an ``other`` interval. Reject these exact-note failures so a
+# taxonomy miss cannot silently contaminate duration statistics. Descriptive
+# notes that include real geometry remain valid.
+_NON_GEOMETRIC_OTHER_NOTES: frozenset[str] = frozenset(
+    {
+        "standing",
+        "closed guard",
+        "full guard",
+        "open guard",
+        "half guard",
+        "side control",
+        "side mount",
+        "mount",
+        "full mount",
+        "back control",
+        "back mount",
+        "rear mount",
+        "turtle",
+        "scramble",
+        "armbar",
+        "arm lock",
+        "kimura",
+        "americana",
+        "omoplata",
+        "triangle",
+        "triangle choke",
+        "choke",
+        "rear naked choke",
+        "guillotine",
+        "heel hook",
+        "kneebar",
+        "ankle lock",
+        "toe hold",
+        "sweep",
+        "pass",
+        "guard pass",
+        "escape",
+        "takedown",
+        "back take",
+        "submission",
+        "transition",
+    }
+)
+
+
+def _normalized_position_note(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.casefold()).strip()
+
 POSITION_SCAN_SYSTEM_PROMPT = """
 You reconstruct the continuous Brazilian Jiu-Jitsu positional state of two
 target athletes in arbitrary source footage. The source may be a formal
@@ -51,15 +101,48 @@ independently invented ranges. Exactly one state covers every instant in the
 scope. Do not judge which athlete is dominant, controlling, winning, or more
 effective.
 
-Use only these active positions: standing, closed_guard, open_guard,
-half_guard, side_control, mount, back_control, turtle, scramble, other. Use
-neutral roles when neither athlete has an established geometric top/bottom
-relationship, including ordinary standing and unresolved scrambles. Use other
-for a real subposition outside the list and describe it precisely in
-position_note, for example 50/50, north-south, knee-on-belly, ashi garami,
-saddle, or single-leg X. Do not collapse a clearly visible named leg entanglement
-into generic open_guard. Use open_guard only when no more specific
-outside-taxonomy configuration is visibly established.
+Use only these active positions and decide from current body geometry, never
+from the name of the technique that led there:
+
+- standing: both athletes are upright or in a standing clinch.
+- closed_guard: the bottom athlete's legs encircle the top athlete with ankles
+  crossed or otherwise visibly closed behind them. "Full guard" maps here.
+- open_guard: the bottom athlete uses unclosed legs/feet to frame, hook, or
+  control the top athlete and no more specific outside-taxonomy leg
+  entanglement is established.
+- half_guard: the bottom athlete's legs visibly trap one of the top athlete's
+  legs.
+- side_control: the top athlete has passed the legs and pins from the side in a
+  chest-to-chest or comparable side-pin relationship. "Side mount" maps here.
+- mount: one athlete straddles the other's torso or hips while facing them.
+- back_control: one athlete is attached behind the other's shoulders/hips in a
+  sustained chest-to-back relationship with a seatbelt, hook, body triangle,
+  rear body lock, or equivalent rear control. "Back mount" and "rear mount"
+  map here. This is a geometric category, not a scoring judgment, so do not
+  require two hooks or an official points signal.
+- turtle: one athlete is compact on knees plus hands/elbows with the torso
+  facing the mat while the opponent is beside, above, or behind them, but has
+  not established the rear attachment required for back_control. Turtle
+  remains turtle while an opponent circles behind or attacks the back;
+  back_control takes precedence only once that rear control is visibly
+  established, and the state returns to turtle when that attachment is lost.
+- scramble: the athletes are actively changing relationship and no listed or
+  outside-taxonomy position is yet established. End scramble as soon as a
+  stable body relationship is visible.
+- other: a real, visibly established geometric subposition outside the list.
+
+Use neutral roles when neither athlete has an established geometric top/bottom
+relationship, including ordinary standing and unresolved scrambles. For other,
+describe concrete body geometry in position_note, for example 50/50,
+north-south, knee-on-belly, ashi garami, saddle, or single-leg X. A technique
+or action name is never a position or sufficient position_note: armbar,
+triangle, choke, sweep, pass, escape, takedown, back take, and submission are
+events. If a submission creates an outside-taxonomy configuration, describe
+the visible torso/hip/leg relationship instead of naming the submission. Never
+use other for back mount, rear mount, side mount, full guard, or turtle; map
+those aliases to their core category. Do not collapse a clearly visible named leg entanglement
+into generic open_guard. Use open_guard only when no more
+specific outside-taxonomy configuration is visibly established.
 
 Preserve the last established active state through brief occlusion, camera
 motion, or a person crossing the frame when the same exchange visibly
@@ -89,8 +172,17 @@ context.
 Athlete A is the player_id on the first labelled reference and Athlete B is
 the player_id on the second labelled reference. Track only those two targets,
 even if other athletes or simultaneous rolling pairs are visible. Apply the
-competition/training interruption rules from the system instruction. Return
-only the required structured JSON.
+competition/training interruption rules from the system instruction.
+
+Make a chronological pass through the entire requested scope before
+finalizing. Do not stop scanning after a salient submission or keep its label
+through the later exchange. After every attempt, defense, sweep/reversal,
+guard engagement/disengagement, pass, back exposure, rear-control attachment
+or loss, and settled scramble, reassess the position and roles from visible
+body geometry. Long proposed intervals require the same continued scrutiny as
+short ones. Emit every established state change, including repeated returns
+between guard, side_control, turtle, and back_control. Return only the required
+structured JSON.
 """.strip()
 
 _POSITION_SCAN_INITIAL_TEMPLATE = Template(POSITION_SCAN_INITIAL_PROMPT)
@@ -183,6 +275,17 @@ provided local window. If confirmed, report the earliest absolute match
 second at which the new state is visibly established. Do not judge dominance
 or control. Use other only with a precise subposition note; use inactive only
 with an explicit interruption reason.
+
+Apply the scan taxonomy from visible geometry. In particular, resolve
+back_control versus turtle explicitly: back_control requires a sustained
+chest-to-back/rear attachment such as a seatbelt, hook, body triangle, or rear
+body lock; turtle is a mat-facing knees-plus-hands/elbows posture without that
+established rear attachment. Map back mount/rear mount to back_control and side
+mount to side_control. A technique or action name such as armbar, sweep, pass,
+escape, or back take is not a position and is not a sufficient other note. If
+the proposed other note merely names an action, replace state_after with the
+geometric core position or a precise outside-taxonomy body configuration that
+is actually visible.
 
 Search anywhere in the provided local window, not only at the proposed frame.
 If the real transition occurs earlier or later than the rough timestamp, set
@@ -386,7 +489,10 @@ def _position_state_schema() -> types.Schema:
             "player_b_role": types.Schema(type=types.Type.STRING, enum=list(PLAYER_ROLES)),
             "position_note": types.Schema(
                 type=types.Type.STRING,
-                description="Required specific subposition description when position='other'; empty otherwise.",
+                description=(
+                    "Required concrete body-geometry description when position='other'; "
+                    "a technique/action name alone is invalid. Empty otherwise."
+                ),
             ),
             "inactive_reason": types.Schema(
                 type=types.Type.STRING,
@@ -613,6 +719,14 @@ def _validated_state(state: Mapping, *, context: str) -> dict:
     if position == "other" and not position_note:
         raise TimelineValidationError(
             f"{context}: position='other' requires a specific position_note describing the subposition"
+        )
+    if (
+        position == "other"
+        and _normalized_position_note(position_note) in _NON_GEOMETRIC_OTHER_NOTES
+    ):
+        raise TimelineValidationError(
+            f"{context}: position='other' position_note must describe body geometry, "
+            f"not only a technique/action or existing position alias; got {position_note!r}"
         )
     if position == "inactive":
         if not inactive_reason:

@@ -277,6 +277,24 @@ def test_position_accuracy_prompts_correct_late_boundaries_and_preserve_named_su
     assert PositionCritiqueConfig().forwardpad_s == 6.0
 
 
+def test_position_prompts_define_back_control_turtle_and_forbid_action_as_position():
+    scan_prompt = " ".join(POSITION_SCAN_SYSTEM_PROMPT.split())
+    initial_prompt = " ".join(POSITION_SCAN_INITIAL_PROMPT.split())
+    critique_prompt = " ".join(POSITION_CRITIQUE_SYSTEM_PROMPT.split())
+
+    assert "back mount" in scan_prompt
+    assert "chest-to-back" in scan_prompt
+    assert "seatbelt" in scan_prompt
+    assert "facing the mat" in scan_prompt
+    assert "back_control takes precedence" in scan_prompt
+    assert "armbar" in scan_prompt
+    assert "technique or action name is never a position" in scan_prompt
+    assert "Do not stop scanning after a salient submission" in initial_prompt
+    assert "reassess the position" in initial_prompt
+    assert "back_control versus turtle" in critique_prompt
+    assert "technique or action name" in critique_prompt
+
+
 def test_position_critique_config_retains_editable_prompt_fields():
     config = PositionCritiqueConfig(
         system_prompt="edited position critique system",
@@ -1009,6 +1027,37 @@ def test_other_and_inactive_require_explanatory_notes(state, message):
             [],
             player_ids=("player_a", "player_b"),
         )
+
+
+@pytest.mark.parametrize(
+    "position_note", ["armbar", "Armbar.", "back_mount", "guard pass"]
+)
+def test_other_note_cannot_be_only_a_technique_or_existing_position_alias(position_note):
+    with pytest.raises(TimelineValidationError, match="body geometry"):
+        build_position_intervals(
+            0.0,
+            10.0,
+            _state("other", "top", "bottom", position_note=position_note),
+            [],
+            player_ids=("player_a", "player_b"),
+        )
+
+
+def test_other_note_accepts_precise_geometric_subposition_description():
+    intervals = build_position_intervals(
+        0.0,
+        10.0,
+        _state(
+            "other",
+            "top",
+            "bottom",
+            position_note="attacker perpendicular to torso with the isolated arm between both legs",
+        ),
+        [],
+        player_ids=("player_a", "player_b"),
+    )
+
+    assert intervals[0]["position"] == "other"
 
 
 def test_crossed_or_out_of_scope_corrected_boundaries_fail_closed():
