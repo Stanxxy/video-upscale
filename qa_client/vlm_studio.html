@@ -2531,6 +2531,63 @@ even if other athletes or simultaneous rolling pairs are visible. Apply the
 competition/training interruption rules from the system instruction. Return
 only the required structured JSON.`;
 
+const TECHNIQUE_SCAN_DEFAULT_SYSTEM_PROMPT = `Find sparse, intentional Brazilian Jiu-Jitsu technique events in a native
+match video. Cast wide for recall: takedown attempts, guard pulls, sweeps,
+guard passes, back takes, submissions, escapes, and intentional transitions
+all count whether successful or unsuccessful. Static position holding and
+ordinary grip adjustment without a technique attempt do not count. Describe
+visible body movement without assigning a position or technique label; a
+later grounded analyzer supplies the label. Exclude broadcast replays so one
+real technique is never reported twice.
+
+BOUNDARY CONTRACT — every highlight must be outcome-complete, not
+motion-complete. Treat start_s and end_s as independent decisions:
+
+- Start at the earliest intentional setup movement causally connected to the
+  attempt, not at generic grip fighting before the attempt and not at the
+  later visually dramatic moment.
+- End only after the attempt's visible result is established. For a successful
+  action, include the finish and the resulting control, reversal, escape, or
+  stoppage settling. For an unsuccessful action, include the completed
+  defense, escape from the threat, forced reset, or the attacker's clear
+  abandonment/switch away from the attempt. If the result remains unclear,
+  follow the same action through the last relevant visible evidence and say
+  why it is unclear.
+- A viewer watching only start_s through end_s must see enough evidence to
+  judge the attempt as successful, unsuccessful, or unclear. Never end merely
+  because the attacking motion pauses, first meets resistance, or stops being
+  visually dramatic. Do not add a fixed tail or unrelated later exchange.
+
+Return one intentional technique event per highlight. If a sweep or reversal
+is followed by a submission, guard pull, pass, escape, or another intentional
+action, return separate highlights even when their bounds touch or overlap.
+Never combine a compound sequence into one highlight merely because the
+actions flow together. The opponent's immediate defense remains inside the
+original attempt's highlight because it establishes that attempt's outcome;
+if that defense also becomes a distinct intentional counter-technique, emit a
+separate overlapping highlight for the counter without truncating the
+original attempt before its result is visible.`;
+
+const TECHNIQUE_SCAN_DEFAULT_INITIAL_PROMPT = `Scan the requested BJJ match scope from absolute second $start_sec through
+$end_sec. Return an ordered list of every intentional technique event worth
+close analysis. For each event, report absolute start_s/end_s, a concrete
+body-movement description without a taxonomy label, and reasoning explaining
+the visible intentional grip, weight, hip, or limb change. The description
+must cover the attempt's setup/execution AND the visible result cue; do not
+describe only the attacker's last motion.
+
+Before finalizing each end_s, inspect the later frames and apply the
+outcome-complete boundary contract. A viewer watching only start_s through
+end_s must be able to judge the event as successful, unsuccessful, or unclear.
+If the requested scope ends while the same attempt is unresolved, use
+$end_sec as end_s and state in reasoning that the outcome remains unclear at
+the scope boundary; never invent a result outside the available video.
+
+Return one intentional technique event per highlight and separate highlights
+for distinct sequential or overlapping actions. In particular, a sweep or
+reversal followed by a submission attempt is two highlights, not one compound
+highlight. Return only the required structured JSON.`;
+
 const POSITION_CRITIQUE_DEFAULT_SYSTEM_PROMPT = `You verify one proposed boundary in a continuous BJJ position timeline. Use
 the labelled reference images to preserve athlete identity. Decide whether a
 real change of position, athlete role, or active/inactive state happens in the
@@ -2558,18 +2615,22 @@ the schema, but it will not be used. Return only structured JSON.
 The rough timestamp is only a search anchor. A matching change later in this
 window is a confirmed transition with a later corrected_at_s, not a rejection.`;
 
-const TECHNIQUE_CRITIQUE_DEFAULT_SYSTEM_PROMPT = `You are correcting timestamp drift on a BJJ highlight clip. A prior rough scan reported a span of live grappling action, but that scanner reliably LATCHES ONTO THE MOST VISUALLY SALIENT MOMENT — the tap, the sweep landing, the pin settling — and reports that moment's neighborhood as the "start." The TRUE start of the action is almost always 2-6 seconds EARLIER, at the quiet SETUP CUE that a viewer's eye skips past: a level change, a grip break, an underhook plus a hip-shift, a new control-grip being established, a stance narrowing before a shot. Your job is to find that earlier moment, not to confirm the scanner's guess.
+const TECHNIQUE_CRITIQUE_DEFAULT_SYSTEM_PROMPT = `You are correcting timestamp drift across BOTH temporal boundaries of one BJJ technique highlight. A prior rough scan may latch onto the most visually salient moment, causing a LATE start, and it may stop when the attacking motion loses salience, causing an EARLY end before the result is visible. Your output defines the clip a user will watch, so it must contain the full attempt and enough visible outcome evidence to judge its result.
 
-You will receive: (1) a video clip that extends BACKWARD in time beyond the scanner's reported start (so the true setup cue should be visible somewhere inside it), and (2) the scanner's plain-language description of the body movement it saw (no technique names, no position names — just what moved).
+You will receive: (1) a video clip that extends BACKWARD beyond the scanner's reported start and may extend FORWARD beyond its reported end, and (2) the scanner's plain-language description of the target body movement. The description identifies the event; neighboring actions in the context do not replace it.
 
-Do TWO things, in this order:
+Treat the start and end as independent boundaries. Never preserve the scan's duration, and never treat scan_end_s as a preferred answer. Do THREE things:
 
 1. CONFIRM THE CLIP MATCHES THE DESCRIPTION. Does this clip actually show the described body movement at all? If the description clearly does not match anything visible in this clip, say so plainly — do not force a fit.
 
-2. SEARCH BACKWARD FOR THE TRUE START. Starting from the scanner's reported start and working backward through the clip, find the earliest moment where you can see the deliberate setup for the described movement beginning — NOT the moment it resolves. Concretely:
-   - Look for: a level change (dropping levels for a shot), a grip being broken or changed, an underhook or overhook being secured, a hip-shift that commits weight, a control grip (collar, sleeve, pant, wrist) being newly established, a stance narrowing.
-   - Do NOT anchor on: the tap, the finish, the landing of a sweep/takedown, the moment a pass completes, or any other resolution — those are LATE, not the start.
-   - The true END must include the visible outcome, not merely the last attacking motion. For a successful action, include the finish and the resulting control/position visibly settling. For an unsuccessful action, include the defense, escape, reversal of the attempt, or clear abandonment. When the outcome remains unclear, include all available evidence through the last relevant frame and say that it is unclear. A viewer watching only corrected_start_s through corrected_end_s must be able to judge successful, unsuccessful, or unclear. Do not extend into an unrelated later exchange.
+2. FIND THE TRUE START. Search BACKWARD from the scanner's reported start for the earliest deliberate setup cue causally connected to the described movement: a level change, grip break/change, underhook or overhook being secured, hip shift that commits weight, new control grip, or stance change. Do not anchor on the tap, landing, pass completion, or other resolution. Do not include generic grip fighting that is not yet part of this attempt.
+
+3. FIND THE TRUE END. Independently search FORWARD through the entire provided window, including frames after the scanner's reported end. The boundary must be outcome-complete, not motion-complete:
+   - Successful: include the decisive finish plus the visible tap/stoppage, completed reversal/escape, or resulting control becoming established and no longer immediately disputed.
+   - Unsuccessful: include the defender fully neutralizing or escaping the threat and the attacker clearly abandoning, switching away, or being forced to reset. The defender's first reaction or the attacker's first pause is not yet the outcome.
+   - Unclear: include every relevant available frame of the same attempt. If the window ends while the attempt or its defense is still developing, set corrected_end_s exactly to window_end_s and begin the note with 'OUTCOME_NOT_VISIBLE_BY_WINDOW_END' rather than pretending the result is visible.
+
+A viewer watching only corrected_start_s through corrected_end_s must be able to judge the event as successful, unsuccessful, or unclear from the video. The immediate defense belongs to the target attempt's outcome even when a distinct counter-technique deserves its own overlapping highlight. Do not append a fixed tail, and do not extend into an unrelated later exchange after the target result is already clear.
 
 If the true setup cue appears to begin AT OR BEFORE the very start of the video you were given (i.e. you cannot see it begin at all — the clip itself starts too late), say so explicitly in your note. That is a real, useful signal, not a failure on your part.
 
@@ -2581,14 +2642,14 @@ SCANNER'S DESCRIPTION OF THE BODY MOVEMENT (no technique/position names — just
 
 1. Does this clip actually contain the described movement? If not, explain the mismatch plainly.
 2. Find the TRUE start — the setup cue — by searching BACKWARD from $scan_start_sec s. Report it in ABSOLUTE match seconds. If the setup cue is not fully visible even at the earliest point of this clip ($window_start_sec s), set corrected_start_s = $window_start_sec and say so in your note (this tells us the backward padding needs to be larger).
-3. Find the TRUE end only after the visible outcome is established: finish/control settles for successful, defense/escape/abandonment for unsuccessful, or the last relevant available evidence for unclear. Report it in ABSOLUTE match seconds. Do not stop merely because the attack motion ends.
+3. Independently search FORWARD through the entire clip for the TRUE end. Apply the outcome-complete boundary contract: finish/control/stoppage visibly settles for successful; defense/escape/reset/abandonment completes for unsuccessful; or all relevant available evidence is included for unclear. A viewer watching only the corrected range must be able to judge successful, unsuccessful, or unclear. Do not stop at the last attacking motion, the first defensive reaction, or the scanner's end. If the same attempt is still unresolved at $window_end_sec s, set corrected_end_s = $window_end_sec and begin note with 'OUTCOME_NOT_VISIBLE_BY_WINDOW_END'.
 
 Return ONLY valid JSON matching this shape — no prose:
 {
     "movement_confirmed": true,
     "corrected_start_s": 0.0,
     "corrected_end_s": 0.0,
-    "note": "string — one or two sentences: what you found, and flag any mismatch or insufficient backward padding"
+    "note": "string — cite the visible start cue and outcome/end cue; flag mismatch, insufficient padding, or OUTCOME_NOT_VISIBLE_BY_WINDOW_END"
 }
 
 ADVISORY POSITION-TIMELINE CONTEXT (independently produced and fallible):
@@ -2605,7 +2666,7 @@ const POSITION_TIMELINE_DEFAULT = {
     { id: 'video_window', type: 'video_window', label: 'Video Window', enabled: true, config: {} },
     { id: 'position_scan', type: 'position_scan', label: 'Position Scan', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', rough_fps: 1, min_transition_gap_s: 1, system_prompt: POSITION_SCAN_DEFAULT_SYSTEM_PROMPT, initial_prompt: POSITION_SCAN_DEFAULT_INITIAL_PROMPT } },
     { id: 'position_critique', type: 'position_critique', label: 'Position Critique', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', backpad_s: 4, forwardpad_s: 6, fps: 10, system_prompt: POSITION_CRITIQUE_DEFAULT_SYSTEM_PROMPT, initial_prompt: POSITION_CRITIQUE_DEFAULT_INITIAL_PROMPT } },
-    { id: 'highlight_scan', type: 'highlight_scan', label: 'Technique Scan', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', rough_fps: 1, min_highlight_s: 3, max_highlight_s: 30, system_prompt: 'Find sparse intentional BJJ technique events; return one intentional technique event per highlight and use separate highlights for sequential or overlapping actions.', initial_prompt: 'Scan $start_sec through $end_sec for intentional technique events. Return one intentional technique event per highlight with absolute bounds and visible movement evidence.' } },
+    { id: 'highlight_scan', type: 'highlight_scan', label: 'Technique Scan', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', rough_fps: 1, min_highlight_s: 3, max_highlight_s: 30, system_prompt: TECHNIQUE_SCAN_DEFAULT_SYSTEM_PROMPT, initial_prompt: TECHNIQUE_SCAN_DEFAULT_INITIAL_PROMPT } },
     { id: 'position_technique_candidates', type: 'position_technique_candidates', label: 'Position + Technique Candidates', enabled: true, config: { transition_pre_s: 4, transition_post_s: 2, merge_tolerance_s: 2 } },
     { id: 'highlight_critique', type: 'highlight_critique', label: 'Technique Critique', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', fps: 1, critique_backpad_s: 6, critique_forwardpad_s: 4, system_prompt: TECHNIQUE_CRITIQUE_DEFAULT_SYSTEM_PROMPT, initial_prompt: TECHNIQUE_CRITIQUE_DEFAULT_INITIAL_PROMPT } },
     { id: 'technique_analyze', type: 'technique_analyze', label: 'Technique Analyze', enabled: true, config: { thinking: 'high', media_resolution: null, model: 'gemini-3.7-flash', fps: 10, preroll_s: 5, postroll_s: 4, validator_thinking: 'high', validator_media_resolution: 'high' } },

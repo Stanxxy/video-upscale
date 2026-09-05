@@ -346,6 +346,21 @@ def test_position_scan_offline_html_defaults_match_backend_canonical_prompts():
     assert initial_match.group(1) == POSITION_SCAN_INITIAL_PROMPT
 
 
+def test_technique_scan_offline_html_defaults_match_backend_canonical_prompts():
+    html = (Path(__file__).parents[1] / "qa_client" / "vlm_studio.html").read_text()
+    system_match = re.search(
+        r"const TECHNIQUE_SCAN_DEFAULT_SYSTEM_PROMPT = `([\s\S]*?)`;", html
+    )
+    initial_match = re.search(
+        r"const TECHNIQUE_SCAN_DEFAULT_INITIAL_PROMPT = `([\s\S]*?)`;", html
+    )
+
+    assert system_match is not None
+    assert initial_match is not None
+    assert system_match.group(1) == TECHNIQUE_SCAN_SYSTEM_PROMPT
+    assert initial_match.group(1) == TECHNIQUE_SCAN_INITIAL_PROMPT
+
+
 def test_critique_offline_html_defaults_match_backend_canonical_prompts():
     html = (Path(__file__).parents[1] / "qa_client" / "vlm_studio.html").read_text()
     expected = {
@@ -466,11 +481,29 @@ def test_technique_scan_requires_one_atomic_event_per_highlight():
     for prompt in (TECHNIQUE_SCAN_SYSTEM_PROMPT, TECHNIQUE_SCAN_INITIAL_PROMPT):
         assert "one intentional technique event per highlight" in prompt
         assert "separate highlights" in prompt
+        assert "outcome-complete" in prompt
+        assert "successful, unsuccessful, or unclear" in prompt
     timeline_pipeline = registry.get_default("position-timeline-techniques")
     technique_scan = next(
         stage for stage in timeline_pipeline.stages if stage.type == "highlight_scan"
     )
     assert technique_scan.config["thinking"] == "high"
+
+
+def test_technique_critique_treats_end_as_independent_outcome_boundary():
+    system_prompt = " ".join(
+        highlight_critique.DEFAULT_CRITIQUE_SYSTEM_PROMPT.split()
+    )
+    initial_prompt = " ".join(
+        TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT.split()
+    )
+
+    for prompt in (system_prompt, initial_prompt):
+        assert "outcome-complete" in prompt
+        assert "successful, unsuccessful, or unclear" in prompt
+        assert "OUTCOME_NOT_VISIBLE_BY_WINDOW_END" in prompt
+    assert "Treat the start and end as independent boundaries" in system_prompt
+    assert "search FORWARD through the entire provided window" in system_prompt
 
 
 def test_technique_analysis_cannot_substitute_a_neighboring_event():

@@ -52,18 +52,22 @@ from typing import Mapping, Optional
 from google.genai import types
 
 DEFAULT_CRITIQUE_SYSTEM_PROMPT: str = """
-You are correcting timestamp drift on a BJJ highlight clip. A prior rough scan reported a span of live grappling action, but that scanner reliably LATCHES ONTO THE MOST VISUALLY SALIENT MOMENT — the tap, the sweep landing, the pin settling — and reports that moment's neighborhood as the "start." The TRUE start of the action is almost always 2-6 seconds EARLIER, at the quiet SETUP CUE that a viewer's eye skips past: a level change, a grip break, an underhook plus a hip-shift, a new control-grip being established, a stance narrowing before a shot. Your job is to find that earlier moment, not to confirm the scanner's guess.
+You are correcting timestamp drift across BOTH temporal boundaries of one BJJ technique highlight. A prior rough scan may latch onto the most visually salient moment, causing a LATE start, and it may stop when the attacking motion loses salience, causing an EARLY end before the result is visible. Your output defines the clip a user will watch, so it must contain the full attempt and enough visible outcome evidence to judge its result.
 
-You will receive: (1) a video clip that extends BACKWARD in time beyond the scanner's reported start (so the true setup cue should be visible somewhere inside it), and (2) the scanner's plain-language description of the body movement it saw (no technique names, no position names — just what moved).
+You will receive: (1) a video clip that extends BACKWARD beyond the scanner's reported start and may extend FORWARD beyond its reported end, and (2) the scanner's plain-language description of the target body movement. The description identifies the event; neighboring actions in the context do not replace it.
 
-Do TWO things, in this order:
+Treat the start and end as independent boundaries. Never preserve the scan's duration, and never treat scan_end_s as a preferred answer. Do THREE things:
 
 1. CONFIRM THE CLIP MATCHES THE DESCRIPTION. Does this clip actually show the described body movement at all? If the description clearly does not match anything visible in this clip, say so plainly — do not force a fit.
 
-2. SEARCH BACKWARD FOR THE TRUE START. Starting from the scanner's reported start and working backward through the clip, find the earliest moment where you can see the deliberate setup for the described movement beginning — NOT the moment it resolves. Concretely:
-   - Look for: a level change (dropping levels for a shot), a grip being broken or changed, an underhook or overhook being secured, a hip-shift that commits weight, a control grip (collar, sleeve, pant, wrist) being newly established, a stance narrowing.
-   - Do NOT anchor on: the tap, the finish, the landing of a sweep/takedown, the moment a pass completes, or any other resolution — those are LATE, not the start.
-   - The true END must include the visible outcome, not merely the last attacking motion. For a successful action, include the finish and the resulting control/position visibly settling. For an unsuccessful action, include the defense, escape, reversal of the attempt, or clear abandonment. When the outcome remains unclear, include all available evidence through the last relevant frame and say that it is unclear. A viewer watching only corrected_start_s through corrected_end_s must be able to judge successful, unsuccessful, or unclear. Do not extend into an unrelated later exchange.
+2. FIND THE TRUE START. Search BACKWARD from the scanner's reported start for the earliest deliberate setup cue causally connected to the described movement: a level change, grip break/change, underhook or overhook being secured, hip shift that commits weight, new control grip, or stance change. Do not anchor on the tap, landing, pass completion, or other resolution. Do not include generic grip fighting that is not yet part of this attempt.
+
+3. FIND THE TRUE END. Independently search FORWARD through the entire provided window, including frames after the scanner's reported end. The boundary must be outcome-complete, not motion-complete:
+   - Successful: include the decisive finish plus the visible tap/stoppage, completed reversal/escape, or resulting control becoming established and no longer immediately disputed.
+   - Unsuccessful: include the defender fully neutralizing or escaping the threat and the attacker clearly abandoning, switching away, or being forced to reset. The defender's first reaction or the attacker's first pause is not yet the outcome.
+   - Unclear: include every relevant available frame of the same attempt. If the window ends while the attempt or its defense is still developing, set corrected_end_s exactly to window_end_s and begin the note with 'OUTCOME_NOT_VISIBLE_BY_WINDOW_END' rather than pretending the result is visible.
+
+A viewer watching only corrected_start_s through corrected_end_s must be able to judge the event as successful, unsuccessful, or unclear from the video. The immediate defense belongs to the target attempt's outcome even when a distinct counter-technique deserves its own overlapping highlight. Do not append a fixed tail, and do not extend into an unrelated later exchange after the target result is already clear.
 
 If the true setup cue appears to begin AT OR BEFORE the very start of the video you were given (i.e. you cannot see it begin at all — the clip itself starts too late), say so explicitly in your note. That is a real, useful signal, not a failure on your part.
 
@@ -77,14 +81,14 @@ SCANNER'S DESCRIPTION OF THE BODY MOVEMENT (no technique/position names — just
 
 1. Does this clip actually contain the described movement? If not, explain the mismatch plainly.
 2. Find the TRUE start — the setup cue — by searching BACKWARD from $scan_start_sec s. Report it in ABSOLUTE match seconds. If the setup cue is not fully visible even at the earliest point of this clip ($window_start_sec s), set corrected_start_s = $window_start_sec and say so in your note (this tells us the backward padding needs to be larger).
-3. Find the TRUE end only after the visible outcome is established: finish/control settles for successful, defense/escape/abandonment for unsuccessful, or the last relevant available evidence for unclear. Report it in ABSOLUTE match seconds. Do not stop merely because the attack motion ends.
+3. Independently search FORWARD through the entire clip for the TRUE end. Apply the outcome-complete boundary contract: finish/control/stoppage visibly settles for successful; defense/escape/reset/abandonment completes for unsuccessful; or all relevant available evidence is included for unclear. A viewer watching only the corrected range must be able to judge successful, unsuccessful, or unclear. Do not stop at the last attacking motion, the first defensive reaction, or the scanner's end. If the same attempt is still unresolved at $window_end_sec s, set corrected_end_s = $window_end_sec and begin note with 'OUTCOME_NOT_VISIBLE_BY_WINDOW_END'.
 
 Return ONLY valid JSON matching this shape — no prose:
 {
     "movement_confirmed": true,
     "corrected_start_s": 0.0,
     "corrected_end_s": 0.0,
-    "note": "string — one or two sentences: what you found, and flag any mismatch or insufficient backward padding"
+    "note": "string — cite the visible start cue and outcome/end cue; flag mismatch, insufficient padding, or OUTCOME_NOT_VISIBLE_BY_WINDOW_END"
 }
 """.strip()
 
@@ -110,11 +114,14 @@ def build_critique_schema() -> types.Schema:
             ),
             "corrected_end_s": types.Schema(
                 type=types.Type.NUMBER, format="float",
-                description="Corrected end of the action, ABSOLUTE match seconds (same clock as the requested scope).",
+                description="Outcome-complete end of the action, ABSOLUTE match seconds (same clock as the requested scope).",
             ),
             "note": types.Schema(
                 type=types.Type.STRING,
-                description="One or two sentences: what was found, and any mismatch/insufficient-backward-padding flag.",
+                description=(
+                    "Visible start cue and outcome/end cue, plus any mismatch or insufficient-padding flag. "
+                    "Begin with OUTCOME_NOT_VISIBLE_BY_WINDOW_END when the result continues past the window."
+                ),
             ),
         },
     )

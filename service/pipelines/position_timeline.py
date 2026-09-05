@@ -105,11 +105,33 @@ visible body movement without assigning a position or technique label; a
 later grounded analyzer supplies the label. Exclude broadcast replays so one
 real technique is never reported twice.
 
+BOUNDARY CONTRACT — every highlight must be outcome-complete, not
+motion-complete. Treat start_s and end_s as independent decisions:
+
+- Start at the earliest intentional setup movement causally connected to the
+  attempt, not at generic grip fighting before the attempt and not at the
+  later visually dramatic moment.
+- End only after the attempt's visible result is established. For a successful
+  action, include the finish and the resulting control, reversal, escape, or
+  stoppage settling. For an unsuccessful action, include the completed
+  defense, escape from the threat, forced reset, or the attacker's clear
+  abandonment/switch away from the attempt. If the result remains unclear,
+  follow the same action through the last relevant visible evidence and say
+  why it is unclear.
+- A viewer watching only start_s through end_s must see enough evidence to
+  judge the attempt as successful, unsuccessful, or unclear. Never end merely
+  because the attacking motion pauses, first meets resistance, or stops being
+  visually dramatic. Do not add a fixed tail or unrelated later exchange.
+
 Return one intentional technique event per highlight. If a sweep or reversal
 is followed by a submission, guard pull, pass, escape, or another intentional
 action, return separate highlights even when their bounds touch or overlap.
 Never combine a compound sequence into one highlight merely because the
-actions flow together.
+actions flow together. The opponent's immediate defense remains inside the
+original attempt's highlight because it establishes that attempt's outcome;
+if that defense also becomes a distinct intentional counter-technique, emit a
+separate overlapping highlight for the counter without truncating the
+original attempt before its result is visible.
 """.strip()
 
 TECHNIQUE_SCAN_INITIAL_PROMPT = """
@@ -117,13 +139,21 @@ Scan the requested BJJ match scope from absolute second $start_sec through
 $end_sec. Return an ordered list of every intentional technique event worth
 close analysis. For each event, report absolute start_s/end_s, a concrete
 body-movement description without a taxonomy label, and reasoning explaining
-the visible intentional grip, weight, hip, or limb change. Return only the
-required structured JSON.
+the visible intentional grip, weight, hip, or limb change. The description
+must cover the attempt's setup/execution AND the visible result cue; do not
+describe only the attacker's last motion.
+
+Before finalizing each end_s, inspect the later frames and apply the
+outcome-complete boundary contract. A viewer watching only start_s through
+end_s must be able to judge the event as successful, unsuccessful, or unclear.
+If the requested scope ends while the same attempt is unresolved, use
+$end_sec as end_s and state in reasoning that the outcome remains unclear at
+the scope boundary; never invent a result outside the available video.
 
 Return one intentional technique event per highlight and separate highlights
 for distinct sequential or overlapping actions. In particular, a sweep or
 reversal followed by a submission attempt is two highlights, not one compound
-highlight.
+highlight. Return only the required structured JSON.
 """.strip()
 
 TECHNIQUE_CRITIQUE_POSITION_INITIAL_PROMPT = (
