@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>BJJ Vision Engine — VLM Studio (QA)</title>
-<script src="https://www.youtube.com/iframe_api"></script>
 <style>
   :root {
     --bg: #0f1117;
@@ -873,6 +873,8 @@
 // Global state
 // ============================================================
 let ytApiReady = false;
+let ytApiLoading = false;
+let ytApiReadyTimeout = null;
 let pendingLoadId = null;
 let ytPlayer = null;
 let ytReady = false;
@@ -1030,31 +1032,108 @@ function loadVideo() {
   seekIntent = null;
   clearActivePill();
   logMsg('Loading video ' + res.id, 'log-info');
-  if (!ytApiReady) {
-    pendingLoadId = res.id;
+  pendingLoadId = res.id;
+  if (!ytApiReady || !youtubeApiAvailable()) {
+    ensureYouTubeIframeApi();
     return;
   }
+  pendingLoadId = null;
   createOrCuePlayer(res.id);
   updateScopeUiAndSendState();
 }
 
 function createOrCuePlayer(id) {
+  if (!youtubeApiAvailable()) {
+    ytApiReady = false;
+    pendingLoadId = id;
+    ensureYouTubeIframeApi();
+    return;
+  }
   if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
     ytPlayer.loadVideoById(id);
   } else {
-    ytPlayer = new YT.Player('yt-player', {
+    ytPlayer = new window.YT.Player('yt-player', {
       videoId: id,
       width: '100%',
       height: '100%',
-      playerVars: { rel: 0, playsinline: 1 },
-      events: { onReady: onPlayerReady, onStateChange: onPlayerStateChange }
+      playerVars: {
+        rel: 0,
+        playsinline: 1,
+        origin: window.location.origin,
+      },
+      events: {
+        onReady: onPlayerReady,
+        onStateChange: onPlayerStateChange,
+        onError: onPlayerError,
+      }
     });
   }
 }
 
-// Called by the YouTube IFrame API script once loaded.
+function youtubeApiAvailable() {
+  return Boolean(window.YT && typeof window.YT.Player === 'function');
+}
+
+function clearYoutubeLoadError() {
+  const errEl = document.getElementById('yt-error');
+  errEl.textContent = '';
+  errEl.style.display = 'none';
+}
+
+function showYoutubeLoadError(message) {
+  const errEl = document.getElementById('yt-error');
+  errEl.textContent = message;
+  errEl.style.display = 'block';
+  logMsg(message, 'log-err');
+}
+
+function ensureYouTubeIframeApi() {
+  // The provider callback is one-shot. If it fired before this page's inline
+  // script registered the callback, recover from the already-present API
+  // instead of leaving every Load click parked in pendingLoadId forever.
+  if (youtubeApiAvailable()) {
+    onYouTubeIframeAPIReady();
+    return;
+  }
+  if (ytApiLoading) return;
+
+  ytApiLoading = true;
+  clearYoutubeLoadError();
+  let script = document.querySelector('script[data-vlm-youtube-api]');
+  if (!script) {
+    script = document.createElement('script');
+    script.src = 'https://www.youtube.com/iframe_api';
+    script.async = true;
+    script.dataset.vlmYoutubeApi = 'true';
+    script.onerror = function() {
+      ytApiLoading = false;
+      if (ytApiReadyTimeout != null) clearTimeout(ytApiReadyTimeout);
+      ytApiReadyTimeout = null;
+      showYoutubeLoadError('Could not load the YouTube player API. Check browser or network blocking, then reload the page.');
+    };
+    document.head.appendChild(script);
+  }
+
+  if (ytApiReadyTimeout != null) clearTimeout(ytApiReadyTimeout);
+  ytApiReadyTimeout = setTimeout(function() {
+    ytApiReadyTimeout = null;
+    if (youtubeApiAvailable()) {
+      onYouTubeIframeAPIReady();
+      return;
+    }
+    ytApiLoading = false;
+    showYoutubeLoadError('YouTube player API did not become ready. Check browser privacy/content blocking, then reload the page.');
+  }, 12000);
+}
+
+// Called by the YouTube IFrame API script once loaded, or by the recovery
+// check above when the one-shot provider callback arrived too early.
 function onYouTubeIframeAPIReady() {
+  if (!youtubeApiAvailable()) return;
   ytApiReady = true;
+  ytApiLoading = false;
+  if (ytApiReadyTimeout != null) clearTimeout(ytApiReadyTimeout);
+  ytApiReadyTimeout = null;
   if (pendingLoadId) {
     const id = pendingLoadId;
     pendingLoadId = null;
@@ -1064,9 +1143,27 @@ function onYouTubeIframeAPIReady() {
 
 function onPlayerReady() {
   ytReady = true;
+  clearYoutubeLoadError();
   try { duration = ytPlayer.getDuration() || 0; } catch (e) { duration = 0; }
   logMsg('Player ready. duration=' + (duration ? secToMmss(duration) : 'unknown'), 'log-in');
   startPoller();
+  updateScopeUiAndSendState();
+}
+
+function onPlayerError(e) {
+  ytReady = false;
+  const code = Number(e && e.data);
+  const detail = {
+    2: 'The YouTube video ID or player parameter is invalid.',
+    5: 'The browser could not play this video in the HTML5 player.',
+    100: 'The video is unavailable, private, or removed.',
+    101: 'The video owner does not allow embedding.',
+    150: 'The video owner does not allow embedding.',
+    153: 'YouTube did not receive the required HTTP Referer or origin identification. Check privacy extensions or referrer policy.',
+  }[code] || 'The YouTube embedded player could not load this video.';
+  const message = 'YouTube player error ' + (Number.isFinite(code) ? code : 'unknown') + ': ' + detail;
+  document.getElementById('player-state-label').textContent = 'error';
+  showYoutubeLoadError(message);
   updateScopeUiAndSendState();
 }
 
@@ -5687,6 +5784,7 @@ document.getElementById('backend-url').addEventListener('change', async () => {
 // ============================================================
 setMode('event');
 setScopeType('timepoint');
+ensureYouTubeIframeApi();
 updateComposerPlaceholder();
 updateScopeUiAndSendState();
 updateSystemInstructionUi();
