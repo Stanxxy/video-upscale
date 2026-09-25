@@ -37,11 +37,11 @@ def test_capability_manifest_is_the_approved_production_contract():
     manifest = get_analysis_settings_capabilities()
 
     assert manifest.schema_version == 1
-    assert manifest.qualified_models == ("gemini-3.5-flash",)
+    assert manifest.qualified_models == ("gemini-3.8-flash",)
     assert manifest.media_resolutions == ("low", "medium", "high")
     assert manifest.analysis_fps == (1, 10)
-    assert manifest.thinking_levels == ("off", "low", "medium", "high")
-    assert manifest.recommended.model == "gemini-3.5-flash"
+    assert manifest.thinking_levels == ("low", "medium", "high")
+    assert manifest.recommended.model == "gemini-3.8-flash"
     assert manifest.recommended.media_resolution == "low"
     assert manifest.recommended.analysis_fps == 10
     assert manifest.recommended.thinking == "high"
@@ -57,7 +57,7 @@ def test_omitted_overrides_resolve_to_complete_immutable_stage_snapshot():
     effective = admitted.effective_analysis_config
     for stage_name in ("scan", "critique", "taxonomy", "actor"):
         stage = getattr(effective, stage_name)
-        assert stage.model == "gemini-3.5-flash"
+        assert stage.model == "gemini-3.8-flash"
         assert stage.media_resolution == "low"
         assert stage.thinking == "high"
     assert effective.scan.fps is None
@@ -106,8 +106,8 @@ def test_one_override_is_retained_raw_and_changes_only_its_mapped_axis():
     ("field", "value", "allowed"),
     [
         ("analysis_fps", 15, "1, 10"),
-        ("analysis_model", "gemini-3.1-flash-lite", "gemini-3.5-flash"),
-        ("analysis_thinking", "maximum", "off, low, medium, high"),
+        ("analysis_model", "gemini-3.1-flash-lite", "gemini-3.8-flash"),
+        ("analysis_thinking", "maximum", "low, medium, high"),
     ],
 )
 def test_off_manifest_values_fail_closed_with_allowed_values(field, value, allowed):
@@ -118,6 +118,13 @@ def test_off_manifest_values_fail_closed_with_allowed_values(field, value, allow
 
     assert field in str(exc.value)
     assert allowed in str(exc.value)
+
+
+def test_gemini38_rejects_disabled_thinking_and_legacy_model():
+    for override in ({"analysis_thinking": "off"}, {"analysis_model": "gemini-3.5-flash"}):
+        request = TrackRequest.model_construct(bucket="b", key="match.mp4", **override)
+        with pytest.raises(AnalysisSettingsValidationError):
+            resolve_analysis_settings(request)
 
 
 def test_effective_snapshot_maps_to_a_deep_copied_pipeline():
@@ -131,15 +138,15 @@ def test_effective_snapshot_maps_to_a_deep_copied_pipeline():
         admitted.effective_analysis_config,
     )
     stages = {stage.id: stage.config for stage in configured.stages}
-    assert stages["highlight_scan"]["model"] == "gemini-3.5-flash"
+    assert stages["highlight_scan"]["model"] == "gemini-3.8-flash"
     assert stages["highlight_scan"]["media_resolution"] == "low"
     assert stages["highlight_scan"]["thinking"] == "high"
     assert "fps" not in stages["highlight_scan"]
-    assert stages["highlight_critique"]["model"] == "gemini-3.5-flash"
+    assert stages["highlight_critique"]["model"] == "gemini-3.8-flash"
     assert "fps" not in stages["highlight_critique"]
     assert stages["highlight_analyze"]["fps"] == 1
-    assert stages["highlight_analyze"]["model"] == "gemini-3.5-flash"
-    assert stages["highlight_analyze"]["actor"]["model"] == "gemini-3.5-flash"
+    assert stages["highlight_analyze"]["model"] == "gemini-3.8-flash"
+    assert stages["highlight_analyze"]["actor"]["model"] == "gemini-3.8-flash"
     assert get_default("highlight-scan-critique-analyze") == original
 
 

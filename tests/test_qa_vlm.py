@@ -30,7 +30,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from google.genai import errors as genai_errors
 from httpx import ASGITransport, AsyncClient
 from PIL import Image, ImageDraw
@@ -889,6 +889,14 @@ def test_thinking_config_for_off_on_flash_is_explicit_budget_zero():
     cfg = qa_vlm_route.thinking_config_for("gemini-3.5-flash", "off")
     assert cfg.thinking_budget == 0
     assert cfg.thinking_level is None
+
+
+def test_gemini38_requires_thinking_when_requested():
+    assert qa_vlm_route.thinking_config_for("gemini-3.8-flash", None) is None
+    with pytest.raises(HTTPException) as exc:
+        qa_vlm_route.thinking_config_for("gemini-3.8-flash", "off")
+    assert exc.value.status_code == 400
+    assert qa_vlm_route.thinking_config_for("gemini-3.8-flash", "high").thinking_level == "HIGH"
 
 
 def test_thinking_config_for_off_or_omitted_on_pro_preview_forces_level_low():

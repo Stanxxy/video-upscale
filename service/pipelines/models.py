@@ -114,7 +114,7 @@ class DetectCropConfig(BaseModel):
     swap/late Gemini 4xx)."""
 
     model_config = ConfigDict(extra="forbid")
-    model: str = "gemini-3.5-flash"
+    model: str = "gemini-3.8-flash"
     padding: float = Field(default=0.2, ge=0.0, le=1.0)
     single_athlete_padding: float = Field(default=0.5, ge=0.0, le=1.0)
     min_crop_fraction: float = Field(default=0.4, gt=0.0, le=1.0)

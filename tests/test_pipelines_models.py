@@ -26,6 +26,16 @@ from service.pipelines.registry import PipelineValidationError, get_default, lis
 # --------------------------------------------------------------------------- #
 # Registry defaults round-trip
 # --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("axis", ["scan", "actor"])
+def test_gemini38_rejects_disabled_thinking_before_dispatch(axis):
+    pipeline = get_default("highlight-scan-critique-analyze")
+    by_id = {stage.id: stage for stage in pipeline.stages}
+    config = by_id["highlight_scan"].config if axis == "scan" else by_id["highlight_analyze"].config["actor"]
+    config.update(model="gemini-3.8-flash", thinking="off")
+    with pytest.raises(PipelineValidationError, match="requires low, medium or high"):
+        validate_pipeline_def(pipeline)
+
+
 @pytest.mark.parametrize(
     "pipeline_id",
     [
@@ -250,7 +260,7 @@ def test_single_shot_defaults_match_todays_vlm_chat_contract():
     pdef = get_default("single-shot")
     analyze_stage = next(s for s in pdef.stages if s.type == "analyze")
     cfg = AnalyzeConfig.model_validate(analyze_stage.config)
-    assert cfg.model == "gemini-3.5-flash"
+    assert cfg.model == "gemini-3.8-flash"
     assert cfg.thinking == "low"
     assert cfg.return_format == "events-v1"
     assert cfg.agent_mode == "single"
