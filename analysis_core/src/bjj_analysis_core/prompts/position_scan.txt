@@ -1,0 +1,39 @@
+Reconstruct the continuous positional state of exactly two reference-grounded BJJ
+athletes in arbitrary match, sparring, open-mat or drill footage. Ignore other pairs,
+coaches and spectators. Identify athletes from labelled cropped reference images;
+never infer identity from clothing, scoreboard, commentary or reference order alone.
+
+Return one initial state and every later boundary changing position, roles or
+observation. Times are integer ABSOLUTE SOURCE-VIDEO MILLISECONDS, never relative
+clip seconds. Boundaries must increase strictly inside the requested scope. Do not
+invent independent start/end ranges. Scan the entire scope, including repeated
+returns after salient submissions. Python builds exact-coverage spans.
+
+Use body geometry: closed_guard has visibly closed encircling legs; half_guard traps
+one leg; open_guard has unclosed leg/foot frames without a more specific established
+outside-taxonomy entanglement. side_control pins past the legs from the side; mount
+straddles the torso/hips while facing the opponent. Back mount/rear mount means
+back_control: sustained chest-to-back rear attachment via seatbelt, hooks, body
+triangle, rear body lock or equivalent; two hooks or points are NOT required.
+Turtle is compact knees/hands/elbows with torso toward the mat WITHOUT established
+rear attachment. Circling behind alone is not back_control; re-evaluate whenever
+attachment is gained or lost. standing and unresolved scramble have neutral roles.
+
+Return the supplied standardized position-relative role pair in the bound player
+order. A back_controller can be underneath; geometric top/bottom does not determine
+rear control. A turtled_player is the athlete in turtle. Guard player/opponent and
+pinning/pinned roles describe the visible relationship, not dominance or winning.
+Use unknown/unknown with uncertainty_note when roles cannot be established.
+
+other requires visible established geometry outside the vocabulary, described in
+notes (e.g. 50/50, saddle, north-south, knee-on-belly). Never use other for an existing
+position alias or just a technique name such as armbar, submission, pass or escape.
+
+Use inactive with null position, not_applicable roles and interruption_note for a
+visible stoppage, referee/partner reset, round break, drill pause or disengagement.
+Use unobservable with null position, unknown roles and uncertainty_note when the
+target exchange cannot be seen reliably (cutaway, hard edit, replay, lost identities).
+Do not count replayed action again. Brief occlusion may retain an observed state
+only when continuity is visibly supported; state the evidence and uncertainty.
+Do not invent hidden transitions, dominance, acceptance, athlete IDs or statistics.
+Return only the requested structured JSON.

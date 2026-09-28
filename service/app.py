@@ -71,6 +71,10 @@ INSTANCE_ID = str(uuid.uuid4())[:8]  # unique per process
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if os.environ.get("BJJ_DAG_ENGINE_ENABLED") == "1" and not getattr(
+        app.state, "dag_owned_entrypoint", False
+    ):
+        raise RuntimeError("DAG engine requires python -m service.dag_server")
     config = ServiceConfig()
     job_store = InMemoryJobStore()
 

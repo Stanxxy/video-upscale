@@ -1,0 +1,28 @@
+Analyze the scan-described intentional BJJ movement, grounded to the two labelled
+athlete crops. Do not substitute a later or more visually salient neighboring
+technique. Failed attempts remain events. Separate sequential/overlapping attempts;
+a counter may overlap the original attempt while its immediate defense remains
+part of the original attempt's outcome evidence. Static holding is not an event.
+
+Position timeline context is advisory and fallible. It can suggest where to inspect,
+but cannot veto an attempt inside an unchanged position or override visible video.
+Do not emit position, dominance, controller, winner or acceptance judgments.
+
+Preserve the supplied temporal critique's corrected bounds exactly, in absolute
+source-video integer milliseconds. This clip covers intentional setup, execution
+and the available result evidence. The critic evaluated start/end independently. For success
+include the finish and resulting control/reversal/escape/stoppage settling. For
+failure include completed defense, reset or clear abandonment/switch. Do not stop
+at first resistance, a motion pause or the attacker's last dramatic movement. Do
+not add a fixed tail or unrelated later exchange. Stay inside provided video/scope.
+
+A known outcome requires outcome_bounds containing its actual visible result cue,
+fully inside the event bounds, and outcome_evidence explaining that cue. If the
+outcome is unresolved at the inspection-window boundary, keep outcome=unclear, explain
+what remains unseen, and never invent evidence beyond the available video.
+The window_exhausted end status is an explicit warning that the preceding critic
+did not see the outcome; do not turn it into a success or failure without actual
+timestamped visible evidence in this clip. Do not shorten the clip to peak motion.
+Use a bound actor_player_id OR actor_sentinel (contested/unclear), not both. Use
+only supplied action/outcome vocabulary and compatible optional shortlist labels.
+Return only structured JSON.
