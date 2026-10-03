@@ -7,6 +7,7 @@ The host checkpoints uploads and owns qualification, leases and reconciliation.
 import asyncio
 import base64
 import hashlib
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -29,6 +30,7 @@ from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 ORIGIN = "https://generativelanguage.googleapis.com"
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+logger = logging.getLogger(__name__)
 
 
 class GeminiBoundaryError(RuntimeError):
@@ -261,32 +263,57 @@ class GeminiProvider:
         url = self._url(url, upload=upload)
         # Bound both total wall time and streamed response size. No redirect,
         # reconnect or retry loop. A lost response remains an uncertain outcome.
-        async with asyncio.timeout(self.timeout):
-            async with self.http.stream(method, url, **kwargs) as response:
-                parts, size = [], 0
-                async for chunk in response.aiter_bytes():
-                    size += len(chunk)
-                    if size > MAX_RESPONSE_BYTES:
-                        raise GeminiBoundaryError(
-                            "provider response exceeds byte limit"
-                        )
-                    parts.append(chunk)
-                raw = b"".join(parts)
-                envelope = dict(
-                    run_id=str(self.run.spec.run_id),
-                    identity=str(identity),
-                    kind=kind,
-                    recorded_at=self.now().isoformat(),
-                    status=response.status_code,
-                    body_base64=base64.b64encode(raw).decode(),
-                    context=context,
-                )
-                ref = await self.artifacts.retain(kind, identity, envelope)
-                if not 200 <= response.status_code < 300:
-                    raise GeminiBoundaryError(
-                        f"provider HTTP {response.status_code}; raw receipt retained"
-                    )
-                return raw, dict(response.headers), ref
+        try:
+            async with asyncio.timeout(self.timeout):
+                async with self.http.stream(method, url, **kwargs) as response:
+                    parts, size = [], 0
+                    async for chunk in response.aiter_bytes():
+                        size += len(chunk)
+                        if size > MAX_RESPONSE_BYTES:
+                            raise GeminiBoundaryError(
+                                "provider response exceeds byte limit"
+                            )
+                        parts.append(chunk)
+                    raw = b"".join(parts)
+        except GeminiBoundaryError:
+            raise
+        except Exception as error:
+            operation = (
+                kind
+                if kind
+                in {
+                    "upload_start",
+                    "upload_finalize",
+                    "file_get",
+                    "file_delete",
+                    "generate",
+                }
+                else "provider_request"
+            )
+            # Exception messages and request objects can contain credentials,
+            # signed upload URLs, or submitted media details. Log only safe tags.
+            logger.warning(
+                "Gemini provider transport failed operation=%s exception_class=%s",
+                operation,
+                type(error).__name__,
+            )
+            raise
+
+        envelope = dict(
+            run_id=str(self.run.spec.run_id),
+            identity=str(identity),
+            kind=kind,
+            recorded_at=self.now().isoformat(),
+            status=response.status_code,
+            body_base64=base64.b64encode(raw).decode(),
+            context=context,
+        )
+        ref = await self.artifacts.retain(kind, identity, envelope)
+        if not 200 <= response.status_code < 300:
+            raise GeminiBoundaryError(
+                f"provider HTTP {response.status_code}; raw receipt retained"
+            )
+        return raw, dict(response.headers), ref
 
     def _file(self, value, *, mime_type, expected_name=None, active=True):
         if not isinstance(value, dict):

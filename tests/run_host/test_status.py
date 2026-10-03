@@ -15,7 +15,7 @@ from test_dispatch import dispatch_tables, setup_dispatch
 from test_progress import nodes, positive_transport
 from test_worker import leases
 
-from service.analysis_gemini import GeminiBoundaryError
+from service.analysis_gemini import GeminiBoundaryError, GeminiProvider
 from service.analysis_run_worker import KeyspacesRunLease
 
 
@@ -174,6 +174,37 @@ async def test_uncertain_provider_failure_preserves_node_and_lifecycle_distincti
         ).one()
         == before
     )
+
+
+@pytest.mark.asyncio
+async def test_provider_transport_failure_logs_only_safe_diagnostics(caplog):
+    secret_detail = "signed-upload-url-and-prompt-must-not-be-logged"
+
+    async def handler(request):
+        raise httpx.ConnectError(secret_detail, request=request)
+
+    provider = object.__new__(GeminiProvider)
+    provider.timeout = 1
+    provider.http = httpx.AsyncClient(
+        headers={"x-goog-api-key": "fixture-secret"},
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        with pytest.raises(httpx.ConnectError, match=secret_detail):
+            await provider._request(
+                "POST",
+                "https://generativelanguage.googleapis.com/v1beta/models/fixture:generateContent",
+                "generate",
+                uuid4(),
+                json={"prompt": secret_detail},
+            )
+    finally:
+        await provider.aclose()
+
+    assert "operation=generate" in caplog.text
+    assert "exception_class=ConnectError" in caplog.text
+    assert secret_detail not in caplog.text
+    assert "fixture-secret" not in caplog.text
 
 
 @pytest.mark.asyncio
