@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from uuid import uuid4
 
 import httpx
@@ -205,6 +206,35 @@ async def test_provider_transport_failure_logs_only_safe_diagnostics(caplog):
     assert "exception_class=ConnectError" in caplog.text
     assert secret_detail not in caplog.text
     assert "fixture-secret" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_provider_receipt_retention_remains_inside_request_timeout(caplog):
+    async def handler(request):
+        return httpx.Response(200, json={"ok": True})
+
+    async def slow_retain(kind, identity, envelope):
+        await asyncio.sleep(1)
+
+    provider = object.__new__(GeminiProvider)
+    provider.timeout = 0.01
+    provider.run = SimpleNamespace(spec=SimpleNamespace(run_id=uuid4()))
+    provider.now = lambda: datetime.now(timezone.utc)
+    provider.artifacts = SimpleNamespace(retain=slow_retain)
+    provider.http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(TimeoutError):
+            await provider._request(
+                "POST",
+                "https://generativelanguage.googleapis.com/v1beta/models/fixture:generateContent",
+                "generate",
+                uuid4(),
+                json={"request": "fixture"},
+            )
+    finally:
+        await provider.aclose()
+
+    assert "Gemini provider transport failed" not in caplog.text
 
 
 @pytest.mark.asyncio
