@@ -226,7 +226,7 @@ class DurableGeminiRun:
         await self.guard()
         return result
 
-    async def execute(self, *, retry_failed=False):
+    async def execute(self, *, retry_failed=False, reissue_unknown=False):
         complete = await self._read("dag_complete")
         if complete is not None and complete.phase == "succeeded":
             # A deleted provider file must not force a new upload or inference
@@ -241,6 +241,7 @@ class DurableGeminiRun:
             sink=self.sink,
             guard=self.guard,
             retry_failed=retry_failed,
+            reissue_unknown=reissue_unknown,
             clock=self.clock,
         )
 

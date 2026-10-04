@@ -252,7 +252,13 @@ async def _drain(task):
 
 
 async def run_position_attempt(
-    lease, host_factory, *, heartbeat_seconds, recover=False, retry_failed=False
+    lease,
+    host_factory,
+    *,
+    heartbeat_seconds,
+    recover=False,
+    retry_failed=False,
+    reissue_unknown=False,
 ):
     """Run one explicit attempt, supervising media teardown and durable completion.
 
@@ -280,7 +286,9 @@ async def run_position_attempt(
             if host.run != lease.run:
                 raise ValueError("worker host differs from leased run")
             await lease.guard()
-            return await host.execute(retry_failed=retry_failed)
+            return await host.execute(
+                retry_failed=retry_failed, reissue_unknown=reissue_unknown
+            )
 
     heart = asyncio.create_task(pulse())
     work = asyncio.create_task(execute())

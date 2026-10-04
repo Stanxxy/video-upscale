@@ -134,12 +134,16 @@ class StepRunner:
         provider,
         *,
         retry_failed=False,
+        reissue_unknown=False,
         guard=None,
         clock=None,
     ):
         self.run, self.config = load_config(run, config_bytes)
         self.config_bytes, self.journal, self.provider = config_bytes, journal, provider
         self.retry_failed, self.guard = retry_failed, guard
+        # Owner-authorized resume only: a model call whose answer never arrived is
+        # sent again (a possible duplicate charge), bounded by max_call_attempts.
+        self.reissue_unknown = reissue_unknown
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def now(self):
@@ -181,7 +185,10 @@ class StepRunner:
                 )
             if previous.phase in ("succeeded", "responded"):
                 return previous
-            if previous.phase == "running" and request is not None:
+            if previous.phase == "running" and request is not None and (
+                not self.reissue_unknown
+                or previous.progress.attempt >= self.config.max_call_attempts
+            ):
                 raise RecoveryRequired(
                     "provider dispatch outcome unknown; reconcile before retry"
                 )

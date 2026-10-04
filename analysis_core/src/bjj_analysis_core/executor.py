@@ -53,6 +53,7 @@ async def execute_pipeline(
     sink,
     guard,
     retry_failed=False,
+    reissue_unknown=False,
     clock=None,
 ):
     if not callable(guard):
@@ -65,6 +66,7 @@ async def execute_pipeline(
         journal,
         provider,
         retry_failed=retry_failed,
+        reissue_unknown=reissue_unknown,
         guard=guard,
         clock=clock,
     )

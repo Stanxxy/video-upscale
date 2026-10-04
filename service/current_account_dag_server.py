@@ -18,6 +18,7 @@ from shared_lib.infrastructure.dag_internal_transport import (
 from shared_lib.infrastructure.dag_service_runtime import DagServiceRuntime
 
 from service.analysis_gemini import qualified_model_versions
+from service.analysis_run_recovery import OwnerRunRecovery
 from service.analysis_run_schedule import OwnerPositionRunSchedule
 from service.result_delivery_supervisor import ResultDeliverySupervisor
 
@@ -134,6 +135,11 @@ def current_account_position_dispatcher(
     )
 
 
+def current_account_run_recovery(dispatcher):
+    """Owner-requested recovery queue for the account lane of ``dispatcher``."""
+    return OwnerRunRecovery(OwnerPositionRunSchedule(dispatcher, owner_kind="account"))
+
+
 def current_account_engine_service_runtime(
     dispatcher,
     sns_client,
@@ -145,8 +151,13 @@ def current_account_engine_service_runtime(
     observe_delivery,
     on_failure,
     interval_seconds=5,
+    recovery=None,
+    observe_recovery=None,
 ):
     """Build supervised account scheduling, enqueue and result delivery workers.
+
+    ``recovery`` (an account-lane ``OwnerRunRecovery`` on this dispatcher) adds
+    the worker that resumes owner-requested stalled runs.
 
     The caller retains ownership of native clients and the dispatcher and must
     drain this runtime before closing them, matching ``DagServiceRuntime``'s
@@ -193,6 +204,14 @@ def current_account_engine_service_runtime(
     if not callable(observe_schedule) or not callable(observe_delivery):
         raise ValueError("schedule and delivery observers are required")
 
+    if recovery is not None and (
+        not isinstance(recovery, OwnerRunRecovery)
+        or recovery.dispatcher is not dispatcher
+        or recovery.schedule.owner_kind != "account"
+        or not callable(observe_recovery)
+    ):
+        raise ValueError("account recovery must share this dispatcher and have an observer")
+
     schedule = OwnerPositionRunSchedule(dispatcher, owner_kind="account")
 
     async def enqueue(run_id, owner_kind):
@@ -226,9 +245,17 @@ def current_account_engine_service_runtime(
             interval_seconds=interval_seconds,
         )
 
+    workers = {"account_schedule": schedule_work, "account_delivery": delivery_work}
+    if recovery is not None:
+
+        async def recovery_work(stop):
+            await recovery.run(stop, observe=observe_recovery)
+
+        workers["account_recovery"] = recovery_work
+
     return DagServiceRuntime(
         application=endpoint,
         settings=listener_settings,
-        workers={"account_schedule": schedule_work, "account_delivery": delivery_work},
+        workers=workers,
         on_failure=on_failure,
     )

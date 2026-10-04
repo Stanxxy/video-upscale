@@ -410,6 +410,65 @@ async def test_competing_workers_reserve_one_provider_call(run, configuration, s
     assert len(provider.calls) == 1
 
 
+class _WorkerDied(BaseException):
+    """A process death: nothing in the runner gets to record an outcome."""
+
+
+async def _interrupt_in_flight(run, configuration, journal, provider, clock, request, **flags):
+    """Leave a reserved model call with no answer, as a crashed worker would."""
+    original = provider.generate
+
+    async def die(*args):
+        raise _WorkerDied()
+
+    provider.generate = die
+    with pytest.raises(_WorkerDied):
+        await StepRunner(run, configuration, journal, provider, clock=clock, **flags).model(request)
+    provider.generate = original
+
+
+@pytest.mark.asyncio
+async def test_owner_resume_resends_an_unanswered_call_only_when_authorized(
+    run, configuration, setup
+):
+    _, journal, clock, sink, provider = setup
+    request = prepare_call(
+        run, configuration, "position_scan", input_window=run.spec.scope, context={}
+    )
+    await _interrupt_in_flight(run, configuration, journal, provider, clock, request)
+    with pytest.raises(RecoveryRequired, match="outcome unknown"):
+        await StepRunner(
+            run, configuration, journal, provider, retry_failed=True, clock=clock
+        ).model(request)
+    calls = len(provider.calls)
+    await StepRunner(
+        run, configuration, journal, provider, reissue_unknown=True, clock=clock
+    ).model(request)
+    assert len(provider.calls) == calls + 1
+    [record] = [r for r in journal.records() if r.phase == "succeeded"]
+    assert record.progress.attempt == 2
+
+
+@pytest.mark.asyncio
+async def test_owner_resume_stops_resending_at_the_attempt_limit(
+    run, configuration, setup
+):
+    _, journal, clock, sink, provider = setup
+    request = prepare_call(
+        run, configuration, "position_scan", input_window=run.spec.scope, context={}
+    )
+    limit = StepRunner(run, configuration, journal, provider, clock=clock).config.max_call_attempts
+    await _interrupt_in_flight(run, configuration, journal, provider, clock, request)
+    for _ in range(limit - 1):
+        await _interrupt_in_flight(
+            run, configuration, journal, provider, clock, request, reissue_unknown=True
+        )
+    with pytest.raises(RecoveryRequired, match="outcome unknown"):
+        await StepRunner(
+            run, configuration, journal, provider, reissue_unknown=True, clock=clock
+        ).model(request)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "field",

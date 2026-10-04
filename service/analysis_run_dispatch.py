@@ -68,13 +68,15 @@ class _AttemptHost:
     def __init__(self, host, actions):
         self.host, self.actions, self.run = host, actions, host.run
 
-    async def execute(self, *, retry_failed=False):
+    async def execute(self, *, retry_failed=False, reissue_unknown=False):
         host, actions = self.host, self.actions
         if actions.upload_receipt is not None:
             await host.reconcile_upload(actions.upload_receipt)
         if actions.cleanup_receipt is not None:
             await host.reconcile_cleanup(actions.cleanup_receipt)
-        result = await host.execute(retry_failed=retry_failed)
+        result = await host.execute(
+            retry_failed=retry_failed, reissue_unknown=reissue_unknown
+        )
         if actions.cleanup:
             await host.cleanup()
         else:
@@ -277,7 +279,13 @@ class PositionRunDispatcher:
         return await read_result_status(run, self.outbox, guard=guard)
 
     async def dispatch(
-        self, run_id, *, recover=False, retry_failed=False, provider_actions=None
+        self,
+        run_id,
+        *,
+        recover=False,
+        retry_failed=False,
+        reissue_unknown=False,
+        provider_actions=None,
     ):
         """Trusted internal invocation by stored UUID only, never a browser payload.
 
@@ -310,4 +318,5 @@ class PositionRunDispatcher:
                 heartbeat_seconds=self.heartbeat_seconds,
                 recover=recover,
                 retry_failed=retry_failed,
+                reissue_unknown=reissue_unknown,
             )
