@@ -12,6 +12,8 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from service.analysis_checkpoint_journal import _target
+
 from service.analysis_run_schedule import (
     OwnerPositionRunSchedule,
     ScheduledAttempt,
@@ -22,7 +24,20 @@ from service.analysis_run_worker import LeaseLost
 STALLED = "stalled"
 NOT_STALLED = "not_stalled"
 NOT_RECOVERABLE = "not_recoverable"
+LIMIT_REACHED = "limit_reached"
 ACCEPTED = "accepted"
+# Owner resumes per run: one after a stop, one more if the resumed run stops again.
+RESUME_LIMIT = 2
+RESUMES_TABLE = "analysis_run_resumes"
+
+
+def resumes_table_ddl(keyspace):
+    """Per-run resume budget; ordinals are claimed with lightweight transactions."""
+    return (
+        f"CREATE TABLE IF NOT EXISTS {_target(keyspace, RESUMES_TABLE)} ("
+        "job_id text, ordinal int, command_id text, requested_at timestamp, "
+        "PRIMARY KEY (job_id, ordinal))"
+    )
 
 
 class RecoveryUnavailable(RuntimeError):
@@ -36,6 +51,7 @@ class OwnerRunRecovery:
         if type(capacity) is not int or not 1 <= capacity <= 64:
             raise ValueError("bounded recovery capacity required")
         self.schedule = schedule
+        self.resumes = _target(schedule.dispatcher.keyspace, RESUMES_TABLE)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self.queue = asyncio.Queue(capacity)
         self.pending = set()
@@ -63,21 +79,67 @@ class OwnerRunRecovery:
         run = await self.schedule._run(UUID(str(run_id)))
         return self._classify(await self.schedule._state(run))
 
-    async def request(self, run_id):
+    async def _claimed(self, run_id):
+        rows = await self.schedule._execute(
+            f"SELECT ordinal, command_id FROM {self.resumes} WHERE job_id=%s",
+            [str(run_id)],
+        )
+        return {row.ordinal: row.command_id for row in rows}
+
+    @staticmethod
+    def _result(outcome, ordinal=None):
+        return {"outcome": outcome, "ordinal": ordinal, "limit": RESUME_LIMIT}
+
+    async def status(self, run_id):
+        """Eligibility plus the run's resume budget (used of ``RESUME_LIMIT``)."""
         run_id = UUID(str(run_id))
-        if run_id in self.pending:
-            return ACCEPTED
         eligibility = await self.eligibility(run_id)
-        if eligibility != STALLED:
-            return eligibility
-        if run_id in self.pending:
-            return ACCEPTED
-        try:
-            self.queue.put_nowait(run_id)
-        except asyncio.QueueFull as error:
-            raise RecoveryUnavailable("recovery queue is full") from error
-        self.pending.add(run_id)
-        return ACCEPTED
+        return {"eligibility": eligibility, "used": len(await self._claimed(run_id)), "limit": RESUME_LIMIT}
+
+    async def request(self, run_id, command_id):
+        """Claim one resume and queue the run.
+
+        Returns ``{"outcome", "ordinal", "limit"}``; ``ordinal`` is None on refusal.
+
+        A replayed ``command_id`` returns its original ordinal and never claims
+        another resume; a refused or unqueued request leaves the budget unchanged.
+        """
+        run_id, command_id = UUID(str(run_id)), str(UUID(str(command_id)))
+        run = await self.schedule._run(run_id)
+        for _ in range(3):
+            claimed = await self._claimed(run_id)
+            for ordinal, existing in claimed.items():
+                if existing == command_id:
+                    return self._result(ACCEPTED, ordinal)
+            eligibility = self._classify(await self.schedule._state(run))
+            if eligibility != STALLED:
+                return self._result(eligibility)
+            if len(claimed) >= RESUME_LIMIT:
+                return self._result(LIMIT_REACHED)
+            ordinal = len(claimed) + 1
+            rows = await self.schedule._execute(
+                f"INSERT INTO {self.resumes} (job_id,ordinal,command_id,requested_at) "
+                "VALUES (%s,%s,%s,%s) IF NOT EXISTS",
+                [str(run_id), ordinal, command_id, self.clock()],
+                conditional=True,
+            )
+            if len(rows) != 1 or type(getattr(rows[0], "applied", None)) is not bool:
+                raise RuntimeError("resume claim unconfirmed")
+            if not rows[0].applied:
+                continue  # A concurrent request took this ordinal; re-read.
+            if run_id not in self.pending:
+                try:
+                    self.queue.put_nowait(run_id)
+                except asyncio.QueueFull as error:
+                    await self.schedule._execute(
+                        f"DELETE FROM {self.resumes} WHERE job_id=%s AND ordinal=%s IF command_id=%s",
+                        [str(run_id), ordinal, command_id],
+                        conditional=True,
+                    )
+                    raise RecoveryUnavailable("recovery queue is full") from error
+                self.pending.add(run_id)
+            return self._result(ACCEPTED, ordinal)
+        raise RecoveryUnavailable("resume claim kept conflicting")
 
     async def _recover(self, run_id):
         try:

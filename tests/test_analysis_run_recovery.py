@@ -9,11 +9,14 @@ from shared_lib.infrastructure.dag_internal_transport import DagServiceKey
 from shared_lib.infrastructure.dag_service_runtime import DagListenerSettings
 from service.analysis_run_recovery import (
     ACCEPTED,
+    LIMIT_REACHED,
     NOT_RECOVERABLE,
     NOT_STALLED,
+    RESUME_LIMIT,
     STALLED,
     OwnerRunRecovery,
     RecoveryUnavailable,
+    resumes_table_ddl,
 )
 from service.analysis_run_schedule import OwnerPositionRunSchedule
 from service.analysis_run_worker import LeaseLost
@@ -35,7 +38,25 @@ class FakeSchedule(OwnerPositionRunSchedule):
 
     def __init__(self, dispatcher, states):
         super().__init__(dispatcher, owner_kind="account")
-        self.states, self.retired = states, []
+        self.states, self.retired, self.claims = states, [], {}
+
+    async def _execute(self, query, values, *, conditional=False):
+        """The resumes table, with Cassandra lightweight-transaction results."""
+        if query.startswith("SELECT ordinal"):
+            return [SimpleNamespace(ordinal=o, command_id=c) for (j, o), c in sorted(self.claims.items()) if j == values[0]]
+        if query.startswith("INSERT"):
+            key = (values[0], values[1])
+            if key in self.claims:
+                return [SimpleNamespace(applied=False)]
+            self.claims[key] = values[2]
+            return [SimpleNamespace(applied=True)]
+        if query.startswith("DELETE"):
+            key = (values[0], values[1])
+            applied = self.claims.get(key) == values[2]
+            if applied:
+                del self.claims[key]
+            return [SimpleNamespace(applied=applied)]
+        raise AssertionError(query)
 
     async def _run(self, run_id):
         if run_id not in self.states:
@@ -88,32 +109,68 @@ def test_eligibility_follows_the_lifecycle_row(state, expected):
     assert asyncio.run(recovery.eligibility(run_id)) == expected
 
 
-def test_only_stalled_runs_are_queued_and_a_repeat_request_is_not_queued_twice():
+def test_only_stalled_runs_are_queued_and_a_replayed_command_keeps_its_ordinal():
     stalled, live = uuid4(), uuid4()
-    recovery, _, _ = _recovery(
+    recovery, schedule, _ = _recovery(
         {stalled: _state("RUNNING", heartbeat_age=120), live: _state("RUNNING")}
     )
+    command = uuid4()
 
     async def exercise():
-        assert await recovery.request(live) == NOT_STALLED
-        assert await recovery.request(stalled) == ACCEPTED
-        assert await recovery.request(stalled) == ACCEPTED
+        assert await recovery.request(live, uuid4()) == {"outcome": NOT_STALLED, "ordinal": None, "limit": RESUME_LIMIT}
+        assert await recovery.request(stalled, command) == {"outcome": ACCEPTED, "ordinal": 1, "limit": RESUME_LIMIT}
+        assert await recovery.request(stalled, command) == {"outcome": ACCEPTED, "ordinal": 1, "limit": RESUME_LIMIT}
+        assert (await recovery.status(stalled))["used"] == 1
         return recovery.queue.qsize()
 
     assert asyncio.run(exercise()) == 1
+    assert not any(job == str(live) for job, _ in schedule.claims)
 
 
-def test_a_full_queue_reports_unavailable_instead_of_dropping_the_request():
+def test_two_resumes_per_run_then_limit_reached():
+    run_id = uuid4()
+    recovery, _, _ = _recovery({run_id: _state("INTERRUPTED")})
+
+    async def exercise():
+        assert await recovery.request(run_id, uuid4()) == {"outcome": ACCEPTED, "ordinal": 1, "limit": RESUME_LIMIT}
+        recovery.pending.clear()  # the first resume ran and the run stopped again
+        assert await recovery.request(run_id, uuid4()) == {"outcome": ACCEPTED, "ordinal": 2, "limit": RESUME_LIMIT}
+        assert await recovery.request(run_id, uuid4()) == {"outcome": LIMIT_REACHED, "ordinal": None, "limit": RESUME_LIMIT}
+        status = await recovery.status(run_id)
+        assert status == {"eligibility": STALLED, "used": RESUME_LIMIT, "limit": RESUME_LIMIT}
+
+    asyncio.run(exercise())
+
+
+def test_a_concurrent_claim_moves_to_the_next_ordinal():
+    run_id = uuid4()
+    recovery, schedule, _ = _recovery({run_id: _state("INTERRUPTED")})
+    schedule.claims[(str(run_id), 1)] = "racing-command"
+    original = schedule._execute
+    calls = {"select": 0}
+
+    async def racing(query, values, *, conditional=False):
+        if query.startswith("SELECT ordinal") and calls["select"] == 0:
+            calls["select"] += 1
+            return []  # first read missed the racing claim
+        return await original(query, values, conditional=conditional)
+
+    schedule._execute = racing
+    assert asyncio.run(recovery.request(run_id, uuid4())) == {"outcome": ACCEPTED, "ordinal": 2, "limit": RESUME_LIMIT}
+
+
+def test_a_full_queue_releases_the_claim_and_reports_unavailable():
     first, second = uuid4(), uuid4()
-    recovery, _, _ = _recovery(
+    recovery, schedule, _ = _recovery(
         {first: _state("INTERRUPTED"), second: _state("INTERRUPTED")}, capacity=1
     )
 
     async def exercise():
-        await recovery.request(first)
+        await recovery.request(first, uuid4())
         with pytest.raises(RecoveryUnavailable):
-            await recovery.request(second)
+            await recovery.request(second, uuid4())
         assert second not in recovery.pending
+        assert (await recovery.status(second))["used"] == 0
 
     asyncio.run(exercise())
 
@@ -121,7 +178,12 @@ def test_a_full_queue_reports_unavailable_instead_of_dropping_the_request():
 def test_another_owners_run_is_refused_by_the_lane():
     recovery, _, _ = _recovery({})
     with pytest.raises(PermissionError):
-        asyncio.run(recovery.request(uuid4()))
+        asyncio.run(recovery.request(uuid4(), uuid4()))
+
+
+def test_resumes_table_ddl_is_keyspace_scoped():
+    ddl = resumes_table_ddl("bjj_s39")
+    assert "bjj_s39.analysis_run_resumes" in ddl and "PRIMARY KEY (job_id, ordinal)" in ddl
 
 
 def test_worker_resumes_with_recovery_flags_and_retires_the_completed_run():
@@ -136,7 +198,7 @@ def test_worker_resumes_with_recovery_flags_and_retires_the_completed_run():
             observed.append(attempt)
             stop.set()
 
-        await recovery.request(run_id)
+        await recovery.request(run_id, uuid4())
         await asyncio.wait_for(recovery.run(stop, observe=observe), 2)
 
     asyncio.run(exercise())
@@ -163,7 +225,7 @@ def test_a_lost_lease_is_reported_without_retiring_the_run():
             observed.append(attempt.status)
             stop.set()
 
-        await recovery.request(run_id)
+        await recovery.request(run_id, uuid4())
         await asyncio.wait_for(recovery.run(stop, observe=observe), 2)
 
     asyncio.run(exercise())
