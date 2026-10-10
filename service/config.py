@@ -26,7 +26,7 @@ class ServiceConfig(BaseSettings):
     trial_aws_access_key_id: str = "test"
     trial_aws_secret_access_key: str = "test"
     sns_topic_arn: str = ""
-    sns_endpoint_url: str = ""  # LocalStack SNS for 000000000000 ARNs; real AWS ARNs ignore this.
+    sns_endpoint_url: str = ""  # LocalStack SNS, used only for ARNs of the emulator account implied by aws_access_key_id (default 000000000000, or a 12-digit namespace key); real AWS ARNs ignore this.
 
     # Gemini (credential – set in .env, do not commit)
     gemini_api_key: str = ""
