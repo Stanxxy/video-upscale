@@ -192,9 +192,16 @@ class StepRunner:
                 raise RecoveryRequired(
                     "provider dispatch outcome unknown; reconcile before retry"
                 )
+            # An owner resume may also re-send a call whose dispatch raised with an
+            # unknown outcome (DISPATCH_UNCERTAIN): same risk as an unanswered call.
+            unknown_outcome = (
+                self.reissue_unknown
+                and request is not None
+                and previous.phase == "failed"
+                and previous.progress.error_code == "DISPATCH_UNCERTAIN"
+            )
             if previous.phase in ("failed", "cancelled") and (
-                not self.retry_failed
-                or not previous.retryable
+                not (unknown_outcome or (self.retry_failed and previous.retryable))
                 or previous.progress.attempt >= self.config.max_call_attempts
             ):
                 raise RecoveryRequired(

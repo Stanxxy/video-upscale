@@ -9,6 +9,7 @@ by each step's ``max_call_attempts``; the lifecycle CAS prevents a double claim.
 """
 
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
@@ -20,6 +21,8 @@ from service.analysis_run_schedule import (
     _stamp,
 )
 from service.analysis_run_worker import LeaseLost
+
+LOG = logging.getLogger(__name__)
 
 STALLED = "stalled"
 NOT_STALLED = "not_stalled"
@@ -152,7 +155,9 @@ class OwnerRunRecovery:
         except LeaseLost:
             # Another owner already holds a fresh lease; nothing was resumed.
             return ScheduledAttempt(run_id, "lease_lost")
-        except Exception:
+        except Exception as error:
+            # Class and engine message only; provider payloads never reach this log.
+            LOG.warning("owner recovery of %s stopped: %s: %s", run_id, type(error).__name__, str(error)[:200])
             return ScheduledAttempt(run_id, "unconfirmed")
         finally:
             self.pending.discard(run_id)

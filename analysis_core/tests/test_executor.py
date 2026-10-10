@@ -450,6 +450,34 @@ async def test_owner_resume_resends_an_unanswered_call_only_when_authorized(
 
 
 @pytest.mark.asyncio
+async def test_owner_resume_resends_a_call_that_failed_with_an_unknown_outcome(
+    run, configuration, setup
+):
+    _, journal, clock, sink, provider = setup
+    request = prepare_call(
+        run, configuration, "position_scan", input_window=run.spec.scope, context={}
+    )
+    original = provider.generate
+
+    async def broken(*args):
+        raise ConnectionError("provider connection dropped")
+
+    provider.generate = broken
+    with pytest.raises(ConnectionError):
+        await StepRunner(run, configuration, journal, provider, clock=clock).model(request)
+    provider.generate = original
+    with pytest.raises(RecoveryRequired, match="bounded recovery"):
+        await StepRunner(
+            run, configuration, journal, provider, retry_failed=True, clock=clock
+        ).model(request)
+    await StepRunner(
+        run, configuration, journal, provider, reissue_unknown=True, clock=clock
+    ).model(request)
+    [record] = [r for r in journal.records() if r.phase == "succeeded"]
+    assert record.progress.attempt == 2
+
+
+@pytest.mark.asyncio
 async def test_owner_resume_stops_resending_at_the_attempt_limit(
     run, configuration, setup
 ):
