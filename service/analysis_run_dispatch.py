@@ -123,7 +123,7 @@ class PositionRunDispatcher:
         mime_type,
         concurrency=1,
         checkpoint_timeout=10,
-        provider_timeout=180,
+        provider_timeout=600,
         transport=None,
     ):
         if type(concurrency) is not int or concurrency < 1:

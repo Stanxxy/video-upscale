@@ -211,7 +211,7 @@ class GeminiProvider:
         api_key,
         qualified_models,
         guard,
-        timeout_seconds=180,
+        timeout_seconds=600,
         clock=None,
         transport=None,
     ):
