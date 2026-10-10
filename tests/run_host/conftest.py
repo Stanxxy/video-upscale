@@ -1,6 +1,7 @@
 """Reuse exact-media fixtures, adding a disposable real checkpoint keyspace."""
 
 import importlib.util
+import logging
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -29,6 +30,12 @@ media_bytes = media_fixtures.media_bytes
 inputs = media_fixtures.inputs
 resolver = media_fixtures.resolver
 Wire = load_fixture_module("s39_host_wire_fixture", "test_gemini.py").Wire
+
+
+@pytest.fixture(autouse=True)
+def service_logs_reach_caplog(monkeypatch):
+    # Importing service.app (test_server) detaches the "service" logger from root.
+    monkeypatch.setattr(logging.getLogger("service"), "propagate", True)
 
 
 @pytest.fixture(scope="module")
