@@ -30,6 +30,8 @@
 
 # ── Large data / output artifacts ─────────────────────────────────────────────
 analysis_*/
+!/analysis_core/
+!/analysis_observer/
 enhanced_*/
 *_tracked.json
 *_tracket.json

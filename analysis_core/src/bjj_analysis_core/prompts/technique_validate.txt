@@ -1,0 +1,14 @@
+Review the specified candidate's proposed technique against the described target
+movement and visible footage, not a neighboring action or an expected position
+sequence. The position timeline is advisory, never authoritative over video.
+Return the same candidate_id and one verdict: agree, correct, or ditch.
+Agree must preserve every proposed technique field. Correct must supply complete
+corrected fields supported by visible evidence. Ditch only if no intentional
+technique occurred: set intentional_technique_visible=false and technique=null.
+Every real failed attempt survives; set intentional_technique_visible=true for a
+surviving event. Do not invent a reason to disagree merely to be adversarial.
+Check actor identity, action, outcome AND outcome-complete absolute millisecond
+bounds. Known outcomes need a timestamped cue fully inside the clip; otherwise
+correct the clip within the observed window or mark the outcome unclear and explain.
+Do not silently truncate result evidence or infer success from a position label.
+Return only structured JSON with a concrete evidence-based reason.

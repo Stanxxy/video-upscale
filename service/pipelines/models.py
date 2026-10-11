@@ -114,7 +114,7 @@ class DetectCropConfig(BaseModel):
     swap/late Gemini 4xx)."""
 
     model_config = ConfigDict(extra="forbid")
-    model: str = "gemini-3.5-flash"
+    model: str = "gemini-3.8-flash"
     padding: float = Field(default=0.2, ge=0.0, le=1.0)
     single_athlete_padding: float = Field(default=0.5, ge=0.0, le=1.0)
     min_crop_fraction: float = Field(default=0.4, gt=0.0, le=1.0)
@@ -137,7 +137,7 @@ class AnalyzeConfig(BaseModel):
     """``analyze`` — the Gemini call node. ``model``/``thinking`` default to the
     production analyzer default (``gemini-3.1-flash-lite``, no thinking_config);
     the ``single-shot`` pipeline overrides these to today's vlm-chat defaults
-    (``gemini-3.5-flash``, thinking ``low``) in its own registry entry.
+    (``gemini-3.8-flash``, thinking ``low``) in its own registry entry.
     ``return_format`` selects the response schema (build plan §3.5).
 
     ``model`` is allowlist-validated against ``qa_vlm.EVENT_MODELS`` at
