@@ -1,8 +1,8 @@
 """Account-only current DAG runtime composition.
 
-This opt-in seam deliberately coexists with ``service.dag_runtime``'s existing
-two-lane composition. It does not synthesize a session lane or alter the public
-engine protocol.
+The current account host's binding of ``service.single_lane_dag_server``: every
+entry point here refuses anything but the account lane, and the dispatcher reads
+only the account namespace's admitted stores.
 """
 
 from __future__ import annotations
@@ -11,19 +11,17 @@ from pathlib import Path
 
 from shared_lib.infrastructure.dag_internal_transport import (
     DagInternalClient,
-    DagInternalEndpoint,
-    DagRunAuthority,
     DagServiceKey,
 )
-from shared_lib.infrastructure.dag_service_runtime import DagServiceRuntime
 
-from service.analysis_gemini import qualified_model_versions
-from service.analysis_run_recovery import OwnerRunRecovery
-from service.analysis_run_schedule import OwnerPositionRunSchedule
-from service.result_delivery_supervisor import ResultDeliverySupervisor
+from service.single_lane_dag_server import (
+    SingleLaneDagRunAuthority,
+    single_lane_engine_service_runtime,
+    single_lane_run_recovery,
+)
 
 
-class AccountOnlyDagRunAuthority(DagRunAuthority):
+class AccountOnlyDagRunAuthority(SingleLaneDagRunAuthority):
     """Signed authority containing exactly one genuine account host client."""
 
     def __init__(self, account: DagInternalClient):
@@ -31,10 +29,7 @@ class AccountOnlyDagRunAuthority(DagRunAuthority):
             raise TypeError("one signed account authority client is required")
         if account.key.owner_kind != "account":
             raise ValueError("account authority client must be account-bound")
-        # Keep the inherited callback and deny-by-absence behavior for every
-        # unsupported owner kind. The base constructor is intentionally not
-        # called because it requires a session lane.
-        self.clients = {"account": account}
+        super().__init__(account)
 
 
 def current_account_authority_client(
@@ -135,127 +130,22 @@ def current_account_position_dispatcher(
     )
 
 
-def current_account_run_recovery(dispatcher):
-    """Owner-requested recovery queue for the account lane of ``dispatcher``."""
-    return OwnerRunRecovery(OwnerPositionRunSchedule(dispatcher, owner_kind="account"))
-
-
-def current_account_engine_service_runtime(
-    dispatcher,
-    sns_client,
-    *,
-    listener_settings,
-    enqueue_key: DagServiceKey,
-    enqueue_audience,
-    observe_schedule,
-    observe_delivery,
-    on_failure,
-    interval_seconds=5,
-    recovery=None,
-    observe_recovery=None,
-):
-    """Build supervised account scheduling, enqueue and result delivery workers.
-
-    ``recovery`` (an account-lane ``OwnerRunRecovery`` on this dispatcher) adds
-    the worker that resumes owner-requested stalled runs.
-
-    The caller retains ownership of native clients and the dispatcher and must
-    drain this runtime before closing them, matching ``DagServiceRuntime``'s
-    lifetime contract.
-    """
+def _require_account(dispatcher):
     if not isinstance(getattr(dispatcher, "authority", None), AccountOnlyDagRunAuthority):
         raise ValueError("current account dispatcher requires account-only signed authority")
-    authority = dispatcher.authority
-    if set(authority.clients) != {"account"}:
-        raise ValueError("current account authority must contain only the account lane")
-    account_client = authority.clients["account"]
-    if (
-        not isinstance(account_client, DagInternalClient)
-        or account_client.key.owner_kind != "account"
-    ):
-        raise ValueError("current account authority client is invalid")
-    if (
-        not isinstance(enqueue_key, DagServiceKey)
-        or enqueue_key.owner_kind != "account"
-        or enqueue_key.secret == account_client.key.secret
-    ):
-        raise ValueError("one distinct account enqueue credential is required")
-    if not callable(getattr(sns_client, "publish", None)):
-        raise ValueError("real result publication client is required")
-    proposals = getattr(dispatcher, "proposals", None)
-    outbox = getattr(dispatcher, "outbox", None)
-    artifact_bucket = getattr(dispatcher, "bucket", None)
-    allowed_buckets = getattr(dispatcher, "allowed_buckets", None)
-    if (
-        proposals is None
-        or outbox is None
-        or getattr(outbox, "proposals", None) is not proposals
-        or not getattr(getattr(proposals, "tables", None), "runs", None)
-        or not getattr(getattr(outbox, "table", None), "name", None)
-        or not isinstance(artifact_bucket, str)
-        or not artifact_bucket.strip()
-        or not isinstance(allowed_buckets, (set, frozenset))
-        or artifact_bucket not in allowed_buckets
-    ):
-        raise ValueError("current account dispatcher resources are incomplete")
-    qualified_model_versions(dispatcher.qualified_models)
-    if not isinstance(dispatcher.api_key, str) or not dispatcher.api_key.strip():
-        raise ValueError("explicit qualified-provider credential is required")
-    if not callable(observe_schedule) or not callable(observe_delivery):
-        raise ValueError("schedule and delivery observers are required")
 
-    if recovery is not None and (
-        not isinstance(recovery, OwnerRunRecovery)
-        or recovery.dispatcher is not dispatcher
-        or recovery.schedule.owner_kind != "account"
-        or not callable(observe_recovery)
-    ):
-        raise ValueError("account recovery must share this dispatcher and have an observer")
 
-    schedule = OwnerPositionRunSchedule(dispatcher, owner_kind="account")
+def current_account_run_recovery(dispatcher):
+    """Owner-requested recovery queue for the account lane of ``dispatcher``."""
+    _require_account(dispatcher)
+    return single_lane_run_recovery(dispatcher)
 
-    async def enqueue(run_id, owner_kind):
-        if owner_kind != "account":
-            raise PermissionError("current account host cannot enqueue another owner")
-        return await schedule.enqueue(run_id)
 
-    endpoint = DagInternalEndpoint(
-        action="enqueue",
-        audience=enqueue_audience,
-        keys=[enqueue_key],
-        handler=enqueue,
-    )
-    delivery = ResultDeliverySupervisor(
-        outbox,
-        sns_client,
-        authority=authority,
-    )
+def current_account_engine_service_runtime(dispatcher, sns_client, **settings):
+    """Build supervised account scheduling, enqueue and result delivery workers.
 
-    async def schedule_work(stop):
-        await schedule.run(
-            stop,
-            observe=observe_schedule,
-            interval_seconds=interval_seconds,
-        )
-
-    async def delivery_work(stop):
-        await delivery.run(
-            stop,
-            observe=observe_delivery,
-            interval_seconds=interval_seconds,
-        )
-
-    workers = {"account_schedule": schedule_work, "account_delivery": delivery_work}
-    if recovery is not None:
-
-        async def recovery_work(stop):
-            await recovery.run(stop, observe=observe_recovery)
-
-        workers["account_recovery"] = recovery_work
-
-    return DagServiceRuntime(
-        application=endpoint,
-        settings=listener_settings,
-        workers=workers,
-        on_failure=on_failure,
-    )
+    See ``single_lane_engine_service_runtime`` for the settings and the
+    lifetime contract.
+    """
+    _require_account(dispatcher)
+    return single_lane_engine_service_runtime(dispatcher, sns_client, **settings)

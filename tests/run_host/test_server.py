@@ -15,6 +15,7 @@ def environment(tmp_path):
     certificate.touch()  # settings checks paths; actual listener validates TLS bytes
     values = dict(
         BJJ_DAG_ENGINE_ENABLED="1",
+        BJJ_DAG_ENGINE_OWNERS="account,session",
         BJJ_DAG_QUALIFIED_MODELS_JSON='{"fixture":["fixture-r1"]}',
         BJJ_DAG_INTERNAL_HOST="127.0.0.1",
         BJJ_DAG_INTERNAL_PORT="9101",
@@ -59,6 +60,25 @@ def test_explicit_settings_keep_owner_lanes_and_tls(environment):
     assert settings["qualified_models"] == {"fixture": frozenset({"fixture-r1"})}
     for owner, lane in settings["lanes"].items():
         assert lane["access_key"].owner_kind == lane["enqueue_key"].owner_kind == owner
+
+
+def test_session_only_engine_needs_no_account_lane(environment):
+    environment["BJJ_DAG_ENGINE_OWNERS"] = "session"
+    for key in [key for key in environment if key.startswith("BJJ_DAG_ACCOUNT_")]:
+        del environment[key]
+    settings = settings_from_env(environment)
+    assert set(settings["lanes"]) == {"session"}
+    lane = settings["lanes"]["session"]
+    assert lane["access_key"].owner_kind == lane["enqueue_key"].owner_kind == "session"
+
+
+@pytest.mark.parametrize(
+    "owners", ["", "guest", "session,session", "session,", "account;session"]
+)
+def test_engine_owners_must_be_explicit_known_lanes(environment, owners):
+    environment["BJJ_DAG_ENGINE_OWNERS"] = owners
+    with pytest.raises(ValueError):
+        settings_from_env(environment)
 
 
 @pytest.mark.parametrize(

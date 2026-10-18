@@ -36,6 +36,10 @@ from service.analysis_checkpoint_journal import _target
 from service.analysis_gemini import qualified_model_versions
 from service.analysis_run_dispatch import PositionRunDispatcher
 from service.dag_runtime import partitioned_engine_service_runtime
+from service.single_lane_dag_server import (
+    SingleLaneDagRunAuthority,
+    single_lane_engine_service_runtime,
+)
 
 LOG = logging.getLogger(__name__)
 OWNERS = ("account", "session")
@@ -48,6 +52,14 @@ def _pairs(pairs):
             raise ValueError("duplicate engine configuration key")
         result[key] = value
     return result
+
+
+def configured_owners(value):
+    """``account,session`` (both lanes) or exactly one lane, e.g. the guest trial's ``session``."""
+    owners = tuple(value.split(","))
+    if not owners or len(set(owners)) != len(owners) or not set(owners) <= set(OWNERS):
+        raise ValueError("BJJ_DAG_ENGINE_OWNERS must name account and/or session once")
+    return tuple(owner for owner in OWNERS if owner in owners)
 
 
 def settings_from_env(environ):
@@ -69,7 +81,7 @@ def settings_from_env(environ):
         private_key=required("BJJ_DAG_INTERNAL_PRIVATE_KEY"),
     )
     lanes = {}
-    for owner in OWNERS:
+    for owner in configured_owners(required("BJJ_DAG_ENGINE_OWNERS")):
         prefix = f"BJJ_DAG_{owner.upper()}_"
         buckets = json.loads(required(prefix + "SOURCE_BUCKETS_JSON"))
         if (
@@ -111,8 +123,8 @@ def settings_from_env(environ):
         for lane in lanes.values()
         for key in ("access_key", "enqueue_key")
     ]
-    if len(set(all_secrets)) != 4:
-        raise ValueError("four distinct host credentials required")
+    if len(set(all_secrets)) != 2 * len(lanes):
+        raise ValueError("distinct access and enqueue credentials per lane required")
     max_bytes = int(required("BJJ_DAG_MAX_SOURCE_BYTES"))
     if max_bytes <= 0:
         raise ValueError("positive source size bound required")
@@ -294,12 +306,18 @@ def runtime_factory(
                     ),
                 )
                 cleanup.push_async_callback(clients[owner].aclose)
+            owners = tuple(settings["lanes"])
+            authority = (
+                DagRunAuthority(**clients)
+                if len(owners) == 2
+                else SingleLaneDagRunAuthority(clients[owners[0]])
+            )
             native = await run_io(native_clients, settings, stack)
             dispatchers = await run_io(
                 prepare_dispatchers,
                 settings,
                 **native,
-                authority=DagRunAuthority(**clients),
+                authority=authority,
                 transports=transports,
             )
 
@@ -322,19 +340,40 @@ def runtime_factory(
                         "DAG delivery owner=%s attempts=%s", owner, len(page.attempts)
                     )
 
-            runtime = partitioned_engine_service_runtime(
-                dispatchers,
-                {owner: native["sns"] for owner in OWNERS},
-                listener_settings=settings["listener_settings"],
-                enqueue_keys=[
-                    settings["lanes"][owner]["enqueue_key"] for owner in OWNERS
-                ],
-                enqueue_audience=settings["enqueue_audience"],
-                observe_schedule=schedule,
-                observe_delivery=delivery,
-                on_failure=on_failure,
-                interval_seconds=interval_seconds,
-            )
+            if len(owners) == 2:
+                runtime = partitioned_engine_service_runtime(
+                    dispatchers,
+                    {owner: native["sns"] for owner in OWNERS},
+                    listener_settings=settings["listener_settings"],
+                    enqueue_keys=[
+                        settings["lanes"][owner]["enqueue_key"] for owner in OWNERS
+                    ],
+                    enqueue_audience=settings["enqueue_audience"],
+                    observe_schedule=schedule,
+                    observe_delivery=delivery,
+                    on_failure=on_failure,
+                    interval_seconds=interval_seconds,
+                )
+            else:
+                (owner,) = owners
+
+                async def schedule_lane(page):
+                    await schedule(owner, page)
+
+                async def delivery_lane(page):
+                    await delivery(owner, page)
+
+                runtime = single_lane_engine_service_runtime(
+                    dispatchers[owner],
+                    native["sns"],
+                    listener_settings=settings["listener_settings"],
+                    enqueue_key=settings["lanes"][owner]["enqueue_key"],
+                    enqueue_audience=settings["enqueue_audience"],
+                    observe_schedule=schedule_lane,
+                    observe_delivery=delivery_lane,
+                    on_failure=on_failure,
+                    interval_seconds=interval_seconds,
+                )
             yield runtime
         finally:
             # run_io joins driver operations before this native-client owner unwinds.

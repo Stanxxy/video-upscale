@@ -415,6 +415,134 @@ async def test_two_store_signed_runtime_isolates_partitions_and_delivery(
             assert closed == [True]
 
 
+@pytest.mark.asyncio
+async def test_session_only_entrypoint_runs_the_guest_lane_alone(
+    schedule_table,
+    s3,
+    media_bytes,
+    checkpoint_database,
+    leases,
+    tmp_path,
+    monkeypatch,
+):
+    # The guest trial host embeds an engine configured with only the session lane.
+    import service.dag_server as server
+    from service.dag_server import runtime_factory
+    from shared_lib.infrastructure.dag_internal_transport import signed_headers
+
+    with (
+        contextmanager(dispatch_tables.__wrapped__)(s3) as tables,
+        contextmanager(delivery_queue_fixture)(s3) as queue,
+    ):
+        inputs = make_inputs.__wrapped__(s3, media_bytes)
+        record = inputs[0].model_dump()
+        record["spec"]["owner"] = {"kind": "session", "principal_id": "guest-session"}
+        inputs = (RegisteredAIRunV1.model_validate(record), *inputs[1:])
+        fixture, run, provider, *_ = await setup_dispatch_fixture(
+            tables, inputs, media_bytes, s3, checkpoint_database, leases, tmp_path
+        )
+        access_key = DagServiceKey("session-access", "s" * 32, "session")
+        enqueue_key = DagServiceKey("session-enqueue", "t" * 32, "session")
+        account_key = DagServiceKey("account-enqueue", "b" * 32, "account")
+        original = fixture.authority
+
+        async def authorize(run_id, owner):
+            assert owner == "session" and run.spec.run_id == run_id
+            await original(run)
+
+        access_app = DagInternalEndpoint(
+            action="authorize", audience="session-access", keys=[access_key], handler=authorize
+        )
+        await OwnerPositionRunSchedule(fixture, owner_kind="session").enqueue(run.spec.run_id)
+
+        composed, closed, failures = {}, [], []
+        prepare = server.prepare_dispatchers
+
+        def observed_prepare(*args, **kwargs):
+            composed.update(prepare(*args, **kwargs))
+            return composed
+
+        monkeypatch.setattr(server, "prepare_dispatchers", observed_prepare)
+
+        def native_clients(settings, stack):
+            stack.callback(closed.append, True)
+            return dict(
+                dynamodb=fixture.proposals.annotations.client,
+                s3=s3[0],
+                sns=queue[0],
+                session=checkpoint_database[0],
+            )
+
+        completed, delivered, done = [], [], asyncio.Event()
+
+        async def observe(kind, owner, page):
+            assert owner == "session"
+            for attempt in page.attempts:
+                if kind == "schedule":
+                    assert attempt.status == "completed"
+                    completed.append(attempt.run_id)
+                else:
+                    assert attempt.status == "acknowledged"
+                    delivered.append(attempt.run_id)
+            if completed and len(delivered) == 2:
+                done.set()
+
+        async def failed(component):
+            failures.append(component)
+
+        settings = dict(
+            lanes={
+                "session": dict(
+                    annotations=fixture.proposals.annotations.tables,
+                    proposals=fixture.proposals.tables,
+                    publication=fixture.outbox.table,
+                    artifact_bucket=fixture.bucket,
+                    allowed_buckets=fixture.allowed_buckets | {fixture.bucket},
+                    scratch_root=fixture.scratch_root,
+                    topic_arn=queue[2],
+                    access_origin="https://trial-host.internal",
+                    access_audience="session-access",
+                    access_key=access_key,
+                    enqueue_key=enqueue_key,
+                )
+            },
+            keyspace=checkpoint_database[1],
+            qualified_models=fixture.qualified_models,
+            api_key="fixture-secret",
+            max_source_bytes=10_000_000,
+            listener_settings=DagListenerSettings("127.0.0.1", 0, local_test=True),
+            enqueue_audience="session-enqueue",
+        )
+        async with runtime_factory(
+            settings,
+            native_clients=native_clients,
+            access_transports={"session": httpx.ASGITransport(app=access_app)},
+            transports={"session": fixture.transport},
+            observe=observe,
+            interval_seconds=0.1,
+        )(None, failed) as runtime:
+            assert set(composed) == {"session"}
+            assert set(runtime.workers) == {"session_schedule", "session_delivery"}
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=runtime.application),
+                base_url="https://engine.internal",
+            ) as signed:
+                path = f"/internal/dag/runs/{run.spec.run_id}/enqueue"
+                for key, status in ((account_key, 401), (enqueue_key, 204)):
+                    response = await signed.post(
+                        path, content=b"", headers=signed_headers(key, "session-enqueue", path)
+                    )
+                    assert response.status_code == status
+            async with runtime.lifespan():
+                await asyncio.wait_for(done.wait(), 45)
+        assert completed == [run.spec.run_id]
+        assert set(delivered) == {run.spec.run_id}
+        assert len(provider.generates()) == 2
+        messages = await receive(queue[1], queue[3], 2)
+        assert all(message.run_id == run.spec.run_id for message in messages)
+        assert failures == [] and closed == [True]
+
+
 # Aliases preserve access to the fixture factories when test arguments shadow names.
 setup_dispatch_fixture = setup_dispatch.__wrapped__
 delivery_queue_fixture = delivery_queue.__wrapped__
