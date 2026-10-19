@@ -269,6 +269,9 @@ def _native_clients(settings, stack):
         port=settings["cassandra_port"],
         protocol_version=4,
         ssl_context=tls,
+        # The driver connects to discovered node IPs; verify every certificate against
+        # the service hostname (Amazon Keyspaces' certificates name the endpoint, not IPs).
+        ssl_options={"server_hostname": settings["cassandra_host"]},
         auth_provider=PlainTextAuthProvider(
             settings["cassandra_username"], settings["cassandra_password"]
         ),
