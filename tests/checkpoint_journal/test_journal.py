@@ -643,3 +643,28 @@ async def test_explicit_outcomes_must_be_homogeneous_booleans(
     journal._execute = reply
     with pytest.raises(adapter.CheckpointIntegrityError, match=message):
         await journal.compare_and_swap(None, checkpoint(run))
+
+
+@pytest.mark.asyncio
+async def test_keyspaces_writer_behind_a_later_head_loses(
+    adapter, resources, run, journal
+):
+    """A writer whose pre-check read is stale reaches the store and must report a lost race."""
+    first = checkpoint(run)
+    second = finished(first)
+    assert await journal.compare_and_swap(None, first)
+    assert await journal.compare_and_swap(1, second)
+    session, s3, keyspace, bucket = resources
+    stale = adapter.KeyspacesCheckpointJournal(
+        run, session, s3, bucket=bucket, keyspace=keyspace, guard=authorized
+    )
+    keyspaces_replies(stale)
+
+    async def nothing_yet(step_id):
+        return None
+
+    stale.read = nothing_yet  # its view predates both commits
+    rival = first.model_copy(update={"input_sha256": "e" * 64})
+    # The head is already at revision 2; the rival's revision-1 batch cannot apply.
+    assert await stale.compare_and_swap(None, rival) is False
+    assert await journal.read(first.step_id) == second
