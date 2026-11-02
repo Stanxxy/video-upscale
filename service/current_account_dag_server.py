@@ -7,6 +7,10 @@ only the account namespace's admitted stores.
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import math
+import time
 from pathlib import Path
 
 from shared_lib.infrastructure.dag_internal_transport import (
@@ -21,15 +25,91 @@ from service.single_lane_dag_server import (
 )
 
 
+LOG = logging.getLogger(__name__)
+
+# A run's guard asks for authority several times per checkpoint, media chunk and
+# heartbeat; each answer is a full signed re-verification (~20 store reads, ~1.5 s
+# in production). A confirmation is reused for this long, so a revocation takes
+# effect within it, and concurrent asks share one check.
+AUTHORITY_REUSE_SECONDS = 5.0
+# A check that cannot be confirmed (store hiccup, slow reply, or a denial) is
+# asked again after these pauses before the run is stopped; a denial still denies.
+AUTHORITY_RETRY_DELAYS = (0.25, 1.0)
+
+
 class AccountOnlyDagRunAuthority(SingleLaneDagRunAuthority):
     """Signed authority containing exactly one genuine account host client."""
 
-    def __init__(self, account: DagInternalClient):
+    def __init__(
+        self,
+        account: DagInternalClient,
+        *,
+        reuse_seconds=AUTHORITY_REUSE_SECONDS,
+        retry_delays=AUTHORITY_RETRY_DELAYS,
+        clock=time.monotonic,
+        sleep=asyncio.sleep,
+    ):
         if not isinstance(account, DagInternalClient):
             raise TypeError("one signed account authority client is required")
         if account.key.owner_kind != "account":
             raise ValueError("account authority client must be account-bound")
+        if not (
+            isinstance(reuse_seconds, (int, float))
+            and math.isfinite(reuse_seconds)
+            and 0 <= reuse_seconds <= 30
+        ) or any(
+            not isinstance(d, (int, float)) or not math.isfinite(d) or not 0 <= d <= 5
+            for d in retry_delays
+        ):
+            raise ValueError("bounded authority reuse and retry delays required")
         super().__init__(account)
+        self.reuse_seconds, self.retry_delays = reuse_seconds, tuple(retry_delays)
+        self.clock, self.sleep = clock, sleep
+        self._confirmed = {}  # run_id -> monotonic deadline of reuse
+        self._checks = {}  # run_id -> the one in-flight check
+
+    async def __call__(self, run):
+        if self.clients.get(run.spec.owner.kind) is None:
+            raise PermissionError("unsupported authority host")
+        run_id = run.spec.run_id
+        if self.clock() < self._confirmed.get(run_id, -math.inf):
+            return
+        check = self._checks.get(run_id)
+        if check is None:
+            check = asyncio.ensure_future(self._confirm(run_id))
+            self._checks[run_id] = check
+            check.add_done_callback(
+                lambda done: self._checks.pop(run_id, None)
+                if self._checks.get(run_id) is done
+                else None
+            )
+        # A cancelled caller must not cancel the check other callers share.
+        await asyncio.shield(check)
+
+    async def _confirm(self, run_id):
+        client = self.clients[self.owner_kind]
+        for attempt, delay in enumerate((*self.retry_delays, None), 1):
+            started = self.clock()
+            try:
+                await client.call("authorize", run_id)
+            except Exception as error:
+                if delay is None:
+                    raise
+                LOG.warning(
+                    "account authority for run %s unconfirmed (attempt %d): %s",
+                    run_id,
+                    attempt,
+                    type(error).__name__,
+                )
+                await self.sleep(delay)
+                continue
+            # Reuse counts from when the confirming check started, not ended.
+            now = self.clock()
+            self._confirmed = {
+                k: v for k, v in self._confirmed.items() if v > now
+            }
+            self._confirmed[run_id] = started + self.reuse_seconds
+            return
 
 
 def current_account_authority_client(

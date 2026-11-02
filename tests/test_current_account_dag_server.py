@@ -285,3 +285,127 @@ def test_dispatcher_rejects_wrong_authority_before_building_resources(tmp_path):
             api_key="explicit-test-provider-key",
             qualified_models={"gemini-3.8-flash": ["gemini-3.8-flash"]},
         )
+
+
+class _Wire:
+    """Mock signed authorize endpoint: replies with the queued statuses (then 204)."""
+
+    def __init__(self, statuses=(), gate=None):
+        self.statuses, self.gate, self.calls = list(statuses), gate, 0
+
+    async def __call__(self, request):
+        import httpx
+
+        self.calls += 1
+        if self.gate is not None:
+            await self.gate.wait()
+        status = self.statuses.pop(0) if self.statuses else 204
+        return httpx.Response(status, stream=httpx.ByteStream(b""))
+
+
+def _authority(wire, **options):
+    import httpx
+
+    client = DagInternalClient(
+        "http://127.0.0.1:1",
+        key=DagServiceKey("current-account-access", "a" * 40, "account"),
+        audience="current-account-access",
+        local_test=True,
+        transport=httpx.MockTransport(wire),
+    )
+    now = [100.0]
+    pauses = []
+
+    async def pause(seconds):
+        pauses.append(seconds)
+
+    authority = AccountOnlyDagRunAuthority(
+        client, clock=lambda: now[0], sleep=pause, **options
+    )
+    return authority, now, pauses
+
+
+def _account_run(run_id=None):
+    return SimpleNamespace(
+        spec=SimpleNamespace(
+            owner=SimpleNamespace(kind="account"), run_id=run_id or uuid4()
+        )
+    )
+
+
+def test_confirmed_authority_is_reused_briefly_then_checked_again():
+    async def scenario():
+        wire = _Wire()
+        authority, now, _ = _authority(wire)
+        run, other = _account_run(), _account_run()
+        await authority(run)
+        await authority(run)
+        now[0] += 4.9
+        await authority(run)
+        assert wire.calls == 1
+        await authority(other)  # reuse is per run
+        assert wire.calls == 2
+        now[0] += 0.2
+        await authority(run)
+        assert wire.calls == 3
+
+    asyncio.run(scenario())
+
+
+def test_concurrent_asks_share_one_check_and_cancellation_does_not_break_it():
+    async def scenario():
+        gate = asyncio.Event()
+        wire = _Wire(gate=gate)
+        authority, _, _ = _authority(wire)
+        run = _account_run()
+        waiters = [asyncio.create_task(authority(run)) for _ in range(5)]
+        await asyncio.sleep(0.05)
+        waiters[0].cancel()
+        gate.set()
+        results = await asyncio.gather(*waiters, return_exceptions=True)
+        assert isinstance(results[0], asyncio.CancelledError)
+        assert results[1:] == [None] * 4 and wire.calls == 1
+
+    asyncio.run(scenario())
+
+
+def test_unconfirmed_check_is_asked_again_before_the_run_is_stopped():
+    async def scenario():
+        wire = _Wire([503, 503])
+        authority, _, pauses = _authority(wire)
+        await authority(_account_run())
+        assert wire.calls == 3 and pauses == [0.25, 1.0]
+
+    asyncio.run(scenario())
+
+
+def test_a_denial_still_denies_and_is_never_reused():
+    async def scenario():
+        wire = _Wire([403] * 6)
+        authority, _, _ = _authority(wire)
+        run = _account_run()
+        with pytest.raises(PermissionError, match="not confirmed"):
+            await authority(run)
+        assert wire.calls == 3
+        with pytest.raises(PermissionError, match="not confirmed"):
+            await authority(run)
+        assert wire.calls == 6
+
+    asyncio.run(scenario())
+
+
+def test_other_owner_is_denied_without_asking_and_bounds_are_checked():
+    async def scenario():
+        wire = _Wire()
+        authority, _, _ = _authority(wire)
+        run = SimpleNamespace(
+            spec=SimpleNamespace(owner=SimpleNamespace(kind="session"), run_id=uuid4())
+        )
+        with pytest.raises(PermissionError, match="unsupported authority"):
+            await authority(run)
+        assert wire.calls == 0
+
+    asyncio.run(scenario())
+    for options in ({"reuse_seconds": 31}, {"reuse_seconds": -1}, {"retry_delays": (6,)}):
+        with pytest.raises(ValueError, match="bounded authority"):
+            _authority(_Wire(), **options)
