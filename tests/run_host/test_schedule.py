@@ -164,13 +164,21 @@ async def test_expired_running_attempt_is_reported_not_automatically_recovered(
 
 @pytest.mark.asyncio
 async def test_uncertain_model_attempt_stays_discoverable_without_paid_retry(
-    setup_dispatch, schedule_table
+    setup_dispatch, schedule_table, caplog
 ):
     queue, run, wire = schedule(setup_dispatch)
     await queue.enqueue(run.spec.run_id)
     wire.status = 503
-    page = await queue.process_page(run.spec.run_id.int % 16)
+    with caplog.at_level("WARNING", logger="service.analysis_run_schedule"):
+        page = await queue.process_page(run.spec.run_id.int % 16)
     assert page.attempts[0].status == "unconfirmed" and len(wire.generates()) == 1
+    # The page reports only counts; the cause of an unconfirmed dispatch is logged.
+    assert any(
+        record.getMessage().startswith(
+            f"scheduled dispatch of {run.spec.run_id} stopped: "
+        )
+        for record in caplog.records
+    )
     await queue._execute(
         f"UPDATE {queue.lifecycle} SET last_heartbeat_at=%s WHERE job_id=%s",
         [datetime.now(timezone.utc) - timedelta(seconds=61), str(run.spec.run_id)],
