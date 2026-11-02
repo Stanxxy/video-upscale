@@ -5,6 +5,7 @@ still own dispatch. No auto-resume, new admission, expiry deletion or schema DDL
 """
 
 import asyncio
+import logging
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,7 @@ from shared_lib.infrastructure.dag_admission_relay import run_io
 from service.analysis_checkpoint_journal import _target
 
 INDEX_STATE = "POSITION_NEW_RUN_V1"
+LOG = logging.getLogger(__name__)
 
 
 def _stamp(value):
@@ -229,11 +231,18 @@ class PositionRunSchedule:
                 return SchedulePage(shard, tuple(attempts), after)
             try:
                 result = await self._process(shard, row)
-            except Exception:
+            except Exception as error:
                 try:
                     run_id = UUID(row.job_id)
                 except (ValueError, TypeError, AttributeError):
                     run_id = None
+                # The page only reports counts; without this the cause is lost.
+                LOG.warning(
+                    "scheduled dispatch of %s stopped: %s: %s",
+                    run_id,
+                    type(error).__name__,
+                    str(error)[:200],
+                )
                 result = ScheduledAttempt(run_id, "unconfirmed")
             attempts.append(result)
         cursor = (

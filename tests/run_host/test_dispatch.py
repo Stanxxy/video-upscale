@@ -31,6 +31,7 @@ from shared_lib.models.analysis_metadata import AnalysisMetadataV1
 from shared_lib.models.analysis_timeline import content_sha256
 from test_worker import leases
 
+from service.analysis_checkpoint_journal import KeyspacesCheckpointJournal
 from service.analysis_run_dispatch import PositionRunDispatcher, UnsupportedRunVersion
 from service.analysis_run_worker import LeaseLost
 from service.analysis_media import DeterministicPreparationRejected
@@ -179,6 +180,30 @@ async def test_stored_run_dispatches_real_dag_to_durable_outbox(setup_dispatch):
     with pytest.raises(LeaseLost):
         await dispatch.dispatch(run.spec.run_id, recover=True)
     assert len(wire.calls) == count
+
+
+@pytest.mark.asyncio
+async def test_keyspaces_batches_without_applied_rows_complete_the_real_dag(
+    setup_dispatch, monkeypatch
+):
+    """Amazon Keyspaces applies conditional logged batches without an [applied] row."""
+    dispatch, run, wire, components, annotations, _ = setup_dispatch
+    execute = KeyspacesCheckpointJournal._execute_sync
+
+    def keyspaces(self, query, values, *, conditional=False):
+        rows = execute(self, query, values, conditional=conditional)
+        return [] if query.startswith("BEGIN BATCH") else rows
+
+    monkeypatch.setattr(KeyspacesCheckpointJournal, "_execute_sync", keyspaces)
+    result = await dispatch.dispatch(run.spec.run_id)
+    assert len(wire.generates()) == 2 and result.techniques.techniques == ()
+    for index, lane in enumerate(("positions", "techniques"), 1):
+        publication, sent = await dispatch.outbox.read(run.spec.run_id, lane)
+        assert sent is None and publication.message.sequence == index
+        await components.ingest(
+            run.spec.analysis_id, publication.message, actor=run.spec.owner
+        )
+    assert list(dispatch.scratch_root.iterdir()) == []
 
 
 @pytest.mark.asyncio

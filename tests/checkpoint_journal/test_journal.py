@@ -547,3 +547,124 @@ async def test_concurrent_first_commit_during_missing_head_probe_is_valid(
 
     journal._execute = insert_after_empty_head
     assert await journal.read(record.step_id) == record
+
+
+def keyspaces_replies(journal, *, shape="empty", commit=True):
+    """Amazon Keyspaces applies a conditional logged batch but returns no [applied] row."""
+    from collections import namedtuple
+
+    execute = journal._execute
+    Row = namedtuple("Row", ["record_revision"])
+
+    async def reply(query, values, *, conditional=False):
+        if not conditional:
+            return await execute(query, values, conditional=conditional)
+        if commit:
+            await execute(query, values, conditional=True)
+        return [] if shape == "empty" else [Row(1)]
+
+    journal._execute = reply
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shape", ["empty", "rows_without_applied"])
+async def test_keyspaces_batch_without_applied_rows_reads_outcome_from_head(
+    journal, run, shape
+):
+    first = checkpoint(run)
+    keyspaces_replies(journal, shape=shape)
+    assert await journal.compare_and_swap(None, first) is True
+    second = finished(first)
+    assert await journal.compare_and_swap(1, second) is True
+    # A stale writer loses: the head already holds a later revision.
+    assert await journal.compare_and_swap(None, first) is False
+    assert await journal.read(first.step_id) == second
+    rows, cursor = await journal.history_page(first.step_id)
+    assert rows == (first, second) and cursor is None
+
+
+@pytest.mark.asyncio
+async def test_keyspaces_concurrent_reservations_have_one_winner(journal, run):
+    first = checkpoint(run)
+    competitor = first.model_copy(update={"input_sha256": "e" * 64})
+    keyspaces_replies(journal)
+    barrier, reply = asyncio.Barrier(2), journal._execute
+
+    async def interleaved(query, values, *, conditional=False):
+        if conditional:
+            await asyncio.wait_for(barrier.wait(), 5)
+        return await reply(query, values, conditional=conditional)
+
+    journal._execute = interleaved
+    outcomes = await asyncio.gather(
+        journal.compare_and_swap(None, first),
+        journal.compare_and_swap(None, competitor),
+    )
+    assert sorted(outcomes) == [False, True]
+    winner = first if outcomes[0] else competitor
+    assert await journal.read(first.step_id) == winner
+    assert (await journal.history_page(first.step_id))[0] == (winner,)
+
+
+@pytest.mark.asyncio
+async def test_no_outcome_and_no_commit_fails_closed(adapter, journal, run):
+    record = checkpoint(run)
+    keyspaces_replies(journal, commit=False)
+    with pytest.raises(adapter.CheckpointIntegrityError, match="did not commit"):
+        await journal.compare_and_swap(None, record)
+    assert await journal.read(record.step_id) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "flags, message",
+    [
+        ((True, False), "ambiguous"),
+        ((True, None), "malformed"),
+        (("yes",), "malformed"),
+    ],
+)
+async def test_explicit_outcomes_must_be_homogeneous_booleans(
+    adapter, journal, run, flags, message
+):
+    from types import SimpleNamespace
+
+    execute = journal._execute
+
+    async def reply(query, values, *, conditional=False):
+        rows = await execute(query, values, conditional=conditional)
+        if not conditional:
+            return rows
+        return [
+            SimpleNamespace(applied=flag) if flag is not None else SimpleNamespace()
+            for flag in flags
+        ]
+
+    journal._execute = reply
+    with pytest.raises(adapter.CheckpointIntegrityError, match=message):
+        await journal.compare_and_swap(None, checkpoint(run))
+
+
+@pytest.mark.asyncio
+async def test_keyspaces_writer_behind_a_later_head_loses(
+    adapter, resources, run, journal
+):
+    """A writer whose pre-check read is stale reaches the store and must report a lost race."""
+    first = checkpoint(run)
+    second = finished(first)
+    assert await journal.compare_and_swap(None, first)
+    assert await journal.compare_and_swap(1, second)
+    session, s3, keyspace, bucket = resources
+    stale = adapter.KeyspacesCheckpointJournal(
+        run, session, s3, bucket=bucket, keyspace=keyspace, guard=authorized
+    )
+    keyspaces_replies(stale)
+
+    async def nothing_yet(step_id):
+        return None
+
+    stale.read = nothing_yet  # its view predates both commits
+    rival = first.model_copy(update={"input_sha256": "e" * 64})
+    # The head is already at revision 2; the rival's revision-1 batch cannot apply.
+    assert await stale.compare_and_swap(None, rival) is False
+    assert await journal.read(first.step_id) == second
