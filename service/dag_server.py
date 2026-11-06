@@ -42,6 +42,14 @@ from service.single_lane_dag_server import (
 )
 
 LOG = logging.getLogger(__name__)
+
+
+def _poll_level(attempts, error_code=None) -> int:
+    """The pollers run every few seconds (~300 idle lines/min on gx10): an empty page is DEBUG,
+    work INFO, a page error WARNING."""
+    if error_code is not None:
+        return logging.WARNING
+    return logging.INFO if attempts else logging.DEBUG
 OWNERS = ("account", "session")
 
 
@@ -328,7 +336,8 @@ def runtime_factory(
                 if observe is not None:
                     await observe("schedule", owner, page)
                 else:
-                    LOG.info(
+                    LOG.log(
+                        _poll_level(page.attempts, page.error_code),
                         "DAG schedule owner=%s attempts=%s error=%s",
                         owner,
                         len(page.attempts),
@@ -339,8 +348,11 @@ def runtime_factory(
                 if observe is not None:
                     await observe("delivery", owner, page)
                 else:
-                    LOG.info(
-                        "DAG delivery owner=%s attempts=%s", owner, len(page.attempts)
+                    LOG.log(
+                        _poll_level(page.attempts),
+                        "DAG delivery owner=%s attempts=%s",
+                        owner,
+                        len(page.attempts),
                     )
 
             if len(owners) == 2:
