@@ -154,7 +154,10 @@ def current_account_position_dispatcher(
         DynamoResultPublicationStore,
     )
     from shared_lib.infrastructure.result_publication_table import ResultPublicationTable
-    from service.analysis_run_dispatch import PositionRunDispatcher
+    from service.analysis_run_dispatch import (
+        PRODUCTION_MAX_PARALLEL_CALLS,
+        PositionRunDispatcher,
+    )
 
     if not isinstance(authority, AccountOnlyDagRunAuthority):
         raise ValueError("an explicit current account authority is required")
@@ -206,6 +209,7 @@ def current_account_position_dispatcher(
         lease_seconds=60,
         heartbeat_seconds=10,
         mime_type="video/mp4",
+        max_parallel_calls=PRODUCTION_MAX_PARALLEL_CALLS,
         transport=transport,
     )
 

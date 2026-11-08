@@ -37,6 +37,7 @@ class DurableGeminiRun:
         guard,
         mime_type,
         clock=None,
+        max_parallel_calls=1,
     ):
         self.run, self.config = load_config(run, config_bytes)
         if journal.run != self.run or provider.run != self.run or not callable(guard):
@@ -46,6 +47,8 @@ class DurableGeminiRun:
         self.config_bytes, self.journal, self.provider = config_bytes, journal, provider
         self.sink, self.guard, self.mime_type = sink, guard, mime_type
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        # Validated by execute_pipeline; scheduling only, never part of step identity.
+        self.max_parallel_calls = max_parallel_calls
 
     def _now(self):
         now = TypeAdapter(AwareDatetime).validate_python(self.clock())
@@ -243,6 +246,7 @@ class DurableGeminiRun:
             retry_failed=retry_failed,
             reissue_unknown=reissue_unknown,
             clock=self.clock,
+            max_parallel_calls=self.max_parallel_calls,
         )
 
         async def retain_result(operation_id):

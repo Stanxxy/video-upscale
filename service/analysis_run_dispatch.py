@@ -12,6 +12,7 @@ from uuid import UUID
 
 from bjj_analysis_core import CORE_VERSION, WORKFLOW_ID
 from bjj_analysis_core.execution import RecoveryRequired
+from bjj_analysis_core.executor import MAX_PARALLEL_CALLS
 from bjj_analysis_core.requests import NodeId
 from bjj_analysis_observer.checkpoints import KeyspacesCheckpointReader
 from bjj_analysis_observer.lifecycle import read_status
@@ -31,6 +32,13 @@ from service.analysis_run_worker import KeyspacesRunLease, run_position_attempt
 
 class UnsupportedRunVersion(DeterministicPreparationRejected):
     pass
+
+
+# Concurrent independent model steps per run for the deployed lanes. Technique
+# critique/analyze/validate items fan out; the position critique chain stays serial.
+# An interrupted attempt can leave up to this many calls with unknown spend, each
+# reconciled through the existing per-step recovery (founder-accepted 2026-11-08).
+PRODUCTION_MAX_PARALLEL_CALLS = 6
 
 
 @dataclass(frozen=True)
@@ -122,12 +130,18 @@ class PositionRunDispatcher:
         heartbeat_seconds,
         mime_type,
         concurrency=1,
+        max_parallel_calls=1,
         checkpoint_timeout=10,
         provider_timeout=600,
         transport=None,
     ):
         if type(concurrency) is not int or concurrency < 1:
             raise ValueError("positive worker concurrency required")
+        if (
+            type(max_parallel_calls) is not int
+            or not 1 <= max_parallel_calls <= MAX_PARALLEL_CALLS
+        ):
+            raise ValueError("bounded per-run model call parallelism required")
         if not callable(authority) or outbox.proposals is not proposals:
             raise ValueError(
                 "shared authoritative run store and live authority required"
@@ -146,6 +160,8 @@ class PositionRunDispatcher:
         self.mime_type, self.checkpoint_timeout = mime_type, checkpoint_timeout
         self.provider_timeout, self.transport = provider_timeout, transport
         self.slots = asyncio.Semaphore(concurrency)
+        # Per-run bound on concurrent independent model steps (executor-validated).
+        self.max_parallel_calls = max_parallel_calls
 
     @staticmethod
     def _version(run):
@@ -211,6 +227,7 @@ class PositionRunDispatcher:
                     sink=PublicationSink(run, self.outbox, guard),
                     guard=guard,
                     mime_type=self.mime_type,
+                    max_parallel_calls=self.max_parallel_calls,
                 )
             finally:
                 await provider.aclose()

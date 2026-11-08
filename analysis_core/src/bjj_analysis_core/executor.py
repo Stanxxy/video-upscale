@@ -1,9 +1,13 @@
-"""Full serial DAG through explicit provider/journal/publication ports.
+"""Full DAG through explicit provider/journal/publication ports.
 
-No service activation or implicit concurrent fan-out. The host supplies verified
-media, durable history, authorization/cancellation guard and an idempotent sink.
+Serial by default. A host may pass an explicit ``max_parallel_calls`` bound to run
+independent model steps concurrently; there is no implicit fan-out. Every request,
+step identity and stage input is the same either way, only wall-clock order changes.
+The host supplies verified media, durable history, authorization/cancellation guard
+and an idempotent sink.
 """
 
+import asyncio
 from typing import Protocol
 
 from bjj_analysis_core.discovery import (
@@ -44,6 +48,45 @@ class ExecutionResultV1(VersionedAnalysisContract):
     techniques: AnalysisRevisionV1
 
 
+# Upper bound a host may request; each in-flight call is one uncertain-spend item
+# if the attempt is interrupted, so the bound is deliberately small.
+MAX_PARALLEL_CALLS = 16
+
+
+async def _ordered(steps, limit):
+    """Run zero-argument step coroutines, at most ``limit`` at once, results in input order.
+
+    ``limit == 1`` is the plain serial loop. Otherwise, after the first failure no
+    further step starts; steps already in flight finish (their dispatch and spend are
+    already committed, and their checkpoints are reused on resume) and the earliest
+    failure in input order is raised. Cancelling the caller cancels every in-flight
+    step, each of which records its own cancelled checkpoint.
+    """
+    if limit == 1:
+        return [await step() for step in steps]
+    gate = asyncio.Semaphore(limit)
+    stopped = False
+
+    async def bounded(step):
+        nonlocal stopped
+        async with gate:
+            if stopped:
+                return None  # never started; a recorded failure is raised below
+            try:
+                return await step()
+            except BaseException:
+                stopped = True
+                raise
+
+    outcomes = await asyncio.gather(
+        *(bounded(step) for step in steps), return_exceptions=True
+    )
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
+    return outcomes
+
+
 async def execute_pipeline(
     run,
     config_bytes,
@@ -55,11 +98,20 @@ async def execute_pipeline(
     retry_failed=False,
     reissue_unknown=False,
     clock=None,
+    max_parallel_calls=1,
 ):
     if not callable(guard):
         raise ValueError(
             "executor requires an explicit current-authority/cancellation guard"
         )
+    if (
+        type(max_parallel_calls) is not int
+        or not 1 <= max_parallel_calls <= MAX_PARALLEL_CALLS
+    ):
+        raise ValueError(
+            f"max_parallel_calls must be an integer from 1 to {MAX_PARALLEL_CALLS}"
+        )
+    limit = max_parallel_calls
     runner = StepRunner(
         run,
         config_bytes,
@@ -101,56 +153,79 @@ async def execute_pipeline(
             f"{component}_publish", revision.model_dump(mode="json"), operation, str
         )
 
-    scan = await runner.model(
-        prepare_call(
-            run, config_bytes, "position_scan", input_window=run.spec.scope, context={}
-        )
-    )
-    decisions, state_before = [], scan.initial_state
-    for index, transition in enumerate(scan.transitions):
-        at = transition.at_ms
-        window = TimeRangeMs(
-            start_ms=max(run.spec.scope.start_ms, at - cfg.position_critique_back_ms),
-            end_ms=min(run.spec.scope.end_ms, at + cfg.position_critique_forward_ms),
-        )
-        decision = await runner.model(
+    async def position_branch():
+        scan = await runner.model(
             prepare_call(
                 run,
                 config_bytes,
-                "position_critique",
-                input_window=window,
-                context=dict(
-                    transition_index=index,
-                    proposed=transition,
-                    state_before=state_before,
+                "position_scan",
+                input_window=run.spec.scope,
+                context={},
+            )
+        )
+        # Always serial: each critique's context carries the previous confirmed
+        # state, a real data dependency between items.
+        decisions, state_before = [], scan.initial_state
+        for index, transition in enumerate(scan.transitions):
+            at = transition.at_ms
+            window = TimeRangeMs(
+                start_ms=max(
+                    run.spec.scope.start_ms, at - cfg.position_critique_back_ms
                 ),
+                end_ms=min(
+                    run.spec.scope.end_ms, at + cfg.position_critique_forward_ms
+                ),
+            )
+            decision = await runner.model(
+                prepare_call(
+                    run,
+                    config_bytes,
+                    "position_critique",
+                    input_window=window,
+                    context=dict(
+                        transition_index=index,
+                        proposed=transition,
+                        state_before=state_before,
+                    ),
+                ),
+                item=str(index),
+            )
+            decisions.append(decision)
+            # Rejected rough states do not poison the next critique's context.
+            if decision.confirmed:
+                state_before = decision.state_after
+        decisions = await summary(
+            "position_critique", decisions, tuple[PositionCritiqueV1, ...]
+        )
+        positions = await deterministic(
+            "positions_normalize",
+            dict(
+                scan=scan.model_dump(mode="json"),
+                critiques=[d.model_dump(mode="json") for d in decisions],
             ),
-            item=str(index),
+            lambda at: normalize_positions(run, scan, decisions, completed_at=at),
+            AnalysisRevisionV1,
         )
-        decisions.append(decision)
-        # Rejected rough states do not poison the next critique's context.
-        if decision.confirmed:
-            state_before = decision.state_after
-    decisions = await summary(
-        "position_critique", decisions, tuple[PositionCritiqueV1, ...]
-    )
-    positions = await deterministic(
-        "positions_normalize",
-        dict(
-            scan=scan.model_dump(mode="json"),
-            critiques=[d.model_dump(mode="json") for d in decisions],
-        ),
-        lambda at: normalize_positions(run, scan, decisions, completed_at=at),
-        AnalysisRevisionV1,
-    )
-    await publish(
-        "positions", positions
-    )  # independently available before technique work
+        await publish(
+            "positions", positions
+        )  # independently available before technique work completes
+        return positions
 
-    technique_scan = await runner.model(
-        prepare_call(
-            run, config_bytes, "technique_scan", input_window=run.spec.scope, context={}
+    async def technique_scan_step():
+        # Observes the full scope with no position context, so it is independent
+        # of the position branch; serial runs keep it after position publication.
+        return await runner.model(
+            prepare_call(
+                run,
+                config_bytes,
+                "technique_scan",
+                input_window=run.spec.scope,
+                context={},
+            )
         )
+
+    positions, technique_scan = await _ordered(
+        [position_branch, technique_scan_step], limit
     )
     batch = await deterministic(
         "position_technique_candidates",
@@ -161,10 +236,9 @@ async def execute_pipeline(
         lambda at: build_candidates(run, config_bytes, technique_scan, positions),
         CandidateBatchV1,
     )
-    temporal = []
-    for candidate in batch.candidates:
-        temporal.append(
-            await runner.model(
+    def critique_step(candidate):
+        async def step():
+            return await runner.model(
                 prepare_call(
                     run,
                     config_bytes,
@@ -175,7 +249,10 @@ async def execute_pipeline(
                 ),
                 item=candidate.candidate_id,
             )
-        )
+
+        return step
+
+    temporal = await _ordered([critique_step(c) for c in batch.candidates], limit)
     temporal = await summary(
         "technique_critique", temporal, tuple[TemporalCritiqueV1, ...]
     )
@@ -190,10 +267,9 @@ async def execute_pipeline(
         ),
         tuple[TechniqueAnalysisInputV1, ...],
     )
-    analyses = []
-    for target in work:
-        analyses.append(
-            await runner.model(
+    def analyze_step(target):
+        async def step():
+            return await runner.model(
                 prepare_call(
                     run,
                     config_bytes,
@@ -204,21 +280,26 @@ async def execute_pipeline(
                 ),
                 item=target.candidate_id,
             )
-        )
+
+        return step
+
+    analyses = await _ordered([analyze_step(t) for t in work], limit)
     analyses = await summary(
         "technique_analyze", analyses, tuple[TechniqueAnalysisV1, ...]
     )
-    candidates, verdicts = [], []
-    for target, analysis in zip(work, analyses, strict=True):
-        candidate = TechniqueCandidateV1(
+    candidates = [
+        TechniqueCandidateV1(
             candidate_id=target.candidate_id,
             description=target.description,
             observation_window=target.bounds,
             proposed=analysis,
         )
-        candidates.append(candidate)
-        verdicts.append(
-            await runner.model(
+        for target, analysis in zip(work, analyses, strict=True)
+    ]
+
+    def validate_step(target, candidate):
+        async def step():
+            return await runner.model(
                 prepare_call(
                     run,
                     config_bytes,
@@ -229,7 +310,12 @@ async def execute_pipeline(
                 ),
                 item=target.candidate_id,
             )
-        )
+
+        return step
+
+    verdicts = await _ordered(
+        [validate_step(t, c) for t, c in zip(work, candidates, strict=True)], limit
+    )
     verdicts = await summary(
         "technique_validate", verdicts, tuple[TechniqueDecisionV1, ...]
     )

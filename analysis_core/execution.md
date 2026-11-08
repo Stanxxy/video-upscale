@@ -1,13 +1,29 @@
 # Execution and host contract (core 0.3)
 
-`execute_pipeline(run, config_bytes, journal=..., provider=..., sink=..., guard=...)`
-is the complete **serial** stage sequence, not a deployed worker. No hidden model
-fan-out, provider retry, extra admission/use debit, startup hook or fallback path.
+`execute_pipeline(run, config_bytes, journal=..., provider=..., sink=..., guard=...,
+max_parallel_calls=1)` is the complete stage sequence, not a deployed worker. No hidden
+model fan-out, provider retry, extra admission/use debit, startup hook or fallback path.
 
 Position scan → per-transition critique → normalize → position publication;
 then independent technique scan → position/technique union → temporal critiques →
 analysis worklist → per-item analysis → validation → normalize → technique publication.
 Rejected rough position states do not become subsequent critique context.
+
+`max_parallel_calls` (1–16, default 1 = strictly serial) is an explicit host choice.
+Above 1, the technique scan runs beside the position branch, and the per-candidate
+technique critique, analysis and validation items each run up to that many at once.
+The position critique chain always stays serial, because each critique's context
+carries the previous confirmed state. Step identities, request bytes, input digests
+and stage inputs (collected in input order) are identical to the serial schedule.
+After a failure no further item starts, items already in flight finish and keep
+their checkpoints, and the earliest failure in input order is raised. The position
+branch (scan → critique chain → normalize → publish) is one item: once started it
+runs to publication even if the parallel technique scan fails, so positions stay
+available exactly as when technique work fails serially. Cancellation cancels every
+in-flight item. An interrupted attempt can therefore leave up to `max_parallel_calls`
+steps with unknown spend, each reconciled per step as below; after a lost lease,
+in-flight siblings cannot commit their reply and stay `running` until reconciled.
+The deployed account/session lanes use `PRODUCTION_MAX_PARALLEL_CALLS` (6).
 
 Position critique defaults to 4000ms backward and 6000ms forward inspection,
 clipped to selected scope. `max_call_attempts` defaults2 (maximum3); these fields
