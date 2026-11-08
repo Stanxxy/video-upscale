@@ -34,7 +34,10 @@ from shared_lib.infrastructure.result_publication_table import ResultPublication
 
 from service.analysis_checkpoint_journal import _target
 from service.analysis_gemini import qualified_model_versions
-from service.analysis_run_dispatch import PositionRunDispatcher
+from service.analysis_run_dispatch import (
+    PRODUCTION_MAX_PARALLEL_CALLS,
+    PositionRunDispatcher,
+)
 from service.dag_runtime import partitioned_engine_service_runtime
 from service.single_lane_dag_server import (
     SingleLaneDagRunAuthority,
@@ -253,6 +256,7 @@ def prepare_dispatchers(
             lease_seconds=60,
             heartbeat_seconds=10,
             mime_type="video/mp4",
+            max_parallel_calls=PRODUCTION_MAX_PARALLEL_CALLS,
             transport=None if transports is None else transports[owner],
         )
     return result
