@@ -21,7 +21,7 @@ def leases(checkpoint_database, inputs, resolver):
         job_id text PRIMARY KEY, video_id text, user_id text, pipeline_kind text,
         job_state text, owner_instance_id text, last_heartbeat_at timestamp,
         started_at timestamp, updated_at timestamp, completed_at timestamp,
-        stage text, progress_percent double
+        stage text, progress_percent double, error_message text
     )""")
     authority = resolver.guard
 
