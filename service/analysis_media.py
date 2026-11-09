@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
-from decimal import ROUND_FLOOR, Decimal
+from decimal import ROUND_FLOOR, Decimal, InvalidOperation
 from pathlib import Path
 
 from bjj_analysis_core.requests import load_config, strict_json
@@ -27,6 +27,22 @@ class MediaIntegrityError(ValueError):
 
 class DeterministicPreparationRejected(MediaIntegrityError):
     """Sanitized, pre-provider input rejection that can safely interrupt a lease."""
+
+
+@dataclass(frozen=True)
+class SourceTimeOrigin:
+    """Measured clocks of the exact source bytes, and the provider mapping.
+
+    The Analyzer's source timeline is presentation time minus the container
+    start_time (the preview convention). Gemini re-bases an uploaded file so that
+    its first video frame is 0 (measured 2026-11-09, see the engine receipt), so
+    ``source_ms = provider_ms + offset_ms`` with offset = video start - container
+    start, floored to a millisecond like the duration.
+    """
+
+    container_start_time: str
+    video_start_time: str
+    offset_ms: int
 
 
 @dataclass(frozen=True)
@@ -48,6 +64,7 @@ class VerifiedRunMedia:
     source_size: int
     source_format: str
     source_duration_ms: int
+    time_origin: SourceTimeOrigin
     crops: tuple[VerifiedCrop, VerifiedCrop]
 
     @contextmanager
@@ -166,8 +183,14 @@ class S3RunMedia:
     def _video(self, path, run):
         probe = self._probe(path, VIDEO_FORMATS)
         videos = [s for s in probe["streams"] if s.get("codec_type") == "video"]
-        if len(videos) != 1 or videos[0].get("disposition", {}).get("attached_pic"):
-            raise MediaIntegrityError("source needs one unambiguous video stream")
+        if not videos:
+            raise MediaIntegrityError("source has no video stream")
+        if len(videos) != 1:
+            raise MediaIntegrityError(
+                "source has more than one video stream or an attached picture"
+            )
+        if videos[0].get("disposition", {}).get("attached_pic"):
+            raise MediaIntegrityError("source video is only an attached picture")
         stream, container = videos[0], probe["format"]
         if any(
             type(stream.get(k)) is not int or stream[k] <= 0
@@ -181,12 +204,31 @@ class S3RunMedia:
         duration_ms = int((duration * 1000).to_integral_value(rounding=ROUND_FLOOR))
         if duration_ms != run.spec.source_duration_ms:
             raise MediaIntegrityError("source duration differs from admitted run")
-        # No silent rebasing/remuxing. A nonzero or absent time origin needs a
-        # separately qualified conversion contract before native provider use.
-        for metadata in (container, stream):
-            if "start_time" not in metadata or Decimal(metadata["start_time"]) != 0:
-                raise MediaIntegrityError("source time origin is not verified zero")
-        return container["format_name"], duration_ms
+        # No remuxing: the exact bytes go to the provider. Their clocks are
+        # measured here and mapped by SourceTimeOrigin, never assumed zero.
+        starts = {}
+        for name, metadata in (("container", container), ("video stream", stream)):
+            try:
+                value = Decimal(metadata["start_time"])
+            except (KeyError, InvalidOperation, TypeError):
+                value = None
+            if value is None or not value.is_finite():
+                raise MediaIntegrityError(f"source {name} start_time is unreadable")
+            starts[name] = value
+        offset = starts["video stream"] - starts["container"]
+        if offset < 0:
+            raise MediaIntegrityError(
+                "source video starts before the container time origin"
+            )
+        offset_ms = int((offset * 1000).to_integral_value(rounding=ROUND_FLOOR))
+        if offset_ms >= duration_ms:
+            raise MediaIntegrityError(
+                "source video starts after the container duration"
+            )
+        origin = SourceTimeOrigin(
+            container["start_time"], stream["start_time"], offset_ms
+        )
+        return container["format_name"], duration_ms, origin
 
     def _crop(self, path, athlete):
         probe = self._probe(path, IMAGE_FORMATS)
@@ -321,7 +363,7 @@ class S3RunMedia:
                     self.max_source,
                 )
                 await self.guard(run)
-                format_name, duration = await self._prepare(
+                format_name, duration, origin = await self._prepare(
                     self._video, source_path, run
                 )
                 crops = []
@@ -340,5 +382,6 @@ class S3RunMedia:
                     size,
                     format_name,
                     duration,
+                    origin,
                     tuple(crops),
                 )

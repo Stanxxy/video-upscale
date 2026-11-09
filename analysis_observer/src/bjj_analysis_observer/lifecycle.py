@@ -32,6 +32,8 @@ class LifecycleView:
     last_heartbeat_at: datetime | None
     lease_expires_at: datetime | None
     completed_at: datetime | None
+    # Sanitized deterministic preparation rejection that stopped the run, else None.
+    stop_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,7 @@ class _Lifecycle:
     heartbeat: datetime
     updated: datetime
     completed: datetime | None
+    stop_reason: str | None = None
 
     def identity(self):
         return self.state, self.owner, self.started, self.completed
@@ -111,6 +114,7 @@ class KeyspacesLifecycleReader:
             _timestamp(row.last_heartbeat_at),
             _timestamp(row.updated_at),
             None if row.completed_at is None else _timestamp(row.completed_at),
+            row.error_message or None,
         )
         if not value.started <= value.heartbeat <= value.updated:
             raise StatusEvidenceError("inconsistent lifecycle timestamp order")
@@ -197,6 +201,7 @@ async def read_status(
             None if after is None else after.heartbeat,
             expires,
             None if after is None else after.completed,
+            None if after is None or after.state != "INTERRUPTED" else after.stop_reason,
         ),
         progress,
     )

@@ -154,11 +154,11 @@ async def test_pre_provider_preparation_rejection_interrupts_after_context_drain
     drained = False
     original_finish = lease.finish
 
-    async def checked_finish(*, completed):
+    async def checked_finish(*, completed, stop_reason=None):
         assert completed is False
         assert drained is True
         assert lease.closed is False
-        await original_finish(completed=completed)
+        await original_finish(completed=completed, stop_reason=stop_reason)
 
     lease.finish = checked_finish
 
@@ -180,6 +180,7 @@ async def test_pre_provider_preparation_rejection_interrupts_after_context_drain
     row = await lease._read()
     assert row.job_state == "INTERRUPTED"
     assert row.completed_at is None
+    assert row.error_message == "sanitized fixture rejection"
     with pytest.raises(LeaseLost):
         await leases().acquire()
     recovery = leases()
