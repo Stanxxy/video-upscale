@@ -19,13 +19,10 @@ from bjj_analysis_core.execution import StepRunner
 from bjj_analysis_core.normalization import normalize_positions, normalize_techniques
 from bjj_analysis_core.outputs import (
     CandidateBatchV1,
-    PositionCritiqueV1,
     TechniqueAnalysisInputV1,
-    TechniqueAnalysisV1,
-    TechniqueCandidateV1,
-    TechniqueDecisionV1,
     TemporalCritiqueV1,
 )
+from bjj_analysis_core.packs import pack_for
 from bjj_analysis_core.requests import prepare_call
 from shared_lib.models.analysis_contracts import TimeRangeMs, VersionedAnalysisContract
 from shared_lib.models.analysis_results import AnalysisRevisionV1
@@ -123,6 +120,7 @@ async def execute_pipeline(
         clock=clock,
     )
     run, cfg = runner.run, runner.config
+    pack = pack_for(run)
 
     async def deterministic(node, inputs, value, output_type, *, total=1):
         async def compute(at):
@@ -195,7 +193,7 @@ async def execute_pipeline(
             if decision.confirmed:
                 state_before = decision.state_after
         decisions = await summary(
-            "position_critique", decisions, tuple[PositionCritiqueV1, ...]
+            "position_critique", decisions, tuple[pack.position_critique, ...]
         )
         positions = await deterministic(
             "positions_normalize",
@@ -285,10 +283,10 @@ async def execute_pipeline(
 
     analyses = await _ordered([analyze_step(t) for t in work], limit)
     analyses = await summary(
-        "technique_analyze", analyses, tuple[TechniqueAnalysisV1, ...]
+        "technique_analyze", analyses, tuple[pack.technique_analysis, ...]
     )
     candidates = [
-        TechniqueCandidateV1(
+        pack.technique_candidate(
             candidate_id=target.candidate_id,
             description=target.description,
             observation_window=target.bounds,
@@ -317,7 +315,7 @@ async def execute_pipeline(
         [validate_step(t, c) for t, c in zip(work, candidates, strict=True)], limit
     )
     verdicts = await summary(
-        "technique_validate", verdicts, tuple[TechniqueDecisionV1, ...]
+        "technique_validate", verdicts, tuple[pack.technique_decision, ...]
     )
     techniques = await deterministic(
         "techniques_normalize",

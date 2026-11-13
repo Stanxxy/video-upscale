@@ -1,0 +1,52 @@
+Reconstruct the continuous positional state of exactly two reference-grounded MMA
+fighters in fight, sparring or training footage. Ignore the referee, cornermen,
+coaches, cameramen and spectators. Identify fighters from labelled cropped reference
+images; never infer identity from shorts colour, corner, scoreboard, commentary or
+reference order alone.
+
+Return one initial state and every later boundary changing position, roles,
+cage_contact or observation. Times are integer ABSOLUTE SOURCE-VIDEO MILLISECONDS,
+never relative clip seconds. Boundaries must increase strictly inside the requested
+scope. Do not invent independent start/end ranges. Scan the entire scope, every
+round. Python builds exact-coverage spans.
+
+Standing phases: striking_range is both fighters standing and separated at kicking
+or punching distance with no sustained grip. clinch is standing with sustained
+upper-body ties (collar tie, underhooks, overhooks, over-under, body lock) facing
+each other. standing_back_control is a standing rear attachment: chest to back with
+a body lock, seatbelt or hooks while both are upright. A single punch or a momentary
+grab during an exchange does not change striking_range into clinch.
+
+Ground phases use body geometry: closed_guard has visibly closed encircling legs;
+half_guard traps one leg; open_guard has unclosed leg/foot frames. side_control pins
+past the legs from the side; mount straddles the torso/hips facing the opponent.
+back_control is sustained chest-to-back rear attachment on the ground (seatbelt,
+hooks, body triangle); two hooks are NOT required. turtle is compact knees/hands/
+elbows with torso toward the mat WITHOUT established rear attachment. wall_seated
+is the bottom fighter sitting or posting against the fence while the other pins or
+holds them there (before a wall-walk or stand-up). Unresolved scrambles are scramble.
+
+Set cage_contact=true for an observed span while either fighter is pressed against
+the fence, false when clearly away from it, null when it cannot be seen or the span
+is not observed. Return the supplied position-relative role pair in the bound player
+order: in a clinch against the fence the cage_pinner presses the cage_pinned fighter
+into it; away from the fence the clinch is neutral/neutral. Roles describe the visible
+relationship, never dominance or who is winning. Use unknown/unknown with
+uncertainty_note when roles cannot be established.
+
+other requires visible established geometry outside the vocabulary, described in
+notes (e.g. north-south, knee-on-belly). Never use other for an existing position or
+a technique name such as punch, takedown, armbar or escape.
+
+Use inactive with null position, not_applicable roles, an interruption_note and an
+interruption_kind for time that is not live fighting: round_break between rounds
+(corners, stools, round cards), replay for broadcast replays and slow-motion
+re-showings, reset for a referee stoppage, stand-up, doctor check, foul break or
+point deduction inside a round. Replayed action is never counted again. Use
+unobservable with null position, unknown roles and uncertainty_note when the live
+exchange cannot be seen reliably (cutaway, crowd shot, graphics over the action,
+lost identities). Brief occlusion may retain an observed state only when continuity
+is visibly supported; state the evidence and uncertainty. interruption_kind is null
+for every state that is not inactive.
+Do not invent hidden transitions, dominance, acceptance, fighter IDs or statistics.
+Return only the requested structured JSON.

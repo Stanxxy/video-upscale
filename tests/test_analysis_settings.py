@@ -306,3 +306,18 @@ def test_production_dag_artifacts_match_advertised_model_and_native_preset():
     versions = qualified_model_versions(json.loads((root / "qualified-models.json").read_text()))
     assert set(versions) == set(get_analysis_settings_capabilities().qualified_models)
     assert versions["gemini-3.8-flash"] == frozenset({"gemini-3.8-flash"})
+
+
+def test_mma_dag_preset_artifact_matches_its_pack_and_generator():
+    from pathlib import Path
+    from service.analysis_preset import gemini38_mma_preset, gemini38_preset
+    from bjj_analysis_core.packs import MMA
+    from bjj_analysis_core.requests import CoreConfigV1, prompt_bundle_sha256
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    saved = CoreConfigV1.model_validate_json((root / "gemini38-mma.json").read_bytes())
+    assert saved == gemini38_mma_preset()
+    assert saved.prompt_bundle_sha256 == prompt_bundle_sha256(MMA)
+    bjj = gemini38_preset()
+    assert saved.technique_scan.fps == 5
+    assert saved.model_copy(update={"prompt_bundle_sha256": bjj.prompt_bundle_sha256, "technique_scan": bjj.technique_scan}) == bjj

@@ -6,23 +6,22 @@ This module performs no network I/O and imports no lab, service or database code
 
 import hashlib
 import json
-from importlib.resources import files
+from functools import cache
 from typing import Literal
 
-from bjj_analysis_core import CORE_VERSION, WORKFLOW_ID
+from bjj_analysis_core import CORE_VERSION
 from bjj_analysis_core.outputs import (
     CandidateConfigV1,
-    PositionCritiqueInputV1,
     PositionCritiqueV1,
     PositionScanV1,
     TechniqueAnalysisInputV1,
     TechniqueAnalysisV1,
-    TechniqueCandidateV1,
     TechniqueDecisionV1,
     TechniqueScanV1,
     TemporalCritiqueInputV1,
     TemporalCritiqueV1,
 )
+from bjj_analysis_core.packs import BJJ, PACKS, pack_for
 from pydantic import Field, StrictStr
 from shared_lib.models.analysis_contracts import (
     AnalysisContract,
@@ -35,12 +34,6 @@ from shared_lib.models.analysis_contracts import (
 )
 from shared_lib.models.analysis_results import AnalysisRevisionV1
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
-from shared_lib.models.position_taxonomy import position_taxonomy_manifest
-from shared_lib.models.simplified_taxonomy import (
-    AXIS3_ACTION,
-    AXIS4_OUTCOME,
-    TECHNIQUE_SHORTLISTS,
-)
 
 NodeId = Literal[
     "position_scan",
@@ -50,14 +43,8 @@ NodeId = Literal[
     "technique_analyze",
     "technique_validate",
 ]
-OUTPUTS = {
-    "position_scan": PositionScanV1,
-    "position_critique": PositionCritiqueV1,
-    "technique_scan": TechniqueScanV1,
-    "technique_critique": TemporalCritiqueV1,
-    "technique_analyze": TechniqueAnalysisV1,
-    "technique_validate": TechniqueDecisionV1,
-}
+# The BJJ pack's node outputs (every pack has the same nodes).
+OUTPUTS = BJJ.outputs
 
 
 def canonical_json(value):
@@ -85,25 +72,30 @@ def strict_json(text):
     return json.loads(text, object_pairs_hook=pairs, parse_constant=invalid)
 
 
-def prompt_bundle():
+def prompt_bundle(pack=BJJ):
     return {
         "core_version": CORE_VERSION,
-        "prompts": {
-            node: files("bjj_analysis_core")
-            .joinpath("prompts", f"{node}.txt")
-            .read_text(encoding="utf-8")
-            for node in OUTPUTS
-        },
-        "positions": position_taxonomy_manifest(),
-        "action_classes": list(AXIS3_ACTION),
-        "outcomes": list(AXIS4_OUTCOME),
-        "technique_classes": TECHNIQUE_SHORTLISTS,
-        "schemas": {node: model.model_json_schema() for node, model in OUTPUTS.items()},
+        "prompts": {node: pack.prompt(node) for node in pack.outputs},
+        **{key: value for key, value in pack.taxonomy.items()},
+        "schemas": {node: model.model_json_schema() for node, model in pack.outputs.items()},
     }
 
 
-def prompt_bundle_sha256():
-    return hashlib.sha256(canonical_json(prompt_bundle()).encode("utf-8")).hexdigest()
+def prompt_bundle_sha256(pack=BJJ):
+    return hashlib.sha256(canonical_json(prompt_bundle(pack)).encode("utf-8")).hexdigest()
+
+
+@cache
+def _pack_by_bundle():
+    return {prompt_bundle_sha256(pack): pack for pack in PACKS.values()}
+
+
+def pack_for_bundle(bundle_sha256):
+    """A prepared call names its pack by the prompt bundle it was built from."""
+    try:
+        return _pack_by_bundle()[bundle_sha256]
+    except KeyError:
+        raise ValueError("prepared call uses an unknown prompt bundle") from None
 
 
 class NodeConfigV1(AnalysisContract):
@@ -149,12 +141,10 @@ def load_config(run, config_bytes):
     if digest != run.spec.effective_config.sha256:
         raise ValueError("configuration bytes differ from admitted run")
     config = CoreConfigV1.model_validate(strict_json(config_bytes))
-    bundle_hash = prompt_bundle_sha256()
-    if (
-        run.spec.core_version != CORE_VERSION
-        or run.spec.workflow_id != WORKFLOW_ID
-        or config.prompt_bundle_sha256 != bundle_hash
-    ):
+    if run.spec.core_version != CORE_VERSION or run.spec.workflow_id not in PACKS:
+        raise ValueError("core or prompt bundle differs from admitted configuration")
+    pack = pack_for(run)
+    if config.prompt_bundle_sha256 != prompt_bundle_sha256(pack):
         raise ValueError("core or prompt bundle differs from admitted configuration")
     return run, config
 
@@ -164,9 +154,10 @@ def prepare_call(
 ):
     """Use persisted stage input, not raw browser configuration or guessed models."""
     run, config = load_config(run, config_bytes)
-    if node_id not in OUTPUTS:
+    pack = pack_for(run)
+    if node_id not in pack.outputs:
         raise ValueError("unknown core node")
-    bundle = prompt_bundle()
+    bundle = prompt_bundle(pack)
     window = TimeRangeMs.model_validate(input_window)
     if not run.spec.scope.contains(window):
         raise ValueError("model observation window exceeds admitted scope")
@@ -179,10 +170,10 @@ def prepare_call(
             )
     else:
         context_model = {
-            "position_critique": PositionCritiqueInputV1,
+            "position_critique": pack.position_critique_input,
             "technique_critique": TemporalCritiqueInputV1,
             "technique_analyze": TechniqueAnalysisInputV1,
-            "technique_validate": TechniqueCandidateV1,
+            "technique_validate": pack.technique_candidate,
         }[node_id]
         parsed = context_model.model_validate(context)
         if node_id == "technique_critique":
@@ -237,6 +228,7 @@ def prepare_call(
         "action_classes": bundle["action_classes"],
         "outcomes": bundle["outcomes"],
         "technique_classes": bundle["technique_classes"],
+        **{key: bundle[key] for key in pack.extra_prompt_keys},
         "stage_context": context,
         "advisory_positions": advisory,
     }
@@ -255,7 +247,8 @@ def prepare_call(
 def parse_response(prepared, response_text):
     """Reject malformed JSON/schema/window violations; no repairs or code fences."""
     prepared = PreparedCallV1.model_validate(prepared)
-    result = OUTPUTS[prepared.node_id].model_validate(strict_json(response_text))
+    pack = pack_for_bundle(prepared.prompt_bundle_sha256)
+    result = pack.outputs[prepared.node_id].model_validate(strict_json(response_text))
     window = prepared.input_window
     context = strict_json(prepared.initial_prompt)["stage_context"]
     if isinstance(result, PositionScanV1):

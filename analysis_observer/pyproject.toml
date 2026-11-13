@@ -8,8 +8,8 @@ version = "0.1.0.post1"
 description = "Read-only durable BJJ analysis observation for account and session hosts"
 requires-python = ">=3.12"
 dependencies = [
-    "bjj-analysis-core==0.3.0.post1",
-    "shared-lib>=1.5.0,<1.7",
+    "bjj-analysis-core==0.3.0.post2",
+    "shared-lib>=1.10.0,<1.11",
     "pydantic>=2.10,<3",
     "cassandra-driver>=3.29.2,<4",
 ]
