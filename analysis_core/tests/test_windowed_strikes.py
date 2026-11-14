@@ -270,3 +270,14 @@ def test_chain_strikes_are_not_published_in_the_windowed_workflow(run, completed
                               technique=proposal, reason="visible"))
     revision = normalize_techniques(run, candidates, decisions, completed_at=completed_at)
     assert [e.action_classes[0].value for e in revision.techniques] == ["takedown_attempt"]
+
+
+def test_outcome_evidence_outside_a_corrected_clip_is_rejected_at_the_call():
+    from bjj_analysis_core.outputs import TechniqueDecisionV1
+    from conftest import technique
+
+    # BJJ release-candidate run: the validator shortened the clip but kept the old outcome window.
+    bad = technique(bounds=dict(start_ms=331700, end_ms=335400), outcome_bounds=dict(start_ms=335400, end_ms=342400))
+    with pytest.raises(ValueError, match="inside the technique bounds"):
+        TechniqueDecisionV1.model_validate(dict(schema_version=1, candidate_id="c", verdict="correct",
+                                                intentional_technique_visible=True, technique=bad, reason="r"))

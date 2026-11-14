@@ -70,6 +70,14 @@ class TechniqueAnalysisV1(VersionedAnalysisContract):
     outcome_evidence: Identifier
     outcome_bounds: TimeRangeMs | None
 
+    @model_validator(mode="after")
+    def outcome_inside_clip(self):
+        # Publication (shared_lib TechniqueEventV1) rejects this; rejecting it here
+        # fails the one provider call (retryable) instead of the deterministic publish.
+        if self.outcome_bounds is not None and not self.bounds.contains(self.outcome_bounds):
+            raise ValueError("outcome evidence bounds must lie inside the technique bounds")
+        return self
+
 
 class TechniqueDecisionV1(VersionedAnalysisContract):
     candidate_id: Identifier
