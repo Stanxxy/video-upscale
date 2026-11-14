@@ -12,14 +12,18 @@ def gemini38_preset() -> CoreConfigV1:
     node = NodeConfigV1(
         model="gemini-3.8-flash", thinking="high", media_resolution="low", fps=10
     )
+    # Checks and validation confirm or reject a proposal in a short window; they
+    # run at low thinking (founder 2026-11-14: high thinking made every check
+    # 20-40 s and most of the spend). Scans and analysis keep high thinking.
+    check = node.model_copy(update={"thinking": "low"})
     return CoreConfigV1(
         prompt_bundle_sha256=prompt_bundle_sha256(),
         position_scan=node.model_copy(update={"fps": 1}),
-        position_critique=node,
+        position_critique=check,
         technique_scan=node.model_copy(update={"fps": 1}),
-        technique_critique=node,
+        technique_critique=check,
         technique_analyze=node,
-        technique_validate=node,
+        technique_validate=check,
         candidates=CandidateConfigV1(),
     )
 

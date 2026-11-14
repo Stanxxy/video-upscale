@@ -68,7 +68,9 @@ This is local implementation, not production deployment or live model qualificat
 
 The founder approved Gemini3.8 production selection on September21 after the
 real-video run. `config/analysis/gemini38.json` is the canonical new-run preset:
-all six nodes use `gemini-3.8-flash`, high thinking, low media resolution,
+all six nodes use `gemini-3.8-flash` and low media resolution; scans and technique
+analysis use high thinking, the three checks (position critique, technique critique,
+technique validate) low thinking (founder, 2026-11-14), with
 1fps scans and10fps detailed stages. The high-resolution experiment is excluded.
 `config/analysis/qualified-models.json` binds the model ID to the returned version
 observed in all21 calls of the completed real-video native DAG.

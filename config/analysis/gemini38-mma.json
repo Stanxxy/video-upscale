@@ -10,7 +10,7 @@
   },
   "position_critique": {
     "model": "gemini-3.8-flash",
-    "thinking": "high",
+    "thinking": "low",
     "media_resolution": "low",
     "fps": 10
   },
@@ -22,7 +22,7 @@
   },
   "technique_critique": {
     "model": "gemini-3.8-flash",
-    "thinking": "high",
+    "thinking": "low",
     "media_resolution": "low",
     "fps": 10
   },
@@ -34,7 +34,7 @@
   },
   "technique_validate": {
     "model": "gemini-3.8-flash",
-    "thinking": "high",
+    "thinking": "low",
     "media_resolution": "low",
     "fps": 10
   },
