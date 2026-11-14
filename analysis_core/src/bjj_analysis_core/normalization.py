@@ -130,7 +130,7 @@ def normalize_positions(run, scan, critiques, *, completed_at):
     return _revision(run, completed_at, "positions", intervals)
 
 
-def normalize_techniques(run, candidates, decisions, *, completed_at):
+def normalize_techniques(run, candidates, decisions, *, completed_at, strikes=()):
     """One terminal decision per candidate; no silent drops or inferred outcomes.
 
     Candidates/decisions must be checkpointed by the host. Input order is kept;
@@ -172,4 +172,17 @@ def normalize_techniques(run, candidates, decisions, *, completed_at):
             **data.model_dump(exclude={"schema_version", "bounds"}),
         )
         events.append(event)
+    # Windowed strike census (mma-windowed-strikes): already merged, one event each.
+    if strikes and not pack.windowed_strikes:
+        raise ValueError("only the windowed strike workflow publishes census strikes")
+    for index, data in enumerate(strikes):
+        data = pack.technique_analysis.model_validate(data)
+        if not run.spec.scope.contains(data.bounds):
+            raise ValueError("strike bounds exceed the selected scope")
+        events.append(
+            TechniqueEventV1(
+                **_common(run, uuid5(run.spec.run_id, f"strike:v1:{index}"), data.bounds),
+                **data.model_dump(exclude={"schema_version", "bounds"}),
+            )
+        )
     return _revision(run, completed_at, "techniques", events)

@@ -41,7 +41,7 @@ class EstimateIn(BaseModel):
 
 async def core_estimate(body: EstimateIn):
     if body.sport not in qa_core.SPORTS:
-        raise HTTPException(status_code=400, detail="sport must be bjj or mma")
+        raise HTTPException(status_code=400, detail="unknown workflow: " + body.sport)
     if body.end_ms <= body.start_ms:
         raise HTTPException(status_code=400, detail="scope end must follow its start")
     try:

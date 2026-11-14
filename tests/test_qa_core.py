@@ -82,7 +82,7 @@ def test_mma_config_is_the_production_preset_and_overrides_only_named_fields():
     assert (changed.technique_scan.fps, changed.technique_scan.media_resolution, changed.technique_scan.model) == (10, "medium", "gemini-3.8-flash")
     assert changed.position_scan == config.position_scan
     with pytest.raises(ValueError, match="unknown node"):
-        qa_core.build_config("mma", {"strike_census": qa_core.NodeOverride(fps=10)})
+        qa_core.build_config("mma", {"strike_party": qa_core.NodeOverride(fps=10)})
 
 
 def test_estimate_counts_scan_frames_and_prices_only_listed_models():
@@ -169,3 +169,21 @@ def test_media_path_accepts_only_youtube_ids(tmp_path):
     assert qa_core.media_path(settings, "1ACTKcuQZyQ", download=False) == tmp_path / "1ACTKcuQZyQ.mp4"
     with pytest.raises(ValueError):
         qa_core.media_path(settings, "../../etc/pa", download=False)
+
+
+def test_v2_workflows_use_the_strike_pack_and_census_only_drops_the_audit():
+    from bjj_analysis_core.packs import MMA_STRIKES
+
+    v2 = qa_core.build_config("mma_v2", {})
+    assert v2.prompt_bundle_sha256 == prompt_bundle_sha256(MMA_STRIKES)
+    assert (v2.strike_census.fps, v2.strike_census.thinking, v2.strike_audit.thinking) == (10, "high", "low")
+    assert (v2.position_critique.thinking, v2.technique_validate.thinking, v2.technique_scan.fps) == ("low", "low", 2)
+    census_only = qa_core.build_config("mma_v2_census", {})
+    assert census_only.strike_audit is None
+    with pytest.raises(ValueError, match="not part of this workflow"):
+        qa_core.build_config("mma_v2_census", {"strike_audit": qa_core.NodeOverride(fps=5)})
+    with pytest.raises(ValueError, match="not part of this workflow"):
+        qa_core.build_config("mma", {"strike_census": qa_core.NodeOverride(fps=5)})
+    # 60 s scope tiled into 20 s windows stepping 18 s: the census sees 66.7 s of video.
+    assert qa_core.estimate(v2, 0, 60_000)["strike_census"]["frames"] == 666
+    assert "strike_census" not in qa_core.estimate(qa_core.build_config("mma", {}), 0, 60_000)

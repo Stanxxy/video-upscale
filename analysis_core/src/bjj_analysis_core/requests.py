@@ -21,6 +21,12 @@ from bjj_analysis_core.outputs import (
     TemporalCritiqueInputV1,
     TemporalCritiqueV1,
 )
+from bjj_analysis_core.mma_outputs import (
+    StrikeAuditInputV1,
+    StrikeAuditV1,
+    StrikeCensusV1,
+    StrikeWindowInputV1,
+)
 from bjj_analysis_core.packs import BJJ, PACKS, pack_for
 from pydantic import Field, StrictStr
 from shared_lib.models.analysis_contracts import (
@@ -42,6 +48,8 @@ NodeId = Literal[
     "technique_critique",
     "technique_analyze",
     "technique_validate",
+    "strike_census",
+    "strike_audit",
 ]
 # The BJJ pack's node outputs (every pack has the same nodes).
 OUTPUTS = BJJ.outputs
@@ -119,6 +127,12 @@ class CoreConfigV1(VersionedAnalysisContract):
     position_critique_back_ms: NonNegativeInt = Field(default=4000, le=30000)
     position_critique_forward_ms: PositiveInt = Field(default=6000, le=30000)
     max_call_attempts: PositiveInt = Field(default=2, le=3)
+    # Windowed strike census (workflow mma-windowed-strikes only; absent elsewhere).
+    # No strike_audit config means the census is published without a second pass.
+    strike_census: NodeConfigV1 | None = None
+    strike_audit: NodeConfigV1 | None = None
+    strike_window_ms: PositiveInt = Field(default=20000, ge=5000, le=60000)
+    strike_overlap_ms: NonNegativeInt = Field(default=2000, le=10000)
 
 
 class PreparedCallV1(VersionedAnalysisContract):
@@ -146,6 +160,13 @@ def load_config(run, config_bytes):
     pack = pack_for(run)
     if config.prompt_bundle_sha256 != prompt_bundle_sha256(pack):
         raise ValueError("core or prompt bundle differs from admitted configuration")
+    if pack.windowed_strikes:
+        if config.strike_census is None:
+            raise ValueError("the windowed strike workflow needs a strike_census node")
+        if config.strike_overlap_ms >= config.strike_window_ms:
+            raise ValueError("strike window overlap must be shorter than the window")
+    elif config.strike_census is not None or config.strike_audit is not None:
+        raise ValueError("strike census nodes belong only to the windowed strike workflow")
     return run, config
 
 
@@ -174,8 +195,25 @@ def prepare_call(
             "technique_critique": TemporalCritiqueInputV1,
             "technique_analyze": TechniqueAnalysisInputV1,
             "technique_validate": pack.technique_candidate,
+            "strike_census": StrikeWindowInputV1,
+            "strike_audit": StrikeAuditInputV1,
         }[node_id]
         parsed = context_model.model_validate(context)
+        if node_id in ("strike_census", "strike_audit"):
+            from bjj_analysis_core.strikes import strike_windows
+
+            if node_id == "strike_audit" and config.strike_audit is None:
+                raise ValueError("this run has no strike audit node")
+            if advisory_positions is not None:
+                raise ValueError("the strike census is visually independent")
+            windows = strike_windows(run, config)
+            index = parsed.window_index
+            if index >= len(windows) or window != windows[index]:
+                raise ValueError("strike window differs from the admitted tiling")
+            if node_id == "strike_census" and parsed.window != window:
+                raise ValueError("strike census context names a different window")
+            if node_id == "strike_audit" and parsed.census.window_index != index:
+                raise ValueError("strike audit reviews another window's census")
         if node_id == "technique_critique":
             from bjj_analysis_core.discovery import critique_window
 
@@ -286,6 +324,26 @@ def parse_response(prepared, response_text):
             raise ValueError(
                 "exhausted outcome must retain evidence through window end"
             )
+    elif isinstance(result, StrikeCensusV1):
+        if result.window_index != context["window_index"]:
+            raise ValueError("census answers a different window")
+        last = window.start_ms
+        for strike in result.strikes:
+            if not last <= strike.at_ms < window.end_ms:
+                raise ValueError("census strikes must be ordered inside the window")
+            last = strike.at_ms
+    elif isinstance(result, StrikeAuditV1):
+        census = context["census"]["strikes"]
+        if result.window_index != context["window_index"]:
+            raise ValueError("audit answers a different window")
+        if [d.census_index for d in result.decisions] != list(range(len(census))):
+            raise ValueError("audit must decide every census strike once, in order")
+        for decision in result.decisions:
+            if decision.at_ms is not None and not window.start_ms <= decision.at_ms < window.end_ms:
+                raise ValueError("retimed strike falls outside the window")
+        for strike in result.added:
+            if not window.start_ms <= strike.at_ms < window.end_ms:
+                raise ValueError("added strike falls outside the window")
     elif isinstance(result, TechniqueAnalysisV1):
         if result.bounds != window:
             raise ValueError("analysis must preserve the authoritative temporal bounds")

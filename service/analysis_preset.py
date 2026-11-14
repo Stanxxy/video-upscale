@@ -4,7 +4,7 @@ Provider qualification remains a separate host input, backed by live evidence.
 """
 
 from bjj_analysis_core.outputs import CandidateConfigV1
-from bjj_analysis_core.packs import MMA
+from bjj_analysis_core.packs import MMA, MMA_STRIKES
 from bjj_analysis_core.requests import CoreConfigV1, NodeConfigV1, prompt_bundle_sha256
 
 
@@ -37,4 +37,29 @@ def gemini38_mma_preset() -> CoreConfigV1:
             "prompt_bundle_sha256": prompt_bundle_sha256(MMA),
             "technique_scan": bjj.technique_scan.model_copy(update={"fps": 5}),
         }
+    )
+
+
+def gemini38_mma_strikes_preset(*, audit=True) -> CoreConfigV1:
+    """Windowed strike census (workflow mma-windowed-strikes); not admitted in production.
+
+    Strikes: one census call per 20 s window at 10 fps (high thinking: it is the
+    detector) and, when ``audit``, one low-thinking audit per window. Grappling keeps
+    the per-candidate chain on a 2 fps grappling-only scan. Checks run at low thinking.
+    """
+    node = NodeConfigV1(
+        model="gemini-3.8-flash", thinking="high", media_resolution="low", fps=10
+    )
+    check = node.model_copy(update={"thinking": "low"})
+    return CoreConfigV1(
+        prompt_bundle_sha256=prompt_bundle_sha256(MMA_STRIKES),
+        position_scan=node.model_copy(update={"fps": 1}),
+        position_critique=check,
+        technique_scan=node.model_copy(update={"fps": 2}),
+        technique_critique=check,
+        technique_analyze=node,
+        technique_validate=check,
+        candidates=CandidateConfigV1(),
+        strike_census=node,
+        strike_audit=check if audit else None,
     )

@@ -91,3 +91,84 @@ class MmaTechniqueDecisionV1(TechniqueDecisionV1):
 
 class MmaTechniqueCandidateV1(TechniqueCandidateV1):
     proposed: MmaTechniqueAnalysisV1
+
+
+# --- Windowed strike census (workflow mma-windowed-strikes) ---------------------------
+from typing import Literal  # noqa: E402
+
+from pydantic import StrictStr  # noqa: E402
+from shared_lib.models.analysis_contracts import (  # noqa: E402
+    AnalysisContract,
+    Identifier,
+    NonNegativeInt,
+    TimeRangeMs,
+    VersionedAnalysisContract,
+)
+
+MmaStrikeAction = _enum("MmaStrikeAction", MMA.strike_actions)
+
+
+class StrikeV1(AnalysisContract):
+    """One thrown strike at its contact (or full-extension) moment."""
+
+    at_ms: NonNegativeInt
+    action: MmaStrikeAction
+    actor_player_id: Identifier | None
+    actor_sentinel: Literal["contested", "unclear"] | None
+    strike_target: MmaStrikeTarget
+    outcome: Literal["successful", "unsuccessful", "unclear"]
+    significant: StrictBool
+    knockdown: StrictBool
+    evidence: Identifier
+
+    @model_validator(mode="after")
+    def one_actor(self):
+        if (self.actor_player_id is None) == (self.actor_sentinel is None):
+            raise ValueError("a strike names its fighter or a sentinel, not both")
+        return self
+
+
+class StrikeCensusV1(VersionedAnalysisContract):
+    window_index: NonNegativeInt
+    strikes: tuple[StrikeV1, ...]
+
+
+class StrikeAuditDecisionV1(AnalysisContract):
+    census_index: NonNegativeInt
+    verdict: Literal["keep", "drop", "retime"]
+    at_ms: NonNegativeInt | None
+    reason: Identifier
+
+    @model_validator(mode="after")
+    def retime_has_time(self):
+        if (self.verdict == "retime") != (self.at_ms is not None):
+            raise ValueError("only a retime carries a corrected time")
+        return self
+
+
+class StrikeAuditV1(VersionedAnalysisContract):
+    window_index: NonNegativeInt
+    decisions: tuple[StrikeAuditDecisionV1, ...]
+    added: tuple[StrikeV1, ...]
+
+
+class StrikeWindowInputV1(AnalysisContract):
+    window_index: NonNegativeInt
+    window: TimeRangeMs
+
+
+class StrikeAuditInputV1(AnalysisContract):
+    window_index: NonNegativeInt
+    census: StrikeCensusV1
+
+
+class StrikeBatchV1(VersionedAnalysisContract):
+    """Deterministic merge result: final strikes as MMA technique analyses."""
+
+    strikes: tuple[MmaTechniqueAnalysisV1, ...]
+    census_count: NonNegativeInt
+    dropped_by_audit: NonNegativeInt
+    added_by_audit: NonNegativeInt
+    rejected_not_live: NonNegativeInt
+    merged_duplicates: NonNegativeInt
+    notes: StrictStr = ""

@@ -16,7 +16,13 @@ from bjj_analysis_core.discovery import (
     resolve_temporal_critiques,
 )
 from bjj_analysis_core.execution import StepRunner
+from bjj_analysis_core.mma_outputs import (
+    StrikeAuditV1,
+    StrikeBatchV1,
+    StrikeCensusV1,
+)
 from bjj_analysis_core.normalization import normalize_positions, normalize_techniques
+from bjj_analysis_core.strikes import merge_strikes, strike_windows
 from bjj_analysis_core.outputs import (
     CandidateBatchV1,
     TechniqueAnalysisInputV1,
@@ -222,9 +228,76 @@ async def execute_pipeline(
             )
         )
 
-    positions, technique_scan = await _ordered(
-        [position_branch, technique_scan_step], limit
-    )
+    async def strike_branch():
+        # Independent of positions: one census (and optional audit) per window, in
+        # parallel; not-live footage is filtered at the merge, after positions exist.
+        windows = strike_windows(run, cfg)
+        inner = max(1, limit - 2)
+
+        def census_step(index, window):
+            async def step():
+                return await runner.model(
+                    prepare_call(
+                        run,
+                        config_bytes,
+                        "strike_census",
+                        input_window=window,
+                        context=dict(window_index=index, window=window),
+                    ),
+                    item=str(index),
+                )
+
+            return step
+
+        censuses = await _ordered(
+            [census_step(i, w) for i, w in enumerate(windows)], inner
+        )
+        censuses = await summary("strike_census", censuses, tuple[StrikeCensusV1, ...])
+        if cfg.strike_audit is None:
+            return censuses, None
+
+        def audit_step(index, window, census):
+            async def step():
+                return await runner.model(
+                    prepare_call(
+                        run,
+                        config_bytes,
+                        "strike_audit",
+                        input_window=window,
+                        context=dict(window_index=index, census=census),
+                    ),
+                    item=str(index),
+                )
+
+            return step
+
+        audits = await _ordered(
+            [audit_step(i, w, c) for i, (w, c) in enumerate(zip(windows, censuses, strict=True))],
+            inner,
+        )
+        audits = await summary("strike_audit", audits, tuple[StrikeAuditV1, ...])
+        return censuses, audits
+
+    if pack.windowed_strikes:
+        positions, technique_scan, (censuses, audits) = await _ordered(
+            [position_branch, technique_scan_step, strike_branch], limit
+        )
+        strike_batch = await deterministic(
+            "strikes_merge",
+            dict(
+                censuses=[c.model_dump(mode="json") for c in censuses],
+                audits=None if audits is None else [a.model_dump(mode="json") for a in audits],
+                positions=positions.model_dump(mode="json"),
+            ),
+            lambda at: merge_strikes(run, cfg, censuses, audits, positions),
+            StrikeBatchV1,
+        )
+        strikes = strike_batch.strikes
+    else:
+        positions, technique_scan = await _ordered(
+            [position_branch, technique_scan_step], limit
+        )
+        strikes = ()
     batch = await deterministic(
         "position_technique_candidates",
         dict(
@@ -322,8 +395,11 @@ async def execute_pipeline(
         dict(
             candidates=[c.model_dump(mode="json") for c in candidates],
             verdicts=[d.model_dump(mode="json") for d in verdicts],
+            **({"strikes": [s.model_dump(mode="json") for s in strikes]} if strikes else {}),
         ),
-        lambda at: normalize_techniques(run, candidates, verdicts, completed_at=at),
+        lambda at: normalize_techniques(
+            run, candidates, verdicts, completed_at=at, strikes=strikes
+        ),
         AnalysisRevisionV1,
     )
     await publish("techniques", techniques)

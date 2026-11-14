@@ -13,4 +13,4 @@ dependencies = ["shared-lib>=1.10.0,<1.13", "pydantic>=2.10,<3"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-bjj_analysis_core = ["prompts/*.txt", "prompts_mma/*.txt"]
+bjj_analysis_core = ["prompts/*.txt", "prompts_mma/*.txt", "prompts_mma_strikes/*.txt"]

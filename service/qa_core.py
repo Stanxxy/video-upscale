@@ -33,7 +33,7 @@ import boto3
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field
 
-from bjj_analysis_core import CORE_VERSION, MMA_WORKFLOW_ID, WORKFLOW_ID
+from bjj_analysis_core import CORE_VERSION, MMA_STRIKES_WORKFLOW_ID, MMA_WORKFLOW_ID, WORKFLOW_ID
 from bjj_analysis_core.execution import StepCheckpointV1
 from bjj_analysis_core.requests import CoreConfigV1, NodeConfigV1
 from shared_lib.models.analysis_contracts import AnalysisRunSpecV1
@@ -41,7 +41,7 @@ from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 from service.analysis_gemini import GeminiProvider, S3GeminiArtifacts
 from service.analysis_media import S3RunMedia
-from service.analysis_preset import gemini38_mma_preset, gemini38_preset
+from service.analysis_preset import gemini38_mma_preset, gemini38_mma_strikes_preset, gemini38_preset
 from service.analysis_run_host import DurableGeminiRun
 
 logger = logging.getLogger("service.qa_core")
@@ -53,10 +53,16 @@ NODES = (
     "technique_critique",
     "technique_analyze",
     "technique_validate",
+    "strike_census",
+    "strike_audit",
 )
+# Workflows VLM Studio can run. "mma_v2*" is the windowed strike census DAG (not admitted
+# in production); "mma_v2_census" publishes the census without the per-window audit.
 SPORTS = {
     "bjj": (WORKFLOW_ID, "bjj.v1", gemini38_preset),
     "mma": (MMA_WORKFLOW_ID, "mma.v1", gemini38_mma_preset),
+    "mma_v2": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", gemini38_mma_strikes_preset),
+    "mma_v2_census": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", lambda: gemini38_mma_strikes_preset(audit=False)),
 }
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
@@ -97,7 +103,7 @@ class NodeOverride(BaseModel):
 
 class CoreRunIn(BaseModel):
     youtube_id: str = Field(pattern=YOUTUBE_ID.pattern)
-    sport: Literal["bjj", "mma"]
+    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census"]
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
     fighters: tuple[FighterIn, FighterIn]
@@ -264,6 +270,8 @@ def build_config(sport, overrides):
         values = {k: v for k, v in change.model_dump().items() if v is not None}
         if values:
             current = getattr(config, node)
+            if current is None:
+                raise ValueError(f"{node} is not part of this workflow")
             config = config.model_copy(update={node: NodeConfigV1.model_validate({**current.model_dump(), **values})})
     return CoreConfigV1.model_validate(config.model_dump())
 
@@ -272,11 +280,15 @@ def estimate(config: CoreConfigV1, start_ms, end_ms):
     """Scan-call input tokens only; per-item calls are unknown until the scans answer."""
     seconds = (end_ms - start_ms) / 1000
     out = {}
-    for node in ("position_scan", "technique_scan"):
+    for node in ("position_scan", "technique_scan", "strike_census"):
         cfg = getattr(config, node)
-        tokens = int(seconds * cfg.fps * _FRAME_TOKENS[cfg.media_resolution])
+        if cfg is None:
+            continue
+        # The census sees every window; overlaps make it slightly more than the scope.
+        span = seconds * (config.strike_window_ms / (config.strike_window_ms - config.strike_overlap_ms) if node == "strike_census" else 1)
+        tokens = int(span * cfg.fps * _FRAME_TOKENS[cfg.media_resolution])
         rate = _rate(cfg.model, date.today())
-        out[node] = {"frames": int(seconds * cfg.fps), "input_tokens": tokens,
+        out[node] = {"frames": int(span * cfg.fps), "input_tokens": tokens,
                      "usd": None if rate is None else round(tokens * rate["input"] / 1e6, 4)}
     return out
 
@@ -515,7 +527,8 @@ class CoreRuns:
             node.update(succeeded=states.count("succeeded"), running=sum(s in {"running", "retrying"} for s in states),
                         failed=states.count("failed"), seen=len(states), usd=round(node["usd"], 4))
             summary.append(node)
-        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "position_critique", "positions_normalize",
+        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "strike_census", "strike_audit", "strikes_merge",
+                                             "position_critique", "positions_normalize",
                                              "positions_publish", "technique_scan", "position_technique_candidates",
                                              "technique_critique", "technique_worklist", "technique_analyze",
                                              "technique_validate", "techniques_normalize", "techniques_publish",

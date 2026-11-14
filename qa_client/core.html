@@ -95,8 +95,8 @@
   <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
     <section>
       <h2>Run setup</h2>
-      <label>Sport</label>
-      <div class="seg" id="sport"><button data-v="mma" aria-pressed="true">MMA</button><button data-v="bjj" aria-pressed="false">BJJ</button></div>
+      <label>Workflow</label>
+      <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma" aria-pressed="true" title="Production MMA DAG: every strike goes through critique, analyze and validate">MMA (production)</button><button data-v="mma_v2" aria-pressed="false" title="Windowed strike census + one audit per 20 s window; grappling keeps the per-candidate chain">MMA v2</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button></div>
       <div class="row">
         <div><label for="start">Scope start (m:ss)</label><input id="start" value="0:00"></div>
         <button id="start-now" style="flex:0 0 auto">= playhead</button>
@@ -130,7 +130,8 @@
   </div>
 </main>
 <script>
-const NODES = ['position_scan','position_critique','technique_scan','technique_critique','technique_analyze','technique_validate'];
+const ALL_NODES = ['position_scan','position_critique','technique_scan','technique_critique','technique_analyze','technique_validate','strike_census','strike_audit'];
+const nodes = () => ALL_NODES.filter(n => state.config && state.config[n]);
 const $ = id => document.getElementById(id);
 const api = (path, opts={}) => fetch($('backend').value.replace(/\/$/,'') + path, {headers:{'content-type':'application/json'}, ...opts})
   .then(async r => { const body = r.headers.get('content-type')?.includes('json') ? await r.json() : await r.blob(); if (!r.ok) throw new Error(body?.detail ? (typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)) : r.statusText); return body; });
@@ -200,7 +201,7 @@ async function loadDefaults() {
 }
 function renderNodeCfg() {
   const opts = (vals, cur) => vals.map(v => '<option' + (String(v) === String(cur) ? ' selected' : '') + '>' + v + '</option>').join('');
-  $('nodes-cfg').innerHTML = '<tr><th>Node</th><th>Model</th><th>Thinking</th><th>Resolution</th><th>FPS</th></tr>' + NODES.map(n => {
+  $('nodes-cfg').innerHTML = '<tr><th>Node</th><th>Model</th><th>Thinking</th><th>Resolution</th><th>FPS</th></tr>' + nodes().map(n => {
     const c = {...state.config[n], ...(state.overrides[n] || {})};
     return '<tr data-n="' + n + '"><td>' + n + '</td><td><input data-k="model" value="' + esc(c.model) + '" size="15"></td>' +
       '<td><select data-k="thinking">' + opts(['minimal','low','medium','high'], c.thinking) + '</select></td>' +
@@ -217,8 +218,8 @@ async function estimate() {
   if (!(e > s)) { $('estimate').textContent = 'Scope end must follow its start.'; validate(); return; }
   try {
     const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:s, end_ms:e, overrides:state.overrides})});
-    const sc = r.scans, usd = (sc.position_scan.usd ?? 0) + (sc.technique_scan.usd ?? 0);
-    $('estimate').textContent = 'Scope ' + fmt(e - s) + ' · scans ≈ ' + (sc.position_scan.frames + sc.technique_scan.frames) + ' frames, ≈ $' + usd.toFixed(3) + ' video input. ' +
+    const sc = Object.values(r.scans), usd = sc.reduce((a, x) => a + (x.usd ?? 0), 0), frames = sc.reduce((a, x) => a + x.frames, 0);
+    $('estimate').textContent = 'Scope ' + fmt(e - s) + ' · ' + (r.scans.strike_census ? 'scans + strike census' : 'scans') + ' ≈ ' + frames + ' frames, ≈ $' + usd.toFixed(3) + ' video input. ' +
       'Thinking output and the per-transition / per-candidate calls come on top; measured: a 60 s MMA window at the default settings cost ≈ $1.7 (12 position checks, 27 technique candidates × 3 calls) and took ≈ 20 min.';
   } catch (err) { $('estimate').textContent = err.message; }
   validate();
@@ -241,7 +242,7 @@ $('run').onclick = async () => {
 async function loadRuns() {
   try {
     const r = await api('/qa/core/runs');
-    $('runs').innerHTML = r.runs.map(x => '<button data-id="' + x.run_id + '"><span>' + esc(x.label || x.youtube_id) + ' · ' + x.sport.toUpperCase() + ' ' + fmt(x.start_ms) + '–' + fmt(x.end_ms) + '</span><span class="state-' + x.state + '">' + x.state + '</span></button>').join('') || '<p class="muted">None yet.</p>';
+    $('runs').innerHTML = r.runs.map(x => '<button data-id="' + x.run_id + '"><span>' + esc(x.label || x.youtube_id) + ' · ' + ({mma:'MMA', mma_v2:'MMA v2', mma_v2_census:'MMA v2 no audit', bjj:'BJJ'}[x.sport] || x.sport) + ' ' + fmt(x.start_ms) + '–' + fmt(x.end_ms) + '</span><span class="state-' + x.state + '">' + x.state + '</span></button>').join('') || '<p class="muted">None yet.</p>';
     $('runs').querySelectorAll('button').forEach(b => b.onclick = () => openRun(b.dataset.id));
   } catch (e) { $('runs').innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
 }
@@ -253,7 +254,7 @@ async function refresh() {
   const req = s.request;
   if (state.youtubeId !== req.youtube_id) { $('yt-input').value = req.youtube_id; await loadVideo(); }
   $('run-state').innerHTML = '<span class="state-' + s.state + '">' + s.state + '</span>';
-  $('run-meta').textContent = (req.label ? req.label + ' · ' : '') + req.sport.toUpperCase() + ' · ' + fmt(req.start_ms) + '–' + fmt(req.end_ms) + ' · ' + req.fighters.map(f => f.name).join(' vs ') +
+  $('run-meta').textContent = (req.label ? req.label + ' · ' : '') + ({mma:'MMA', mma_v2:'MMA v2', mma_v2_census:'MMA v2 no audit', bjj:'BJJ'}[req.sport] || req.sport) + ' · ' + fmt(req.start_ms) + '–' + fmt(req.end_ms) + ' · ' + req.fighters.map(f => f.name).join(' vs ') +
     ' · spend ≈ $' + s.total_usd.toFixed(3) + (s.in_flight_calls ? ' + ' + s.in_flight_calls + ' in flight' : '') + (s.unknown_cost_calls ? ' (+' + s.unknown_cost_calls + ' finished calls without usage: not priced)' : '');
   $('progress').innerHTML = '<tr><th>Step</th><th>Done</th><th>Running</th><th>Failed</th><th>Calls</th><th>In tok</th><th>Out+think</th><th>$</th></tr>' +
     s.nodes.map(n => '<tr><td>' + n.node_id + '</td><td>' + n.succeeded + '/' + n.seen + '</td><td>' + (n.running || '') + '</td><td>' + (n.failed || '') + '</td><td>' + (n.calls || '') + '</td><td>' + (n.input_tokens || '') + '</td><td>' + ((n.output_tokens + n.thinking_tokens) || '') + '</td><td>' + (n.calls ? n.usd.toFixed(3) : '') + '</td></tr>').join('');

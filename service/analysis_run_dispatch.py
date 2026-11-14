@@ -204,8 +204,10 @@ class PositionRunDispatcher:
             )
             try:
                 # Check every configured node before any upload/model action.
+                # Strike census nodes exist only in the windowed strike workflow.
                 if any(
-                    getattr(provider.config, node).model not in provider.models
+                    getattr(provider.config, node) is not None
+                    and getattr(provider.config, node).model not in provider.models
                     for node in get_args(NodeId)
                 ):
                     raise UnsupportedRunVersion(
