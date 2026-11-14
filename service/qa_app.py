@@ -38,6 +38,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from service.config import ServiceConfig
 from service.job_store import InMemoryJobStore
+from service.routes import qa_core as qa_core_routes
 from service.routes.qa import identity_analyze
 from service.routes.qa_pipeline import list_pipelines, pipeline_defaults, pipeline_run
 from service.routes.qa_vlm import vlm_chat, vlm_image
@@ -95,6 +96,9 @@ def create_qa_app() -> FastAPI:
     app.get("/qa/pipelines")(list_pipelines)
     app.get("/qa/pipeline-defaults")(pipeline_defaults)
     app.post("/qa/pipeline-run")(pipeline_run)
+
+    # Production analysis core (BJJ/MMA packs) on local footage — QA host ports only.
+    qa_core_routes.mount(app)
 
     return app
 

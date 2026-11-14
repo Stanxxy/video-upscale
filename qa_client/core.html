@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VLM Studio · Production core</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --ink:#e8ebf0; --muted:#8d95a5; --accent:#e5484d; --ok:#3fb950; --warn:#d29922; --blue:#4c8dff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:15px; margin:0; }
+  header a { color:var(--muted); }
+  main { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:12px; padding:12px 16px; }
+  @media (max-width:1000px) { main { grid-template-columns:minmax(0,1fr); } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; min-width:0; }
+  h2 { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 8px; }
+  label { display:block; color:var(--muted); font-size:11px; margin:6px 0 2px; }
+  input, select, button { font:inherit; color:var(--ink); background:#0c0e12; border:1px solid var(--line); border-radius:6px; padding:6px 8px; min-width:0; }
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:white; font-weight:600; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+  .row > * { flex:1 1 120px; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .seg button { border:0; border-radius:0; background:transparent; }
+  .seg button[aria-pressed=true] { background:var(--ink); color:#111; font-weight:600; }
+  .player { position:relative; width:100%; aspect-ratio:16/9; background:black; border-radius:6px; overflow:hidden; }
+  .player video { position:absolute; inset:0; width:100%; height:100%; }
+  .muted { color:var(--muted); }
+  .err { color:#ff8b8b; white-space:pre-wrap; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:500; font-size:11px; }
+  .table-wrap { overflow-x:auto; }
+  .fighters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  @media (max-width:520px) { .fighters { grid-template-columns:minmax(0,1fr); } }
+  .fighter { border:1px solid var(--line); border-radius:6px; padding:8px; min-width:0; }
+  .frame { position:relative; margin-top:6px; user-select:none; touch-action:none; }
+  .frame img { width:100%; display:block; border-radius:4px; }
+  .frame .box { position:absolute; border:2px solid var(--accent); background:#e5484d22; pointer-events:none; }
+  .crop-preview { height:72px; margin-top:6px; border-radius:4px; }
+  .lane { position:relative; height:26px; background:#0c0e12; border:1px solid var(--line); border-radius:4px; margin:4px 0; overflow:hidden; }
+  .lane > div { position:absolute; top:0; bottom:0; border-right:1px solid #0008; font-size:10px; padding:2px 3px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; }
+  .lane .tick { width:2px; padding:0; border:0; }
+  .lane-label { font-size:11px; color:var(--muted); }
+  .pill { display:inline-block; padding:1px 6px; border-radius:10px; border:1px solid var(--line); cursor:pointer; font-variant-numeric:tabular-nums; }
+  .pill:hover { border-color:var(--ink); }
+  .events { max-height:520px; overflow:auto; }
+  .ev { display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 10px; padding:6px 4px; border-bottom:1px solid var(--line); }
+  .ev .title { font-weight:600; }
+  .ev .why { color:var(--muted); grid-column:2; white-space:pre-wrap; }
+  .ev[data-rejected=true] { opacity:.45; }
+  .tag { font-size:10px; padding:0 5px; border-radius:3px; border:1px solid var(--line); color:var(--muted); margin-left:4px; }
+  .runs { max-height:180px; overflow:auto; }
+  .runs button { width:100%; text-align:left; margin:2px 0; display:flex; gap:8px; justify-content:space-between; }
+  .state-succeeded { color:var(--ok); } .state-failed, .state-interrupted { color:#ff8b8b; } .state-running, .state-preparing, .state-queued { color:var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>VLM Studio · Production core</h1>
+  <span class="muted">Runs the exact production analysis DAG (BJJ or MMA pack) on a YouTube video, with real Gemini calls.</span>
+  <a href="vlm_studio.html">← QA pipelines</a>
+  <span style="flex:1"></span>
+  <label style="margin:0">Backend <input id="backend" value="http://localhost:8000" size="22"></label>
+</header>
+<main>
+  <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
+    <section>
+      <h2>Video</h2>
+      <div class="row">
+        <div style="flex:3 1 220px"><label for="yt-input">YouTube URL or id</label><input id="yt-input" style="width:100%" placeholder="https://www.youtube.com/watch?v=…"></div>
+        <button id="fetch" style="flex:0 0 auto">Load</button>
+      </div>
+      <p id="media-status" class="muted"></p>
+      <div class="player"><video id="vid" controls playsinline preload="metadata"></video></div>
+      <p class="muted" style="margin:6px 0 0">Playhead <span id="now">0:00.0</span></p>
+    </section>
+    <section id="results-section" hidden>
+      <h2>Results <span id="results-meta" class="muted" style="text-transform:none; letter-spacing:0"></span></h2>
+      <div class="row" style="align-items:center">
+        <div class="seg" id="ev-filter" style="flex:0 0 auto">
+          <button data-f="all" aria-pressed="true">All</button><button data-f="strike" aria-pressed="false">Strikes</button><button data-f="other" aria-pressed="false">Grappling</button>
+        </div>
+        <span style="flex:1"></span>
+        <button id="dl" style="flex:0 0 auto">Download JSON</button>
+      </div>
+      <div class="lane-label">Positions</div><div class="lane" id="lane-pos"></div>
+      <div class="lane-label" id="lane-a-label">Fighter A</div><div class="lane" id="lane-a"></div>
+      <div class="lane-label" id="lane-b-label">Fighter B</div><div class="lane" id="lane-b"></div>
+      <div class="events" id="events"></div>
+    </section>
+  </div>
+  <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
+    <section>
+      <h2>Run setup</h2>
+      <label>Sport</label>
+      <div class="seg" id="sport"><button data-v="mma" aria-pressed="true">MMA</button><button data-v="bjj" aria-pressed="false">BJJ</button></div>
+      <div class="row">
+        <div><label for="start">Scope start (m:ss)</label><input id="start" value="0:00"></div>
+        <button id="start-now" style="flex:0 0 auto">= playhead</button>
+        <div><label for="end">Scope end (m:ss)</label><input id="end" value="1:00"></div>
+        <button id="end-now" style="flex:0 0 auto">= playhead</button>
+      </div>
+      <label>Fighters (identity crops: pause on a clear frame, Grab, then drag a box around the fighter)</label>
+      <div class="fighters">
+        <div class="fighter" data-i="0"><input class="name" value="Fighter A" style="width:100%"><button class="grab" style="margin-top:6px">Grab frame at playhead</button><div class="frame"></div></div>
+        <div class="fighter" data-i="1"><input class="name" value="Fighter B" style="width:100%"><button class="grab" style="margin-top:6px">Grab frame at playhead</button><div class="frame"></div></div>
+      </div>
+      <details style="margin-top:8px"><summary class="muted">Node settings (defaults = production preset)</summary>
+        <div class="table-wrap"><table id="nodes-cfg"></table></div>
+        <div class="row"><div><label for="parallel">Parallel calls</label><input id="parallel" type="number" min="1" max="16" value="6"></div><div><label for="label">Label</label><input id="label" placeholder="optional"></div></div>
+      </details>
+      <p id="estimate" class="muted"></p>
+      <button id="run" class="primary">Run analysis</button>
+      <p id="run-err" class="err"></p>
+    </section>
+    <section>
+      <h2>Run <span id="run-state"></span></h2>
+      <p id="run-meta" class="muted"></p>
+      <div class="table-wrap"><table id="progress"></table></div>
+      <div class="row" style="margin-top:8px"><button id="resume" hidden>Resume (retries failed calls only)</button><button id="cancel" hidden>Cancel</button></div>
+      <p id="run-error" class="err"></p>
+    </section>
+    <section>
+      <h2>Previous runs</h2>
+      <div class="runs" id="runs"></div>
+    </section>
+  </div>
+</main>
+<script>
+const NODES = ['position_scan','position_critique','technique_scan','technique_critique','technique_analyze','technique_validate'];
+const $ = id => document.getElementById(id);
+const api = (path, opts={}) => fetch($('backend').value.replace(/\/$/,'') + path, {headers:{'content-type':'application/json'}, ...opts})
+  .then(async r => { const body = r.headers.get('content-type')?.includes('json') ? await r.json() : await r.blob(); if (!r.ok) throw new Error(body?.detail ? (typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)) : r.statusText); return body; });
+const fmt = ms => { const s = Math.max(0, ms) / 1000, m = Math.floor(s / 60); return m + ':' + (s - m * 60).toFixed(1).padStart(4, '0'); };
+const parseT = v => { const p = String(v).trim().split(':').map(Number); if (p.some(isNaN)) return NaN; return Math.round((p.length === 2 ? p[0] * 60 + p[1] : p[0]) * 1000); };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const state = { youtubeId:null, duration:null, sport:'mma', config:null, overrides:{}, fighters:[{},{}], runId:null, poll:null, result:null, filter:'all' };
+const video = () => $('vid');
+let stopAt = null;
+
+function ytId(v) { const m = String(v).match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([A-Za-z0-9_-]{11})/); return m ? m[1] : (/^[A-Za-z0-9_-]{11}$/.test(v.trim()) ? v.trim() : null); }
+// The player plays the exact local file the run analyses, so every time lines up with the model's clock.
+function nowMs() { return Math.round((video().currentTime || 0) * 1000); }
+function seek(ms, untilMs) { if (!video().src) return; video().currentTime = Math.max(0, ms) / 1000; video().play(); stopAt = untilMs ?? null; }
+setInterval(() => { const t = nowMs(); $('now').textContent = fmt(t); if (stopAt != null && t >= stopAt) { video().pause(); stopAt = null; } }, 100);
+
+function segmented(el, onChange) { el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); onChange(b.dataset.v ?? b.dataset.f); }); }
+segmented($('sport'), v => { state.sport = v; loadDefaults(); });
+segmented($('ev-filter'), v => { state.filter = v; renderEvents(); });
+
+async function loadVideo() {
+  const id = ytId($('yt-input').value); if (!id) { $('media-status').textContent = 'Not a YouTube URL or id.'; return; }
+  state.youtubeId = id; $('media-status').textContent = 'Preparing the local copy (first time downloads the video; a few minutes)…'; $('fetch').disabled = true;
+  try {
+    const m = await api('/qa/core/media/' + id + '?download=true');
+    state.duration = m.duration_ms; $('media-status').textContent = 'Local copy ready · ' + fmt(m.duration_ms) + ' · ' + id;
+    const src = $('backend').value.replace(/\/$/,'') + '/qa/core/video/' + id;
+    if (video().src !== src) video().src = src;
+    loadRuns();
+  } catch (e) { $('media-status').textContent = 'Could not prepare the video: ' + e.message; }
+  finally { $('fetch').disabled = false; }
+}
+$('fetch').onclick = loadVideo;
+$('start-now').onclick = () => { $('start').value = fmt(nowMs()); estimate(); };
+$('end-now').onclick = () => { $('end').value = fmt(nowMs()); estimate(); };
+['start','end'].forEach(id => $(id).addEventListener('change', estimate));
+
+// Fighter crop: grab the frame at the playhead, drag a box over it.
+document.querySelectorAll('.fighter').forEach(card => {
+  const i = Number(card.dataset.i), frame = card.querySelector('.frame');
+  card.querySelector('.grab').onclick = async () => {
+    if (!state.youtubeId) return;
+    const t = nowMs(); video().pause();
+    const blob = await api('/qa/core/frame/' + state.youtubeId + '?t_ms=' + t);
+    frame.innerHTML = '<img alt="frame at ' + fmt(t) + '"><div class="box" hidden></div><canvas class="crop-preview" hidden></canvas>';
+    const img = frame.querySelector('img'); img.src = URL.createObjectURL(blob);
+    state.fighters[i] = {frame_ms:t, box:null};
+    let a = null; const box = frame.querySelector('.box');
+    const pt = e => { const r = img.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+    const draw = (p, q) => { const l = Math.min(p[0], q[0]), t2 = Math.min(p[1], q[1]), w = Math.abs(p[0] - q[0]), h = Math.abs(p[1] - q[1]); Object.assign(box.style, {left:l*100+'%', top:t2*100+'%', width:w*100+'%', height:h*100+'%'}); box.hidden = false; return [l, t2, w, h]; };
+    img.addEventListener('pointerdown', e => { e.preventDefault(); a = pt(e); img.setPointerCapture(e.pointerId); });
+    img.addEventListener('pointermove', e => { if (a) draw(a, pt(e)); });
+    img.addEventListener('pointerup', e => { if (!a) return; const b = draw(a, pt(e)); a = null; if (b[2] > 0.02 && b[3] > 0.04) { state.fighters[i].box = b; preview(frame, img, b); } validate(); });
+    validate();
+  };
+  card.querySelector('.name').addEventListener('input', validate);
+});
+function preview(frame, img, b) {
+  const c = frame.querySelector('.crop-preview'), w = img.naturalWidth * b[2], h = img.naturalHeight * b[3];
+  c.width = Math.round(w); c.height = Math.round(h); c.getContext('2d').drawImage(img, img.naturalWidth * b[0], img.naturalHeight * b[1], w, h, 0, 0, w, h); c.hidden = false;
+}
+
+async function loadDefaults() {
+  state.overrides = {};
+  try { const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:0, end_ms:1000})}); state.config = r.config; renderNodeCfg(); estimate(); }
+  catch (e) { $('estimate').textContent = 'Backend not reachable: ' + e.message; }
+}
+function renderNodeCfg() {
+  const opts = (vals, cur) => vals.map(v => '<option' + (String(v) === String(cur) ? ' selected' : '') + '>' + v + '</option>').join('');
+  $('nodes-cfg').innerHTML = '<tr><th>Node</th><th>Model</th><th>Thinking</th><th>Resolution</th><th>FPS</th></tr>' + NODES.map(n => {
+    const c = {...state.config[n], ...(state.overrides[n] || {})};
+    return '<tr data-n="' + n + '"><td>' + n + '</td><td><input data-k="model" value="' + esc(c.model) + '" size="15"></td>' +
+      '<td><select data-k="thinking">' + opts(['minimal','low','medium','high'], c.thinking) + '</select></td>' +
+      '<td><select data-k="media_resolution">' + opts(['low','medium','high'], c.media_resolution) + '</select></td>' +
+      '<td><select data-k="fps">' + opts([1,2,5,10,15], c.fps) + '</select></td></tr>';
+  }).join('');
+  $('nodes-cfg').querySelectorAll('input,select').forEach(el => el.addEventListener('change', () => {
+    const n = el.closest('tr').dataset.n, k = el.dataset.k, v = k === 'fps' ? Number(el.value) : el.value;
+    state.overrides[n] = {...(state.overrides[n] || {})}; if (String(state.config[n][k]) === String(v)) delete state.overrides[n][k]; else state.overrides[n][k] = v; estimate();
+  }));
+}
+async function estimate() {
+  const s = parseT($('start').value), e = parseT($('end').value);
+  if (!(e > s)) { $('estimate').textContent = 'Scope end must follow its start.'; validate(); return; }
+  try {
+    const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:s, end_ms:e, overrides:state.overrides})});
+    const sc = r.scans, usd = (sc.position_scan.usd ?? 0) + (sc.technique_scan.usd ?? 0);
+    $('estimate').textContent = 'Scope ' + fmt(e - s) + ' · scans ≈ ' + (sc.position_scan.frames + sc.technique_scan.frames) + ' frames, ≈ $' + usd.toFixed(3) + ' video input. ' +
+      'Thinking output and the per-transition / per-candidate calls come on top; measured: a 60 s MMA window at the default settings cost ≈ $1.7 (12 position checks, 27 technique candidates × 3 calls) and took ≈ 20 min.';
+  } catch (err) { $('estimate').textContent = err.message; }
+  validate();
+}
+function validate() {
+  const ok = state.youtubeId && state.fighters.every(f => f.box) && parseT($('end').value) > parseT($('start').value);
+  $('run').disabled = !ok;
+  $('run').title = ok ? '' : 'Load a video, set the scope and draw a box around both fighters.';
+}
+$('run').onclick = async () => {
+  $('run-err').textContent = '';
+  const names = [...document.querySelectorAll('.fighter .name')].map(x => x.value.trim());
+  const body = {youtube_id:state.youtubeId, sport:state.sport, start_ms:parseT($('start').value), end_ms:parseT($('end').value),
+    fighters:state.fighters.map((f, i) => ({name:names[i], frame_ms:f.frame_ms, box:f.box})), overrides:state.overrides,
+    max_parallel_calls:Number($('parallel').value) || 6, label:$('label').value.trim() || null};
+  try { const r = await api('/qa/core/runs', {method:'POST', body:JSON.stringify(body)}); openRun(r.run_id); loadRuns(); }
+  catch (e) { $('run-err').textContent = e.message; }
+};
+
+async function loadRuns() {
+  try {
+    const r = await api('/qa/core/runs');
+    $('runs').innerHTML = r.runs.map(x => '<button data-id="' + x.run_id + '"><span>' + esc(x.label || x.youtube_id) + ' · ' + x.sport.toUpperCase() + ' ' + fmt(x.start_ms) + '–' + fmt(x.end_ms) + '</span><span class="state-' + x.state + '">' + x.state + '</span></button>').join('') || '<p class="muted">None yet.</p>';
+    $('runs').querySelectorAll('button').forEach(b => b.onclick = () => openRun(b.dataset.id));
+  } catch (e) { $('runs').innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+}
+function openRun(id) { state.runId = id; state.result = null; clearInterval(state.poll); refresh(); state.poll = setInterval(refresh, 3000); }
+async function refresh() {
+  const id = state.runId; if (!id) return;
+  let s; try { s = await api('/qa/core/runs/' + id); } catch (e) { $('run-error').textContent = e.message; return; }
+  if (id !== state.runId) return;
+  const req = s.request;
+  if (state.youtubeId !== req.youtube_id) { $('yt-input').value = req.youtube_id; await loadVideo(); }
+  $('run-state').innerHTML = '<span class="state-' + s.state + '">' + s.state + '</span>';
+  $('run-meta').textContent = (req.label ? req.label + ' · ' : '') + req.sport.toUpperCase() + ' · ' + fmt(req.start_ms) + '–' + fmt(req.end_ms) + ' · ' + req.fighters.map(f => f.name).join(' vs ') +
+    ' · spend ≈ $' + s.total_usd.toFixed(3) + (s.in_flight_calls ? ' + ' + s.in_flight_calls + ' in flight' : '') + (s.unknown_cost_calls ? ' (+' + s.unknown_cost_calls + ' finished calls without usage: not priced)' : '');
+  $('progress').innerHTML = '<tr><th>Step</th><th>Done</th><th>Running</th><th>Failed</th><th>Calls</th><th>In tok</th><th>Out+think</th><th>$</th></tr>' +
+    s.nodes.map(n => '<tr><td>' + n.node_id + '</td><td>' + n.succeeded + '/' + n.seen + '</td><td>' + (n.running || '') + '</td><td>' + (n.failed || '') + '</td><td>' + (n.calls || '') + '</td><td>' + (n.input_tokens || '') + '</td><td>' + ((n.output_tokens + n.thinking_tokens) || '') + '</td><td>' + (n.calls ? n.usd.toFixed(3) : '') + '</td></tr>').join('');
+  $('run-error').textContent = s.error || '';
+  $('resume').hidden = !['failed','interrupted','cancelled'].includes(s.state);
+  $('cancel').hidden = !['queued','preparing','running'].includes(s.state);
+  if (s.components.length && (!state.result || state.result.components !== s.components.join())) {
+    state.result = await api('/qa/core/runs/' + id + '/result'); state.result.components = s.components.join(); state.result.request = req; renderResults();
+  }
+  if (!['queued','preparing','running'].includes(s.state)) { clearInterval(state.poll); loadRuns(); }
+}
+$('resume').onclick = async () => { try { await api('/qa/core/runs/' + state.runId + '/resume', {method:'POST'}); openRun(state.runId); } catch (e) { $('run-error').textContent = e.message; } };
+$('cancel').onclick = async () => { await api('/qa/core/runs/' + state.runId + '/cancel', {method:'POST'}); refresh(); };
+
+const STRIKES = new Set(['strike_punch','strike_kick','strike_knee','strike_elbow','ground_strike']);
+const PHASE = {striking_range:'#2f6fd6', clinch:'#c28a1e', standing_back_control:'#c28a1e', wall_seated:'#c28a1e'};
+function laneColor(p) { if (p.observation === 'inactive') return 'repeating-linear-gradient(45deg,#333 0 4px,#222 4px 8px)'; if (p.observation !== 'observed') return '#444'; return PHASE[p.position] || '#2f9e5a'; }
+function renderResults() {
+  const r = state.result, req = r.request, s0 = req.start_ms, span = req.end_ms - req.start_ms; $('results-section').hidden = false;
+  const pos = r.positions?.positions || [], tech = r.techniques?.techniques || [];
+  const players = r.positions?.player_ids || r.techniques?.player_ids || ['fighter-a','fighter-b'];
+  const names = Object.fromEntries(players.map((p, i) => [p, req.fighters[i]?.name || p]));
+  $('lane-a-label').textContent = names[players[0]]; $('lane-b-label').textContent = names[players[1]];
+  $('results-meta').textContent = pos.length + ' position spans · ' + (r.techniques ? tech.length + ' techniques' : 'techniques pending');
+  const pct = ms => ((ms - s0) / span * 100) + '%';
+  $('lane-pos').innerHTML = pos.map(p => '<div title="' + esc((p.position || p.interruption_kind || p.observation) + ' ' + fmt(p.bounds.start_ms) + '–' + fmt(p.bounds.end_ms)) + '" style="left:' + pct(p.bounds.start_ms) + ';width:calc(' + pct(p.bounds.end_ms) + ' - ' + pct(p.bounds.start_ms) + ');background:' + laneColor(p) + '" data-s="' + p.bounds.start_ms + '" data-e="' + p.bounds.end_ms + '">' + esc(p.position || p.interruption_kind || p.observation) + '</div>').join('');
+  for (const [lane, pid] of [['lane-a', players[0]], ['lane-b', players[1]]]) {
+    $(lane).innerHTML = tech.filter(t => t.actor_player_id === pid || !t.actor_player_id).map(t => '<div class="tick" title="' + esc(t.action_classes.join(',') + ' ' + fmt(t.bounds.start_ms)) + '" style="left:' + pct(t.bounds.start_ms) + ';background:' + (STRIKES.has(t.action_classes[0]) ? (t.outcome === 'successful' ? '#ff6b6b' : '#ff6b6b66') : '#7ee787') + '" data-s="' + t.bounds.start_ms + '" data-e="' + t.bounds.end_ms + '"></div>').join('');
+  }
+  document.querySelectorAll('.lane > div').forEach(d => d.onclick = () => seek(Number(d.dataset.s), Number(d.dataset.e)));
+  renderEvents();
+}
+function renderEvents() {
+  const r = state.result; if (!r) return;
+  const req = r.request, players = r.techniques?.player_ids || r.positions?.player_ids || [];
+  const names = Object.fromEntries(players.map((p, i) => [p, req.fighters[i]?.name || p]));
+  const items = [...(r.positions?.positions || []).map(p => ({...p, _k:'position'})), ...(r.techniques?.techniques || []).map(t => ({...t, _k:'technique'}))]
+    .filter(x => state.filter === 'all' || (x._k === 'technique' && (state.filter === 'strike') === STRIKES.has(x.action_classes[0])))
+    .sort((a, b) => a.bounds.start_ms - b.bounds.start_ms);
+  $('events').innerHTML = items.map(x => {
+    const when = '<span class="pill" data-s="' + x.bounds.start_ms + '" data-e="' + x.bounds.end_ms + '">' + fmt(x.bounds.start_ms) + '–' + fmt(x.bounds.end_ms) + '</span>';
+    if (x._k === 'position') {
+      const what = x.observation === 'observed' ? x.position + ' · ' + x.roles.map((role, i) => (names[players[i]] || '') + ' ' + role).join(' / ') + (x.cage_contact ? ' · cage' : '') : (x.interruption_kind || x.observation) + (x.interruption_note ? ' — ' + x.interruption_note : '');
+      return '<div class="ev">' + when + '<div class="title">' + esc(what) + '<span class="tag">position</span></div><div class="why">' + esc(x.notes || x.uncertainty_note || '') + '</div></div>';
+    }
+    const actor = x.actor_player_id ? names[x.actor_player_id] : x.actor_sentinel;
+    const strike = STRIKES.has(x.action_classes[0]);
+    const detail = strike ? [x.strike_target, x.outcome === 'successful' ? 'landed' : x.outcome === 'unsuccessful' ? 'missed' : x.outcome, x.significant ? 'significant' : null, x.knockdown ? 'KNOCKDOWN' : null].filter(Boolean).join(' · ') : x.outcome;
+    return '<div class="ev">' + when + '<div class="title">' + esc(x.action_classes.join(', ')) + ' — ' + esc(actor) + ' <span class="muted">' + esc(detail) + '</span><span class="tag">' + (strike ? 'strike' : 'technique') + '</span></div><div class="why">' + esc([x.notes, x.outcome_evidence].filter(Boolean).join('\n')) + '</div></div>';
+  }).join('') || '<p class="muted">Nothing in this filter.</p>';
+  $('events').querySelectorAll('.pill').forEach(p => p.onclick = () => seek(Number(p.dataset.s) - 1000, Number(p.dataset.e) + 1000));
+}
+$('dl').onclick = () => { const r = state.result; if (!r) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], {type:'application/json'})); a.download = 'core-' + state.runId + '.json'; a.click(); };
+
+loadDefaults(); loadRuns();
+</script>
+</body>
+</html>
