@@ -887,7 +887,7 @@ async def test_run_pipeline_vision_mimic_simplified_end_to_end_mocked(monkeypatc
                 "start_frame": 0, "end_frame": 20,
                 "position": "mount", "actor": "p1",
                 "action_class": "submission_arm_lock", "outcome": "unsuccessful",
-                "specific_technique_guess": "possibly a kimura", "confidence": 0.75,
+                "confidence": 0.75,
             }],
         }))
 
@@ -916,7 +916,6 @@ async def test_run_pipeline_vision_mimic_simplified_end_to_end_mocked(monkeypatc
     assert run_complete["dedup_applied"] is True
     assert len(run_complete["clips"]) == 1
     assert run_complete["clips"][0]["position"] == "mount"
-    assert run_complete["clips"][0]["specific_technique_guess"] == "possibly a kimura"
 
 
 # =============================================================================== #

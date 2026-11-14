@@ -227,7 +227,6 @@ def prepare_call(
         "position_taxonomy": bundle["positions"],
         "action_classes": bundle["action_classes"],
         "outcomes": bundle["outcomes"],
-        "technique_classes": bundle["technique_classes"],
         **{key: bundle[key] for key in pack.extra_prompt_keys},
         "stage_context": context,
         "advisory_positions": advisory,

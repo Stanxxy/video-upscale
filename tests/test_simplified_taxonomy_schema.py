@@ -53,11 +53,10 @@ def test_schema_axis4_outcome_is_scalar_string_enum():
     assert set(axis4.enum) == set(tm.AXIS4_OUTCOME)
 
 
-def test_schema_has_no_technique_guess_or_shortlist_field():
+def test_schema_has_no_technique_list_or_guess_field():
     schema = _build_response_schema([PID_A, PID_B])
     clip_props = schema.properties["clips"].items.properties
-    assert "technique_guess" not in clip_props
-    assert "technique_shortlist" not in clip_props
+    assert not [name for name in clip_props if "guess" in name or "shortlist" in name]
 
 
 def test_schema_required_fields_use_new_axes():

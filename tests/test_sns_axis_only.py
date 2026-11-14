@@ -96,8 +96,9 @@ def test_clip_to_axis_only_event_real_construction_succeeds():
     event = clip_to_axis_only_event(_clip(), uuid4())
     assert event.start_time == "00:01:05"
     assert event.end_time == "00:02:10"
-    assert event.event_candidates[0].schema_version == 3
-    assert event.event_candidates[0].action is None
+    candidate = event.event_candidates[0]
+    assert candidate.schema_version == 3
+    assert candidate.axis3_action == ["submission_arm_lock"]
 
 
 # --------------------------------------------------------------------------- #

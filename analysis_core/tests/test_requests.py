@@ -21,7 +21,7 @@ def test_installed_wheel_contains_prompts_and_no_host_imports(run, configuration
 
     root = Path(bjj_analysis_core.__file__).parent
     assert "site-packages" in str(root)
-    assert importlib.metadata.version("bjj-analysis-core") == "0.3.0.post2"
+    assert importlib.metadata.version("bjj-analysis-core") == "0.3.0.post3"
     assert len(list((root / "prompts").glob("*.txt"))) == 6
     assert len(list((root / "prompts_mma").glob("*.txt"))) == 6
     for path in root.glob("*.py"):

@@ -12,11 +12,7 @@ from types import MappingProxyType
 from typing import Mapping
 
 from shared_lib.models.position_taxonomy import position_taxonomy_manifest
-from shared_lib.models.simplified_taxonomy import (
-    AXIS3_ACTION,
-    AXIS4_OUTCOME,
-    TECHNIQUE_SHORTLISTS,
-)
+from shared_lib.models.simplified_taxonomy import AXIS3_ACTION, AXIS4_OUTCOME
 from shared_lib.models.sport_taxonomy import vocabulary
 
 from bjj_analysis_core import MMA_WORKFLOW_ID, WORKFLOW_ID
@@ -92,7 +88,6 @@ BJJ = AnalysisPack(
             "positions": position_taxonomy_manifest(),
             "action_classes": list(AXIS3_ACTION),
             "outcomes": list(AXIS4_OUTCOME),
-            "technique_classes": TECHNIQUE_SHORTLISTS,
         }
     ),
     extra_prompt_keys=(),
@@ -125,7 +120,6 @@ MMA = AnalysisPack(
             },
             "action_classes": _MMA_VOCAB["actions"],
             "outcomes": _MMA_VOCAB["outcomes"],
-            "technique_classes": _MMA_VOCAB["technique_shortlists"],
             "strike_classes": _MMA_VOCAB["strike_actions"],
             "strike_targets": _MMA_VOCAB["strike_targets"],
         }

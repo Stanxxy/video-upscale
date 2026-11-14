@@ -299,9 +299,9 @@ async def identity_analyze(body: QAIdentityAnalyzeRequest):
     clips = []
     for clip in parsed.get("clips", []) or []:
         clips.append({
-            "action": clip.get("action"),
-            "technique": clip.get("technique"),
-            "specific_technique": clip.get("specific_technique"),
+            "axis1_position": clip.get("axis1_position"),
+            "axis3_action": clip.get("axis3_action"),
+            "axis4_outcome": clip.get("axis4_outcome"),
             "actor_player_id": clip.get("actor_player_id"),
             "identity_uncertain": clip.get("identity_uncertain"),
             "reasoning": clip.get("reasoning"),

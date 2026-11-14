@@ -21,7 +21,7 @@ from pydantic import ValidationError
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 # The value pinned in config/analysis/gemini38.json for every admitted BJJ run.
-BJJ_BUNDLE = "ce925cb824762900dc29544f3f5892afd9f4f9d8636a6a875c3539f6653db634"
+BJJ_BUNDLE = "9b4a9392128cc79fdd3c2fe533f7be135e18edf60eb6419ff1f4af66ded357ca"
 
 
 def mma_run(run, configuration, *, taxonomy_id="mma.v1", workflow_id=MMA_WORKFLOW_ID):
@@ -51,8 +51,7 @@ def strike(**changes):
     value = {
         **technique(),
         "action_classes": ["strike_punch"],
-        "technique_shortlist": "hook",
-        "technique_guess": "left hook",
+        "notes": "left hook",
         "evidence": "visible left hook to the jaw",
         "outcome_evidence": "head snaps back on impact",
         "strike_target": "head",
@@ -66,6 +65,31 @@ def strike(**changes):
 def test_bjj_bundle_is_byte_identical_to_the_admitted_preset():
     assert prompt_bundle_sha256() == prompt_bundle_sha256(BJJ) == BJJ_BUNDLE
     assert "strike_classes" not in prompt_bundle()
+
+
+def test_no_pack_asks_for_or_returns_a_technique_list_or_guess(run, configuration):
+    """The specific move lives in notes/evidence only."""
+    removed = [f"technique_{name}" for name in ("shortlist", "guess", "classes")]
+    mma, mma_config = mma_run(run, configuration)
+    for pack, admitted, config_bytes in ((BJJ, run, configuration), (MMA, mma, mma_config)):
+        bundle = prompt_bundle(pack)
+        for field in removed:
+            assert field not in pack.technique_analysis.model_fields
+            assert field not in bundle
+        assert not [field for field in removed if field in json.dumps(bundle)]
+        assert "shortlist" not in "".join(bundle["prompts"].values())
+        call = prepare_call(
+            admitted, config_bytes, "technique_scan", input_window=admitted.spec.scope, context={}
+        )
+        assert not [field for field in removed if field in call.initial_prompt]
+
+
+def test_a_response_carrying_a_technique_label_is_rejected(run, configuration):
+    mma, config_bytes = mma_run(run, configuration)
+    call = _analyze_call(mma, config_bytes)
+    for name in ("shortlist", "guess"):
+        with pytest.raises(ValidationError):
+            parse_response(call, json.dumps({**strike(), f"technique_{name}": "hook"}))
 
 
 def test_mma_bundle_is_its_own_and_names_its_pack():
@@ -121,7 +145,7 @@ def test_parse_rejects_incomplete_or_misplaced_strike_fields(run, configuration)
     for bad in (
         strike(strike_target=None),
         strike(significant=None),
-        strike(action_classes=["takedown_attempt"], technique_shortlist="double_leg"),
+        strike(action_classes=["takedown_attempt"]),
         {**technique(), "strike_target": None, "significant": None, "knockdown": True},
     ):
         with pytest.raises(ValidationError):

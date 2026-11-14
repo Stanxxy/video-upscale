@@ -65,8 +65,6 @@ class TechniqueAnalysisV1(VersionedAnalysisContract):
     actor_player_id: Identifier | None
     actor_sentinel: TechniqueActorSentinel | None
     outcome: TechniqueOutcome
-    technique_shortlist: Identifier | None
-    technique_guess: Identifier | None
     notes: StrictStr
     evidence: Identifier
     outcome_evidence: Identifier
