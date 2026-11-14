@@ -115,7 +115,6 @@ def _ingest_result(duration_sec=1500.0) -> HighlightIngestResult:
         gemini_file_mime_type="video/mp4",
         gemini_file_expiration=datetime.now(timezone.utc) + timedelta(hours=40),
         video_duration_sec=duration_sec,
-        player_references=[],
     )
 
 

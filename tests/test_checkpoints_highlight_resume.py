@@ -1,8 +1,7 @@
 """S12 Phase 1b — service/checkpoints/highlight_resume.py (item 8).
 
-Dramatically simpler than the tracking pipeline's build_resume_plan — no
-SAM2-style cursor math, just "which chunk comes next" + the Gemini Files
-API identity carried on the latest HIGHLIGHT_INGEST checkpoint.
+Just "which chunk comes next" + the Gemini Files API identity carried on the
+latest HIGHLIGHT_INGEST checkpoint.
 """
 from __future__ import annotations
 
@@ -22,7 +21,6 @@ def _chunk_cp(chunk_index: int, *, completed: bool = True) -> dict:
 def _ingest_cp(
     *, gemini_file_uri="files/abc", gemini_file_name="files/abc",
     gemini_file_mime_type="video/mp4", gemini_file_expiration=None,
-    player_references_ready=True,
 ) -> dict:
     return {
         "stage_name": "highlight_ingest",
@@ -34,7 +32,6 @@ def _ingest_cp(
                 "gemini_file_mime_type": gemini_file_mime_type,
                 "gemini_file_expiration": gemini_file_expiration,
             },
-            "player_references_ready": player_references_ready,
         },
     }
 
@@ -43,7 +40,6 @@ def test_no_checkpoints_resumes_from_chunk_zero():
     plan = build_highlight_resume_plan([])
     assert plan["resume_from_chunk_index"] == 0
     assert plan["gemini_file_uri"] is None
-    assert plan["player_references_ready"] is False
 
 
 def test_n_completed_chunks_resumes_from_chunk_n():
@@ -68,7 +64,6 @@ def test_ingest_checkpoint_carries_gemini_file_identity():
     assert plan["gemini_file_name"] == "files/abc"
     assert plan["gemini_file_mime_type"] == "video/mp4"
     assert plan["gemini_file_expiration"] == datetime.fromisoformat(exp)
-    assert plan["player_references_ready"] is True
 
 
 def test_ingest_and_chunk_checkpoints_together():
@@ -81,7 +76,6 @@ def test_no_ingest_checkpoint_leaves_gemini_fields_none():
     plan = build_highlight_resume_plan([_chunk_cp(0)])
     assert plan["gemini_file_uri"] is None
     assert plan["gemini_file_expiration"] is None
-    assert plan["player_references_ready"] is False
 
 
 def test_malformed_expiration_string_does_not_raise():

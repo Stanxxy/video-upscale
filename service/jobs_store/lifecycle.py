@@ -4,9 +4,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from service.analysis_keyspaces_enums import (
+    LEGACY_AWAITING_CORRECTION_STATE,
+    RETIRED_TRACKING_MESSAGE,
+    RETIRED_TRACKING_STAGES,
     JobState,
     PipelineStage,
     parse_job_state,
+    parse_pipeline_stage_optional,
     states_that_sync_latest_job_row,
     states_with_completed_at,
 )
@@ -42,12 +46,9 @@ class LifecycleMixin:
         total_frames: int = 0,
         pipeline_kind: str | None = None,
     ) -> bool:
-        """``pipeline_kind`` (S12 Phase 1b production wiring, design §6.2):
-        ``"tracking"`` or ``"highlight_v2"``, additive Cassandra column.
-        ``None`` writes an absent/NULL value — ``get_lifecycle`` below
-        treats absent as ``"tracking"`` for back-compat with rows created
-        before this column existed (a job created before this change is,
-        definitionally, a tracking job)."""
+        """``pipeline_kind`` is the additive Cassandra column naming the job
+        workflow (``"highlight_v2"`` for POST /track jobs). ``None`` writes
+        an absent/NULL value."""
         video_id = "" if video_id is None else str(video_id)
         now = datetime.now(timezone.utc)
         q = (
@@ -81,9 +82,19 @@ class LifecycleMixin:
         if not rows:
             return None
         r = rows[0]
-        st = parse_job_state(r.job_state)
-        from service.analysis_keyspaces_enums import parse_pipeline_stage_optional
-        stg = parse_pipeline_stage_optional(r.stage)
+        retired_message = ""
+        if r.job_state == LEGACY_AWAITING_CORRECTION_STATE:
+            # Row left by the retired local tracking pipeline: terminal, never resumed.
+            st = JobState.FAILED
+            retired_message = RETIRED_TRACKING_MESSAGE
+        else:
+            st = parse_job_state(r.job_state)
+        retired_stage_message = ""
+        if r.stage in RETIRED_TRACKING_STAGES:
+            stg = None
+            retired_stage_message = f"retired tracking stage '{r.stage}'"
+        else:
+            stg = parse_pipeline_stage_optional(r.stage)
         return {
             "job_id": r.job_id,
             "video_id": r.video_id or "",
@@ -93,13 +104,8 @@ class LifecycleMixin:
             "replacement_job_id": getattr(r, "replacement_job_id", None),
             "job_state": st.value,
             "stage": stg.value if stg else "",
-            # Absent/NULL (rows created before this column existed) ->
-            # "tracking" back-compat default (design §6.2).
-            "pipeline_kind": getattr(r, "pipeline_kind", None) or "tracking",
-            # S12 Phase 1b (design §1.2/item 11.5) — additive, only ever
-            # populated by run_highlight_job; None for every tracking job
-            # (same "stays null for v2-only concepts" symmetry as
-            # current_frame/total_frames for a v2 job).
+            "pipeline_kind": getattr(r, "pipeline_kind", None),
+            # Additive, only ever populated by run_highlight_job.
             "chunk_index": getattr(r, "chunk_index", None),
             "chunks_total": getattr(r, "chunks_total", None),
             "highlights_found_so_far": getattr(r, "highlights_found_so_far", None),
@@ -107,8 +113,8 @@ class LifecycleMixin:
             "progress_percent": r.progress_percent or 0.0,
             "current_frame": r.current_frame or 0,
             "total_frames": r.total_frames or 0,
-            "stage_message": r.stage_message or "",
-            "error_message": r.error_message or "",
+            "stage_message": r.stage_message or retired_stage_message,
+            "error_message": r.error_message or retired_message,
             "owner_instance_id": r.owner_instance_id or "",
             "last_heartbeat_at": as_utc_aware(r.last_heartbeat_at),
             "started_at": as_utc_aware(r.started_at),
@@ -312,47 +318,6 @@ class LifecycleMixin:
                 logger.warning("Failed to sync latest_job for %s: %s", job_id, e)
         return ok
 
-    async def set_replacement(
-        self, job_id: str, replacement_job_id: str
-    ) -> bool:
-        now = datetime.now(timezone.utc)
-        q = (
-            f"UPDATE {self._ks}.job_lifecycle SET "
-            f"replacement_job_id = %s, updated_at = %s "
-            f"WHERE job_id = %s"
-        )
-        return await self._client.execute_write(q, [
-            replacement_job_id, now, job_id,
-        ])
-
-    async def claim_replacement(
-        self,
-        job_id: str,
-        replacement_job_id: str,
-        expected_state: JobState = JobState.AWAITING_CORRECTION,
-    ) -> bool:
-        now = datetime.now(timezone.utc)
-        q = (
-            f"UPDATE {self._ks}.job_lifecycle SET "
-            f"replacement_job_id = %s, updated_at = %s "
-            f"WHERE job_id = %s "
-            f"IF replacement_job_id = null "
-            f"AND job_state = %s"
-        )
-        rows = await self._client.execute(q, [
-            replacement_job_id,
-            now,
-            job_id,
-            expected_state.value,
-        ])
-        if not rows:
-            return False
-        row = rows[0]
-        if hasattr(row, "_asdict"):
-            row_dict = row._asdict()
-            return bool(row_dict.get("[applied]", row_dict.get("applied", False)))
-        return bool(getattr(row, "applied", False))
-
     async def heartbeat(self, job_id: str, owner_instance_id: str) -> bool:
         now = datetime.now(timezone.utc)
         q = (
@@ -441,7 +406,6 @@ class LifecycleMixin:
             if row and row.get("job_state") in (
                 JobState.PENDING.value,
                 JobState.RUNNING.value,
-                JobState.AWAITING_CORRECTION.value,
             ):
                 results.append(row)
         return results

@@ -124,12 +124,12 @@ async def test_reconcile_once_interrupts_and_dispatches_stale_running_job():
 
 
 @pytest.mark.asyncio
-async def test_reconcile_once_ignores_awaiting_correction_jobs():
+async def test_reconcile_once_ignores_legacy_awaiting_correction_jobs():
     now = datetime(2026, 4, 26, 20, 0, tzinfo=timezone.utc)
     store = FakeJobsStore([
         {
             "job_id": "awaiting-job",
-            "job_state": JobState.AWAITING_CORRECTION.value,
+            "job_state": "AWAITING_CORRECTION",  # legacy row parked by the retired tracking pipeline
             "owner_instance_id": "old-worker",
             "last_heartbeat_at": now - timedelta(minutes=10),
             "heartbeat_bucket": "2026042619",

@@ -2,8 +2,8 @@
 
 ``service.app:app`` (the full production app) is not usable for local QA VLM
 work: its ``lifespan`` unconditionally connects to Cassandra/Keyspaces
-(``KeyspacesClient()``), starts ``HeartbeatTask``/``RecoveryManager``, and
-pre-warms SAM2 — none of which the QA VLM Studio page
+(``KeyspacesClient()``) and starts ``HeartbeatTask``/``RecoveryManager`` —
+none of which the QA VLM Studio page
 (``qa_client/vlm_studio.html``) needs. Without a running Cassandra cluster,
 that startup hard-fails with ``cassandra.cluster.NoHostAvailable`` before the
 process ever binds a port.
@@ -13,8 +13,8 @@ This module mounts ONLY the QA routes (``/qa/vlm-chat``, ``/qa/vlm-image``,
 policy as ``service.app``. It deliberately imports the route callables
 directly from their leaf modules (``service.routes.qa_vlm``, ``service.routes.qa``)
 rather than via the ``service.routes`` package barrel — the barrel eagerly
-imports ``service.routes.jobs``/``human_loop``/``health`` (which pull in
-``torch`` and the tracking/worker stack) at package-import time.
+imports ``service.routes.jobs``/``health`` and the worker stack at
+package-import time.
 
 Only requirement to run: ``BJJ_GEMINI_API_KEY``/``GEMINI_API_KEY`` in the
 engine ``.env`` (loaded via ``service.config.ServiceConfig``), plus yt-dlp +

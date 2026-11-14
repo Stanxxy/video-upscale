@@ -56,10 +56,6 @@ token.json
 service.log
 # Rotated service logs (service.sh → logs/service-*.log)
 logs/
-# SAM2 frame extraction in process cwd (tracking_pipeline/sam2_manager.py)
-temp_sam2_frames*/
-# YOLO/SAM local debug frame dumps (images already covered by *.jpg)
-**/debug_frames/
 
 # ── Local test / agent scratch ────────────────────────────────────────────────
 test_run_output.txt

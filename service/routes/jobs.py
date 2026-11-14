@@ -72,10 +72,7 @@ async def create_track_job(request: TrackRequest):
             admitted_request.user_id or "",
             "",
             owner_instance_id=route_state._instance_id,
-            # S12 Phase 1b (design §1.1/§6.2): v2 is THE production path —
-            # every job created via POST /track is a highlight_v2 job.
-            # Existing rows created before this column existed read back as
-            # "tracking" (see jobs_store/lifecycle.py::get_lifecycle).
+            # Every job created via POST /track is a highlight_v2 job.
             pipeline_kind="highlight_v2",
         ),
         "job lifecycle",
@@ -151,7 +148,7 @@ async def cancel_job(job_id: str):
     route_state._require_write(
         await route_state._jobs_store.write_checkpoint(
             job_id,
-            PipelineStage.TRACK,
+            PipelineStage.CANCELLATION,
             False,
             build_cancellation_checkpoint(
                 reason="user_cancelled",
@@ -167,7 +164,7 @@ async def cancel_job(job_id: str):
         "job cancellation state",
     )
 
-    # Stop the running job task so tracking (and later stages) exit promptly
+    # Stop the running job task so it exits promptly
     task = route_state._active_tasks.get(job_id)
     if task is not None and not task.done():
         task.cancel()

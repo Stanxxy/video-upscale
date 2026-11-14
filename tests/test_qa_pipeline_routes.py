@@ -26,7 +26,7 @@ YT_URL = f"https://www.youtube.com/watch?v={YT_ID}"
 
 
 def _make_app(gemini_api_key: str) -> FastAPI:
-    config = ServiceConfig(detection_timeout=86400.0, s3_endpoint_url="http://localhost:4566")
+    config = ServiceConfig(s3_endpoint_url="http://localhost:4566")
     object.__setattr__(config, "gemini_api_key", gemini_api_key)
     init_routes(config, InMemoryJobStore(), None, instance_id="qa-pipeline-test")
     app = FastAPI()

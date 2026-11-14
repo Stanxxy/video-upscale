@@ -1,4 +1,4 @@
-"""Default service startup must stay independent from the legacy GPU profile."""
+"""Default service startup must not import the removed local vision stack."""
 from __future__ import annotations
 
 import subprocess
@@ -9,14 +9,14 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_default_app_registers_gemini_routes_without_legacy_gpu_imports():
-    """Catch a default-startup import of a package moved to the optional profile."""
+def test_default_app_registers_gemini_routes_without_local_vision_imports():
+    """Catch a default-startup import of a local vision-model package."""
     script = """
 import importlib.abc
 import sys
 
 
-class BlockLegacyGpuImports(importlib.abc.MetaPathFinder):
+class BlockLocalVisionImports(importlib.abc.MetaPathFinder):
     roots = {
         'torch', 'torchvision', 'sam2', 'spandrel', 'ultralytics',
         'supervision', 'rtmlib', 'scipy', 'huggingface_hub', 'tqdm',
@@ -24,11 +24,11 @@ class BlockLegacyGpuImports(importlib.abc.MetaPathFinder):
 
     def find_spec(self, fullname, path=None, target=None):
         if fullname.split('.', 1)[0] in self.roots:
-            raise ModuleNotFoundError(f'blocked legacy GPU import: {fullname}')
+            raise ModuleNotFoundError(f'blocked local vision import: {fullname}')
         return None
 
 
-sys.meta_path.insert(0, BlockLegacyGpuImports())
+sys.meta_path.insert(0, BlockLocalVisionImports())
 from service.app import app
 from service.routes import scheduling
 

@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import mimetypes
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -24,7 +23,7 @@ from service.jobs_store import JobsStore
 from service.models import TrackRequest
 from service.pipelines import gemini_upload
 from service.s3 import S3Client
-from service.worker.helpers import _make_s3, _make_s3_for_bucket
+from service.worker.helpers import _make_s3_for_bucket
 from service.worker.highlight_progress import (
     PREPARING,
     HighlightProgressWriter,
@@ -59,7 +58,6 @@ class HighlightIngestResult:
     gemini_file_mime_type: Optional[str]
     gemini_file_expiration: Optional[datetime]
     video_duration_sec: float
-    player_references: list = field(default_factory=list)
 
 
 @dataclass
@@ -86,41 +84,6 @@ def _probe_duration_sec(video_path: str) -> float:
         return frame_count / fps
     finally:
         cap.release()
-
-
-def _binding_field(binding, name: str):
-    """Support both AthleteBinding pydantic objects and plain dicts (same
-    duck-typing convention already used by sns.py::_bindings_by_player_id)."""
-    if isinstance(binding, dict):
-        return binding.get(name)
-    return getattr(binding, name, None)
-
-
-async def _fetch_player_references(s3, bucket: str, athlete_bindings, loop) -> list[dict]:
-    """Download each ``athlete_bindings[].s3_key`` reference-capture crop
-    (design §4.2) — inline bytes, fetched ONCE per job. A binding missing
-    ``s3_key``/``player_id`` is skipped (logged), never fabricated."""
-    refs: list[dict] = []
-    for binding in athlete_bindings or []:
-        player_id = _binding_field(binding, "player_id")
-        s3_key = _binding_field(binding, "s3_key")
-        player_name = _binding_field(binding, "player_name")
-        if not player_id or not s3_key:
-            logger.warning(
-                "highlight_ingest: athlete_binding missing player_id/s3_key, skipping "
-                "reference image: %r",
-                binding,
-            )
-            continue
-        image_bytes = await loop.run_in_executor(None, s3.get_object, bucket, s3_key)
-        mime_type = mimetypes.guess_type(s3_key)[0] or "image/jpeg"
-        refs.append({
-            "player_id": player_id,
-            "player_name": player_name,
-            "image_bytes": image_bytes,
-            "mime_type": mime_type,
-        })
-    return refs
 
 
 async def prepare_highlight_source(
@@ -230,15 +193,6 @@ async def complete_highlight_ingest_stage(
         )
     await progress.write(PipelineStage.HIGHLIGHT_INGEST, 7.0, phase=PREPARING)
 
-    # References are stored in the SAME bucket as the source video — same
-    # established convention as upscale_setup.py:82 (`ref_bucket =
-    # request.bucket  # references stored in same bucket`), NOT
-    # output_bucket (a bucket-split deployment has output_bucket != bucket;
-    # reference crops were never written to output_bucket).
-    reference_s3 = source.s3 if source.s3 is not None else _make_s3(config)
-    player_references = await _fetch_player_references(
-        reference_s3, request.bucket, request.athlete_bindings, loop,
-    )
     await progress.write(PipelineStage.HIGHLIGHT_INGEST, 10.0, phase=PREPARING)
 
     await jobs_store.write_checkpoint(
@@ -250,7 +204,6 @@ async def complete_highlight_ingest_stage(
             gemini_file_expiration=(
                 gemini_file_expiration.isoformat() if gemini_file_expiration else None
             ),
-            player_references_ready=True,
             worker_state=_make_worker_state(
                 progress_percent=10.0, stage_progress_fraction=1.0,
             ),
@@ -264,5 +217,4 @@ async def complete_highlight_ingest_stage(
         gemini_file_mime_type=gemini_file_mime_type,
         gemini_file_expiration=gemini_file_expiration,
         video_duration_sec=source.video_duration_sec,
-        player_references=player_references,
     )

@@ -87,20 +87,15 @@ def test_track_response_uses_rest_ack_without_websocket_url():
 
 @pytest.mark.asyncio
 async def test_run_with_semaphore_dispatches_to_run_highlight_job(monkeypatch, service_components):
-    """S12 Phase 1b (design §1.1, item 15): the single call-site swap —
-    _run_with_semaphore must dispatch to run_highlight_job, never the
-    dormant tracking pipeline's run_job."""
+    """_run_with_semaphore must dispatch to run_highlight_job."""
     config, job_store, jobs_store = service_components
     run_highlight_job_mock = AsyncMock()
-    run_job_mock = AsyncMock()
     monkeypatch.setattr(scheduling_mod, "run_highlight_job", run_highlight_job_mock)
-    monkeypatch.setattr("service.worker.orchestrator.run_job", run_job_mock)
 
     request = TrackRequest(bucket="b", key="k.mp4")
     await scheduling_mod._run_with_semaphore("job-1", request)
 
     run_highlight_job_mock.assert_awaited_once_with("job-1", request, config, job_store, jobs_store)
-    run_job_mock.assert_not_awaited()
 
 
 @pytest.mark.asyncio
