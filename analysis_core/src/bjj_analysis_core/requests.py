@@ -331,9 +331,11 @@ def parse_response(prepared, response_text):
     elif isinstance(result, StrikeCensusV1):
         if result.window_index != context["window_index"]:
             raise ValueError("census answers a different window")
+        # The window's last frame is visible to the model: its end is inclusive here
+        # (the overlap with the next window catches it twice; the merge keeps one).
         last = window.start_ms
         for strike in result.strikes:
-            if not last <= strike.at_ms < window.end_ms:
+            if not last <= strike.at_ms <= window.end_ms:
                 raise ValueError("census strikes must be ordered inside the window")
             last = strike.at_ms
     elif isinstance(result, StrikeAuditV1):
@@ -343,7 +345,7 @@ def parse_response(prepared, response_text):
         if [d.census_index for d in result.decisions] != list(range(len(census))):
             raise ValueError("audit must decide every census strike once, in order")
         for decision in result.decisions:
-            if decision.verdict == "retime" and not window.start_ms <= decision.at_ms < window.end_ms:
+            if decision.verdict == "retime" and not window.start_ms <= decision.at_ms <= window.end_ms:
                 raise ValueError("retimed strike falls outside the window")
             if (
                 decision.verdict == "keep"
@@ -352,7 +354,7 @@ def parse_response(prepared, response_text):
             ):
                 raise ValueError("a kept strike keeps its census time; use retime to move it")
         for strike in result.added:
-            if not window.start_ms <= strike.at_ms < window.end_ms:
+            if not window.start_ms <= strike.at_ms <= window.end_ms:
                 raise ValueError("added strike falls outside the window")
     elif isinstance(result, TechniqueAnalysisV1):
         if result.bounds != window:

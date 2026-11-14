@@ -100,7 +100,7 @@ def merge_strikes(run, config, censuses, audits, positions):
         found += [(s.at_ms, (index, "added"), s) for s in audit.added]
         added += len(audit.added)
     for at, (index, _), _ in found:
-        if not windows[index].start_ms <= at < windows[index].end_ms:
+        if not windows[index].start_ms <= at <= windows[index].end_ms:
             raise ValueError("strike time falls outside its window")
     live = [f for f in found if not _not_live(positions, f[0])]
     rejected = len(found) - len(live)

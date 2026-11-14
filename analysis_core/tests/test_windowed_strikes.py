@@ -95,7 +95,8 @@ def test_census_call_must_use_its_admitted_window_and_answers_inside_it(run):
     call = prepare_call(run, data, "strike_census", input_window=window, context=dict(window_index=1, window=window))
     ok = dict(schema_version=1, window_index=1, strikes=[strike(5200), strike(5900, actor="a")])
     assert len(parse_response(call, json.dumps(ok)).strikes) == 2
-    for bad, message in ((dict(ok, strikes=[strike(10000)]), "inside the window"),
+    assert parse_response(call, json.dumps(dict(ok, strikes=[strike(10000)])))  # last visible frame
+    for bad, message in ((dict(ok, strikes=[strike(10001)]), "inside the window"),
                          (dict(ok, strikes=[strike(5900), strike(5200)]), "inside the window"),
                          (dict(ok, window_index=0), "different window")):
         with pytest.raises(ValueError, match=message):
