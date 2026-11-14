@@ -18,8 +18,9 @@ from bjj_analysis_core.mma_outputs import (
 from shared_lib.models.analysis_contracts import TimeRangeMs
 
 # A merged strike event spans its contact moment +-250 ms; outcome evidence is the
-# contact +-50 ms. Same-fighter, same-class strikes this close across a window
-# overlap are one strike seen twice.
+# contact +-50 ms. Same-fighter, same-class strikes this close from two sources (two
+# windows of an overlap, or the census and its audit's additions) are one strike seen
+# twice; within one source they are a real fast combination.
 EVENT_HALF_MS = 250
 CONTACT_HALF_MS = 50
 DUPLICATE_MS = 400
@@ -85,7 +86,7 @@ def merge_strikes(run, config, censuses, audits, positions):
     found, dropped, added = [], 0, 0
     for index, census in enumerate(censuses):
         if audits is None:
-            found += [(s.at_ms, index, s) for s in census.strikes]
+            found += [(s.at_ms, (index, "census"), s) for s in census.strikes]
             continue
         audit = audits[index]
         if len(audit.decisions) != len(census.strikes):
@@ -95,29 +96,29 @@ def merge_strikes(run, config, censuses, audits, positions):
                 dropped += 1
             else:
                 at = decision.at_ms if decision.verdict == "retime" else strike.at_ms
-                found.append((at, index, strike))
-        found += [(s.at_ms, index, s) for s in audit.added]
+                found.append((at, (index, "census"), strike))
+        found += [(s.at_ms, (index, "added"), s) for s in audit.added]
         added += len(audit.added)
-    for at, index, _ in found:
+    for at, (index, _), _ in found:
         if not windows[index].start_ms <= at < windows[index].end_ms:
             raise ValueError("strike time falls outside its window")
     live = [f for f in found if not _not_live(positions, f[0])]
     rejected = len(found) - len(live)
     live.sort(key=lambda f: (f[0], f[1]))
     kept, merged = [], 0
-    for at, index, strike in live:
+    for at, source, strike in live:
         actor = strike.actor_player_id or strike.actor_sentinel
         twin = any(
-            other_index != index
+            other_source != source
             and abs(other_at - at) <= DUPLICATE_MS
             and (other.actor_player_id or other.actor_sentinel) == actor
             and other.action == strike.action
-            for other_at, other_index, other in kept
+            for other_at, other_source, other in kept
         )
         if twin:
             merged += 1
         else:
-            kept.append((at, index, strike))
+            kept.append((at, source, strike))
     return StrikeBatchV1(
         strikes=tuple(_analysis(run, strike, at) for at, _, strike in kept),
         census_count=sum(len(c.strikes) for c in censuses),

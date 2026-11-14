@@ -115,6 +115,10 @@ def test_audit_decides_every_census_strike_once_in_order(run):
         parse_response(call, json.dumps(dict(schema_version=1, window_index=0, decisions=[keep], added=[])))
     with pytest.raises(ValueError, match="outside the window"):
         parse_response(call, json.dumps(dict(schema_version=1, window_index=0, decisions=[keep, dict(retime, at_ms=7000)], added=[])))
+    echo = dict(keep, at_ms=2000)
+    assert parse_response(call, json.dumps(dict(schema_version=1, window_index=0, decisions=[echo, retime], added=[])))
+    with pytest.raises(ValueError, match="keeps its census time"):
+        parse_response(call, json.dumps(dict(schema_version=1, window_index=0, decisions=[dict(keep, at_ms=2100), retime], added=[])))
 
 
 def _positions(run, inactive):
@@ -144,7 +148,7 @@ def test_merge_applies_audit_rejects_not_live_and_merges_overlap_twins_only(run)
                                                  dict(census_index=1, verdict="keep", at_ms=None, reason="r"),
                                                  dict(census_index=2, verdict="keep", at_ms=None, reason="r"),
                                                  dict(census_index=3, verdict="drop", at_ms=None, reason="feint")],
-                      added=[strike(4000, actor="a", outcome="unclear")]),
+                      added=[strike(4000, actor="a", outcome="unclear"), strike(2100)]),
         StrikeAuditV1(window_index=1, decisions=[dict(census_index=0, verdict="keep", at_ms=None, reason="r"),
                                                  dict(census_index=1, verdict="retime", at_ms=8600, reason="r")], added=[]),
         StrikeAuditV1(window_index=2, decisions=[], added=[]),
@@ -153,7 +157,8 @@ def test_merge_applies_audit_rejects_not_live_and_merges_overlap_twins_only(run)
     # 2000 and 2300 stay (same window: a fast combination); 5500/5700 are one strike seen
     # from two windows; the knee was dropped; 8600 sits in the replay span; 4000 was added.
     assert [s.bounds.start_ms + 250 for s in batch.strikes] == [2000, 2300, 4000, 5500]
-    assert (batch.dropped_by_audit, batch.added_by_audit, batch.rejected_not_live, batch.merged_duplicates) == (1, 1, 1, 1)
+    # The audit's 2100 re-adds the census 2000 punch: one strike, not a combination.
+    assert (batch.dropped_by_audit, batch.added_by_audit, batch.rejected_not_live, batch.merged_duplicates) == (1, 2, 1, 2)
     unclear = batch.strikes[2]
     assert unclear.outcome == "unclear" and unclear.outcome_bounds is None and unclear.actor_player_id == "a"
     assert batch.strikes[0].outcome_bounds == TimeRangeMs(start_ms=1950, end_ms=2050)

@@ -141,8 +141,9 @@ class StrikeAuditDecisionV1(AnalysisContract):
 
     @model_validator(mode="after")
     def retime_has_time(self):
-        if (self.verdict == "retime") != (self.at_ms is not None):
-            raise ValueError("only a retime carries a corrected time")
+        # keep may echo the census time (checked against it at parse); drop ignores it.
+        if self.verdict == "retime" and self.at_ms is None:
+            raise ValueError("a retime carries its corrected time")
         return self
 
 

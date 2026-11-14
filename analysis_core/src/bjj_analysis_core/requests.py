@@ -339,8 +339,14 @@ def parse_response(prepared, response_text):
         if [d.census_index for d in result.decisions] != list(range(len(census))):
             raise ValueError("audit must decide every census strike once, in order")
         for decision in result.decisions:
-            if decision.at_ms is not None and not window.start_ms <= decision.at_ms < window.end_ms:
+            if decision.verdict == "retime" and not window.start_ms <= decision.at_ms < window.end_ms:
                 raise ValueError("retimed strike falls outside the window")
+            if (
+                decision.verdict == "keep"
+                and decision.at_ms is not None
+                and decision.at_ms != census[decision.census_index]["at_ms"]
+            ):
+                raise ValueError("a kept strike keeps its census time; use retime to move it")
         for strike in result.added:
             if not window.start_ms <= strike.at_ms < window.end_ms:
                 raise ValueError("added strike falls outside the window")
