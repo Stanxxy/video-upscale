@@ -126,6 +126,10 @@ class CoreConfigV1(VersionedAnalysisContract):
     # Full executor bounds are versioned with the effective run configuration.
     position_critique_back_ms: NonNegativeInt = Field(default=4000, le=30000)
     position_critique_forward_ms: PositiveInt = Field(default=6000, le=30000)
+    # "confirmed": each position check sees the previous *confirmed* state, so the
+    # checks run one at a time. "proposed": each sees the scan's own previous state,
+    # so all checks run in parallel (the serial chain dominates long MMA fights).
+    position_critique_context: Literal["confirmed", "proposed"] = "confirmed"
     max_call_attempts: PositiveInt = Field(default=2, le=3)
     # Windowed strike census (workflow mma-windowed-strikes only; absent elsewhere).
     # No strike_audit config means the census is published without a second pass.

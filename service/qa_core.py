@@ -109,6 +109,9 @@ class CoreRunIn(BaseModel):
     fighters: tuple[FighterIn, FighterIn]
     overrides: dict[str, NodeOverride] = Field(default_factory=dict)
     max_parallel_calls: int = Field(default=4, ge=1, le=16)
+    # None keeps the workflow's preset; true/false runs position checks in parallel
+    # (each sees the scan's previous state) or one at a time (previous confirmed state).
+    parallel_position_checks: Optional[bool] = None
     label: Optional[str] = Field(default=None, max_length=80)
 
 
@@ -262,8 +265,10 @@ class Cancelled(RuntimeError):
     pass
 
 
-def build_config(sport, overrides):
+def build_config(sport, overrides, parallel_position_checks=None):
     config = SPORTS[sport][2]()
+    if parallel_position_checks is not None:
+        config = config.model_copy(update={"position_critique_context": "proposed" if parallel_position_checks else "confirmed"})
     for node, change in overrides.items():
         if node not in NODES:
             raise ValueError(f"unknown node {node}")
@@ -369,7 +374,7 @@ class CoreRuns:
 
     def _register(self, job: Job, request: CoreRunIn, source: Path):
         workflow_id, taxonomy_id, _ = SPORTS[request.sport]
-        config = build_config(request.sport, request.overrides)
+        config = build_config(request.sport, request.overrides, request.parallel_position_checks)
         config_bytes = config.model_dump_json().encode()
         duration = probe_duration_ms(source)
         if request.end_ms > duration or request.start_ms >= request.end_ms:

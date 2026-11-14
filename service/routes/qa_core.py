@@ -37,6 +37,7 @@ class EstimateIn(BaseModel):
     start_ms: int
     end_ms: int
     overrides: dict[str, qa_core.NodeOverride] = {}
+    parallel_position_checks: Optional[bool] = None
 
 
 async def core_estimate(body: EstimateIn):
@@ -45,7 +46,7 @@ async def core_estimate(body: EstimateIn):
     if body.end_ms <= body.start_ms:
         raise HTTPException(status_code=400, detail="scope end must follow its start")
     try:
-        config = qa_core.build_config(body.sport, body.overrides)
+        config = qa_core.build_config(body.sport, body.overrides, body.parallel_position_checks)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from None
     return dict(config=config.model_dump(mode="json"), scans=qa_core.estimate(config, body.start_ms, body.end_ms))
@@ -94,7 +95,7 @@ async def core_create(body: qa_core.CoreRunIn):
     if not qa_core.media_path(core.settings, body.youtube_id, download=False).exists():
         raise HTTPException(status_code=409, detail="fetch the video first")
     try:
-        qa_core.build_config(body.sport, body.overrides)
+        qa_core.build_config(body.sport, body.overrides, body.parallel_position_checks)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from None
     return core.status(core.create(body).run_id)

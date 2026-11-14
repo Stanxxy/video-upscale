@@ -320,3 +320,34 @@ async def test_cancellation_settles_every_in_flight_call_as_cancelled(
 async def test_parallelism_bound_is_explicit_and_small(run, configuration, lanes, bound):
     with pytest.raises(ValueError, match="max_parallel_calls"):
         await execute(run, configuration, lanes(f"bad{bound}"), max_parallel_calls=bound)
+
+
+@pytest.mark.asyncio
+async def test_proposed_context_runs_position_checks_in_parallel_with_scan_states(
+    run, configuration, lanes
+):
+    import hashlib
+
+    from bjj_analysis_core.requests import CoreConfigV1
+    from shared_lib.models.analysis_run_record import RegisteredAIRunV1
+
+    proposed = (
+        CoreConfigV1.model_validate_json(configuration)
+        .model_copy(update={"position_critique_context": "proposed"})
+        .model_dump_json()
+        .encode()
+    )
+    spec = run.spec.model_copy(
+        update={"effective_config": run.spec.effective_config.model_copy(
+            update={"sha256": hashlib.sha256(proposed).hexdigest()})}
+    )
+    parallel_run = RegisteredAIRunV1.model_validate({**run.model_dump(), "spec": spec.model_dump()})
+    delays = {"position_critique": 0.02}
+    serial, fast = lanes("confirmed", delays=delays), lanes("proposed", delays=delays)
+    one = await execute(run, configuration, serial, max_parallel_calls=6)
+    many = await execute(parallel_run, proposed, fast, max_parallel_calls=6)
+    assert serial[3].max_by_node["position_critique"] == 1
+    assert fast[3].max_by_node["position_critique"] == len(TRANSITIONS)
+    assert fast[3].max_in_flight <= 6
+    # Every transition is confirmed here, so confirmed and proposed contexts agree.
+    assert [p.position for p in one.positions.positions] == [p.position for p in many.positions.positions]

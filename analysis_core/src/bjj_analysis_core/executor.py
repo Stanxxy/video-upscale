@@ -127,6 +127,12 @@ async def execute_pipeline(
     )
     run, cfg = runner.run, runner.config
     pack = pack_for(run)
+    # One run-wide bound on provider calls in flight, whichever branches run at once.
+    gate = asyncio.Semaphore(limit)
+
+    async def model(request, *, item=None):
+        async with gate:
+            return await runner.model(request, item=item)
 
     async def deterministic(node, inputs, value, output_type, *, total=1):
         async def compute(at):
@@ -158,7 +164,7 @@ async def execute_pipeline(
         )
 
     async def position_branch():
-        scan = await runner.model(
+        scan = await model(
             prepare_call(
                 run,
                 config_bytes,
@@ -167,10 +173,7 @@ async def execute_pipeline(
                 context={},
             )
         )
-        # Always serial: each critique's context carries the previous confirmed
-        # state, a real data dependency between items.
-        decisions, state_before = [], scan.initial_state
-        for index, transition in enumerate(scan.transitions):
+        def critique(index, transition, state_before):
             at = transition.at_ms
             window = TimeRangeMs(
                 start_ms=max(
@@ -180,7 +183,7 @@ async def execute_pipeline(
                     run.spec.scope.end_ms, at + cfg.position_critique_forward_ms
                 ),
             )
-            decision = await runner.model(
+            return model(
                 prepare_call(
                     run,
                     config_bytes,
@@ -194,10 +197,28 @@ async def execute_pipeline(
                 ),
                 item=str(index),
             )
-            decisions.append(decision)
-            # Rejected rough states do not poison the next critique's context.
-            if decision.confirmed:
-                state_before = decision.state_after
+
+        if cfg.position_critique_context == "proposed":
+            # Each check sees the scan's own previous state: no dependency, parallel.
+            befores = (scan.initial_state,) + tuple(
+                t.state_after for t in scan.transitions[:-1]
+            )
+            decisions = await _ordered(
+                [
+                    (lambda i=i, t=t, b=b: critique(i, t, b))
+                    for i, (t, b) in enumerate(zip(scan.transitions, befores, strict=True))
+                ],
+                limit,
+            )
+        else:
+            # Serial: each check's context carries the previous confirmed state.
+            decisions, state_before = [], scan.initial_state
+            for index, transition in enumerate(scan.transitions):
+                decision = await critique(index, transition, state_before)
+                decisions.append(decision)
+                # Rejected rough states do not poison the next critique's context.
+                if decision.confirmed:
+                    state_before = decision.state_after
         decisions = await summary(
             "position_critique", decisions, tuple[pack.position_critique, ...]
         )
@@ -218,7 +239,7 @@ async def execute_pipeline(
     async def technique_scan_step():
         # Observes the full scope with no position context, so it is independent
         # of the position branch; serial runs keep it after position publication.
-        return await runner.model(
+        return await model(
             prepare_call(
                 run,
                 config_bytes,
@@ -230,13 +251,13 @@ async def execute_pipeline(
 
     async def strike_branch():
         # Independent of positions: one census (and optional audit) per window, in
-        # parallel; not-live footage is filtered at the merge, after positions exist.
+        # parallel (bounded by the run-wide gate); not-live footage is filtered at the
+        # merge, after positions exist.
         windows = strike_windows(run, cfg)
-        inner = max(1, limit - 2)
 
         def census_step(index, window):
             async def step():
-                return await runner.model(
+                return await model(
                     prepare_call(
                         run,
                         config_bytes,
@@ -250,7 +271,7 @@ async def execute_pipeline(
             return step
 
         censuses = await _ordered(
-            [census_step(i, w) for i, w in enumerate(windows)], inner
+            [census_step(i, w) for i, w in enumerate(windows)], limit
         )
         censuses = await summary("strike_census", censuses, tuple[StrikeCensusV1, ...])
         if cfg.strike_audit is None:
@@ -258,7 +279,7 @@ async def execute_pipeline(
 
         def audit_step(index, window, census):
             async def step():
-                return await runner.model(
+                return await model(
                     prepare_call(
                         run,
                         config_bytes,
@@ -273,7 +294,7 @@ async def execute_pipeline(
 
         audits = await _ordered(
             [audit_step(i, w, c) for i, (w, c) in enumerate(zip(windows, censuses, strict=True))],
-            inner,
+            limit,
         )
         audits = await summary("strike_audit", audits, tuple[StrikeAuditV1, ...])
         return censuses, audits
@@ -309,7 +330,7 @@ async def execute_pipeline(
     )
     def critique_step(candidate):
         async def step():
-            return await runner.model(
+            return await model(
                 prepare_call(
                     run,
                     config_bytes,
@@ -340,7 +361,7 @@ async def execute_pipeline(
     )
     def analyze_step(target):
         async def step():
-            return await runner.model(
+            return await model(
                 prepare_call(
                     run,
                     config_bytes,
@@ -370,7 +391,7 @@ async def execute_pipeline(
 
     def validate_step(target, candidate):
         async def step():
-            return await runner.model(
+            return await model(
                 prepare_call(
                     run,
                     config_bytes,

@@ -187,3 +187,10 @@ def test_v2_workflows_use_the_strike_pack_and_census_only_drops_the_audit():
     # 60 s scope tiled into 20 s windows stepping 18 s: the census sees 66.7 s of video.
     assert qa_core.estimate(v2, 0, 60_000)["strike_census"]["frames"] == 666
     assert "strike_census" not in qa_core.estimate(qa_core.build_config("mma", {}), 0, 60_000)
+
+
+def test_parallel_position_checks_follow_the_preset_unless_the_run_says_otherwise():
+    assert qa_core.build_config("mma_v2", {}).position_critique_context == "proposed"
+    assert qa_core.build_config("mma", {}).position_critique_context == "confirmed"
+    assert qa_core.build_config("mma", {}, True).position_critique_context == "proposed"
+    assert qa_core.build_config("mma_v2", {}, False).position_critique_context == "confirmed"

@@ -110,6 +110,7 @@
       </div>
       <details style="margin-top:8px"><summary class="muted">Node settings (defaults = production preset)</summary>
         <div class="table-wrap"><table id="nodes-cfg"></table></div>
+        <label style="display:flex; gap:6px; align-items:center; color:var(--ink); font-size:12px; margin-top:8px"><input type="checkbox" id="par-pos" style="width:auto"> Position checks in parallel (each sees the scan's previous state; preset: <span id="par-pos-preset">—</span>)</label>
         <div class="row"><div><label for="parallel">Parallel calls</label><input id="parallel" type="number" min="1" max="16" value="6"></div><div><label for="label">Label</label><input id="label" placeholder="optional"></div></div>
       </details>
       <p id="estimate" class="muted"></p>
@@ -196,7 +197,7 @@ function preview(frame, img, b) {
 
 async function loadDefaults() {
   state.overrides = {};
-  try { const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:0, end_ms:1000})}); state.config = r.config; renderNodeCfg(); estimate(); }
+  try { const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:0, end_ms:1000})}); state.config = r.config; $('par-pos').checked = r.config.position_critique_context === 'proposed'; $('par-pos-preset').textContent = r.config.position_critique_context === 'proposed' ? 'parallel' : 'one at a time'; renderNodeCfg(); estimate(); }
   catch (e) { $('estimate').textContent = 'Backend not reachable: ' + e.message; }
 }
 function renderNodeCfg() {
@@ -234,7 +235,8 @@ $('run').onclick = async () => {
   const names = [...document.querySelectorAll('.fighter .name')].map(x => x.value.trim());
   const body = {youtube_id:state.youtubeId, sport:state.sport, start_ms:parseT($('start').value), end_ms:parseT($('end').value),
     fighters:state.fighters.map((f, i) => ({name:names[i], frame_ms:f.frame_ms, box:f.box})), overrides:state.overrides,
-    max_parallel_calls:Number($('parallel').value) || 6, label:$('label').value.trim() || null};
+    max_parallel_calls:Number($('parallel').value) || 6, label:$('label').value.trim() || null,
+    parallel_position_checks:$('par-pos').checked};
   try { const r = await api('/qa/core/runs', {method:'POST', body:JSON.stringify(body)}); openRun(r.run_id); loadRuns(); }
   catch (e) { $('run-err').textContent = e.message; }
 };
