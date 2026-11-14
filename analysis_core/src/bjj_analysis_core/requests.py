@@ -22,6 +22,8 @@ from bjj_analysis_core.outputs import (
     TemporalCritiqueV1,
 )
 from bjj_analysis_core.mma_outputs import (
+    KnockdownCheckInputV1,
+    KnockdownCheckV1,
     StrikeAuditInputV1,
     StrikeAuditV1,
     StrikeCensusV1,
@@ -50,6 +52,7 @@ NodeId = Literal[
     "technique_validate",
     "strike_census",
     "strike_audit",
+    "knockdown_check",
 ]
 # The BJJ pack's node outputs (every pack has the same nodes).
 OUTPUTS = BJJ.outputs
@@ -135,6 +138,8 @@ class CoreConfigV1(VersionedAnalysisContract):
     # No strike_audit config means the census is published without a second pass.
     strike_census: NodeConfigV1 | None = None
     strike_audit: NodeConfigV1 | None = None
+    # Second look at each census knockdown (windowed workflow only; optional).
+    knockdown_check: NodeConfigV1 | None = None
     strike_window_ms: PositiveInt = Field(default=20000, ge=5000, le=60000)
     strike_overlap_ms: NonNegativeInt = Field(default=2000, le=10000)
 
@@ -169,7 +174,11 @@ def load_config(run, config_bytes):
             raise ValueError("the windowed strike workflow needs a strike_census node")
         if config.strike_overlap_ms >= config.strike_window_ms:
             raise ValueError("strike window overlap must be shorter than the window")
-    elif config.strike_census is not None or config.strike_audit is not None:
+    elif (
+        config.strike_census is not None
+        or config.strike_audit is not None
+        or config.knockdown_check is not None
+    ):
         raise ValueError("strike census nodes belong only to the windowed strike workflow")
     return run, config
 
@@ -201,8 +210,20 @@ def prepare_call(
             "technique_validate": pack.technique_candidate,
             "strike_census": StrikeWindowInputV1,
             "strike_audit": StrikeAuditInputV1,
+            "knockdown_check": KnockdownCheckInputV1,
         }[node_id]
         parsed = context_model.model_validate(context)
+        if node_id == "knockdown_check":
+            from bjj_analysis_core.strikes import knockdown_window
+
+            if config.knockdown_check is None:
+                raise ValueError("this run has no knockdown check node")
+            if advisory_positions is not None:
+                raise ValueError("the knockdown check is visually independent")
+            if not parsed.strike.knockdown:
+                raise ValueError("only a flagged knockdown is checked")
+            if window != knockdown_window(run, parsed.at_ms):
+                raise ValueError("knockdown check window differs from its strike")
         if node_id in ("strike_census", "strike_audit"):
             from bjj_analysis_core.strikes import strike_windows
 
@@ -356,6 +377,9 @@ def parse_response(prepared, response_text):
         for strike in result.added:
             if not window.start_ms <= strike.at_ms <= window.end_ms:
                 raise ValueError("added strike falls outside the window")
+    elif isinstance(result, KnockdownCheckV1):
+        if result.strike_index != context["strike_index"]:
+            raise ValueError("knockdown check answers a different strike")
     elif isinstance(result, TechniqueAnalysisV1):
         if result.bounds != window:
             raise ValueError("analysis must preserve the authoritative temporal bounds")

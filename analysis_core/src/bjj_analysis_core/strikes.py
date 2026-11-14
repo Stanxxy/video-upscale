@@ -10,6 +10,7 @@ merged.
 """
 
 from bjj_analysis_core.mma_outputs import (
+    KnockdownCheckV1,
     MmaTechniqueAnalysisV1,
     StrikeAuditV1,
     StrikeBatchV1,
@@ -24,6 +25,39 @@ from shared_lib.models.analysis_contracts import TimeRangeMs
 EVENT_HALF_MS = 250
 CONTACT_HALF_MS = 50
 DUPLICATE_MS = 400
+
+
+# A knockdown check sees 2 s before the strike (setup) and 5 s after (the fall).
+KNOCKDOWN_BEFORE_MS = 2000
+KNOCKDOWN_AFTER_MS = 5000
+
+
+def knockdown_window(run, at_ms):
+    scope = run.spec.scope
+    return TimeRangeMs(
+        start_ms=max(scope.start_ms, at_ms - KNOCKDOWN_BEFORE_MS),
+        end_ms=min(scope.end_ms, at_ms + KNOCKDOWN_AFTER_MS),
+    )
+
+
+def contact_ms(strike):
+    """The census contact time behind a merged strike event (see _analysis)."""
+    if strike.outcome_bounds is not None:
+        return (strike.outcome_bounds.start_ms + strike.outcome_bounds.end_ms) // 2
+    return (strike.bounds.start_ms + strike.bounds.end_ms) // 2
+
+
+def apply_knockdown_checks(batch, flagged, checks):
+    """Unconfirmed knockdowns keep the strike, without the knockdown flag."""
+    checks = tuple(KnockdownCheckV1.model_validate(c) for c in checks)
+    if [c.strike_index for c in checks] != list(flagged):
+        raise ValueError("exactly one knockdown check is required per flagged strike")
+    rejected = {c.strike_index for c in checks if not c.knocked_down}
+    strikes = tuple(
+        s.model_copy(update={"knockdown": False}) if i in rejected else s
+        for i, s in enumerate(batch.strikes)
+    )
+    return batch.model_copy(update={"strikes": strikes, "knockdowns_rejected": len(rejected)})
 
 
 def strike_windows(run, config):

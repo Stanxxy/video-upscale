@@ -172,4 +172,19 @@ class StrikeBatchV1(VersionedAnalysisContract):
     added_by_audit: NonNegativeInt
     rejected_not_live: NonNegativeInt
     merged_duplicates: NonNegativeInt
+    knockdowns_rejected: NonNegativeInt = 0
     notes: StrictStr = ""
+
+
+class KnockdownCheckInputV1(AnalysisContract):
+    strike_index: NonNegativeInt
+    at_ms: NonNegativeInt
+    strike: MmaTechniqueAnalysisV1
+
+
+class KnockdownCheckV1(VersionedAnalysisContract):
+    """Second look at one census knockdown: did this strike put the opponent down?"""
+
+    strike_index: NonNegativeInt
+    knocked_down: StrictBool
+    reason: Identifier

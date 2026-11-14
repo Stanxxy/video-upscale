@@ -39,6 +39,7 @@ def config_bytes(pack=MMA_STRIKES, *, audit=True, **changes):
         candidates=dict(),
         strike_census=NODE if pack is MMA_STRIKES else None,
         strike_audit=NODE if (pack is MMA_STRIKES and audit) else None,
+        knockdown_check=NODE if pack is MMA_STRIKES else None,
         strike_window_ms=5000,
         strike_overlap_ms=1000,
     )
@@ -193,7 +194,12 @@ class Provider:
                         reason="no grappling attack at the cut")
         elif request.node_id == "strike_census":
             start = context["window"]["start_ms"]
-            data = dict(window_index=context["window_index"], strikes=[strike(start + 600), strike(start + 1500, actor="a")])
+            # The first window's punch is flagged as a knockdown; its check says no.
+            data = dict(window_index=context["window_index"],
+                        strikes=[strike(start + 600, knockdown=context["window_index"] == 0), strike(start + 1500, actor="a")])
+        elif request.node_id == "knockdown_check":
+            data = dict(strike_index=context["strike_index"], knocked_down=False,
+                        reason="opponent only steps back; both feet stay planted")
         else:
             data = dict(window_index=context["window_index"], added=[],
                         decisions=[dict(census_index=i, verdict="keep", at_ms=None, reason="visible")
@@ -232,11 +238,13 @@ def test_full_dag_publishes_census_strikes_as_mma_techniques_without_per_strike_
                                           clock=clock, max_parallel_calls=parallel))
     calls = sorted(provider.calls)
     assert calls.count("strike_census") == 3 and calls.count("strike_audit") == 3
+    assert calls.count("knockdown_check") == 1
     assert "technique_analyze" not in calls and "technique_validate" not in calls
     events = result.techniques.techniques
     # Windows start 1000/5000/9000; the replay runs 8000 to scope end, so 9600 and 10500 are rejected.
     assert [(e.bounds.start_ms + 250, e.actor_player_id) for e in events] == [(1600, "b"), (2500, "a"), (5600, "b"), (6500, "a")]
     assert all(e.taxonomy_id == "mma.v1" and e.strike_target is not None and e.origin == "ai" for e in events)
+    assert not any(e.knockdown for e in events)  # the only knockdown was rejected; the strike stays
     assert sink.outputs["techniques"] == result.techniques
     # Resume replays every step from the journal: no provider call.
     again = Provider(clock)

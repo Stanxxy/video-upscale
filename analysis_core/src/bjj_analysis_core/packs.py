@@ -143,6 +143,7 @@ MMA_STRIKES = AnalysisPack(
             **MMA.outputs,
             "strike_census": mma.StrikeCensusV1,
             "strike_audit": mma.StrikeAuditV1,
+            "knockdown_check": mma.KnockdownCheckV1,
         }
     ),
     position_critique_input=mma.MmaPositionCritiqueInputV1,

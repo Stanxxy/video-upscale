@@ -62,5 +62,6 @@ def gemini38_mma_strikes_preset(*, audit=True) -> CoreConfigV1:
         candidates=CandidateConfigV1(),
         strike_census=node,
         strike_audit=check if audit else None,
+        knockdown_check=check,
         position_critique_context="proposed",
     )

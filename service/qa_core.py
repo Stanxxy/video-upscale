@@ -55,6 +55,7 @@ NODES = (
     "technique_validate",
     "strike_census",
     "strike_audit",
+    "knockdown_check",
 )
 # Workflows VLM Studio can run. "mma_v2*" is the windowed strike census DAG (not admitted
 # in production); "mma_v2_census" publishes the census without the per-window audit.
@@ -532,7 +533,7 @@ class CoreRuns:
             node.update(succeeded=states.count("succeeded"), running=sum(s in {"running", "retrying"} for s in states),
                         failed=states.count("failed"), seen=len(states), usd=round(node["usd"], 4))
             summary.append(node)
-        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "strike_census", "strike_audit", "strikes_merge",
+        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "strike_census", "strike_audit", "strikes_merge", "knockdown_check", "knockdowns_apply",
                                              "position_critique", "positions_normalize",
                                              "positions_publish", "technique_scan", "position_technique_candidates",
                                              "technique_critique", "technique_worklist", "technique_analyze",

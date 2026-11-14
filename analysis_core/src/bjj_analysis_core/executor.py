@@ -17,12 +17,19 @@ from bjj_analysis_core.discovery import (
 )
 from bjj_analysis_core.execution import StepRunner
 from bjj_analysis_core.mma_outputs import (
+    KnockdownCheckV1,
     StrikeAuditV1,
     StrikeBatchV1,
     StrikeCensusV1,
 )
 from bjj_analysis_core.normalization import normalize_positions, normalize_techniques
-from bjj_analysis_core.strikes import merge_strikes, strike_windows
+from bjj_analysis_core.strikes import (
+    apply_knockdown_checks,
+    contact_ms,
+    knockdown_window,
+    merge_strikes,
+    strike_windows,
+)
 from bjj_analysis_core.outputs import (
     CandidateBatchV1,
     TechniqueAnalysisInputV1,
@@ -313,6 +320,38 @@ async def execute_pipeline(
             lambda at: merge_strikes(run, cfg, censuses, audits, positions),
             StrikeBatchV1,
         )
+        if cfg.knockdown_check is not None:
+            flagged = tuple(i for i, s in enumerate(strike_batch.strikes) if s.knockdown)
+
+            def knockdown_step(index):
+                strike = strike_batch.strikes[index]
+                at_ms = contact_ms(strike)
+
+                async def step():
+                    return await model(
+                        prepare_call(
+                            run,
+                            config_bytes,
+                            "knockdown_check",
+                            input_window=knockdown_window(run, at_ms),
+                            context=dict(strike_index=index, at_ms=at_ms, strike=strike),
+                        ),
+                        item=str(index),
+                    )
+
+                return step
+
+            checks = await _ordered([knockdown_step(i) for i in flagged], limit)
+            checks = await summary("knockdown_check", checks, tuple[KnockdownCheckV1, ...])
+            strike_batch = await deterministic(
+                "knockdowns_apply",
+                dict(
+                    batch=strike_batch.model_dump(mode="json"),
+                    checks=[c.model_dump(mode="json") for c in checks],
+                ),
+                lambda at: apply_knockdown_checks(strike_batch, flagged, checks),
+                StrikeBatchV1,
+            )
         strikes = strike_batch.strikes
     else:
         positions, technique_scan = await _ordered(

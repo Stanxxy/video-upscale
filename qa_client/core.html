@@ -131,7 +131,7 @@
   </div>
 </main>
 <script>
-const ALL_NODES = ['position_scan','position_critique','technique_scan','technique_critique','technique_analyze','technique_validate','strike_census','strike_audit'];
+const ALL_NODES = ['position_scan','position_critique','technique_scan','technique_critique','technique_analyze','technique_validate','strike_census','strike_audit','knockdown_check'];
 const nodes = () => ALL_NODES.filter(n => state.config && state.config[n]);
 const $ = id => document.getElementById(id);
 const api = (path, opts={}) => fetch($('backend').value.replace(/\/$/,'') + path, {headers:{'content-type':'application/json'}, ...opts})
