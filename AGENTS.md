@@ -133,4 +133,4 @@ Canonical **bjj-team-*** skill definitions live in the **umbrella** workspace at
 
 ## Key Design Decisions
 
-See `working_log/knowledge-base/INDEX.md` for the full list. The local vision-model workflow (RF-DETR/SAM2 tracking, upscaling, annotation, human correction) was removed on 2026-11-13; its decisions are history only.
+See `working_log/knowledge-base/INDEX.md` for the full list. The local vision-model workflow (hybrid athlete tracking, upscaling, annotation, human box correction) was removed on 2026-11-13; its decisions are history only.

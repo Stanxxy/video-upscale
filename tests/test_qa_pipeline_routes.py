@@ -3,7 +3,7 @@
 
 Mirrors ``test_qa_vlm.py``'s pattern: a minimal FastAPI app mounting only the
 pipeline routes + ``init_routes`` for ``route_state._config``, no production
-router/Cassandra/torch dependency beyond what importing ``service.routes.qa_vlm``
+router/Cassandra/ML dependency beyond what importing ``service.routes.qa_vlm``
 already pulls in (documented in ``service/qa_app.py``).
 """
 from __future__ import annotations
