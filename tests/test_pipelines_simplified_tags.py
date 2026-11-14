@@ -72,9 +72,8 @@ def test_schema_tag_required_fields():
     assert set(tag.required) == {
         "start_frame", "end_frame", "position", "actor", "action_class", "outcome", "confidence",
     }
-    # specific_technique_guess is optional (present as a property, absent from required)
-    assert "specific_technique_guess" in tag.properties
-    assert "specific_technique_guess" not in tag.required
+    # There is no technique list or guess field: the move lives in notes only.
+    assert not [name for name in tag.properties if "guess" in name or "shortlist" in name]
 
 
 def test_schema_position_is_string_enum_of_exact_9_values():
@@ -105,13 +104,6 @@ def test_schema_actor_is_free_text_not_an_enum():
     assert not actor.enum  # None or empty — never gated
 
 
-def test_schema_specific_technique_guess_is_free_text_not_an_enum():
-    tag = _tag_schema()
-    guess = tag.properties["specific_technique_guess"]
-    assert guess.type == types.Type.STRING
-    assert not guess.enum
-
-
 def test_schema_confidence_is_number():
     tag = _tag_schema()
     assert tag.properties["confidence"].type == types.Type.NUMBER
@@ -128,8 +120,9 @@ def test_prompt_demands_absolute_frame_numbers():
 
 def test_prompt_names_all_four_fields_and_demands_exact_enum_values():
     prompt = simplified_tags.build_prompt([0, 1], previous_context="ctx")
-    for field in ("position", "actor", "action_class", "outcome", "specific_technique_guess", "confidence"):
+    for field in ("position", "actor", "action_class", "outcome", "confidence"):
         assert field in prompt
+    assert "guess" not in prompt
     assert "EXACTLY one" in prompt or "EXACTLY the" in prompt
 
 
@@ -149,7 +142,7 @@ def test_prompt_defaults_context_to_start_of_match_when_none():
 def test_default_taxonomy_text_loaded_from_bundled_file_and_mentions_all_axes():
     text = simplified_tags.DEFAULT_TAXONOMY_TEXT
     assert "Simplified taxonomy file not found." not in text  # file must actually be present/readable
-    for axis_value in ("closed_guard", "submission_arm_lock", "unsuccessful", "specific_technique_guess"):
+    for axis_value in ("closed_guard", "submission_arm_lock", "unsuccessful"):
         assert axis_value in text
 
 

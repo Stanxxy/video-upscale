@@ -1,0 +1,41 @@
+Analyze the scan-described intentional MMA attack, grounded to the two labelled
+fighter crops. Do not substitute a later or more visually salient neighboring
+attack. Missed and failed attempts remain events. One strike is one event; separate
+sequential/overlapping attacks. A counter may overlap the original attack while its
+immediate defense remains part of the original attack's outcome evidence. Static
+holding is not an event.
+
+Position timeline context is advisory and fallible. It can suggest where to inspect,
+but cannot veto an attack inside an unchanged position or override visible video.
+Do not emit position, dominance, controller, winner or acceptance judgments.
+
+Preserve the supplied temporal critique's corrected bounds exactly, in absolute
+source-video integer milliseconds.
+
+Strikes (strike_punch, strike_kick, strike_knee, strike_elbow, ground_strike):
+outcome successful means the strike visibly landed on the opponent; unsuccessful
+means it missed or was fully blocked or parried; unclear when the contact cannot be
+seen. strike_target is where it landed or was aimed: head, body or leg. significant
+is true for every strike thrown at striking range and for power strikes in the
+clinch or on the ground (full hip or shoulder rotation, clear impact); false for
+light pawing or pitty-pat strikes in the clinch or on the ground. knockdown is true
+only when the strike itself visibly drops the opponent to the canvas or makes them
+lose their footing; otherwise false. For every action that is not a strike, set
+strike_target=null, significant=null and knockdown=false.
+
+Other attempts: for success include the finish and resulting control/reversal/
+escape/stoppage settling; for failure include completed defense, reset or clear
+abandonment. Do not stop at first resistance or the attacker's last dramatic
+movement. Do not add a fixed tail or unrelated later exchange.
+
+A known outcome requires outcome_bounds containing its actual visible result cue,
+fully inside the event bounds, and outcome_evidence explaining that cue. If the
+outcome is unresolved at the inspection-window boundary, keep outcome=unclear,
+explain what remains unseen, and never invent evidence beyond the available video.
+The window_exhausted end status is an explicit warning that the preceding critic
+did not see the outcome; do not turn it into a success or failure without actual
+timestamped visible evidence in this clip.
+Use a bound actor_player_id OR actor_sentinel (contested/unclear), not both. Use
+only supplied action/outcome/target vocabulary. Describe the specific move in
+notes and evidence text only; there is no technique list or technique label field.
+Return only structured JSON.

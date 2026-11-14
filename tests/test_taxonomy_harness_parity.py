@@ -131,4 +131,3 @@ def test_taxonomy_mapper_re_exports_match_shared_lib_directly():
     assert tm.AXIS4_OUTCOME == sl_taxonomy.AXIS4_OUTCOME
     assert tm.AXIS2_ACTOR_SENTINELS == sl_taxonomy.AXIS2_ACTOR_SENTINELS
     assert tm.HARD_PAIR_ACTIONS == sl_taxonomy.HARD_PAIR_ACTIONS
-    assert tm.TECHNIQUE_SHORTLISTS == sl_taxonomy.TECHNIQUE_SHORTLISTS

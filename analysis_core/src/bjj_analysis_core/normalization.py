@@ -7,13 +7,8 @@ replayed outputs produce identical revisions and never receive review acceptance
 
 from uuid import uuid5
 
-from bjj_analysis_core import CORE_VERSION, WORKFLOW_ID
-from bjj_analysis_core.outputs import (
-    PositionCritiqueV1,
-    PositionScanV1,
-    TechniqueCandidateV1,
-    TechniqueDecisionV1,
-)
+from bjj_analysis_core import CORE_VERSION
+from bjj_analysis_core.packs import pack_for
 from pydantic import AwareDatetime, TypeAdapter
 from shared_lib.models.analysis_contracts import TimeRangeMs
 from shared_lib.models.analysis_results import (
@@ -28,8 +23,9 @@ from shared_lib.models.analysis_timeline import content_sha256
 def _context(run, completed_at):
     run = RegisteredAIRunV1.model_validate(run)
     completed_at = TypeAdapter(AwareDatetime).validate_python(completed_at)
-    if run.spec.core_version != CORE_VERSION or run.spec.workflow_id != WORKFLOW_ID:
+    if run.spec.core_version != CORE_VERSION:
         raise ValueError("registered run requires a different core version")
+    pack_for(run)  # an unknown workflow or taxonomy mismatch fails here
     if completed_at < run.registered_at:
         raise ValueError("component completion precedes registered run")
     return run, completed_at
@@ -44,6 +40,7 @@ def _common(run, item_id, bounds):
         item_id=item_id,
         bounds=bounds,
         player_ids=tuple(a.player_id for a in run.spec.athletes),
+        taxonomy_id=run.spec.taxonomy_id,
     )
 
 
@@ -61,6 +58,7 @@ def _revision(run, completed_at, component, items):
         player_ids=tuple(a.player_id for a in run.spec.athletes),
         created_at=completed_at,
         author=run.spec.owner,
+        taxonomy_id=run.spec.taxonomy_id,
         **{component: tuple(items)},
     )
     final = AnalysisRevisionV1.model_validate(
@@ -83,8 +81,9 @@ def normalize_positions(run, scan, critiques, *, completed_at):
     Do not merge adjacent states: doing so can discard evidence or a reset cue.
     """
     run, completed_at = _context(run, completed_at)
-    scan = PositionScanV1.model_validate(scan)
-    decisions = tuple(PositionCritiqueV1.model_validate(c) for c in critiques)
+    pack = pack_for(run)
+    scan = pack.position_scan.model_validate(scan)
+    decisions = tuple(pack.position_critique.model_validate(c) for c in critiques)
     by_index = {c.transition_index: c for c in decisions}
     if len(by_index) != len(decisions) or set(by_index) != set(
         range(len(scan.transitions))
@@ -139,9 +138,10 @@ def normalize_techniques(run, candidates, decisions, *, completed_at):
     event's clip is rejected, never clamped or assigned a fixed padding tail.
     """
     run, completed_at = _context(run, completed_at)
-    candidates = tuple(TechniqueCandidateV1.model_validate(c) for c in candidates)
+    pack = pack_for(run)
+    candidates = tuple(pack.technique_candidate.model_validate(c) for c in candidates)
     candidate_ids = tuple(c.candidate_id for c in candidates)
-    decisions = tuple(TechniqueDecisionV1.model_validate(d) for d in decisions)
+    decisions = tuple(pack.technique_decision.model_validate(d) for d in decisions)
     by_id = {d.candidate_id: d for d in decisions}
     if (
         len(set(candidate_ids)) != len(candidate_ids)

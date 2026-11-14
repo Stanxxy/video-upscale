@@ -59,18 +59,53 @@ async def test_create_lifecycle_propagates_recovery_index_failure():
 
 
 # ---------------------------------------------------------------------------
-# S12 Phase 1b — pipeline_kind additive column (item 10). Existing rows
-# (SimpleNamespace fixtures with no pipeline_kind attribute at all) must
-# read back as "tracking" — a job created before this column existed is,
-# definitionally, a tracking job.
+# pipeline_kind additive column. Rows with no pipeline_kind read back as None
+# (no silent "tracking" default).
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_get_lifecycle_defaults_absent_pipeline_kind_to_tracking():
+async def test_get_lifecycle_absent_pipeline_kind_reads_as_none():
     store = JobsStore(FakeKeyspacesClient([], [_lifecycle_row()]))
 
     lifecycle = await store.get_lifecycle("job-id")
 
-    assert lifecycle["pipeline_kind"] == "tracking"
+    assert lifecycle["pipeline_kind"] is None
+
+
+# ---------------------------------------------------------------------------
+# Rows left by the retired local tracking pipeline are read explicitly.
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_get_lifecycle_reads_legacy_awaiting_correction_as_failed_with_reason():
+    store = JobsStore(FakeKeyspacesClient([], [_lifecycle_row(job_state="AWAITING_CORRECTION")]))
+
+    lifecycle = await store.get_lifecycle("job-id")
+
+    assert lifecycle["job_state"] == JobState.FAILED.value
+    assert "retired local tracking pipeline" in lifecycle["error_message"]
+
+
+@pytest.mark.asyncio
+async def test_get_lifecycle_reads_retired_tracking_stage_explicitly():
+    row = _lifecycle_row(job_state=JobState.COMPLETED.value)
+    row.stage = "upscale_analyze"
+    store = JobsStore(FakeKeyspacesClient([], [row]))
+
+    lifecycle = await store.get_lifecycle("job-id")
+
+    assert lifecycle["job_state"] == JobState.COMPLETED.value
+    assert lifecycle["stage"] == ""
+    assert lifecycle["stage_message"] == "retired tracking stage 'upscale_analyze'"
+    assert lifecycle["error_message"] == ""
+
+
+@pytest.mark.asyncio
+async def test_get_lifecycle_unknown_stage_still_raises():
+    row = _lifecycle_row()
+    row.stage = "bogus"
+    store = JobsStore(FakeKeyspacesClient([], [row]))
+
+    with pytest.raises(ValueError, match="invalid Keyspaces lifecycle.stage"):
+        await store.get_lifecycle("job-id")
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "core_version": "0.3.0",
+  "prompt_bundle_sha256": "24b07c5febde3430d5a0c1f2eecc333f6571aef991f0e2e6e0e9e555b461cf16",
+  "position_scan": {
+    "model": "gemini-3.8-flash",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 1
+  },
+  "position_critique": {
+    "model": "gemini-3.8-flash",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 10
+  },
+  "technique_scan": {
+    "model": "gemini-3.8-flash",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 5
+  },
+  "technique_critique": {
+    "model": "gemini-3.8-flash",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 10
+  },
+  "technique_analyze": {
+    "model": "gemini-3.8-flash",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 10
+  },
+  "technique_validate": {
+    "model": "gemini-3.8-flash",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 10
+  },
+  "candidates": {
+    "transition_pre_ms": 4000,
+    "transition_post_ms": 2000,
+    "merge_tolerance_ms": 2000,
+    "critique_back_ms": 6000,
+    "critique_forward_ms": 4000
+  },
+  "position_critique_back_ms": 4000,
+  "position_critique_forward_ms": 6000,
+  "max_call_attempts": 2
+}

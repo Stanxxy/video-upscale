@@ -130,8 +130,8 @@ def _vision_mimic_simplified() -> PipelineDef:
         description=(
             "Same frame-sample -> detect+crop -> window -> analyze -> context-chain -> "
             "dedup shape as vision-mimic, but the analyze node tags with the NEW "
-            "simplified 4-axis taxonomy (position/actor/action_class/outcome + "
-            "specific_technique_guess) instead of the production clips-v1 schema. "
+            "simplified 4-axis taxonomy (position/actor/action_class/outcome) "
+            "instead of the production clips-v1 schema. "
             "QA experiment only — no tracking model, no upscale, not routed through "
             "analyzer.py's clips-v1 prompt."
         ),

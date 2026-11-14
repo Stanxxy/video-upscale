@@ -1356,9 +1356,9 @@ function rawDetails(raw) {
 
 // ============================================================
 // simplified-tags-v1 renderer — 4-axis BJJ tagging (Position/Actor/
-// Action-Class/Outcome + free-text technique guess). Distinct shape from
-// clips-v1/events-v1 (start_frame/end_frame, no action/technique/
-// specific_technique fields) so it gets its own table, NOT
+// Action-Class/Outcome). Distinct shape from
+// clips-v1/events-v1 (start_frame/end_frame, no action/technique
+// fields) so it gets its own table, NOT
 // renderEventsTable()/normalizeClipsToEvents() — reused by both the
 // per-window card body and the final deduped list (see windowCardHtml()/
 // renderDedupedClips()).
@@ -1406,18 +1406,16 @@ function renderTimeTagsTable(tags) {
     const actor = escHtml(t.actor || '—');
     const giChip = t.actor_gi_color ? (' <span class="badge badge-neutral">' + escHtml(t.actor_gi_color) + '</span>') : '';
     const actionClass = escHtml(t.action_class || '—');
-    const guess = t.specific_technique_guess ? escHtml(t.specific_technique_guess) : '';
     const conf = (t.confidence != null) ? Math.round(t.confidence * 100) + '%' : '—';
     return '<tr><td>' + timeHtml + '</td>' +
       '<td><span class="badge badge-neutral">' + position + '</span></td>' +
       '<td>' + actor + giChip + '</td>' +
       '<td><span class="badge badge-neutral">' + actionClass + '</span></td>' +
       '<td>' + outcomeBadgeHtml(t.outcome) + '</td>' +
-      '<td style="color:var(--text-dim); font-style:italic;">' + guess + '</td>' +
       '<td>' + conf + '</td></tr>';
   }).join('');
   return '<div class="msg-table-wrap"><table class="clips"><thead><tr>' +
-    '<th>Time</th><th>Position</th><th>Actor</th><th>Action</th><th>Outcome</th><th>Guess</th><th>Conf</th>' +
+    '<th>Time</th><th>Position</th><th>Actor</th><th>Action</th><th>Outcome</th><th>Conf</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
@@ -1581,18 +1579,16 @@ function renderSimplifiedTagsTable(tags) {
     const position = escHtml(t.position || '—');
     const actor = escHtml(t.actor || '—');
     const actionClass = escHtml(t.action_class || '—');
-    const guess = t.specific_technique_guess ? escHtml(t.specific_technique_guess) : '';
     const conf = (t.confidence != null) ? Math.round(t.confidence * 100) + '%' : '—';
     return '<tr><td>' + timeHtml + '</td>' +
       '<td><span class="badge badge-neutral">' + position + '</span></td>' +
       '<td>' + actor + '</td>' +
       '<td><span class="badge badge-neutral">' + actionClass + '</span></td>' +
       '<td>' + outcomeBadgeHtml(t.outcome) + '</td>' +
-      '<td style="color:var(--text-dim); font-style:italic;">' + guess + '</td>' +
       '<td>' + conf + '</td></tr>';
   }).join('');
   return '<div class="msg-table-wrap"><table class="clips"><thead><tr>' +
-    '<th>Time</th><th>Position</th><th>Actor</th><th>Action</th><th>Outcome</th><th>Guess</th><th>Conf</th>' +
+    '<th>Time</th><th>Position</th><th>Actor</th><th>Action</th><th>Outcome</th><th>Conf</th>' +
     '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 }
 
@@ -3321,9 +3317,9 @@ function normalizeClipsToEvents(clips) {
     }
     return {
       start, end,
-      label: c.label || c.specific_technique || c.technique || c.action || c.action_category,
-      action_category: c.action_category || c.action,
-      technique: c.technique || c.specific_technique,
+      label: c.label || (c.axis3_action || []).join(', ') || c.technique || c.action_category,
+      action_category: c.action_category || (c.axis3_action || []).join(', '),
+      technique: c.technique,
       actor: c.actor || c.actor_player_id || c.role,
       description: c.description || c.reasoning,
       confidence: c.confidence
@@ -3589,7 +3585,7 @@ function renderDedupedClips() {
 // response formats (events-v1, clips-v1, simplified-tags-v1 frame-keyed/
 // fps-gated, simplified-tags-time-v1 seconds-keyed) into an identical
 // 2-line row (time pill + bold primary label + actor chip + confidence //
-// position/outcome chips + specific_technique_guess caption). The rail is a
+// position/outcome chips). The rail is a
 // click-to-seek INDEX over the SAME data the full detail tables
 // (renderTimeTagsTable/renderSimplifiedTagsTable/renderEventsTable, still
 // rendered full-width below as the audit surface) already show — it does
@@ -3612,13 +3608,13 @@ function toRailRow(item, format) {
       startSec: seekable ? item.start_s : null,
       endSec: seekable ? item.end_s : null,
       timeLabel: seekable ? (secToMmss(item.start_s) + ' → ' + secToMmss(item.end_s)) : '—',
-      primaryLabel: item.action_class || item.specific_technique_guess || '—',
+      primaryLabel: item.action_class || '—',
       actorLabel: item.actor || null,
       giColor: item.actor_gi_color || null,
       confidence: item.confidence != null ? item.confidence : null,
       positionLabel: item.position || null,
       outcome: item.outcome || null,
-      captionText: item.specific_technique_guess || null,
+      captionText: null,
       errored: false
     };
   }
@@ -3637,13 +3633,13 @@ function toRailRow(item, format) {
       startSec: seekable ? item.start_frame / fps : null,
       endSec: seekable ? item.end_frame / fps : null,
       timeLabel,
-      primaryLabel: item.action_class || item.specific_technique_guess || '—',
+      primaryLabel: item.action_class || '—',
       actorLabel: item.actor || null,
       giColor: null,
       confidence: item.confidence != null ? item.confidence : null,
       positionLabel: item.position || null,
       outcome: item.outcome || null,
-      captionText: item.specific_technique_guess || null,
+      captionText: null,
       errored: false
     };
   }
@@ -4174,33 +4170,31 @@ function mockClipsForWindow(returnFormat, windowStartSec, windowStartFrame, isMu
   }
   if (returnFormat === 'simplified-tags-v1') {
     // 4-axis simplified tagging — start_frame/end_frame (frame-based, like
-    // clips-v1), position/actor/action_class/outcome enums + an ungated
-    // free-text specific_technique_guess. NO action/technique/
-    // specific_technique fields (frozen contract — see BJJ_TAXONOMY_SIMPLIFIED_
-    // GEMINI_TAGGING.md).
-    const mk = (offsetSec, position, actor, action_class, outcome, guess, conf) => ({
+    // clips-v1), position/actor/action_class/outcome enums. NO action/technique
+    // fields (frozen contract — see BJJ_TAXONOMY_SIMPLIFIED_GEMINI_TAGGING.md).
+    const mk = (offsetSec, position, actor, action_class, outcome, conf) => ({
       start_frame: windowStartFrame + Math.round(offsetSec * 30),
       end_frame: windowStartFrame + Math.round((offsetSec + 3) * 30),
       position, actor, action_class, outcome,
-      specific_technique_guess: guess, confidence: conf
+      confidence: conf
     });
     const base = [
-      mk(2, 'standing', 'A', 'takedown_attempt', 'unsuccessful', 'possibly a single leg', 0.75),
-      mk(10, 'mount', 'B', 'submission_arm_lock', 'successful', 'looked like a straight armbar', 0.68)
+      mk(2, 'standing', 'A', 'takedown_attempt', 'unsuccessful', 0.75),
+      mk(10, 'mount', 'B', 'submission_arm_lock', 'successful', 0.68)
     ];
-    if (isMulti) base.push(mk(16, 'side_control', 'A', 'guard_pass', 'unclear', null, 0.55));
+    if (isMulti) base.push(mk(16, 'side_control', 'A', 'guard_pass', 'unclear', 0.55));
     return base;
   }
-  // clips-v1 (analyzer._build_response_schema) — start_frame/end_frame, action/
-  // technique/specific_technique, actor_player_id, reasoning.
-  const mk = (offsetSec, action, technique, actorId, conf) => ({
+  // clips-v1 (analyzer._build_response_schema) — start_frame/end_frame,
+  // axis1_position/axis3_action/axis4_outcome, actor_player_id, reasoning.
+  const mk = (offsetSec, position, action, outcome, actorId, conf) => ({
     start_frame: windowStartFrame + Math.round(offsetSec * 30),
     end_frame: windowStartFrame + Math.round((offsetSec + 3) * 30),
-    action, technique, specific_technique: technique.replace(/_/g, ' '),
-    actor_player_id: actorId, reasoning: 'Mock (' + action + '/' + technique + ').', confidence: conf
+    axis1_position: [position], axis3_action: [action], axis4_outcome: outcome,
+    actor_player_id: actorId, reasoning: 'Mock (' + position + '/' + action + ').', confidence: conf
   });
-  const base = [mk(2, 'takedown', 'single_leg', 'A', 0.8), mk(10, 'submission_attempt', 'armbar', 'B', 0.6)];
-  if (isMulti) base.push(mk(16, 'guard_pass', 'knee_cut_pass', 'A', 0.7));
+  const base = [mk(2, 'standing', 'takedown_attempt', 'successful', 'A', 0.8), mk(10, 'mount', 'submission_arm_lock', 'unsuccessful', 'B', 0.6)];
+  if (isMulti) base.push(mk(16, 'half_guard', 'guard_pass', 'unclear', 'A', 0.7));
   return base;
 }
 
@@ -4210,7 +4204,7 @@ function mockClipsForWindow(returnFormat, windowStartSec, windowStartFrame, isMu
 function mockDedup(clips, keyBy) {
   const seen = new Map();
   clips.forEach(c => {
-    const key = ((keyBy === 'role' ? c.role : c.actor_player_id) || 'unknown') + '|' + (c.technique || c.action || '');
+    const key = ((keyBy === 'role' ? c.role : c.actor_player_id) || 'unknown') + '|' + ((c.axis3_action || []).join(',') || c.technique || c.action || '');
     seen.set(key, c);
   });
   const list = Array.from(seen.values());
@@ -4246,15 +4240,15 @@ function mockChunkListForScope(startSec, endSec) {
 
 function mockTimeTagsForChunk(chunk) {
   const dur = chunk.end_s - chunk.start_s;
-  const mk = (frac, position, actor, action_class, outcome, guess, conf, gi) => ({
+  const mk = (frac, position, actor, action_class, outcome, conf, gi) => ({
     start_s: chunk.start_s + Math.round(frac * dur),
     end_s: chunk.start_s + Math.min(dur, Math.round(frac * dur) + 3),
     position, actor, action_class, outcome, actor_gi_color: gi || null,
-    specific_technique_guess: guess, confidence: conf
+    confidence: conf
   });
   return [
-    mk(0.15, 'standing', 'top', 'takedown_attempt', 'unsuccessful', 'possibly a single leg', 0.75, 'white'),
-    mk(0.55, 'mount', 'bottom', 'submission_arm_lock', 'successful', 'looked like a straight armbar', 0.68, 'blue')
+    mk(0.15, 'standing', 'top', 'takedown_attempt', 'unsuccessful', 0.75, 'white'),
+    mk(0.55, 'mount', 'bottom', 'submission_arm_lock', 'successful', 0.68, 'blue')
   ];
 }
 

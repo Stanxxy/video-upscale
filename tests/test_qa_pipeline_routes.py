@@ -3,7 +3,7 @@
 
 Mirrors ``test_qa_vlm.py``'s pattern: a minimal FastAPI app mounting only the
 pipeline routes + ``init_routes`` for ``route_state._config``, no production
-router/Cassandra/torch dependency beyond what importing ``service.routes.qa_vlm``
+router/Cassandra/ML dependency beyond what importing ``service.routes.qa_vlm``
 already pulls in (documented in ``service/qa_app.py``).
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ YT_URL = f"https://www.youtube.com/watch?v={YT_ID}"
 
 
 def _make_app(gemini_api_key: str) -> FastAPI:
-    config = ServiceConfig(detection_timeout=86400.0, s3_endpoint_url="http://localhost:4566")
+    config = ServiceConfig(s3_endpoint_url="http://localhost:4566")
     object.__setattr__(config, "gemini_api_key", gemini_api_key)
     init_routes(config, InMemoryJobStore(), None, instance_id="qa-pipeline-test")
     app = FastAPI()

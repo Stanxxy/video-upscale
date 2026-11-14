@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from typing import get_args
 from uuid import UUID
 
-from bjj_analysis_core import CORE_VERSION, WORKFLOW_ID
+from bjj_analysis_core import CORE_VERSION
+from bjj_analysis_core.packs import PACKS
 from bjj_analysis_core.execution import RecoveryRequired
 from bjj_analysis_core.executor import MAX_PARALLEL_CALLS
 from bjj_analysis_core.requests import NodeId
@@ -165,7 +166,7 @@ class PositionRunDispatcher:
 
     @staticmethod
     def _version(run):
-        if (run.spec.workflow_id, run.spec.core_version) != (WORKFLOW_ID, CORE_VERSION):
+        if run.spec.workflow_id not in PACKS or run.spec.core_version != CORE_VERSION:
             raise UnsupportedRunVersion(
                 "no installed executor for admitted workflow/core version"
             )

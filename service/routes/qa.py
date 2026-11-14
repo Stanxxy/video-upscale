@@ -1,11 +1,10 @@
 """QA harness endpoint for Stream 2 Gemini identity-grounding.
 
-``POST /qa/identity-analyze`` runs ONLY the Gemini analyzer (no GPU, no SAM2
-tracking, no upscale) on a short clip plus labelled player references, and
+``POST /qa/identity-analyze`` runs ONLY the Gemini analyzer (no GPU) on a short clip plus labelled player references, and
 returns the grounded result for the human eyeball gate in the QA client.
 
 This is the reusable live gate for Stream 2 (``actor_player_id`` structured
-output). It deliberately bypasses the tracking pipeline: it extracts a handful
+output). It extracts a handful
 of evenly-spaced RAW full frames from the clip, downloads the reference images,
 builds a ``BJJTechniqueAnalyzer`` with ``config.gemini_api_key``, and calls
 ``analyze_sequence(frames, indices, player_references=...)`` directly.
@@ -300,9 +299,9 @@ async def identity_analyze(body: QAIdentityAnalyzeRequest):
     clips = []
     for clip in parsed.get("clips", []) or []:
         clips.append({
-            "action": clip.get("action"),
-            "technique": clip.get("technique"),
-            "specific_technique": clip.get("specific_technique"),
+            "axis1_position": clip.get("axis1_position"),
+            "axis3_action": clip.get("axis3_action"),
+            "axis4_outcome": clip.get("axis4_outcome"),
             "actor_player_id": clip.get("actor_player_id"),
             "identity_uncertain": clip.get("identity_uncertain"),
             "reasoning": clip.get("reasoning"),

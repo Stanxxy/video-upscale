@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "core_version": "0.3.0",
-  "prompt_bundle_sha256": "ce925cb824762900dc29544f3f5892afd9f4f9d8636a6a875c3539f6653db634",
+  "prompt_bundle_sha256": "9b4a9392128cc79fdd3c2fe533f7be135e18edf60eb6419ff1f4af66ded357ca",
   "position_scan": {
     "model": "gemini-3.8-flash",
     "thinking": "high",

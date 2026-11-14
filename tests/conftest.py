@@ -26,8 +26,6 @@ from service.routes import init_routes, router
 def make_mock_jobs_store() -> MagicMock:
     """Build an in-memory mock of JobsStore for route-level tests.
 
-    The mock supports race-test injection via ``store._claim_replacement_result``
-    — set to ``False`` before a request to simulate a lost replacement claim.
     """
     store = MagicMock()
     _lifecycles: dict[str, dict] = {}
@@ -35,8 +33,7 @@ def make_mock_jobs_store() -> MagicMock:
     _checkpoints: dict[tuple[str, str], dict] = {}
     # Append-only history of every checkpoint write, keyed by (job_id,
     # stage_name). Lets tests assert the *sequence* of incremental writes
-    # (e.g. tracking_uploaded → analysis_uploaded → annotated_video_uploaded
-    # for the upload row) without losing data when the same row is overwritten.
+    # without losing data when the same row is overwritten.
     _checkpoint_history: dict[tuple[str, str], list[dict]] = {}
     _latest: dict[str, dict] = {}
 
@@ -68,9 +65,8 @@ def make_mock_jobs_store() -> MagicMock:
             "stage_message": "",
             "error_message": "",
             "owner_instance_id": owner_instance_id,
-            # S12 Phase 1b (design §6.2) — absent/None back-compats to
-            # "tracking", same convention as the real JobsStore.get_lifecycle.
-            "pipeline_kind": pipeline_kind or "tracking",
+            # Raw column value; absent reads as None, like the real JobsStore.
+            "pipeline_kind": pipeline_kind,
         }
         return True
 
@@ -85,7 +81,6 @@ def make_mock_jobs_store() -> MagicMock:
             if (
                 sync_latest
                 and sv in {
-                    "AWAITING_CORRECTION",
                     "INTERRUPTED",
                     "COMPLETED",
                     "FAILED",
@@ -126,19 +121,6 @@ def make_mock_jobs_store() -> MagicMock:
         _latest[video_id] = {"job_id": job_id, "job_state": st}
         return True
 
-    async def set_replacement(job_id, replacement_job_id):
-        if job_id in _lifecycles:
-            _lifecycles[job_id]["replacement_job_id"] = replacement_job_id
-        return True
-
-    async def claim_replacement(job_id, replacement_job_id, expected_state=None):
-        if getattr(store, "_claim_replacement_result", None) is False:
-            return False
-        if job_id not in _lifecycles or _lifecycles[job_id].get("replacement_job_id"):
-            return False
-        _lifecycles[job_id]["replacement_job_id"] = replacement_job_id
-        return True
-
     async def update_progress(*args, **kwargs):
         pass
 
@@ -161,8 +143,6 @@ def make_mock_jobs_store() -> MagicMock:
     store.get_checkpoint = get_checkpoint
     store.get_all_checkpoints = get_all_checkpoints
     store.set_latest = set_latest
-    store.set_replacement = set_replacement
-    store.claim_replacement = claim_replacement
     store.update_progress = update_progress
     store.list_active_recovery_index_rows_newest_first = (
         list_active_recovery_index_rows_newest_first
@@ -187,7 +167,6 @@ def mock_jobs_store():
 @pytest.fixture()
 def service_components(mock_jobs_store):
     config = ServiceConfig(
-        detection_timeout=86400.0,
         s3_endpoint_url="http://localhost:4566",
     )
     job_store = InMemoryJobStore()

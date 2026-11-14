@@ -1,6 +1,0 @@
-ultralytics>=8.4.0
-supervision>=0.25.0
-sam2
-rtmlib
-scipy
-flask

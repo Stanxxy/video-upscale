@@ -8,7 +8,6 @@ from enum import StrEnum
 class JobState(StrEnum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
-    AWAITING_CORRECTION = "AWAITING_CORRECTION"
     INTERRUPTED = "INTERRUPTED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
@@ -32,28 +31,29 @@ def states_that_sync_latest_job_row() -> frozenset[JobState]:
             JobState.FAILED,
             JobState.CANCELLED,
             JobState.INTERRUPTED,
-            JobState.AWAITING_CORRECTION,
         }
     )
 
 
 class PipelineStage(StrEnum):
-    DOWNLOAD = "download"
-    DETECT = "detect"
-    TRACK = "track"
-    UPSCALE_ANALYZE = "upscale_analyze"
-    ANNOTATE = "annotate"
-    UPLOAD = "upload"
-    PUBLISH = "publish"
-
-    # S12 Phase 1b production wiring (design §6.1) — the v2
-    # highlight-scan-critique-analyze job lifecycle's own, much shorter
-    # stage set. ADDITIVE ONLY: the seven members above stay meaningful for
-    # the dormant tracking pipeline and its own tests (decision 2,
-    # deprecate-in-place, never delete).
+    # The highlight-scan-critique-analyze job lifecycle's stage set.
     HIGHLIGHT_INGEST = "highlight_ingest"   # S3 download + Gemini Files API upload + reference images
     HIGHLIGHT_CHUNK = "highlight_chunk"     # one checkpoint per completed outer chunk
     HIGHLIGHT_PUBLISH = "highlight_publish"  # terminal: analysis_complete sent
+    CANCELLATION = "cancellation"           # durable record of a user cancel request
+
+
+# Historical Keyspaces rows written by the retired local tracking/upscale
+# pipeline. They are read explicitly as a retired, unrecoverable job (see
+# ``jobs_store.lifecycle.LifecycleMixin.get_lifecycle``); no code resumes them.
+LEGACY_AWAITING_CORRECTION_STATE = "AWAITING_CORRECTION"
+RETIRED_TRACKING_STAGES = frozenset(
+    {"download", "detect", "track", "upscale_analyze", "annotate", "upload", "publish"}
+)
+RETIRED_TRACKING_MESSAGE = (
+    "This job ran on the retired local tracking pipeline and cannot be resumed. "
+    "Start a new analysis."
+)
 
 
 def parse_job_state(raw: str | None) -> JobState:

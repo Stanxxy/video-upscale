@@ -8,12 +8,6 @@ from service.routes.jobs import cancel_job, create_track_job, get_job
 from service.routes.analysis_settings import get_analysis_settings
 from service.routes.active_jobs import get_active_jobs, ActiveJobsResponse
 from service.routes.events import job_events_sse
-# S12 Phase 1b (design §6.4, item 16): human_loop.py's three routes are
-# UNREGISTERED from the production app surface — decision 2, "removed from
-# production" means the HTTP surface literally 404s. The handler functions
-# (get_detection_frame/resume_job/submit_detection_response) stay in
-# human_loop.py, fully importable for direct unit testing or a future SAM3-
-# scout-gated revival; they are simply never imported/wired here anymore.
 from service.routes.recovery import (
     bootstrap_recovery_on_startup,
     drain_orphan_pending_jobs_on_startup,
@@ -44,13 +38,6 @@ router.get("/jobs/active", response_model=ActiveJobsResponse)(get_active_jobs)
 
 # SSE
 router.get("/jobs/{job_id}/events")(job_events_sse)
-
-# Human-in-the-loop (S12 Phase 1b, design §6.4) — UNREGISTERED, not deleted.
-# These three paths now 404 (route-not-found) in production; the dormant
-# tracking pipeline's correction/detect-suspend flow has no production
-# entrypoint left. See service/routes/human_loop.py for the still-importable
-# handlers and tests/test_human_loop_routes_unregistered.py for the 404
-# regression guard.
 
 # Health
 router.get("/health")(health)

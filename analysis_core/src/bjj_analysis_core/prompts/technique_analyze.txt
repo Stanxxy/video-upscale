@@ -24,5 +24,6 @@ The window_exhausted end status is an explicit warning that the preceding critic
 did not see the outcome; do not turn it into a success or failure without actual
 timestamped visible evidence in this clip. Do not shorten the clip to peak motion.
 Use a bound actor_player_id OR actor_sentinel (contested/unclear), not both. Use
-only supplied action/outcome vocabulary and compatible optional shortlist labels.
+only supplied action/outcome vocabulary. Describe the specific move in notes and
+evidence text only; there is no technique list or technique label field.
 Return only structured JSON.

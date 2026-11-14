@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID, uuid5
 
-from bjj_analysis_core import CORE_VERSION, WORKFLOW_ID
+from bjj_analysis_core import CORE_VERSION
 from bjj_analysis_core.outputs import (
     CandidateBatchV1,
-    PositionScanV1,
     TechniqueAnalysisInputV1,
 )
+from bjj_analysis_core.packs import PACKS, pack_for
 from pydantic import TypeAdapter
 from shared_lib.models.analysis_contracts import NodeProgressV1
 
@@ -83,11 +83,16 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
         or not 0 <= max_item_reads <= 2000
     ):
         raise ValueError("live read authority and bounded item budget required")
-    if CORE_VERSION != SUPPORTED_CORE_VERSION or (
-        run.spec.workflow_id,
-        run.spec.core_version,
-    ) != (WORKFLOW_ID, SUPPORTED_CORE_VERSION):
+    if (
+        CORE_VERSION != SUPPORTED_CORE_VERSION
+        or run.spec.core_version != SUPPORTED_CORE_VERSION
+        or run.spec.workflow_id not in PACKS
+    ):
         raise ProgressEvidenceError("no progress reader for registered core/workflow")
+    try:
+        pack = pack_for(run)
+    except ValueError as error:
+        raise ProgressEvidenceError("registered run has a mismatched taxonomy") from error
 
     async def read(node, item=None):
         await guard()
@@ -116,7 +121,7 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
             return None
         return TypeAdapter(value_type).validate_json(record.result_json)
 
-    scan = output("position_scan", PositionScanV1)
+    scan = output("position_scan", pack.position_scan)
     batch = output("position_technique_candidates", CandidateBatchV1)
     work = output("technique_worklist", tuple[TechniqueAnalysisInputV1, ...])
     items = {

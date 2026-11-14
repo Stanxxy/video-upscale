@@ -227,10 +227,8 @@ async def run_highlight_job(
     publish loop (resumable at candidate granularity) -> HIGHLIGHT_PUBLISH
     -> COMPLETED.
 
-    Same top-level try/except/finally SHAPE as ``worker/orchestrator.py::
-    run_job`` (cancellation -> CANCELLED, uncaught exception -> FAILED,
-    ``finally`` cleanup) — reused as a pattern, NOT a fork of that file's
-    tracking-specific stage machinery (no SAM2/YOLO/upscale imports at all).
+    Top-level try/except/finally shape: cancellation -> CANCELLED, uncaught
+    exception -> FAILED, ``finally`` cleanup.
     """
     work_dir = os.path.join(config.temp_dir, job_id)
     os.makedirs(work_dir, exist_ok=True)
