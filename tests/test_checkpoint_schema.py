@@ -104,12 +104,14 @@ def test_highlight_ingest_completed_envelope_shape():
     cp = build_highlight_ingest_completed(
         gemini_file_uri="files/abc", gemini_file_name="files/abc",
         gemini_file_mime_type="video/mp4", gemini_file_expiration="2026-07-22T12:00:00+00:00",
+        player_references_ready=True,
         worker_state=_ws(progress_percent=5.0),
     )
     _assert_envelope(cp)
     assert cp["reason"] == "highlight_ingest_completed"
     assert cp["artifacts"]["gemini_file_uri"] == "files/abc"
     assert cp["artifacts"]["gemini_file_mime_type"] == "video/mp4"
+    assert cp["player_references_ready"] is True
 
 
 def test_highlight_chunk_completed_envelope_shape():

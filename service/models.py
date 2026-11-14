@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from enum import Enum
-from typing import Dict, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from uuid import UUID
 from shared_lib.models.sns_event_models import VideoEventCandidate, VideoEventWithCandidates  # noqa: F401
 
@@ -8,6 +8,17 @@ from shared_lib.models.sns_event_models import VideoEventCandidate, VideoEventWi
 class AnalyzerMode(str, Enum):
     SINGLE = "single"
     MULTI = "multi"
+
+
+class AthleteBinding(BaseModel):
+    """Reference crop for one athlete; Gemini grounds ``actor_player_id`` to it.
+
+    ``track_id`` is still sent by the backend; it is accepted and unused.
+    """
+    player_id: str
+    player_name: str
+    s3_key: Optional[str] = None  # player-references/<vid>/<pid>.jpg
+    track_id: Optional[int] = None
 
 
 class JobStatus(str, Enum):
@@ -27,6 +38,7 @@ class TrackRequest(BaseModel):
     start_time: Optional[str] = None  # MM:SS or HH:MM:SS
     end_time: Optional[str] = None
     video_id: Optional[UUID] = None
+    athlete_bindings: Optional[List[AthleteBinding]] = None
     sampling_rate: int = Field(default=1, ge=1)
     analyzer_mode: AnalyzerMode = AnalyzerMode.SINGLE
     sns_topic_arn: Optional[str] = None

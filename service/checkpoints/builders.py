@@ -13,10 +13,12 @@ def build_highlight_ingest_completed(
     gemini_file_name: str,
     gemini_file_mime_type: str | None,
     gemini_file_expiration: str | None,
+    player_references_ready: bool,
     worker_state: WorkerStateSnapshot,
 ) -> dict[str, Any]:
     """S12 Phase 1b (design §6.1) — terminal checkpoint for the
-    ``HIGHLIGHT_INGEST`` stage: S3 download + Gemini Files API upload.
+    ``HIGHLIGHT_INGEST`` stage: S3 download + Gemini Files API upload +
+    reference-image fetch.
     ``gemini_file_expiration`` is an ISO-8601 string (never a raw
     ``datetime`` — ``write_checkpoint`` JSON-serializes ``checkpoint_data``
     and datetimes are not JSON-serializable)."""
@@ -29,6 +31,7 @@ def build_highlight_ingest_completed(
             "gemini_file_expiration": gemini_file_expiration,
         },
         reason="highlight_ingest_completed",
+        player_references_ready=player_references_ready,
     )
 
 

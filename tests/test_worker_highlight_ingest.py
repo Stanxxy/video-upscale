@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from service.config import ServiceConfig
-from service.models import TrackRequest
+from service.models import AthleteBinding, TrackRequest
 from service.worker.stages import highlight_ingest
 
 
@@ -38,7 +38,11 @@ class FakeJobsStore:
 
 class FakeS3:
     """Objects are keyed on (bucket, key) — NOT key alone — so a
-    bucket-mismatch bug raises a KeyError instead of silently succeeding."""
+    bucket-mismatch bug (e.g. reading a reference image from the wrong
+    bucket) raises a KeyError instead of silently succeeding. This is a
+    deliberate hardening (evaluator HIGH finding, PR #13): a fake that
+    ignores its bucket argument is exactly what let the
+    output_bucket-vs-bucket reference-fetch bug through undetected."""
 
     def __init__(self, objects: dict[tuple[str, str], bytes]):
         self._objects = objects
@@ -83,6 +87,7 @@ async def _run_ingest(job_id, request, config, jobs_store, work_dir):
 
 @pytest.mark.asyncio
 async def test_fresh_job_uploads_and_polls_to_active(monkeypatch, tmp_path):
+    monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
     monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: FakeS3({}))
 
     uploaded = SimpleNamespace(name="files/abc")
@@ -100,6 +105,7 @@ async def test_fresh_job_uploads_and_polls_to_active(monkeypatch, tmp_path):
     assert result.gemini_file_name == "files/abc"
     assert result.gemini_file_mime_type == "video/mp4"
     assert result.video_duration_sec == 123.4
+    assert result.player_references == []
 
     highlight_ingest.gemini_upload.upload_video_to_gemini.assert_awaited_once()
     highlight_ingest.gemini_upload.poll_until_active.assert_awaited_once()
@@ -109,10 +115,12 @@ async def test_fresh_job_uploads_and_polls_to_active(monkeypatch, tmp_path):
     assert stage_name.value == "highlight_ingest"
     assert completed is True
     assert data["artifacts"]["gemini_file_uri"] == active.uri
+    assert data["player_references_ready"] is True
 
 
 @pytest.mark.asyncio
 async def test_resume_with_non_expired_checkpoint_skips_reupload(monkeypatch, tmp_path):
+    monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
     monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: FakeS3({}))
 
     upload_mock = AsyncMock()
@@ -131,6 +139,7 @@ async def test_resume_with_non_expired_checkpoint_skips_reupload(monkeypatch, tm
                 "gemini_file_mime_type": "video/mp4",
                 "gemini_file_expiration": future_expiry,
             },
+            "player_references_ready": True,
         },
     }
     jobs_store = FakeJobsStore(checkpoints=[existing_checkpoint])
@@ -145,6 +154,7 @@ async def test_resume_with_non_expired_checkpoint_skips_reupload(monkeypatch, tm
 
 @pytest.mark.asyncio
 async def test_resume_with_expired_checkpoint_reuploads(monkeypatch, tmp_path):
+    monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
     monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: FakeS3({}))
 
     uploaded = SimpleNamespace(name="files/new")
@@ -167,6 +177,7 @@ async def test_resume_with_expired_checkpoint_reuploads(monkeypatch, tmp_path):
                 "gemini_file_mime_type": "video/mp4",
                 "gemini_file_expiration": near_expiry,
             },
+            "player_references_ready": True,
         },
     }
     jobs_store = FakeJobsStore(checkpoints=[existing_checkpoint])
@@ -179,9 +190,78 @@ async def test_resume_with_expired_checkpoint_reuploads(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_player_references_fetched_from_athlete_bindings(monkeypatch, tmp_path):
+    """Regression guard (evaluator HIGH finding, PR #13): references are
+    stored in request.bucket ("src-bucket"), NOT request.output_bucket
+    ("out-bucket") — a bucket-split deployment (output_bucket != bucket, a
+    real shape this request constructs below) must read the reference
+    image from the SOURCE bucket, same convention as
+    upscale_setup.py:82 (`ref_bucket = request.bucket`)."""
+    fake_s3 = FakeS3({("src-bucket", "player-references/vid/p1.jpg"): b"fake-jpeg-bytes"})
+    monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: fake_s3)
+    monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: fake_s3)
+
+    uploaded = SimpleNamespace(name="files/abc")
+    active = SimpleNamespace(
+        name="files/abc", uri="https://.../files/abc", mime_type="video/mp4",
+        expiration_time=datetime.now(timezone.utc) + timedelta(hours=48),
+    )
+    monkeypatch.setattr(highlight_ingest.gemini_upload, "upload_video_to_gemini", AsyncMock(return_value=uploaded))
+    monkeypatch.setattr(highlight_ingest.gemini_upload, "poll_until_active", AsyncMock(return_value=active))
+
+    request = _request(
+        output_bucket="out-bucket",
+        athlete_bindings=[
+            AthleteBinding(
+                track_id=1, player_id="p1", player_name="Alice",
+                s3_key="player-references/vid/p1.jpg",
+            ),
+        ],
+    )
+    jobs_store = FakeJobsStore(checkpoints=[])
+
+    result = await _run_ingest("job-1", request, _config(), jobs_store, str(tmp_path))
+
+    assert len(result.player_references) == 1
+    ref = result.player_references[0]
+    assert ref["player_id"] == "p1"
+    assert ref["player_name"] == "Alice"
+    assert ref["image_bytes"] == b"fake-jpeg-bytes"
+    assert ref["mime_type"] == "image/jpeg"
+    # Explicitly pins WHICH bucket was read — must be request.bucket
+    # ("src-bucket"), never request.output_bucket ("out-bucket").
+    assert fake_s3.get_object_calls == [("src-bucket", "player-references/vid/p1.jpg")]
+
+
+@pytest.mark.asyncio
+async def test_binding_missing_s3_key_is_skipped_not_fabricated(monkeypatch, tmp_path):
+    fake_s3 = FakeS3({})
+    monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: fake_s3)
+    monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: fake_s3)
+
+    uploaded = SimpleNamespace(name="files/abc")
+    active = SimpleNamespace(
+        name="files/abc", uri="https://.../files/abc", mime_type="video/mp4",
+        expiration_time=datetime.now(timezone.utc) + timedelta(hours=48),
+    )
+    monkeypatch.setattr(highlight_ingest.gemini_upload, "upload_video_to_gemini", AsyncMock(return_value=uploaded))
+    monkeypatch.setattr(highlight_ingest.gemini_upload, "poll_until_active", AsyncMock(return_value=active))
+
+    request = _request(
+        athlete_bindings=[AthleteBinding(track_id=1, player_id="p1", player_name="Alice", s3_key=None)],
+    )
+    jobs_store = FakeJobsStore(checkpoints=[])
+
+    result = await _run_ingest("job-1", request, _config(), jobs_store, str(tmp_path))
+
+    assert result.player_references == []
+
+
+@pytest.mark.asyncio
 async def test_poll_failure_propagates_never_swallowed(monkeypatch, tmp_path):
     """A FAILED/timeout Files-API state must raise all the way out of the
     ingest stage — no fallback, no fabricated ACTIVE state."""
+    monkeypatch.setattr(highlight_ingest, "_make_s3", lambda config: FakeS3({}))
     monkeypatch.setattr(highlight_ingest, "_make_s3_for_bucket", lambda config, bucket: FakeS3({}))
 
     uploaded = SimpleNamespace(name="files/abc")

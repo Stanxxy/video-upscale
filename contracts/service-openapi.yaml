@@ -228,6 +228,18 @@ components:
         sns_topic_arn:
           type: string
           nullable: true
+        athlete_bindings:
+          type: array
+          nullable: true
+          description: Reference crops Gemini grounds `actor_player_id` to.
+          items:
+            type: object
+            required: [player_id, player_name]
+            properties:
+              player_id: {type: string}
+              player_name: {type: string}
+              s3_key: {type: string, nullable: true}
+              track_id: {type: integer, nullable: true, description: Accepted, unused}
         analysis_model:
           type: string
           nullable: true

@@ -348,6 +348,7 @@ async def run_highlight_job(
                 request_timeout_ms=config.gemini_request_timeout_ms,
                 retry_config=retry_config,
                 video_mime_type=ingest.gemini_file_mime_type,
+                player_references=ingest.player_references,
             )
             planned = executors.estimate_run_plan(pipeline, duration_sec=chunk_end - chunk_start)
 

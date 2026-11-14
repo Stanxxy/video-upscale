@@ -12,7 +12,7 @@ The engine keeps only its Gemini analysis paths. Decision record:
 - The legacy dual-emit SNS path and the technique shortlist resolver.
 - `API.md` and the tracking JSON contract (they documented the removed inputs).
 
-**Wire changes**: `TrackRequest` no longer carries the tracking model selector, the `resume_*` pointers, `player_references`, `athlete_bindings` or other tracking-only fields; extra fields from older callers are ignored. The `/track` highlight ingest no longer fetches athlete reference crops, so its actor axis runs without reference images.
+**Wire changes**: `TrackRequest` no longer carries the tracking model selector, the `resume_*` pointers or other tracking-only fields; `athlete_bindings` stays (reference crops are a live Gemini feature, `box` is dropped); extra fields from older callers are ignored.
 
 **Historical rows**: rows with `pipeline_kind` NULL or `tracking`, or state `AWAITING_CORRECTION`, are failed with an explicit retired-pipeline message and never resumed (`contracts/bjj_backend/JOB_ROTATION_HANDOFF_AND_RESUME.md`).
 
