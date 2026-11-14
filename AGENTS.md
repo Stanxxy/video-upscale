@@ -1,9 +1,8 @@
 # Agent Handbook — whole-video-analysis (Vision Engine)
 
 This repo is the **vision engine** for the BJJ Vision platform. It handles:
-- Hybrid athlete tracking (RF-DETR detection + SAM2 mask propagation)
-- BJJ technique analysis via Gemini API (single-agent and multi-agent modes)
-- Video annotation and upscaling
+- Gemini analysis of match video: position, actor, action class, outcome (the specific move lives in notes)
+- The account analysis DAG (`analysis_core`) and the `/track` highlight orchestrator
 - REST API (FastAPI, default port 8000 via `BJJ_PORT`) consumed by `bjj-vision-backend`
 
 The companion platform monorepo lives at `/Users/stanliu/Documents/bjj-proj/`.
@@ -27,39 +26,25 @@ whole-video-analysis/
 ├── service/               # FastAPI service (default port 8000)
 │   ├── app.py             # Entry point + lifespan
 │   ├── routes/            # REST endpoints package
-│   ├── worker/            # Async job orchestrator package
-│   ├── checkpoints/       # V1 checkpoint builders + resume plan
+│   ├── worker/            # Highlight orchestrator + ingest stage
+│   ├── pipelines/         # Gemini DAG nodes (executors, scan/critique, frame_source, ...)
+│   ├── checkpoints/       # V1 checkpoint builders + highlight resume plan
 │   ├── jobs_store/        # Keyspaces persistence facade
+│   ├── dag_server.py, analysis_run_*.py, result_*.py  # account DAG host
 │   ├── models.py          # Pydantic schemas
 │   ├── job_store.py       # In-memory job state
 │   ├── config.py          # Env/config management
-│   ├── tracking_runner.py # RF-DETR + SAM2 orchestration
-│   ├── video_annotator.py # Video annotation
-│   ├── taxonomy_mapper.py # Pipeline → frontend enum bridging
-│   ├── vllm_selector.py   # Gemini athlete hint (>2 YOLO candidates)
+│   ├── taxonomy_mapper.py # Axis vocabulary + axis-only candidate
 │   ├── s3.py              # S3 operations
 │   └── sns.py             # SNS event publishing
-├── tracking_pipeline/     # Installable package (hybrid tracking implementation)
-│   ├── hybrid/            # SAM2 loop modules (orchestrator, loop, output, …)
-│   ├── hybrid_tracking.py # Public run_tracking shim
-│   ├── select_boxes/      # Human box-selection UI (web + cv2)
-│   ├── detect.py          # RF-DETR detection
-│   ├── sam2_manager.py    # SAM2 propagation
-│   ├── identity_manager.py# DINOv2 + color re-ID
-│   ├── state_machine.py     # Scramble/cut/fade state
-│   ├── pipeline.py        # CLI orchestrator (run: python -m tracking_pipeline)
-│   └── ...                # Pose, video I/O, smoothing, etc.
-├── tracking/              # Public API re-exports (from tracking_pipeline)
-│   └── __init__.py
+├── analysis_core/         # DAG prompts, outputs, presets
+├── analysis_observer/     # Lifecycle/checkpoint observer
+├── analyzer.py            # Gemini sliding-window analyzer (QA identity routes)
 ├── contracts/             # OpenAPI + backend checkpoint contracts
-├── pyproject.toml         # setuptools: packages tracking + tracking_pipeline
 ├── tests/                 # pytest unit tests
 ├── qa_client/             # Manual QA client scripts
 ├── working_log/           # Planning docs, knowledge base
-│   └── knowledge-base/    # Design decisions, insights, requirements
 ├── service.sh             # Service start/stop/restart
-├── AGENTS.md              # This file
-├── API.md                 # Legacy REST reference (see contracts/service-openapi.yaml)
 └── bjj_analysis_taxonomy.md # Taxonomy enum source of truth
 ```
 
@@ -148,9 +133,4 @@ Canonical **bjj-team-*** skill definitions live in the **umbrella** workspace at
 
 ## Key Design Decisions
 
-See `working_log/knowledge-base/INDEX.md` for the full list. Critical ones to know:
-
-1. **Hybrid tracking**: RF-DETR + SAM2 + DINOv2 re-ID — see `decisions/2026-03-15-rfdetr-sam2-hybrid-tracking.md`
-2. **Taxonomy mapper**: bridges Gemini output to frontend enums — see `decisions/2026-03-15-taxonomy-mapper-frontend-bridge.md`
-3. **Single-job concurrency**: GPU constraint, intentional — see `decisions/2026-03-15-single-job-concurrency.md`
-4. **tracking/ + tracking_pipeline**: package layout and public imports — see `decisions/2026-03-15-tracking-package-shim.md`
+See `working_log/knowledge-base/INDEX.md` for the full list. The local vision-model workflow (RF-DETR/SAM2 tracking, upscaling, annotation, human correction) was removed on 2026-11-13; its decisions are history only.
