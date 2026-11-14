@@ -244,3 +244,21 @@ def test_full_dag_publishes_census_strikes_as_mma_techniques_without_per_strike_
                                  max_parallel_calls=parallel))
     assert again.calls == []
     journal.close()
+
+
+def test_chain_strikes_are_not_published_in_the_windowed_workflow(run, completed_at):
+    from bjj_analysis_core.normalization import normalize_techniques
+    from conftest import technique
+
+    data = config_bytes()
+    run = strikes_run(run, data)
+    grapple = technique(action_classes=["takedown_attempt"], strike_target=None, significant=None, knockdown=False)
+    punch = technique(action_classes=["strike_punch"], strike_target="head", significant=True, knockdown=True,
+                      notes="right hand drops him", outcome_evidence="falls", outcome_bounds=dict(start_ms=5500, end_ms=5900))
+    candidates, decisions = [], []
+    for name, proposal in (("grapple", grapple), ("punch", punch)):
+        candidates.append(dict(candidate_id=name, description="seen", observation_window=dict(start_ms=1000, end_ms=11000), proposed=proposal))
+        decisions.append(dict(schema_version=1, candidate_id=name, verdict="agree", intentional_technique_visible=True,
+                              technique=proposal, reason="visible"))
+    revision = normalize_techniques(run, candidates, decisions, completed_at=completed_at)
+    assert [e.action_classes[0].value for e in revision.techniques] == ["takedown_attempt"]

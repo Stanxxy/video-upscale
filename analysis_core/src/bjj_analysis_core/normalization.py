@@ -19,6 +19,10 @@ from shared_lib.models.analysis_results import (
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 from shared_lib.models.analysis_timeline import content_sha256
 
+from shared_lib.models.sport_taxonomy import vocabulary as _vocabulary
+
+STRIKE_ACTIONS = frozenset(_vocabulary("mma.v1").strike_actions)
+
 
 def _context(run, completed_at):
     run = RegisteredAIRunV1.model_validate(run)
@@ -159,6 +163,13 @@ def normalize_techniques(run, candidates, decisions, *, completed_at, strikes=()
         if decision.verdict == "ditch":
             continue
         data = decision.technique
+        if pack.windowed_strikes and any(
+            a.value in STRIKE_ACTIONS for a in data.action_classes
+        ):
+            # Windowed strike workflow: strikes come only from the census. A position-
+            # change candidate the chain labels as a strike is the census's strike seen
+            # a second time (it duplicated knockdowns in the Round 1 run), not a new one.
+            continue
         if decision.verdict == "agree" and data != candidate.proposed:
             raise ValueError("agree must preserve the proposed technique exactly")
         if not candidate.observation_window.contains(data.bounds):
