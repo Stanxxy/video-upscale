@@ -23,5 +23,9 @@ turtle; the fighter pinning a wall_seated opponent against the fence. striking_r
 clinch, scramble and other have top_player_id null. Use scramble while neither fighter
 has established a position; never guess a top fighter you cannot identify.
 
+other is only for visible established geometry outside the vocabulary: name it in
+geometry (e.g. north-south, knee-on-belly), never a vocabulary position or a technique.
+Every other position has geometry null.
+
 evidence states the identity cue for the top fighter (for example "orange shorts,
 short beard") and the visible geometry. Return only the requested structured JSON.

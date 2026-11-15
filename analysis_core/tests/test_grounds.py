@@ -74,8 +74,9 @@ def test_the_merge_replaces_the_phase_and_restores_the_scan_after_it(run):
     scan = MMA_GROUND.position_scan.model_validate(SCAN)
     phases = ground_phases(ground_run, config, scan)
     rescans = [dict(schema_version=1, phase_index=i, states=[
-        dict(at_ms=w.start_ms, position="clinch", top_player_id=None, evidence="standing tie-up"),
-        dict(at_ms=c.start_ms + 500, position="side_control", top_player_id="a", evidence="a in grey shorts on top"),
+        dict(at_ms=w.start_ms, position="clinch", top_player_id=None, evidence="standing tie-up", geometry=None),
+        dict(at_ms=c.start_ms + 500, position="side_control", top_player_id="a", evidence="a in grey shorts on top",
+             geometry=None),
     ]) for i, (c, w) in enumerate(phases)]
     merged = apply_ground_rescans(MMA_GROUND, ground_run, config, scan, rescans)
     timeline = [(t.at_ms, t.state_after.position.value, tuple(r.value for r in t.state_after.roles))
@@ -85,6 +86,20 @@ def test_the_merge_replaces_the_phase_and_restores_the_scan_after_it(run):
     assert timeline[-1][0] == 7000 and timeline[-1][1] == "striking_range"  # the scan resumes
     with pytest.raises(ValueError, match="every ground phase"):
         apply_ground_rescans(MMA_GROUND, ground_run, config, scan, rescans[:-1])
+
+
+def test_an_other_ground_state_publishes_its_geometry_as_notes(run):
+    """Publication rejects other without concrete geometry (a held-out run failed there)."""
+    ground_run, data = ground(run)
+    _, config = load_config(ground_run, data)
+    scan = MMA_GROUND.position_scan.model_validate(SCAN)
+    rescans = [dict(schema_version=1, phase_index=i, states=[
+        dict(at_ms=c.start_ms, position="other", top_player_id=None, evidence="a over b's head",
+             geometry="north-south"),
+    ]) for i, (c, _) in enumerate(ground_phases(ground_run, config, scan))]
+    merged = apply_ground_rescans(MMA_GROUND, ground_run, config, scan, rescans)
+    other = [t.state_after for t in merged.transitions if t.state_after.position.value == "other"]
+    assert other and all(s.notes == "north-south" and s.roles == ("neutral", "neutral") for s in other)
 
 
 def test_the_ground_call_window_and_answers_are_checked(run):
@@ -100,13 +115,16 @@ def test_the_ground_call_window_and_answers_are_checked(run):
     def answer(*states):
         return json.dumps(dict(schema_version=1, phase_index=0, states=list(states)))
 
-    ok = dict(at_ms=window.start_ms, position="side_control", top_player_id="b", evidence="b on top")
+    ok = dict(at_ms=window.start_ms, position="side_control", top_player_id="b", evidence="b on top", geometry=None)
     assert parse_response(call, answer(ok)).states[0].top_player_id == "b"
     for bad, message in (
         (dict(ok, top_player_id="referee"), "top fighter"),
         (dict(ok, top_player_id=None), "top fighter"),
         (dict(ok, position="scramble"), "neutral position"),
         (dict(ok, at_ms=core.start_ms + 1), "from the start"),
+        (dict(ok, position="other", top_player_id=None), "concrete subposition geometry"),
+        (dict(ok, position="other", top_player_id=None, geometry="clinch"), "concrete subposition geometry"),
+        (dict(ok, geometry="north-south"), "only an other position"),
     ):
         with pytest.raises(ValueError, match=message):
             parse_response(call, answer(bad))
@@ -126,7 +144,7 @@ class Provider:
         elif request.node_id == "ground_rescan":
             data = dict(phase_index=context["phase_index"], states=[dict(
                 at_ms=context["window"]["start_ms"], position="side_control", top_player_id="a",
-                evidence="a on top")])
+                evidence="a on top", geometry=None)])
         elif request.node_id == "position_critique":
             data = dict(transition_index=context["transition_index"], confirmed=True,
                         corrected_at_ms=context["proposed"]["at_ms"] + 3000,

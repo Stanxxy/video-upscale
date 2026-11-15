@@ -85,7 +85,7 @@ def ground_state(pack, run, state):
             observation="observed",
             position=position,
             roles=roles,
-            notes="",
+            notes=state.geometry or "",
             evidence=state.evidence,
             uncertainty_note=None,
             interruption_note=None,

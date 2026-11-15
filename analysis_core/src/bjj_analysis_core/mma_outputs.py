@@ -209,6 +209,17 @@ class GroundStateV1(AnalysisContract):
     position: MmaPositionCode
     top_player_id: Identifier | None
     evidence: Identifier
+    geometry: StrictStr | None  # other only: the concrete subposition (published as notes)
+
+    @model_validator(mode="after")
+    def other_names_its_geometry(self):
+        from shared_lib.models.position_taxonomy import validate_other_note
+
+        if self.position.value == "other":
+            validate_other_note(self.geometry or "", MMA.positions)
+        elif self.geometry is not None:
+            raise ValueError("geometry describes only an other position")
+        return self
 
 
 class GroundRescanV1(VersionedAnalysisContract):
