@@ -76,6 +76,13 @@ SPORTS = {
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
 QUALIFIED_MODELS = ENGINE_ROOT / "config" / "analysis" / "qualified-models.json"
+# Models VLM Studio may run for experiments in addition to the production qualification
+# (never written to qualified-models.json): model id -> accepted returned versions.
+STUDIO_EXPERIMENT_MODELS = {"gemini-4-hydrogen": ["gemini-4-hydrogen"]}
+
+
+def studio_models():
+    return {**json.loads(QUALIFIED_MODELS.read_text()), **STUDIO_EXPERIMENT_MODELS}
 
 # Google's published Standard paid-tier rate (https://ai.google.dev/gemini-api/docs/pricing),
 # the same table s34 VLM Studio used. Thinking tokens bill as output. An unlisted
@@ -84,6 +91,9 @@ _PROMO_END = date(2026, 12, 31)
 
 
 def _rate(model: str | None, on: date):
+    # Gemini 4 Hydrogen (2026-11-12): $1.50 / $7.50 per 1M, implicit cache $0.075, no promo.
+    if model == "gemini-4-hydrogen":
+        return {"input": 1.50, "output": 7.50, "cached": 0.075}
     if model not in {"gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"}:
         return None
     if on <= _PROMO_END:
@@ -462,7 +472,7 @@ class CoreRuns:
             scratch.mkdir(exist_ok=True)
             media = S3RunMedia(self.client, allowed_buckets={self.settings.bucket}, scratch_root=scratch,
                                max_source_bytes=4 * 1024**3, guard=guard)
-            qualified = json.loads(QUALIFIED_MODELS.read_text())
+            qualified = studio_models()
             async with media.open(run) as verified:
                 artifacts = S3GeminiArtifacts(run, self.client, bucket=self.settings.bucket)
                 provider = GeminiProvider(verified, artifacts, api_key=self.settings.api_key,
