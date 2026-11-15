@@ -124,6 +124,31 @@ class KeyspacesCheckpointReader:
             raise CheckpointIntegrityError("checkpoint payload differs from pointer")
         return record
 
+    MAX_CONFIG_BYTES = 64 * 1024
+
+    def _read_config_sync(self):
+        ref = self.run.spec.effective_config
+        if ref.bucket != self.bucket:
+            raise CheckpointIntegrityError("run configuration is outside the progress bucket")
+        response = self.s3.get_object(Bucket=ref.bucket, Key=ref.key)
+        stream = response["Body"]
+        try:
+            data = stream.read(self.MAX_CONFIG_BYTES + 1)
+        finally:
+            stream.close()
+        if len(data) > self.MAX_CONFIG_BYTES:
+            raise CheckpointIntegrityError("run configuration exceeds byte limit")
+        if hashlib.sha256(data).hexdigest() != ref.sha256:
+            raise CheckpointIntegrityError("run configuration checksum mismatch")
+        return data
+
+    async def config_bytes(self):
+        """The run's admitted configuration bytes (immutable, content-addressed)."""
+        await self.guard()
+        data = await asyncio.to_thread(self._read_config_sync)
+        await self.guard()
+        return data
+
     async def read(self, step_id):
         step_id = UUID(str(step_id))
         await self.guard()

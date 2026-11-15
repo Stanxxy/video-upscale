@@ -13,34 +13,16 @@ from bjj_analysis_core.outputs import (
     CandidateBatchV1,
     TechniqueAnalysisInputV1,
 )
+from bjj_analysis_core.mma_outputs import StrikeBatchV1
 from bjj_analysis_core.packs import PACKS, pack_for
+from bjj_analysis_core.requests import load_config
+from bjj_analysis_core.strikes import strike_windows
 from pydantic import TypeAdapter
 from shared_lib.models.analysis_contracts import NodeProgressV1
+from shared_lib.models.analysis_progress import FANOUT_NODES, WORKFLOW_NODE_ORDERS
 
-NODES = (
-    "provider_upload",
-    "position_scan",
-    "position_critique",
-    "positions_normalize",
-    "positions_publish",
-    "technique_scan",
-    "position_technique_candidates",
-    "technique_critique",
-    "technique_worklist",
-    "technique_analyze",
-    "technique_validate",
-    "techniques_normalize",
-    "techniques_publish",
-    "dag_complete",
-    "provider_cleanup",
-)
 HOST_NODES = {"provider_upload", "dag_complete", "provider_cleanup"}
-FANOUTS = {
-    "position_critique",
-    "technique_critique",
-    "technique_analyze",
-    "technique_validate",
-}
+FANOUTS = FANOUT_NODES
 SUPPORTED_CORE_VERSION = "0.3.0"
 
 
@@ -87,12 +69,21 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
         CORE_VERSION != SUPPORTED_CORE_VERSION
         or run.spec.core_version != SUPPORTED_CORE_VERSION
         or run.spec.workflow_id not in PACKS
+        or run.spec.workflow_id not in WORKFLOW_NODE_ORDERS
     ):
         raise ProgressEvidenceError("no progress reader for registered core/workflow")
     try:
         pack = pack_for(run)
     except ValueError as error:
         raise ProgressEvidenceError("registered run has a mismatched taxonomy") from error
+    order = WORKFLOW_NODE_ORDERS[run.spec.workflow_id]
+    config = None
+    if pack.windowed_strikes:
+        # Strike windows come from the run's own admitted configuration.
+        try:
+            _, config = load_config(run, await journal.config_bytes())
+        except ValueError as error:
+            raise ProgressEvidenceError("registered run configuration is unusable") from error
 
     async def read(node, item=None):
         await guard()
@@ -113,7 +104,7 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
 
     # Read topology sources before their dependent summaries. A racing read that
     # cannot justify a summary fails explicitly rather than claiming empty success.
-    heads = {node: await read(node) for node in NODES}
+    heads = {node: await read(node) for node in order}
 
     def output(node, value_type):
         record = heads[node]
@@ -124,7 +115,22 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     scan = output("position_scan", pack.position_scan)
     batch = output("position_technique_candidates", CandidateBatchV1)
     work = output("technique_worklist", tuple[TechniqueAnalysisInputV1, ...])
-    items = {
+    items = {}
+    if config is not None:
+        windows = [str(i) for i in range(len(strike_windows(run, config)))]
+        merged = output("strikes_merge", StrikeBatchV1)
+        items = {
+            "strike_census": windows,
+            "strike_audit": windows if config.strike_audit is not None else [],
+            "knockdown_check": (
+                []
+                if config.knockdown_check is None
+                else None
+                if merged is None
+                else [str(i) for i, s in enumerate(merged.strikes) if s.knockdown]
+            ),
+        }
+    items |= {
         "position_critique": (
             None if scan is None else [str(i) for i in range(len(scan.transitions))]
         ),
@@ -141,7 +147,7 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     if sum(len(ids) for ids in items.values() if ids is not None) > max_item_reads:
         raise ProgressEvidenceError("progress item read budget exceeded")
     views = []
-    for node in NODES:
+    for node in order:
         head = heads[node]
         if node not in FANOUTS:
             progress = None if head is None else head.progress
