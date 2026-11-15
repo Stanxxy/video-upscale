@@ -74,3 +74,16 @@ def test_labels_are_stored_per_video_cleared_and_validated(tmp_path):
                 dict(key="fighter-a@1", verdict="landed", source="a", extra=1)):
         with pytest.raises(ValidationError):
             sr.LabelIn(**bad)
+
+
+def test_timing_and_several_techniques_are_flags_beside_the_verdict(tmp_path):
+    labels = sr.save_label(tmp_path, "XFBseoY4ER0", sr.LabelIn(
+        key="fighter-a@1300", verdict="landed", source="both", note="cut starts late",
+        flags=["timing_off", "holds_several", "timing_off"], count=2))
+    assert labels["fighter-a@1300"]["flags"] == ["holds_several", "timing_off"]
+    assert labels["fighter-a@1300"]["count"] == 2 and labels["fighter-a@1300"]["verdict"] == "landed"
+    only_timing = sr.save_label(tmp_path, "XFBseoY4ER0", sr.LabelIn(
+        key="fighter-a@1300", verdict="landed", source="both", flags=["timing_off"], count=3))
+    assert only_timing["fighter-a@1300"]["count"] is None  # a count belongs to holds_several
+    with pytest.raises(ValidationError):
+        sr.LabelIn(key="fighter-a@1300", verdict="landed", source="both", flags=["blurry"])
