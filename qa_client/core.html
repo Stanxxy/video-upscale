@@ -428,8 +428,8 @@ function srSummary() {
   const A = stat('a'), B = stat('b'), n = s => its.filter(it => it.source === s).length;
   $('sr-sum').innerHTML =
     '<div><span class="muted">Reviewed</span><b>' + done + ' / ' + its.length + '</b><span class="muted">both ' + n('both') + ' · A only ' + n('a') + ' · B only ' + n('b') + (n('added') ? ' · added ' + n('added') : '') + '</span></div>' +
-    '<div><span class="muted">A: ' + esc(sr.data.a.sport) + '</span><b>' + A[0] + ' strikes</b><span class="muted">real ' + A[1] + ' · found ' + A[2] + ' of real · landed call ' + A[3] + '</span></div>' +
-    '<div><span class="muted">B: ' + esc(sr.data.b.sport) + '</span><b>' + B[0] + ' strikes</b><span class="muted">real ' + B[1] + ' · found ' + B[2] + ' of real · landed call ' + B[3] + '</span></div>';
+    '<div><span class="muted">A: ' + esc(sr.data.a.sport) + '</span><b>' + A[0] + ' strikes</b><span class="muted">real: ' + A[1] + ' · found ' + A[2] + ' of all real · landed/missed right: ' + A[3] + '</span></div>' +
+    '<div><span class="muted">B: ' + esc(sr.data.b.sport) + '</span><b>' + B[0] + ' strikes</b><span class="muted">real: ' + B[1] + ' · found ' + B[2] + ' of all real · landed/missed right: ' + B[3] + '</span></div>';
 }
 function srList() {
   const cur = sr.items[sr.i];
@@ -443,7 +443,7 @@ function srList() {
 function srSide(title, s) {
   if (!s) return '<div class="sr-side none"><h3>' + title + '</h3><div>Not detected</div></div>';
   const out = s.outcome === 'successful' ? 'landed' : s.outcome === 'unsuccessful' ? 'missed' : s.outcome;
-  return '<div class="sr-side"><h3>' + title + ' · ' + fmt(s.t_ms) + '</h3><div class="what">' + esc(s.classes.join(', ').replace(/_/g, ' ') + ' → ' + (s.target || '?') + ' · ' + out + (s.significant ? ' · significant' : '') + (s.knockdown ? ' · KNOCKDOWN' : '')) + '</div><div class="why">' + esc([s.notes, s.evidence].filter(Boolean).join('\n')) + '</div></div>';
+  return '<div class="sr-side"><h3>' + title + ' · ' + fmt(s.t_ms) + '</h3><div class="what">' + esc(s.classes.join(', ').replace(/_/g, ' ') + ' → ' + (s.target || '?') + ' · ' + out + (s.significant ? ' · significant' : '') + (s.knockdown ? ' · KNOCKDOWN' : '')) + '</div><div class="why">' + esc([...new Set([s.notes, s.evidence].filter(Boolean))].join('\n')) + '</div></div>';
 }
 function srShow(play) {
   const it = sr.items[sr.i]; if (!it) { $('sr-cur').innerHTML = '<p class="muted">No strikes in this comparison.</p>'; return; }
