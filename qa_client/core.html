@@ -97,6 +97,8 @@
       <h2>Run setup</h2>
       <label>Workflow</label>
       <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma_v2" aria-pressed="true" title="Production MMA DAG: windowed strike census + one audit per 20 s window + knockdown check; grappling keeps the per-candidate chain">MMA (production)</button><button data-v="mma" aria-pressed="false" title="MMA v1 baseline: every strike goes through critique, analyze and validate">MMA v1</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button></div>
+      <label for="all-model">Model for every step</label>
+      <select id="all-model"><option value="">Preset (per step)</option><option>gemini-3.8-flash</option><option>gemini-4-hydrogen</option></select>
       <div class="row">
         <div><label for="start">Scope start (m:ss)</label><input id="start" value="0:00"></div>
         <button id="start-now" style="flex:0 0 auto">= playhead</button>
@@ -151,6 +153,7 @@ setInterval(() => { const t = nowMs(); $('now').textContent = fmt(t); if (stopAt
 
 function segmented(el, onChange) { el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); onChange(b.dataset.v ?? b.dataset.f); }); }
 segmented($('sport'), v => { state.sport = v; loadDefaults(); });
+$('all-model').addEventListener('change', applyAllModel);
 segmented($('ev-filter'), v => { state.filter = v; renderEvents(); });
 
 async function loadVideo() {
@@ -196,9 +199,17 @@ function preview(frame, img, b) {
 }
 
 async function loadDefaults() {
-  state.overrides = {};
+  state.overrides = {}; $('all-model').value = '';
   try { const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:0, end_ms:1000})}); state.config = r.config; $('par-pos').checked = r.config.position_critique_context === 'proposed'; $('par-pos-preset').textContent = r.config.position_critique_context === 'proposed' ? 'parallel' : 'one at a time'; renderNodeCfg(); estimate(); }
   catch (e) { $('estimate').textContent = 'Backend not reachable: ' + e.message; }
+}
+function applyAllModel() {
+  const m = $('all-model').value;
+  for (const n of nodes()) {
+    state.overrides[n] = {...(state.overrides[n] || {})};
+    if (!m || state.config[n].model === m) delete state.overrides[n].model; else state.overrides[n].model = m;
+  }
+  renderNodeCfg(); estimate();
 }
 function renderNodeCfg() {
   const opts = (vals, cur) => vals.map(v => '<option' + (String(v) === String(cur) ? ' selected' : '') + '>' + v + '</option>').join('');
