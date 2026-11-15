@@ -33,7 +33,13 @@ import boto3
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field
 
-from bjj_analysis_core import CORE_VERSION, MMA_STRIKES_WORKFLOW_ID, MMA_WORKFLOW_ID, WORKFLOW_ID
+from bjj_analysis_core import (
+    CORE_VERSION,
+    MMA_GROUND_WORKFLOW_ID,
+    MMA_STRIKES_WORKFLOW_ID,
+    MMA_WORKFLOW_ID,
+    WORKFLOW_ID,
+)
 from bjj_analysis_core.execution import StepCheckpointV1
 from bjj_analysis_core.requests import CoreConfigV1, NodeConfigV1
 from shared_lib.models.analysis_contracts import AnalysisRunSpecV1
@@ -46,6 +52,7 @@ from service.analysis_preset import (
     gemini38_mma_strikes_preset,
     gemini38_preset,
     hydrogen_unchecked,
+    with_ground_rescan,
 )
 from service.analysis_run_host import DurableGeminiRun
 
@@ -61,6 +68,7 @@ NODES = (
     "strike_census",
     "strike_audit",
     "knockdown_check",
+    "ground_rescan",
 )
 # Workflows VLM Studio can run. "mma_v2" is the production MMA workflow (windowed strike
 # census + audit); "mma_v2_census" skips the audit; "mma" is the v1 per-strike chain baseline.
@@ -72,6 +80,10 @@ SPORTS = {
     # Experiment arms: Gemini 4 Hydrogen on every model step, no check steps.
     "bjj_h": (WORKFLOW_ID, "bjj.v1", lambda: hydrogen_unchecked(gemini38_preset())),
     "mma_v2_h": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", lambda: hydrogen_unchecked(gemini38_mma_strikes_preset())),
+    # Ground re-scan experiments (who is on top in MMA ground phases).
+    "mma_v2_hg": (MMA_GROUND_WORKFLOW_ID, "mma.v1",
+                  lambda: with_ground_rescan(hydrogen_unchecked(gemini38_mma_strikes_preset()))),
+    "mma_v2_g": (MMA_GROUND_WORKFLOW_ID, "mma.v1", lambda: with_ground_rescan(gemini38_mma_strikes_preset())),
 }
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
@@ -122,7 +134,7 @@ class NodeOverride(BaseModel):
 
 class CoreRunIn(BaseModel):
     youtube_id: str = Field(pattern=YOUTUBE_ID.pattern)
-    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census", "bjj_h", "mma_v2_h"]
+    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census", "bjj_h", "mma_v2_h", "mma_v2_hg", "mma_v2_g"]
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
     fighters: tuple[FighterIn, FighterIn]
@@ -551,7 +563,7 @@ class CoreRuns:
             node.update(succeeded=states.count("succeeded"), running=sum(s in {"running", "retrying"} for s in states),
                         failed=states.count("failed"), seen=len(states), usd=round(node["usd"], 4))
             summary.append(node)
-        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "strike_census", "strike_audit", "strikes_merge", "knockdown_check", "knockdowns_apply",
+        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "ground_rescan", "ground_merge", "strike_census", "strike_audit", "strikes_merge", "knockdown_check", "knockdowns_apply",
                                              "position_critique", "positions_normalize",
                                              "positions_publish", "technique_scan", "position_technique_candidates",
                                              "technique_critique", "technique_worklist", "technique_analyze",

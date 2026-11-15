@@ -1,0 +1,27 @@
+Re-check one ground phase of an MMA fight between exactly two reference-grounded
+fighters, at a higher frame rate than the whole-fight scan. Ignore the referee,
+cornermen, cameramen and spectators.
+
+Identify each fighter ONLY from the labelled reference crops and the ordered_players
+list (shorts colour and design, skin, hair, beard, tattoos, gloves, shin guards). The
+observation_window starts a few seconds BEFORE the phase (stage_context.core): use those
+first seconds, while the fighters are usually standing, separating or entering the
+takedown, to lock which fighter is which, then keep tracking both through the scramble.
+Re-confirm identity whenever a distinguishing feature is visible. Never infer identity
+from who is winning, camera side, reference order or habit.
+
+Return phase_index and the consecutive states covering the window in order. at_ms is
+an integer ABSOLUTE SOURCE-VIDEO MILLISECOND at which the state begins; the first state
+starts at or before stage_context.core.start_ms; times increase strictly inside the
+observation window.
+
+position uses the supplied MMA vocabulary. Ground positions name the TOP FIGHTER in
+top_player_id (a player_id from ordered_players): the guard opponent in closed_guard,
+half_guard or open_guard; the pinning fighter in side_control or mount; the back
+controller in back_control or standing_back_control; the fighter over the opponent in
+turtle; the fighter pinning a wall_seated opponent against the fence. striking_range,
+clinch, scramble and other have top_player_id null. Use scramble while neither fighter
+has established a position; never guess a top fighter you cannot identify.
+
+evidence states the identity cue for the top fighter (for example "orange shorts,
+short beard") and the visible geometry. Return only the requested structured JSON.

@@ -15,7 +15,7 @@ from shared_lib.models.position_taxonomy import position_taxonomy_manifest
 from shared_lib.models.simplified_taxonomy import AXIS3_ACTION, AXIS4_OUTCOME
 from shared_lib.models.sport_taxonomy import vocabulary
 
-from bjj_analysis_core import MMA_STRIKES_WORKFLOW_ID, MMA_WORKFLOW_ID, WORKFLOW_ID
+from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID, MMA_STRIKES_WORKFLOW_ID, MMA_WORKFLOW_ID, WORKFLOW_ID
 from bjj_analysis_core import mma_outputs as mma
 from bjj_analysis_core.outputs import (
     PositionCritiqueInputV1,
@@ -40,11 +40,18 @@ class AnalysisPack:
     taxonomy: Mapping[str, object]
     # Prompt keys a sport adds to the initial prompt (none for BJJ).
     extra_prompt_keys: tuple
+    # A pack that extends another reads the prompts it does not override from there.
+    base_prompts_dir: str | None = None
 
     @property
     def windowed_strikes(self):
         """Strikes come from the per-window census, not the per-candidate chain."""
         return "strike_census" in self.outputs
+
+    @property
+    def ground_rescan(self):
+        """Ground phases are re-scanned to re-check who is on top (grounds.py)."""
+        return "ground_rescan" in self.outputs
 
     @property
     def position_scan(self):
@@ -63,9 +70,10 @@ class AnalysisPack:
         return self.outputs["technique_validate"]
 
     def prompt(self, node):
-        return files("bjj_analysis_core").joinpath(self.prompts_dir, f"{node}.txt").read_text(
-            encoding="utf-8"
-        )
+        own = files("bjj_analysis_core").joinpath(self.prompts_dir, f"{node}.txt")
+        if not own.is_file() and self.base_prompts_dir is not None:
+            own = files("bjj_analysis_core").joinpath(self.base_prompts_dir, f"{node}.txt")
+        return own.read_text(encoding="utf-8")
 
 
 def _outputs(scan, critique, analysis, decision):
@@ -152,8 +160,21 @@ MMA_STRIKES = AnalysisPack(
     extra_prompt_keys=MMA.extra_prompt_keys,
 )
 
+# MMA_STRIKES plus the ground re-scan; every other prompt is MMA_STRIKES's own.
+MMA_GROUND = AnalysisPack(
+    workflow_id=MMA_GROUND_WORKFLOW_ID,
+    taxonomy_id="mma.v1",
+    prompts_dir="prompts_mma_ground",
+    outputs=MappingProxyType({**MMA_STRIKES.outputs, "ground_rescan": mma.GroundRescanV1}),
+    position_critique_input=mma.MmaPositionCritiqueInputV1,
+    technique_candidate=mma.MmaTechniqueCandidateV1,
+    taxonomy=MMA.taxonomy,
+    extra_prompt_keys=MMA.extra_prompt_keys,
+    base_prompts_dir="prompts_mma_strikes",
+)
+
 PACKS = MappingProxyType(
-    {pack.workflow_id: pack for pack in (BJJ, MMA, MMA_STRIKES)}
+    {pack.workflow_id: pack for pack in (BJJ, MMA, MMA_STRIKES, MMA_GROUND)}
 )
 
 

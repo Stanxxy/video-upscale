@@ -222,3 +222,19 @@ def test_hydrogen_no_check_arms_run_only_first_pass_steps_on_hydrogen():
             "position_critique", "technique_critique", "technique_validate", "strike_audit", "knockdown_check"))
     # Thinking is unchanged from the release presets.
     assert qa_core.build_config("mma_v2_h", {}).strike_census.thinking == "high"
+
+
+def test_ground_rescan_arms_add_the_node_on_the_ground_workflow():
+    from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID
+    from bjj_analysis_core.packs import MMA_GROUND
+    from bjj_analysis_core.requests import prompt_bundle_sha256
+
+    for sport, scan_model in (("mma_v2_hg", "gemini-4-hydrogen"), ("mma_v2_g", "gemini-3.8-flash")):
+        workflow, _, _ = qa_core.SPORTS[sport]
+        config = qa_core.build_config(sport, {})
+        assert workflow == MMA_GROUND_WORKFLOW_ID
+        assert config.prompt_bundle_sha256 == prompt_bundle_sha256(MMA_GROUND)
+        assert (config.ground_rescan.model, config.ground_rescan.fps, config.ground_rescan.thinking) == (
+            "gemini-4-hydrogen", 5, "high")
+        assert config.position_scan.model == scan_model
+        assert (config.ground_window_ms, config.ground_lookback_ms) == (20000, 5000)

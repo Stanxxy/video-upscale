@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from bjj_analysis_core.outputs import CandidateConfigV1
-from bjj_analysis_core.packs import MMA, MMA_STRIKES
+from bjj_analysis_core.packs import MMA, MMA_GROUND, MMA_STRIKES
 from bjj_analysis_core.requests import CoreConfigV1, NodeConfigV1, prompt_bundle_sha256
 
 
@@ -93,6 +93,21 @@ def hydrogen_unchecked(config: CoreConfigV1) -> CoreConfigV1:
     })
 
 
+def with_ground_rescan(config: CoreConfigV1, model: str = "gemini-4-hydrogen") -> CoreConfigV1:
+    """VLM Studio experiment: the windowed MMA preset plus a ground re-scan node.
+
+    Workflow mma-windowed-strikes-ground: each ground phase of the position scan is
+    re-scanned at 5 fps in 20 s windows that start 5 s early; the model names the top
+    fighter (bjj_analysis_core.grounds). Not admitted in production.
+    """
+    return config.model_copy(update={
+        "prompt_bundle_sha256": prompt_bundle_sha256(MMA_GROUND),
+        "ground_rescan": NodeConfigV1(model=model, thinking="high", media_resolution="low", fps=5),
+    })
+
+
+# Ground re-scan fields are written only into ground presets.
+_GROUND_FIELDS = {"ground_rescan", "ground_window_ms", "ground_lookback_ms"}
 # Windowed-workflow fields are written only into windowed presets.
 _WINDOWED_FIELDS = {
     "strike_census", "strike_audit", "knockdown_check", "strike_window_ms", "strike_overlap_ms",
@@ -110,6 +125,8 @@ def preset_bytes(config: CoreConfigV1) -> bytes:
     data = config.model_dump(mode="json")
     if config.strike_census is None:
         data = {k: v for k, v in data.items() if k not in _WINDOWED_FIELDS}
+    if config.ground_rescan is None:
+        data = {k: v for k, v in data.items() if k not in _GROUND_FIELDS}
     return (json.dumps(data, indent=2) + "\n").encode()
 
 

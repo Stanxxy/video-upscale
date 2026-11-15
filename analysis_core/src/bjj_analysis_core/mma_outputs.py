@@ -188,3 +188,38 @@ class KnockdownCheckV1(VersionedAnalysisContract):
     strike_index: NonNegativeInt
     knocked_down: StrictBool
     reason: Identifier
+
+
+# --- Ground re-scan (workflow mma-windowed-strikes-ground) ---------------------------
+# The whole-scope position scan samples 1 fps over minutes; on the ground it loses which
+# fighter is on top or calls control a clinch. Each ground phase is re-scanned in a short
+# window at a higher frame rate, starting a few seconds before the phase so both fighters
+# are seen while still easy to tell apart. The model names the TOP FIGHTER; the ordered
+# role pair is derived in code (an ordered pair is easy to fill in the wrong order).
+
+
+class GroundRescanInputV1(AnalysisContract):
+    phase_index: NonNegativeInt
+    core: TimeRangeMs  # the span whose positions this re-scan replaces
+    window: TimeRangeMs  # what the model sees: look-back before the core, 2 s after
+
+
+class GroundStateV1(AnalysisContract):
+    at_ms: NonNegativeInt
+    position: MmaPositionCode
+    top_player_id: Identifier | None
+    evidence: Identifier
+
+
+class GroundRescanV1(VersionedAnalysisContract):
+    phase_index: NonNegativeInt
+    states: tuple[GroundStateV1, ...]
+
+    @model_validator(mode="after")
+    def ordered_states(self):
+        if not self.states:
+            raise ValueError("a ground re-scan returns at least one state")
+        times = [s.at_ms for s in self.states]
+        if times != sorted(set(times)):
+            raise ValueError("ground states must be in strictly increasing time order")
+        return self

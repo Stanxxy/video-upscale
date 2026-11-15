@@ -17,7 +17,9 @@ from bjj_analysis_core.discovery import (
     unchecked_worklist,
 )
 from bjj_analysis_core.execution import StepRunner
+from bjj_analysis_core.grounds import apply_ground_rescans, ground_phases
 from bjj_analysis_core.mma_outputs import (
+    GroundRescanV1,
     KnockdownCheckV1,
     StrikeAuditV1,
     StrikeBatchV1,
@@ -181,6 +183,41 @@ async def execute_pipeline(
                 context={},
             )
         )
+        if pack.ground_rescan:
+            # Re-check every ground phase in a short look-back window, then let the
+            # checks (if any) and normalization work on the merged scan.
+            phases = ground_phases(run, cfg, scan)
+
+            def rescan_step(index, core, window):
+                async def step():
+                    return await model(
+                        prepare_call(
+                            run,
+                            config_bytes,
+                            "ground_rescan",
+                            input_window=window,
+                            context=dict(phase_index=index, core=core, window=window),
+                        ),
+                        item=str(index),
+                    )
+
+                return step
+
+            rescans = await _ordered(
+                [rescan_step(i, core, window) for i, (core, window) in enumerate(phases)], limit
+            )
+            rescans = await summary("ground_rescan", rescans, tuple[GroundRescanV1, ...])
+            rough = scan
+            scan = await deterministic(
+                "ground_merge",
+                dict(
+                    scan=rough.model_dump(mode="json"),
+                    rescans=[r.model_dump(mode="json") for r in rescans],
+                ),
+                lambda at: apply_ground_rescans(pack, run, cfg, rough, rescans),
+                pack.position_scan,
+            )
+
         def critique(index, transition, state_before):
             at = transition.at_ms
             window = TimeRangeMs(
