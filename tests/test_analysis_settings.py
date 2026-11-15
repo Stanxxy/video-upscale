@@ -117,7 +117,7 @@ def test_portable_six_node_preset_is_explicit_and_does_not_claim_qualification()
                  "technique_critique", "technique_analyze", "technique_validate"):
         node = getattr(config, name)
         assert node.model == "gemini-3.8-flash"
-        assert node.thinking == "high"
+        assert node.thinking == ("low" if name.endswith(("critique", "validate")) else "high")
         assert node.media_resolution == "low"
         assert node.fps == (1 if name.endswith("scan") else 10)
 
