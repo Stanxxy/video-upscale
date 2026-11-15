@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "core_version": "0.3.0",
+  "prompt_bundle_sha256": "b6c941ed7c5fee24325b9aa179c10ff53d37b8f9f57ab3ee31a1696b02ba5237",
+  "position_scan": {
+    "model": "gemini-4-hydrogen",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 1
+  },
+  "position_critique": null,
+  "technique_scan": {
+    "model": "gemini-4-hydrogen",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 2
+  },
+  "technique_critique": null,
+  "technique_analyze": {
+    "model": "gemini-4-hydrogen",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 10
+  },
+  "technique_validate": null,
+  "candidates": {
+    "transition_pre_ms": 4000,
+    "transition_post_ms": 2000,
+    "merge_tolerance_ms": 2000,
+    "critique_back_ms": 6000,
+    "critique_forward_ms": 4000
+  },
+  "position_critique_back_ms": 4000,
+  "position_critique_forward_ms": 6000,
+  "position_critique_context": "proposed",
+  "max_call_attempts": 2,
+  "strike_census": {
+    "model": "gemini-4-hydrogen",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 10
+  },
+  "strike_audit": null,
+  "knockdown_check": null,
+  "strike_window_ms": 20000,
+  "strike_overlap_ms": 2000,
+  "ground_rescan": {
+    "model": "gemini-4-hydrogen",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 5
+  },
+  "ground_window_ms": 20000,
+  "ground_lookback_ms": 5000
+}

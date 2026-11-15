@@ -183,6 +183,24 @@ def critique_window(run, config_bytes, candidate):
     )
 
 
+def unchecked_worklist(run, config_bytes, candidates):
+    """No temporal check configured: every candidate is analyzed in its own bounds."""
+    run, config = load_config(run, config_bytes)
+    if config.technique_critique is not None:
+        raise ValueError("this run checks every candidate; use its critiques")
+    return tuple(
+        TechniqueAnalysisInputV1(
+            candidate_id=c.candidate_id,
+            description=c.description,
+            bounds=c.bounds,
+            end_status="outcome_visible",
+            temporal_reason="no temporal check: the scan's own bounds",
+        )
+        for c in (DiscoveryCandidateV1.model_validate(c) for c in candidates)
+        if run.spec.scope.contains(c.bounds)
+    )
+
+
 def resolve_temporal_critiques(run, config_bytes, candidates, decisions):
     """No missing critique becomes an empty event; explicit rejects remain auditable.
 

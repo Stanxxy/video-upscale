@@ -54,6 +54,31 @@
   .tag { font-size:10px; padding:0 5px; border-radius:3px; border:1px solid var(--line); color:var(--muted); margin-left:4px; }
   .runs { max-height:180px; overflow:auto; }
   .runs button { width:100%; text-align:left; margin:2px 0; display:flex; gap:8px; justify-content:space-between; }
+  .sr-head { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+  .sr-head > * { flex:1 1 160px; min-width:0; }
+  .sr-sum { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px; margin:8px 0; }
+  .sr-sum div { border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  .sr-sum b { display:block; font-size:16px; font-variant-numeric:tabular-nums; }
+  .sr-cur { border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px; }
+  .sr-cur .top { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; }
+  .sr-cmp { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+  @media (max-width:520px) { .sr-cmp { grid-template-columns:minmax(0,1fr); } }
+  .sr-side { border:1px solid var(--line); border-radius:6px; padding:8px; min-width:0; }
+  .sr-side h3 { margin:0 0 4px; font-size:11px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.05em; }
+  .sr-side.none { opacity:.55; }
+  .sr-side .what { font-weight:600; }
+  .sr-side .why { color:var(--muted); white-space:pre-wrap; margin-top:4px; }
+  .sr-verdicts { display:flex; flex-wrap:wrap; gap:6px; }
+  .sr-verdicts button { flex:1 1 auto; }
+  .sr-verdicts button[aria-pressed=true] { background:var(--ink); color:#111; font-weight:600; }
+  .sr-verdicts kbd, .sr-keys kbd { font:10px ui-monospace,monospace; border:1px solid var(--line); border-radius:3px; padding:0 3px; margin-right:4px; color:var(--muted); }
+  .sr-keys { color:var(--muted); font-size:11px; }
+  .sr-list { position:relative; max-height:300px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px; }
+  .sr-list button { width:100%; display:grid; grid-template-columns:62px 92px minmax(0,1fr) auto; gap:8px; text-align:left; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; padding:5px 8px; }
+  .sr-list button[aria-current=true] { background:#ffffff14; }
+  .src { font-size:10px; padding:1px 5px; border-radius:3px; border:1px solid var(--line); white-space:nowrap; }
+  .src-both { color:var(--ok); border-color:#3fb95066; } .src-a { color:var(--blue); border-color:#4c8dff66; } .src-b { color:var(--warn); border-color:#d2992266; } .src-added { color:#d2a8ff; border-color:#d2a8ff66; }
+  .vd { font-size:11px; color:var(--muted); white-space:nowrap; } .vd.real { color:var(--ok); } .vd.fake { color:#ff8b8b; }
   .state-succeeded { color:var(--ok); } .state-failed, .state-interrupted { color:#ff8b8b; } .state-running, .state-preparing, .state-queued { color:var(--warn); }
 </style>
 </head>
@@ -93,10 +118,51 @@
     </section>
   </div>
   <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
+    <section id="sr">
+      <h2>Strike review <span class="muted" style="text-transform:none; letter-spacing:0">two runs' strikes, one by one; your verdicts become strike ground truth</span></h2>
+      <div class="sr-head">
+        <div><label for="sr-pair">Prepared comparison</label><select id="sr-pair" style="width:100%"><option value="">Choose a clip…</option></select></div>
+        <div><label for="sr-a">Run A</label><select id="sr-a" style="width:100%"></select></div>
+        <div><label for="sr-b">Run B</label><select id="sr-b" style="width:100%"></select></div>
+        <button id="sr-load" style="flex:0 0 auto">Compare</button>
+      </div>
+      <p id="sr-msg" class="muted"></p>
+      <div id="sr-body" hidden>
+        <div class="sr-sum" id="sr-sum"></div>
+        <div class="row" style="align-items:center">
+          <div class="seg" id="sr-filter" style="flex:0 0 auto"><button data-f="all" aria-pressed="true">All</button><button data-f="both" aria-pressed="false">Both</button><button data-f="a" aria-pressed="false">A only</button><button data-f="b" aria-pressed="false">B only</button><button data-f="todo" aria-pressed="false">Not reviewed</button></div>
+          <span style="flex:1"></span>
+          <div class="seg" id="sr-speed" style="flex:0 0 auto"><button data-v="0.25" aria-pressed="false">¼×</button><button data-v="0.5" aria-pressed="true">½×</button><button data-v="1" aria-pressed="false">1×</button></div>
+        </div>
+        <div class="sr-cur" id="sr-cur"></div>
+        <div class="sr-list" id="sr-list"></div>
+        <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">A strike neither run found</summary>
+          <div class="row" style="margin-top:6px; align-items:center">
+            <select id="sr-add-actor"></select>
+            <select id="sr-add-verdict"><option value="landed">landed</option><option value="missed">missed</option><option value="contact_unclear">contact unclear</option></select>
+            <button id="sr-add" style="flex:0 0 auto">Add at playhead</button>
+          </div>
+          <p class="muted" style="margin:4px 0 0">Pause on the moment of contact (or the punch's full extension), then add it.</p>
+        </details>
+      </div>
+    </section>
+    <section>
+      <h2>Run <span id="run-state"></span></h2>
+      <p id="run-meta" class="muted"></p>
+      <div class="table-wrap"><table id="progress"></table></div>
+      <div class="row" style="margin-top:8px"><button id="resume" hidden>Resume (retries failed calls only)</button><button id="cancel" hidden>Cancel</button></div>
+      <p id="run-error" class="err"></p>
+    </section>
+    <section>
+      <h2>Previous runs</h2>
+      <div class="runs" id="runs"></div>
+    </section>
     <section>
       <h2>Run setup</h2>
       <label>Workflow</label>
-      <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma_v2" aria-pressed="true" title="Production MMA DAG: windowed strike census + one audit per 20 s window + knockdown check; grappling keeps the per-candidate chain">MMA (production)</button><button data-v="mma" aria-pressed="false" title="MMA v1 baseline: every strike goes through critique, analyze and validate">MMA v1</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button></div>
+      <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma_v2" aria-pressed="true" title="Production MMA DAG: windowed strike census + one audit per 20 s window + knockdown check; grappling keeps the per-candidate chain">MMA (production)</button><button data-v="mma" aria-pressed="false" title="MMA v1 baseline: every strike goes through critique, analyze and validate">MMA v1</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button><button data-v="mma_v2_h" aria-pressed="false" title="Experiment: Gemini 4 Hydrogen on every model step, no check steps">MMA, Hydrogen no checks</button><button data-v="bjj_h" aria-pressed="false" title="Experiment: Gemini 4 Hydrogen on every model step, no check steps">BJJ, Hydrogen no checks</button><button data-v="mma_v2_hg" aria-pressed="false" title="Experiment: Hydrogen no checks + ground re-scan (who is on top, 5 fps, 5 s look-back)">MMA, Hydrogen + ground re-scan</button><button data-v="mma_v2_g" aria-pressed="false" title="Experiment: production MMA preset + Hydrogen ground re-scan">MMA + ground re-scan</button></div>
+      <label for="all-model">Model for every step</label>
+      <select id="all-model"><option value="">Preset (per step)</option><option>gemini-3.8-flash</option><option>gemini-4-hydrogen</option></select>
       <div class="row">
         <div><label for="start">Scope start (m:ss)</label><input id="start" value="0:00"></div>
         <button id="start-now" style="flex:0 0 auto">= playhead</button>
@@ -117,21 +183,10 @@
       <button id="run" class="primary">Run analysis</button>
       <p id="run-err" class="err"></p>
     </section>
-    <section>
-      <h2>Run <span id="run-state"></span></h2>
-      <p id="run-meta" class="muted"></p>
-      <div class="table-wrap"><table id="progress"></table></div>
-      <div class="row" style="margin-top:8px"><button id="resume" hidden>Resume (retries failed calls only)</button><button id="cancel" hidden>Cancel</button></div>
-      <p id="run-error" class="err"></p>
-    </section>
-    <section>
-      <h2>Previous runs</h2>
-      <div class="runs" id="runs"></div>
-    </section>
   </div>
 </main>
 <script>
-const ALL_NODES = ['position_scan','position_critique','technique_scan','technique_critique','technique_analyze','technique_validate','strike_census','strike_audit','knockdown_check'];
+const ALL_NODES = ['position_scan','ground_rescan','position_critique','technique_scan','technique_critique','technique_analyze','technique_validate','strike_census','strike_audit','knockdown_check'];
 const nodes = () => ALL_NODES.filter(n => state.config && state.config[n]);
 const $ = id => document.getElementById(id);
 const api = (path, opts={}) => fetch($('backend').value.replace(/\/$/,'') + path, {headers:{'content-type':'application/json'}, ...opts})
@@ -151,6 +206,7 @@ setInterval(() => { const t = nowMs(); $('now').textContent = fmt(t); if (stopAt
 
 function segmented(el, onChange) { el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); onChange(b.dataset.v ?? b.dataset.f); }); }
 segmented($('sport'), v => { state.sport = v; loadDefaults(); });
+$('all-model').addEventListener('change', applyAllModel);
 segmented($('ev-filter'), v => { state.filter = v; renderEvents(); });
 
 async function loadVideo() {
@@ -196,9 +252,17 @@ function preview(frame, img, b) {
 }
 
 async function loadDefaults() {
-  state.overrides = {};
+  state.overrides = {}; $('all-model').value = '';
   try { const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:0, end_ms:1000})}); state.config = r.config; $('par-pos').checked = r.config.position_critique_context === 'proposed'; $('par-pos-preset').textContent = r.config.position_critique_context === 'proposed' ? 'parallel' : 'one at a time'; renderNodeCfg(); estimate(); }
   catch (e) { $('estimate').textContent = 'Backend not reachable: ' + e.message; }
+}
+function applyAllModel() {
+  const m = $('all-model').value;
+  for (const n of nodes()) {
+    state.overrides[n] = {...(state.overrides[n] || {})};
+    if (!m || state.config[n].model === m) delete state.overrides[n].model; else state.overrides[n].model = m;
+  }
+  renderNodeCfg(); estimate();
 }
 function renderNodeCfg() {
   const opts = (vals, cur) => vals.map(v => '<option' + (String(v) === String(cur) ? ' selected' : '') + '>' + v + '</option>').join('');
@@ -311,7 +375,125 @@ function renderEvents() {
 }
 $('dl').onclick = () => { const r = state.result; if (!r) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], {type:'application/json'})); a.download = 'core-' + state.runId + '.json'; a.click(); };
 
-loadDefaults(); loadRuns();
+/* ---------- strike review ---------- */
+const VERDICTS = [['landed','Landed','1'],['missed','Missed','2'],['contact_unclear','Contact unclear','3'],['not_a_strike','Not a strike','4'],['wrong_fighter','Wrong fighter','5'],['unsure','Unsure','0']];
+const REAL = new Set(['landed','missed','contact_unclear','wrong_fighter']);
+const sr = { data:null, pairs:[], items:[], view:[], i:0, filter:'all', rate:0.5, runs:[] };
+async function srInit() {
+  try {
+    const [p, r] = await Promise.all([api('/qa/core/strike-review/pairs'), api('/qa/core/runs')]);
+    sr.pairs = p.pairs; sr.runs = r.runs.filter(x => x.state === 'succeeded' && x.sport !== 'bjj' && x.sport !== 'bjj_h');
+    $('sr-pair').innerHTML = '<option value="">Choose a clip…</option>' + sr.pairs.map((x, i) => '<option value="' + i + '">' + esc(x.label) + '</option>').join('');
+    const opt = sr.runs.map(x => '<option value="' + x.run_id + '">' + esc((x.label || x.youtube_id) + ' · ' + x.sport + ' · ' + fmt(x.start_ms) + '–' + fmt(x.end_ms)) + '</option>').join('');
+    $('sr-a').innerHTML = '<option value="">—</option>' + opt; $('sr-b').innerHTML = '<option value="">—</option>' + opt;
+  } catch (e) { $('sr-msg').textContent = e.message; }
+}
+$('sr-pair').onchange = () => { const p = sr.pairs[$('sr-pair').value]; if (!p) return; $('sr-a').value = p.a; $('sr-b').value = p.b; srLoad(); };
+$('sr-load').onclick = srLoad;
+segmented($('sr-filter'), v => { sr.filter = v; srView(); if (!sr.view.includes(sr.items[sr.i]) && sr.view.length) { sr.i = sr.items.indexOf(sr.view[0]); } srShow(false); });
+segmented($('sr-speed'), v => { sr.rate = Number(v); video().playbackRate = sr.rate; });
+async function srLoad() {
+  const a = $('sr-a').value, b = $('sr-b').value; if (!a || !b) { $('sr-msg').textContent = 'Choose two runs.'; return; }
+  $('sr-msg').textContent = 'Loading…';
+  try {
+    sr.data = await api('/qa/core/strike-review?a=' + a + '&b=' + b);
+    if (state.youtubeId !== sr.data.youtube_id) { $('yt-input').value = sr.data.youtube_id; await loadVideo(); }
+    const d = sr.data, warn = d.fighters.join() !== d.fighters_b.join() ? ' · warning: the runs name the fighters differently (' + d.fighters_b.join(' vs ') + ')' : '';
+    $('sr-msg').innerHTML = '<b>A</b> ' + esc(d.a.label || d.a.run_id.slice(0, 8)) + ' · <b>B</b> ' + esc(d.b.label || d.b.run_id.slice(0, 8)) + ' · ' + fmt(d.start_ms) + '–' + fmt(d.end_ms) + ' · ' + esc(d.fighters.join(' vs ')) + esc(warn);
+    $('sr-add-actor').innerHTML = d.fighters.map((f, i) => '<option value="fighter-' + 'ab'[i] + '">' + esc(f) + '</option>').join('');
+    srMerge(); sr.i = 0; $('sr-body').hidden = false; srView(); srShow(false);
+  } catch (e) { $('sr-msg').textContent = e.message; }
+}
+function srMerge() {
+  const d = sr.data, keys = new Set(d.items.map(x => x.key));
+  const added = Object.entries(d.labels).filter(([k, l]) => l.source === 'added' && !keys.has(k) && l.t_ms >= d.start_ms && l.t_ms < d.end_ms)
+    .map(([k, l]) => ({key:k, source:'added', t_ms:l.t_ms, actor:l.actor, a:null, b:null}));
+  sr.items = [...d.items, ...added].sort((x, y) => x.t_ms - y.t_ms);
+}
+const nameOf = actor => sr.data.fighters['ab'.indexOf(actor.slice(-1))] || actor;
+const verdictOf = it => sr.data.labels[it.key]?.verdict;
+function srView() {
+  sr.view = sr.items.filter(it => sr.filter === 'all' || (sr.filter === 'todo' ? !verdictOf(it) : it.source === sr.filter));
+  srSummary(); srList();
+}
+function srSummary() {
+  const its = sr.items, lab = it => verdictOf(it), done = its.filter(lab).length;
+  const stat = side => {
+    const mine = its.filter(it => it[side]), judged = mine.filter(it => lab(it) && lab(it) !== 'unsure'), real = judged.filter(it => REAL.has(lab(it)));
+    const allReal = its.filter(it => REAL.has(lab(it))).length, foundReal = its.filter(it => it[side] && REAL.has(lab(it))).length;
+    const landedCalls = real.filter(it => ['landed','missed'].includes(lab(it)));
+    const landedOk = landedCalls.filter(it => (it[side].outcome === 'successful') === (lab(it) === 'landed')).length;
+    return [mine.length, judged.length ? Math.round(real.length / judged.length * 100) + '%' : '–', allReal ? Math.round(foundReal / allReal * 100) + '%' : '–', landedCalls.length ? Math.round(landedOk / landedCalls.length * 100) + '%' : '–'];
+  };
+  const A = stat('a'), B = stat('b'), n = s => its.filter(it => it.source === s).length;
+  $('sr-sum').innerHTML =
+    '<div><span class="muted">Reviewed</span><b>' + done + ' / ' + its.length + '</b><span class="muted">both ' + n('both') + ' · A only ' + n('a') + ' · B only ' + n('b') + (n('added') ? ' · added ' + n('added') : '') + '</span></div>' +
+    '<div><span class="muted">A: ' + esc(sr.data.a.sport) + '</span><b>' + A[0] + ' strikes</b><span class="muted">real: ' + A[1] + ' · found ' + A[2] + ' of all real · landed/missed right: ' + A[3] + '</span></div>' +
+    '<div><span class="muted">B: ' + esc(sr.data.b.sport) + '</span><b>' + B[0] + ' strikes</b><span class="muted">real: ' + B[1] + ' · found ' + B[2] + ' of all real · landed/missed right: ' + B[3] + '</span></div>';
+}
+function srList() {
+  const cur = sr.items[sr.i];
+  $('sr-list').innerHTML = sr.view.map(it => {
+    const v = verdictOf(it), side = it.a || it.b, cls = side ? side.classes.join(',').replace(/strike_|ground_strike/g, m => m === 'ground_strike' ? 'ground' : '') : 'added';
+    return '<button data-k="' + it.key + '" aria-current="' + (it === cur) + '"><span>' + fmt(it.t_ms) + '</span><span class="src src-' + it.source + '">' + ({both:'both', a:'A only', b:'B only', added:'added'})[it.source] + '</span><span>' + esc(nameOf(it.actor) + ' · ' + cls) + '</span><span class="vd ' + (v ? (REAL.has(v) ? 'real' : v === 'not_a_strike' ? 'fake' : '') : '') + '">' + (v ? v.replace(/_/g, ' ') : '·') + '</span></button>';
+  }).join('') || '<p class="muted" style="padding:8px">Nothing in this filter.</p>';
+  $('sr-list').querySelectorAll('button').forEach(b => b.onclick = () => { sr.i = sr.items.findIndex(x => x.key === b.dataset.k); srShow(true); });
+  // Keep the current strike in view inside the list only; never scroll the page away from the video.
+  const list = $('sr-list'), row = list.querySelector('[aria-current=true]');
+  if (row && (row.offsetTop < list.scrollTop || row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = row.offsetTop - list.clientHeight / 2;
+}
+function srSide(title, s) {
+  if (!s) return '<div class="sr-side none"><h3>' + title + '</h3><div>Not detected</div></div>';
+  const out = s.outcome === 'successful' ? 'landed' : s.outcome === 'unsuccessful' ? 'missed' : s.outcome;
+  return '<div class="sr-side"><h3>' + title + ' · ' + fmt(s.t_ms) + '</h3><div class="what">' + esc(s.classes.join(', ').replace(/_/g, ' ') + ' → ' + (s.target || '?') + ' · ' + out + (s.significant ? ' · significant' : '') + (s.knockdown ? ' · KNOCKDOWN' : '')) + '</div><div class="why">' + esc([...new Set([s.notes, s.evidence].filter(Boolean))].join('\n')) + '</div></div>';
+}
+function srShow(play) {
+  const it = sr.items[sr.i]; if (!it) { $('sr-cur').innerHTML = '<p class="muted">No strikes in this comparison.</p>'; return; }
+  const v = verdictOf(it), pos = sr.view.indexOf(it);
+  $('sr-cur').innerHTML = '<div class="top"><span><b>' + fmt(it.t_ms) + '</b> · ' + esc(nameOf(it.actor)) + ' <span class="src src-' + it.source + '">' + ({both:'both runs', a:'A only', b:'B only', added:'added by you'})[it.source] + '</span></span><span class="muted">' + (pos >= 0 ? (pos + 1) + ' of ' + sr.view.length + ' in this filter' : 'outside this filter') + '</span></div>' +
+    (it.source === 'added' ? '' : '<div class="sr-cmp">' + srSide('A', it.a) + srSide('B', it.b) + '</div>') +
+    '<div class="sr-verdicts">' + VERDICTS.map(([k, t, key]) => '<button data-v="' + k + '" aria-pressed="' + (v === k) + '"><kbd>' + key + '</kbd>' + t + '</button>').join('') + '</div>' +
+    '<div class="row" style="align-items:center"><button id="sr-prev" style="flex:0 0 auto">← Previous</button><button id="sr-replay" style="flex:0 0 auto">Replay</button><button id="sr-next" style="flex:0 0 auto">Next →</button><span class="sr-keys"><kbd>space</kbd>replay <kbd>←</kbd><kbd>→</kbd>move <kbd>1</kbd>–<kbd>5</kbd>,<kbd>0</kbd>verdict (moves on)</span></div>';
+  $('sr-cur').querySelectorAll('.sr-verdicts button').forEach(b => b.onclick = () => srLabel(b.dataset.v));
+  $('sr-prev').onclick = () => srMove(-1); $('sr-next').onclick = () => srMove(1); $('sr-replay').onclick = srPlay;
+  srList();
+  if (play) srPlay();
+}
+function srPlay() { const it = sr.items[sr.i]; if (!it) return; video().playbackRate = sr.rate; seek(it.t_ms - 1500, it.t_ms + 1000); }
+function srMove(step) {
+  const pos = sr.view.indexOf(sr.items[sr.i]);
+  const next = pos < 0 ? sr.view.find(it => it.t_ms >= sr.items[sr.i].t_ms) : sr.view[pos + step];
+  if (next) { sr.i = sr.items.indexOf(next); srShow(true); }
+}
+async function srLabel(verdict) {
+  const it = sr.items[sr.i]; if (!it) return;
+  const clear = verdictOf(it) === verdict;
+  try {
+    const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:it.key, verdict:clear ? null : verdict, source:it.source})});
+    sr.data.labels = r.labels;
+  } catch (e) { $('sr-msg').textContent = 'Not saved: ' + e.message; return; }
+  const before = sr.items[sr.i]; srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === before.key)); srView();
+  if (!clear) { const cur = sr.items[sr.i]; const next = sr.view.find(x => x.t_ms > cur.t_ms || (x.t_ms === cur.t_ms && x.key > cur.key)); if (next) { sr.i = sr.items.indexOf(next); srShow(true); return; } }
+  srShow(false);
+}
+$('sr-add').onclick = async () => {
+  if (!sr.data) return;
+  const t = nowMs(), actor = $('sr-add-actor').value;
+  if (t < sr.data.start_ms || t >= sr.data.end_ms) { $('sr-msg').textContent = 'The playhead is outside this comparison (' + fmt(sr.data.start_ms) + '–' + fmt(sr.data.end_ms) + ').'; return; }
+  try { const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:actor + '@' + t, verdict:$('sr-add-verdict').value, source:'added'})}); sr.data.labels = r.labels; }
+  catch (e) { $('sr-msg').textContent = 'Not saved: ' + e.message; return; }
+  srMerge(); sr.i = sr.items.findIndex(x => x.key === actor + '@' + t); srView(); srShow(false);
+};
+document.addEventListener('keydown', e => {
+  if (!sr.data || $('sr-body').hidden || e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const v = VERDICTS.find(x => x[2] === e.key);
+  if (v) { e.preventDefault(); srLabel(v[0]); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); srMove(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); srMove(-1); }
+  else if (e.key === ' ' && !e.target.closest('button, video')) { e.preventDefault(); srPlay(); }
+});
+
+loadDefaults(); loadRuns(); srInit();
 </script>
 </body>
 </html>

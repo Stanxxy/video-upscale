@@ -67,7 +67,16 @@ This is local implementation, not production deployment or live model qualificat
 ## Approved Gemini 3.8 production setup
 
 The founder approved Gemini3.8 production selection on September21 after the
-real-video run. `config/analysis/gemini38.json` is the canonical new-run preset:
+real-video run. New runs use the Hydrogen presets (founder 2026-11-15):
+`config/analysis/hydrogen.json` (BJJ) runs every model step on `gemini-4-hydrogen` with
+the scans and analysis at high thinking and no check steps (no position or technique
+checks, no validator); `config/analysis/hydrogen-mma-ground.json` is the MMA preset for
+workflow `mma-windowed-strikes-ground`: the same, with the 10fps strike census and no
+strike or knockdown check, plus a 5fps ground re-scan that names the top fighter in each
+ground phase. Progress reports a check step a preset leaves out as `skipped`. The
+gemini38 presets below stay for runs admitted with them.
+
+`config/analysis/gemini38.json` was the canonical new-run preset:
 all six nodes use `gemini-3.8-flash` and low media resolution; scans and technique
 analysis use high thinking, the three checks (position critique, technique critique,
 technique validate) low thinking (founder, 2026-11-14), with
@@ -80,7 +89,8 @@ low-thinking second look at every flagged knockdown; grappling keeps the
 per-candidate chain on a 2fps scan. Regenerate both files with
 `python service/analysis_preset.py`; the published digest is over these exact bytes.
 `config/analysis/qualified-models.json` binds the model ID to the returned version
-observed in all21 calls of the completed real-video native DAG.
+observed in all21 calls of the completed real-video native DAG; `gemini-4-hydrogen`
+returns `gemini-4-hydrogen` (21 VLM Studio runs on 13 clips, x-mma 2026-11-15).
 
 Publish the exact preset bytes into each owner's existing private artifact bucket
 under a content-addressed immutable key. Set that owner's `BJJ_DAG_PRESET_REF_JSON`

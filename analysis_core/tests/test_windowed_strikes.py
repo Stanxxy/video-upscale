@@ -281,3 +281,34 @@ def test_outcome_evidence_outside_a_corrected_clip_is_rejected_at_the_call():
     with pytest.raises(ValueError, match="inside the technique bounds"):
         TechniqueDecisionV1.model_validate(dict(schema_version=1, candidate_id="c", verdict="correct",
                                                 intentional_technique_visible=True, technique=bad, reason="r"))
+
+
+def test_a_run_without_check_nodes_publishes_the_first_pass_with_no_check_calls(run, tmp_path):
+    """Hydrogen experiment arm: no position/technique checks, no validator, audit or knockdown check."""
+    data = config_bytes(audit=False, knockdown_check=None, position_critique=None,
+                        technique_critique=None, technique_validate=None)
+    run = strikes_run(run, data)
+    at = [run.registered_at]
+
+    def clock():
+        at[0] += timedelta(milliseconds=1)
+        return at[0]
+
+    provider, sink = Provider(clock), Sink()
+
+    async def guard():
+        return None
+
+    journal = DiskJournal(tmp_path / "j.sqlite")
+    result = asyncio.run(execute_pipeline(run, data, journal=journal, provider=provider, sink=sink, guard=guard,
+                                          clock=clock, max_parallel_calls=4))
+    assert set(provider.calls) == {"position_scan", "technique_scan", "strike_census"}
+    # The scan's replay transition at 8000 stands unchecked.
+    assert [p.bounds.start_ms for p in result.positions.positions] == [1000, 8000]
+    # The census knockdown is published unchecked (no knockdown check configured).
+    events = result.techniques.techniques
+    assert [(e.bounds.start_ms + 250, e.knockdown) for e in events][:2] == [(1600, True), (2500, False)]
+    with pytest.raises(ValueError, match="no position_critique node"):
+        prepare_call(run, data, "position_critique", input_window=dict(start_ms=1000, end_ms=5000),
+                     context=dict(transition_index=0, proposed=dict(), state_before=dict()))
+    journal.close()

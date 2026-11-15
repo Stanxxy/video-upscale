@@ -380,3 +380,35 @@ async def test_proposed_context_with_no_scan_transitions_runs_no_position_checks
     result = await execute(parallel_run, proposed, lane, max_parallel_calls=6)
     assert "position_critique" not in lane[3].max_by_node
     assert len(result.positions.positions) == 1
+
+
+@pytest.mark.asyncio
+async def test_without_check_nodes_the_first_pass_is_published_with_no_check_calls(
+    run, configuration, lanes
+):
+    """Checks that only echo the first pass (as Hydrogen's did) change nothing when cut."""
+    import hashlib
+
+    from bjj_analysis_core.requests import CoreConfigV1
+    from shared_lib.models.analysis_run_record import RegisteredAIRunV1
+
+    unchecked = (
+        CoreConfigV1.model_validate_json(configuration)
+        .model_copy(update={"position_critique": None, "technique_critique": None, "technique_validate": None})
+        .model_dump_json()
+        .encode()
+    )
+    spec = run.spec.model_copy(
+        update={"effective_config": run.spec.effective_config.model_copy(
+            update={"sha256": hashlib.sha256(unchecked).hexdigest()})}
+    )
+    bare = RegisteredAIRunV1.model_validate({**run.model_dump(), "spec": spec.model_dump()})
+    checked_lane, bare_lane = lanes("checked"), lanes("bare")
+    checked = await execute(run, configuration, checked_lane, max_parallel_calls=4)
+    result = await execute(bare, unchecked, bare_lane, max_parallel_calls=4)
+    calls = {node for node, _ in bare_lane[3].items}
+    assert not calls & {"position_critique", "technique_critique", "technique_validate"}
+    assert "technique_analyze" in calls
+    assert [p.bounds for p in result.positions.positions] == [p.bounds for p in checked.positions.positions]
+    assert len(result.techniques.techniques) == len(checked.techniques.techniques) == len(EVENTS)
+    assert [t.bounds for t in result.techniques.techniques] == [t.bounds for t in checked.techniques.techniques]

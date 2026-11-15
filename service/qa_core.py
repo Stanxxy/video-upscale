@@ -33,7 +33,13 @@ import boto3
 from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field
 
-from bjj_analysis_core import CORE_VERSION, MMA_STRIKES_WORKFLOW_ID, MMA_WORKFLOW_ID, WORKFLOW_ID
+from bjj_analysis_core import (
+    CORE_VERSION,
+    MMA_GROUND_WORKFLOW_ID,
+    MMA_STRIKES_WORKFLOW_ID,
+    MMA_WORKFLOW_ID,
+    WORKFLOW_ID,
+)
 from bjj_analysis_core.execution import StepCheckpointV1
 from bjj_analysis_core.requests import CoreConfigV1, NodeConfigV1
 from shared_lib.models.analysis_contracts import AnalysisRunSpecV1
@@ -41,7 +47,13 @@ from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 from service.analysis_gemini import GeminiProvider, S3GeminiArtifacts
 from service.analysis_media import S3RunMedia
-from service.analysis_preset import gemini38_mma_preset, gemini38_mma_strikes_preset, gemini38_preset
+from service.analysis_preset import (
+    gemini38_mma_preset,
+    gemini38_mma_strikes_preset,
+    gemini38_preset,
+    hydrogen_unchecked,
+    with_ground_rescan,
+)
 from service.analysis_run_host import DurableGeminiRun
 
 logger = logging.getLogger("service.qa_core")
@@ -56,6 +68,7 @@ NODES = (
     "strike_census",
     "strike_audit",
     "knockdown_check",
+    "ground_rescan",
 )
 # Workflows VLM Studio can run. "mma_v2" is the production MMA workflow (windowed strike
 # census + audit); "mma_v2_census" skips the audit; "mma" is the v1 per-strike chain baseline.
@@ -64,10 +77,22 @@ SPORTS = {
     "mma": (MMA_WORKFLOW_ID, "mma.v1", gemini38_mma_preset),
     "mma_v2": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", gemini38_mma_strikes_preset),
     "mma_v2_census": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", lambda: gemini38_mma_strikes_preset(audit=False)),
+    # Experiment arms: Gemini 4 Hydrogen on every model step, no check steps.
+    "bjj_h": (WORKFLOW_ID, "bjj.v1", lambda: hydrogen_unchecked(gemini38_preset())),
+    "mma_v2_h": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", lambda: hydrogen_unchecked(gemini38_mma_strikes_preset())),
+    # Ground re-scan experiments (who is on top in MMA ground phases).
+    "mma_v2_hg": (MMA_GROUND_WORKFLOW_ID, "mma.v1",
+                  lambda: with_ground_rescan(hydrogen_unchecked(gemini38_mma_strikes_preset()))),
+    "mma_v2_g": (MMA_GROUND_WORKFLOW_ID, "mma.v1", lambda: with_ground_rescan(gemini38_mma_strikes_preset())),
 }
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
 QUALIFIED_MODELS = ENGINE_ROOT / "config" / "analysis" / "qualified-models.json"
+
+
+def studio_models():
+    """VLM Studio runs exactly the production-qualified models."""
+    return json.loads(QUALIFIED_MODELS.read_text())
 
 # Google's published Standard paid-tier rate (https://ai.google.dev/gemini-api/docs/pricing),
 # the same table s34 VLM Studio used. Thinking tokens bill as output. An unlisted
@@ -76,6 +101,9 @@ _PROMO_END = date(2026, 12, 31)
 
 
 def _rate(model: str | None, on: date):
+    # Gemini 4 Hydrogen (2026-11-12): $1.50 / $7.50 per 1M, implicit cache $0.075, no promo.
+    if model == "gemini-4-hydrogen":
+        return {"input": 1.50, "output": 7.50, "cached": 0.075}
     if model not in {"gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"}:
         return None
     if on <= _PROMO_END:
@@ -104,7 +132,7 @@ class NodeOverride(BaseModel):
 
 class CoreRunIn(BaseModel):
     youtube_id: str = Field(pattern=YOUTUBE_ID.pattern)
-    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census"]
+    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census", "bjj_h", "mma_v2_h", "mma_v2_hg", "mma_v2_g"]
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
     fighters: tuple[FighterIn, FighterIn]
@@ -454,7 +482,7 @@ class CoreRuns:
             scratch.mkdir(exist_ok=True)
             media = S3RunMedia(self.client, allowed_buckets={self.settings.bucket}, scratch_root=scratch,
                                max_source_bytes=4 * 1024**3, guard=guard)
-            qualified = json.loads(QUALIFIED_MODELS.read_text())
+            qualified = studio_models()
             async with media.open(run) as verified:
                 artifacts = S3GeminiArtifacts(run, self.client, bucket=self.settings.bucket)
                 provider = GeminiProvider(verified, artifacts, api_key=self.settings.api_key,
@@ -533,7 +561,7 @@ class CoreRuns:
             node.update(succeeded=states.count("succeeded"), running=sum(s in {"running", "retrying"} for s in states),
                         failed=states.count("failed"), seen=len(states), usd=round(node["usd"], 4))
             summary.append(node)
-        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "strike_census", "strike_audit", "strikes_merge", "knockdown_check", "knockdowns_apply",
+        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "ground_rescan", "ground_merge", "strike_census", "strike_audit", "strikes_merge", "knockdown_check", "knockdowns_apply",
                                              "position_critique", "positions_normalize",
                                              "positions_publish", "technique_scan", "position_technique_candidates",
                                              "technique_critique", "technique_worklist", "technique_analyze",

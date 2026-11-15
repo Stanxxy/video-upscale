@@ -77,7 +77,7 @@ def _revision(run, completed_at, component, items):
     return final
 
 
-def normalize_positions(run, scan, critiques, *, completed_at):
+def normalize_positions(run, scan, critiques, *, completed_at, unchecked=()):
     """Every rough transition needs one decision; no missing critiques or sorting.
 
     Rejected transitions vanish only by explicit decision. Confirmed corrected
@@ -87,10 +87,17 @@ def normalize_positions(run, scan, critiques, *, completed_at):
     run, completed_at = _context(run, completed_at)
     pack = pack_for(run)
     scan = pack.position_scan.model_validate(scan)
-    decisions = tuple(pack.position_critique.model_validate(c) for c in critiques)
-    by_index = {c.transition_index: c for c in decisions}
-    if len(by_index) != len(decisions) or set(by_index) != set(
-        range(len(scan.transitions))
+    # critiques=None: the run has no position check; the scan's transitions stand.
+    decisions = None if critiques is None else tuple(
+        pack.position_critique.model_validate(c) for c in critiques
+    )
+    by_index = {} if decisions is None else {c.transition_index: c for c in decisions}
+    # unchecked: transitions a ground re-scan already checked (grounds.py); they stand.
+    unchecked = frozenset(unchecked)
+    if decisions is not None and (
+        len(by_index) != len(decisions)
+        or set(by_index) & unchecked
+        or set(by_index) | unchecked != set(range(len(scan.transitions)))
     ):
         raise ValueError(
             "exactly one critique is required for every scanned transition"
@@ -104,7 +111,10 @@ def normalize_positions(run, scan, critiques, *, completed_at):
         previous_rough = transition.at_ms
     start, state, intervals = run.spec.scope.start_ms, scan.initial_state, []
     boundaries = []
-    for index in range(len(scan.transitions)):
+    for index, transition in enumerate(scan.transitions):
+        if decisions is None or index in unchecked:
+            boundaries.append((transition.at_ms, transition.state_after))
+            continue
         decision = by_index[index]
         if decision.confirmed:
             boundaries.append((decision.corrected_at_ms, decision.state_after))
@@ -145,13 +155,16 @@ def normalize_techniques(run, candidates, decisions, *, completed_at, strikes=()
     pack = pack_for(run)
     candidates = tuple(pack.technique_candidate.model_validate(c) for c in candidates)
     candidate_ids = tuple(c.candidate_id for c in candidates)
-    decisions = tuple(pack.technique_decision.model_validate(d) for d in decisions)
+    # decisions=None: the run has no validator; each analysis stands as proposed.
+    unchecked = decisions is None
+    decisions = () if unchecked else tuple(
+        pack.technique_decision.model_validate(d) for d in decisions
+    )
     by_id = {d.candidate_id: d for d in decisions}
-    if (
-        len(set(candidate_ids)) != len(candidate_ids)
-        or len(by_id) != len(decisions)
+    if len(set(candidate_ids)) != len(candidate_ids) or (not unchecked and (
+        len(by_id) != len(decisions)
         or set(by_id) != set(candidate_ids)
-    ):
+    )):
         raise ValueError(
             "exactly one decision is required for every technique candidate"
         )
@@ -159,10 +172,13 @@ def normalize_techniques(run, candidates, decisions, *, completed_at, strikes=()
     for candidate in candidates:
         if not run.spec.scope.contains(candidate.observation_window):
             raise ValueError("candidate observation window exceeds selected scope")
-        decision = by_id[candidate.candidate_id]
-        if decision.verdict == "ditch":
-            continue
-        data = decision.technique
+        if unchecked:
+            data = candidate.proposed
+        else:
+            decision = by_id[candidate.candidate_id]
+            if decision.verdict == "ditch":
+                continue
+            data = decision.technique
         if pack.windowed_strikes and any(
             a.value in STRIKE_ACTIONS for a in data.action_classes
         ):
@@ -170,7 +186,7 @@ def normalize_techniques(run, candidates, decisions, *, completed_at, strikes=()
             # change candidate the chain labels as a strike is the census's strike seen
             # a second time (it duplicated knockdowns in the Round 1 run), not a new one.
             continue
-        if decision.verdict == "agree" and data != candidate.proposed:
+        if not unchecked and decision.verdict == "agree" and data != candidate.proposed:
             raise ValueError("agree must preserve the proposed technique exactly")
         if not candidate.observation_window.contains(data.bounds):
             raise ValueError("technique bounds exceed the supplied observation window")

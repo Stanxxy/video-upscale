@@ -22,6 +22,8 @@ from bjj_analysis_core.outputs import (
     TemporalCritiqueV1,
 )
 from bjj_analysis_core.mma_outputs import (
+    GroundRescanInputV1,
+    GroundRescanV1,
     KnockdownCheckInputV1,
     KnockdownCheckV1,
     StrikeAuditInputV1,
@@ -53,6 +55,7 @@ NodeId = Literal[
     "strike_census",
     "strike_audit",
     "knockdown_check",
+    "ground_rescan",
 ]
 # The BJJ pack's node outputs (every pack has the same nodes).
 OUTPUTS = BJJ.outputs
@@ -120,11 +123,13 @@ class CoreConfigV1(VersionedAnalysisContract):
     core_version: Literal[CORE_VERSION] = CORE_VERSION
     prompt_bundle_sha256: Sha256
     position_scan: NodeConfigV1
-    position_critique: NodeConfigV1
+    # A null check node means "no check": the first pass is used as-is (the scan's
+    # transitions, the scan's event bounds, the analysis). Explicit, never implied.
+    position_critique: NodeConfigV1 | None
     technique_scan: NodeConfigV1
-    technique_critique: NodeConfigV1
+    technique_critique: NodeConfigV1 | None
     technique_analyze: NodeConfigV1
-    technique_validate: NodeConfigV1
+    technique_validate: NodeConfigV1 | None
     candidates: CandidateConfigV1
     # Full executor bounds are versioned with the effective run configuration.
     position_critique_back_ms: NonNegativeInt = Field(default=4000, le=30000)
@@ -142,6 +147,12 @@ class CoreConfigV1(VersionedAnalysisContract):
     knockdown_check: NodeConfigV1 | None = None
     strike_window_ms: PositiveInt = Field(default=20000, ge=5000, le=60000)
     strike_overlap_ms: NonNegativeInt = Field(default=2000, le=10000)
+    # Ground re-scan (workflow mma-windowed-strikes-ground only): each ground phase of
+    # the position scan is re-scanned in windows of ground_window_ms that start
+    # ground_lookback_ms early (bjj_analysis_core.grounds).
+    ground_rescan: NodeConfigV1 | None = None
+    ground_window_ms: PositiveInt = Field(default=20000, ge=5000, le=60000)
+    ground_lookback_ms: NonNegativeInt = Field(default=5000, le=15000)
 
 
 class PreparedCallV1(VersionedAnalysisContract):
@@ -180,6 +191,8 @@ def load_config(run, config_bytes):
         or config.knockdown_check is not None
     ):
         raise ValueError("strike census nodes belong only to the windowed strike workflow")
+    if pack.ground_rescan != (config.ground_rescan is not None):
+        raise ValueError("the ground re-scan node belongs exactly to the ground workflow")
     return run, config
 
 
@@ -192,6 +205,8 @@ def prepare_call(
     if node_id not in pack.outputs:
         raise ValueError("unknown core node")
     bundle = prompt_bundle(pack)
+    if getattr(config, node_id) is None:
+        raise ValueError(f"this run has no {node_id} node")
     window = TimeRangeMs.model_validate(input_window)
     if not run.spec.scope.contains(window):
         raise ValueError("model observation window exceeds admitted scope")
@@ -211,6 +226,7 @@ def prepare_call(
             "strike_census": StrikeWindowInputV1,
             "strike_audit": StrikeAuditInputV1,
             "knockdown_check": KnockdownCheckInputV1,
+            "ground_rescan": GroundRescanInputV1,
         }[node_id]
         parsed = context_model.model_validate(context)
         if node_id == "knockdown_check":
@@ -239,6 +255,17 @@ def prepare_call(
                 raise ValueError("strike census context names a different window")
             if node_id == "strike_audit" and parsed.census.window_index != index:
                 raise ValueError("strike audit reviews another window's census")
+        if node_id == "ground_rescan":
+            from bjj_analysis_core.grounds import AFTER_MS
+
+            if advisory_positions is not None:
+                raise ValueError("the ground re-scan is visually independent")
+            expected = TimeRangeMs(
+                start_ms=max(run.spec.scope.start_ms, parsed.core.start_ms - config.ground_lookback_ms),
+                end_ms=min(run.spec.scope.end_ms, parsed.core.end_ms + AFTER_MS),
+            )
+            if parsed.window != window or window != expected:
+                raise ValueError("ground re-scan window differs from its phase and look-back")
         if node_id == "technique_critique":
             from bjj_analysis_core.discovery import critique_window
 
@@ -377,6 +404,23 @@ def parse_response(prepared, response_text):
         for strike in result.added:
             if not window.start_ms <= strike.at_ms <= window.end_ms:
                 raise ValueError("added strike falls outside the window")
+    elif isinstance(result, GroundRescanV1):
+        from bjj_analysis_core.grounds import TOP_BOTTOM
+
+        if result.phase_index != context["phase_index"]:
+            raise ValueError("ground re-scan answers a different phase")
+        players = {p["player_id"] for p in strict_json(prepared.initial_prompt)["ordered_players"]}
+        core = context["core"]
+        if result.states[0].at_ms > core["start_ms"]:
+            raise ValueError("ground re-scan must describe its phase from the start")
+        for state in result.states:
+            if not window.start_ms <= state.at_ms < window.end_ms:
+                raise ValueError("ground state falls outside the window")
+            if state.position.value in TOP_BOTTOM:
+                if state.top_player_id not in players:
+                    raise ValueError("a ground position names its top fighter by player id")
+            elif state.top_player_id is not None:
+                raise ValueError("a neutral position has no top fighter")
     elif isinstance(result, KnockdownCheckV1):
         if result.strike_index != context["strike_index"]:
             raise ValueError("knockdown check answers a different strike")

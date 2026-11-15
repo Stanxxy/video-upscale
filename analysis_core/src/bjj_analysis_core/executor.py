@@ -14,9 +14,12 @@ from bjj_analysis_core.discovery import (
     build_candidates,
     critique_window,
     resolve_temporal_critiques,
+    unchecked_worklist,
 )
 from bjj_analysis_core.execution import StepRunner
+from bjj_analysis_core.grounds import apply_ground_rescans, ground_phases, rescanned_transitions
 from bjj_analysis_core.mma_outputs import (
+    GroundRescanV1,
     KnockdownCheckV1,
     StrikeAuditV1,
     StrikeBatchV1,
@@ -180,6 +183,44 @@ async def execute_pipeline(
                 context={},
             )
         )
+        rescanned = ()
+        if pack.ground_rescan:
+            # Re-check every ground phase in a short look-back window, then let the
+            # checks (if any) and normalization work on the merged scan.
+            phases = ground_phases(run, cfg, scan)
+
+            def rescan_step(index, core, window):
+                async def step():
+                    return await model(
+                        prepare_call(
+                            run,
+                            config_bytes,
+                            "ground_rescan",
+                            input_window=window,
+                            context=dict(phase_index=index, core=core, window=window),
+                        ),
+                        item=str(index),
+                    )
+
+                return step
+
+            rescans = await _ordered(
+                [rescan_step(i, core, window) for i, (core, window) in enumerate(phases)], limit
+            )
+            rescans = await summary("ground_rescan", rescans, tuple[GroundRescanV1, ...])
+            rough = scan
+            scan = await deterministic(
+                "ground_merge",
+                dict(
+                    scan=rough.model_dump(mode="json"),
+                    rescans=[r.model_dump(mode="json") for r in rescans],
+                ),
+                lambda at: apply_ground_rescans(pack, run, cfg, rough, rescans),
+                pack.position_scan,
+            )
+            rescanned = rescanned_transitions(cfg, phases, scan)
+        checked = [i for i in range(len(scan.transitions)) if i not in rescanned]
+
         def critique(index, transition, state_before):
             at = transition.at_ms
             window = TimeRangeMs(
@@ -205,7 +246,9 @@ async def execute_pipeline(
                 item=str(index),
             )
 
-        if cfg.position_critique_context == "proposed":
+        if cfg.position_critique is None:
+            decisions = None  # no position check: the scan's transitions stand
+        elif cfg.position_critique_context == "proposed":
             # Each check sees the scan's own previous state: no dependency, parallel.
             # A scan with no transitions has no checks (and no "before" states).
             befores = ((scan.initial_state,) + tuple(
@@ -215,6 +258,7 @@ async def execute_pipeline(
                 [
                     (lambda i=i, t=t, b=b: critique(i, t, b))
                     for i, (t, b) in enumerate(zip(scan.transitions, befores, strict=True))
+                    if i in checked
                 ],
                 limit,
             )
@@ -222,21 +266,26 @@ async def execute_pipeline(
             # Serial: each check's context carries the previous confirmed state.
             decisions, state_before = [], scan.initial_state
             for index, transition in enumerate(scan.transitions):
+                if index in rescanned:
+                    state_before = transition.state_after  # accepted from the re-scan
+                    continue
                 decision = await critique(index, transition, state_before)
                 decisions.append(decision)
                 # Rejected rough states do not poison the next critique's context.
                 if decision.confirmed:
                     state_before = decision.state_after
-        decisions = await summary(
-            "position_critique", decisions, tuple[pack.position_critique, ...]
-        )
+        if decisions is not None:
+            decisions = await summary(
+                "position_critique", decisions, tuple[pack.position_critique, ...]
+            )
         positions = await deterministic(
             "positions_normalize",
             dict(
                 scan=scan.model_dump(mode="json"),
-                critiques=[d.model_dump(mode="json") for d in decisions],
+                critiques=None if decisions is None else [d.model_dump(mode="json") for d in decisions],
+                **({"rescanned": list(rescanned)} if rescanned else {}),
             ),
-            lambda at: normalize_positions(run, scan, decisions, completed_at=at),
+            lambda at: normalize_positions(run, scan, decisions, completed_at=at, unchecked=rescanned),
             AnalysisRevisionV1,
         )
         await publish(
@@ -384,21 +433,30 @@ async def execute_pipeline(
 
         return step
 
-    temporal = await _ordered([critique_step(c) for c in batch.candidates], limit)
-    temporal = await summary(
-        "technique_critique", temporal, tuple[TemporalCritiqueV1, ...]
-    )
-    work = await deterministic(
-        "technique_worklist",
-        dict(
-            candidates=batch.model_dump(mode="json"),
-            decisions=[d.model_dump(mode="json") for d in temporal],
-        ),
-        lambda at: resolve_temporal_critiques(
-            run, config_bytes, batch.candidates, temporal
-        ),
-        tuple[TechniqueAnalysisInputV1, ...],
-    )
+    if cfg.technique_critique is None:
+        # No temporal check: each candidate is analyzed in the scan's own bounds.
+        work = await deterministic(
+            "technique_worklist",
+            dict(candidates=batch.model_dump(mode="json"), decisions=None),
+            lambda at: unchecked_worklist(run, config_bytes, batch.candidates),
+            tuple[TechniqueAnalysisInputV1, ...],
+        )
+    else:
+        temporal = await _ordered([critique_step(c) for c in batch.candidates], limit)
+        temporal = await summary(
+            "technique_critique", temporal, tuple[TemporalCritiqueV1, ...]
+        )
+        work = await deterministic(
+            "technique_worklist",
+            dict(
+                candidates=batch.model_dump(mode="json"),
+                decisions=[d.model_dump(mode="json") for d in temporal],
+            ),
+            lambda at: resolve_temporal_critiques(
+                run, config_bytes, batch.candidates, temporal
+            ),
+            tuple[TechniqueAnalysisInputV1, ...],
+        )
     def analyze_step(target):
         async def step():
             return await model(
@@ -445,17 +503,20 @@ async def execute_pipeline(
 
         return step
 
-    verdicts = await _ordered(
-        [validate_step(t, c) for t, c in zip(work, candidates, strict=True)], limit
-    )
-    verdicts = await summary(
-        "technique_validate", verdicts, tuple[pack.technique_decision, ...]
-    )
+    if cfg.technique_validate is None:
+        verdicts = None  # no validator: each analysis stands as proposed
+    else:
+        verdicts = await _ordered(
+            [validate_step(t, c) for t, c in zip(work, candidates, strict=True)], limit
+        )
+        verdicts = await summary(
+            "technique_validate", verdicts, tuple[pack.technique_decision, ...]
+        )
     techniques = await deterministic(
         "techniques_normalize",
         dict(
             candidates=[c.model_dump(mode="json") for c in candidates],
-            verdicts=[d.model_dump(mode="json") for d in verdicts],
+            verdicts=None if verdicts is None else [d.model_dump(mode="json") for d in verdicts],
             **({"strikes": [s.model_dump(mode="json") for s in strikes]} if strikes else {}),
         ),
         lambda at: normalize_techniques(

@@ -195,3 +195,45 @@ def test_parallel_position_checks_follow_the_preset_unless_the_run_says_otherwis
         assert qa_core.build_config(sport, {}).position_critique_context == "proposed"
         assert qa_core.build_config(sport, {}, False).position_critique_context == "confirmed"
         assert qa_core.build_config(sport, {}, True).position_critique_context == "proposed"
+
+
+def test_studio_runs_the_production_qualified_models_and_prices_hydrogen():
+    """Hydrogen is production-qualified (founder 2026-11-15); Studio runs exactly that list."""
+    import json
+    from datetime import date
+
+    production = json.loads(qa_core.QUALIFIED_MODELS.read_text())
+    assert production["gemini-4-hydrogen"] == ["gemini-4-hydrogen"]
+    assert qa_core.studio_models() == production
+    assert qa_core._rate("gemini-4-hydrogen", date(2026, 11, 15)) == {"input": 1.50, "output": 7.50, "cached": 0.075}
+    config = qa_core.build_config("bjj", {n: qa_core.NodeOverride(model="gemini-4-hydrogen") for n in (
+        "position_scan", "position_critique", "technique_scan", "technique_critique", "technique_analyze", "technique_validate")})
+    assert {getattr(config, n).model for n in ("position_scan", "technique_validate")} == {"gemini-4-hydrogen"}
+    assert (config.position_scan.thinking, config.technique_validate.thinking) == ("high", "low")
+
+
+def test_hydrogen_no_check_arms_run_only_first_pass_steps_on_hydrogen():
+    for sport, model_nodes in (("bjj_h", ("position_scan", "technique_scan", "technique_analyze")),
+                               ("mma_v2_h", ("position_scan", "technique_scan", "technique_analyze", "strike_census"))):
+        config = qa_core.build_config(sport, {})
+        assert {getattr(config, n).model for n in model_nodes} == {"gemini-4-hydrogen"}
+        assert all(getattr(config, n) is None for n in (
+            "position_critique", "technique_critique", "technique_validate", "strike_audit", "knockdown_check"))
+    # Thinking is unchanged from the release presets.
+    assert qa_core.build_config("mma_v2_h", {}).strike_census.thinking == "high"
+
+
+def test_ground_rescan_arms_add_the_node_on_the_ground_workflow():
+    from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID
+    from bjj_analysis_core.packs import MMA_GROUND
+    from bjj_analysis_core.requests import prompt_bundle_sha256
+
+    for sport, scan_model in (("mma_v2_hg", "gemini-4-hydrogen"), ("mma_v2_g", "gemini-3.8-flash")):
+        workflow, _, _ = qa_core.SPORTS[sport]
+        config = qa_core.build_config(sport, {})
+        assert workflow == MMA_GROUND_WORKFLOW_ID
+        assert config.prompt_bundle_sha256 == prompt_bundle_sha256(MMA_GROUND)
+        assert (config.ground_rescan.model, config.ground_rescan.fps, config.ground_rescan.thinking) == (
+            "gemini-4-hydrogen", 5, "high")
+        assert config.position_scan.model == scan_model
+        assert (config.ground_window_ms, config.ground_lookback_ms) == (20000, 5000)
