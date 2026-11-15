@@ -51,21 +51,20 @@ def sequences_run(run, data=None):
     return strikes_run(run, data, MMA_SEQUENCES_WORKFLOW_ID), data
 
 
-def step(start, end=None, action="strike_punch", technique="jab", outcome="successful", **changes):
+def step(action="strike_punch", technique="jab", outcome="successful", **changes):
     strike = action.startswith("strike_") or action == "ground_strike"
     value = dict(
-        start_ms=start, end_ms=end or start + 300, action=action, technique=technique, note=None,
-        outcome=outcome, strike_target="head" if strike else None, significant=True if strike else None,
-        knockdown=False, repeat=1, landed=(int(outcome == "successful") if action == "ground_strike" else None),
-        evidence="seen on the main angle",
+        evidence="seen on the main angle", action=action, technique=technique, note=None, outcome=outcome,
+        strike_target="head" if strike else None, significant=True if strike else None, knockdown=False,
+        repeat=1, landed=(int(outcome == "successful") if action == "ground_strike" else None),
     )
     value.update(changes)
     return value
 
 
-def seq(*steps, actor="a", summary="a chain"):
+def seq(start, end, *steps, actor="a", summary="a chain"):
     return dict(summary=summary, actor_appearance=f"{actor} shorts", actor_player_id=actor, actor_sentinel=None,
-                steps=list(steps))
+                start_ms=start, end_ms=end, steps=list(steps or (step(),)))
 
 
 def census(index, *sequences):
@@ -124,94 +123,80 @@ def test_census_answers_are_checked_inside_the_window_and_by_the_step_rules(run)
     def answer(*sequences, index=0):
         return json.dumps(dict(schema_version=1, window_index=index, sequences=list(sequences)))
 
-    good = seq(step(1200), step(1500, technique="cross"), step(2000, 3500, "takedown_attempt", "double_leg"),
-               step(3800, 5000, "ground_strike", "punch", repeat=5, landed=3))
-    assert len(parse_response(call, answer(good)).sequences[0].steps) == 4
+    good = seq(1200, 5000, step(), step(technique="cross"), step("takedown_attempt", "double_leg"),
+               step("ground_strike", "punch", repeat=5, landed=3))
+    parsed = parse_response(call, answer(good)).sequences[0]
+    assert [s.technique.value for s in parsed.steps] == ["jab", "cross", "double_leg", "punch"]
     for bad, message in (
         (answer(good, index=1), "different window"),
-        (answer(seq(step(5900, 6200))), "inside the window"),
-        (answer(seq(step(1200), actor="referee")), "player id"),
-        (answer(seq(step(1200, technique="double_leg"))), "technique names"),
-        (answer(seq(step(1200, action="takedown_attempt", technique="jab"))), "technique names"),
-        (answer(seq(step(1200, technique="other"))), "needs a note"),
-        (answer(seq(step(1200, 2000, "ground_strike", "punch", repeat=2, landed=3))), "at most repeat"),
-        (answer(seq(step(1200, 2000, "takedown_attempt", "trip", strike_target="leg"))), "only to strike steps"),
-        (answer(seq(step(2000), step(1200))), "ordered by start"),
+        (answer(seq(5900, 6200)), "inside the window"),
+        (answer(seq(1500, 1200)), "ends after it starts"),
+        (answer(seq(1200, 1500, actor="referee")), "player id"),
+        (answer(seq(1200, 1500, step(technique="double_leg"))), "technique names"),
+        (answer(seq(1200, 1500, step("takedown_attempt", "jab"))), "technique names"),
+        (answer(seq(1200, 1500, step(technique="other"))), "needs a note"),
+        (answer(seq(1200, 1500, step("ground_strike", "punch", repeat=2, landed=3))), "at most repeat"),
+        (answer(seq(1200, 1500, step("takedown_attempt", "trip", strike_target="leg"))), "only to strike steps"),
     ):
         with pytest.raises(ValueError, match=message):
             parse_response(call, bad)
 
 
-def test_merge_joins_overlap_copies_keeps_the_better_seen_step_and_splits_long_pauses(run):
+def test_a_sequence_seen_in_two_overlapping_windows_is_kept_once(run):
     seq_run, data = sequences_run(run)
     _, config = load_config(seq_run, data)
     censuses = [
-        census(
-            0,
-            # Cut off by window 0's end (unclear); window 1 sees the takedown land.
-            seq(step(4800), step(5100, 6000, "takedown_attempt", "double_leg", outcome="unclear")),
-            # A pause of 2 s inside one census sequence: two sequences.
-            seq(step(1200), step(3500, technique="hook"), actor="b"),
-        ),
-        census(
-            1,
-            seq(step(4800), step(5150, 6500, "takedown_attempt", "double_leg"),
-                step(6700, 8000, "ground_strike", "punch", repeat=4, landed=2)),
-            # The other fighter at the same moment is not a copy.
-            seq(step(4900, technique="cross"), actor="b"),
-        ),
+        # Window 0 (1000-6000) is cut off at its end; window 1 (4000-9000) sees the whole chain.
+        census(0, seq(4800, 6000, step(), step("takedown_attempt", "double_leg", outcome="unclear"))),
+        census(1, seq(4900, 7500, step(), step("takedown_attempt", "double_leg"), step("ground_strike", "punch", repeat=4, landed=2)),
+               seq(5000, 5400, step(technique="cross"), actor="b")),  # the other fighter is not a copy
         census(2),
     ]
-    live = _positions(seq_run, (9500, 10000))
-    batch = merge_sequences(seq_run, config, censuses, live)
-    assert (batch.census_sequences, batch.merged_copies, batch.splits) == (4, 1, 1)
-    chains = [([s.action.value for s in q.steps], q.actor_player_id) for q in batch.sequences]
-    assert chains == [
-        (["strike_punch"], "b"),
-        (["strike_punch"], "b"),
-        (["strike_punch"], "b"),
-        (["strike_punch", "takedown_attempt", "ground_strike"], "a"),
-    ] or chains == [
-        (["strike_punch"], "b"),
-        (["strike_punch"], "b"),
-        (["strike_punch", "takedown_attempt", "ground_strike"], "a"),
-        (["strike_punch"], "b"),
-    ]
+    batch = merge_sequences(seq_run, config, censuses, _positions(seq_run, (9500, 10000)))
+    assert (batch.census_sequences, batch.merged_copies) == (3, 1)
     joined = next(q for q in batch.sequences if q.actor_player_id == "a")
-    takedown = joined.steps[1]
-    assert takedown.outcome.value == "successful" and takedown.bounds.end_ms == 6500
+    assert [s.technique for s in joined.steps] == ["jab", "double_leg", "punch"]  # window 1's copy saw more
+    assert (joined.bounds.start_ms, joined.bounds.end_ms) == (4900, 7500)
+    assert [q.actor_player_id for q in batch.sequences] == ["a", "b"]
 
 
-def test_merge_rejects_steps_in_footage_that_is_not_live(run):
+def test_one_answer_listing_a_sequence_twice_keeps_it_once(run):
     seq_run, data = sequences_run(run)
     _, config = load_config(seq_run, data)
-    censuses = [census(0, seq(step(2000), step(2300, technique="cross"))), census(1), census(2)]
-    batch = merge_sequences(seq_run, config, censuses, _positions(seq_run, (2200, 3000)))
-    assert batch.rejected_not_live_steps == 1
-    assert [[s.technique for s in q.steps] for q in batch.sequences] == [["jab"]]
+    censuses = [census(0, seq(2000, 3000, step()), seq(2100, 3200, step(), step(technique="cross"))), census(1), census(2)]
+    batch = merge_sequences(seq_run, config, censuses, _positions(seq_run, (9500, 10000)))
+    assert batch.merged_copies == 1 and len(batch.sequences) == 1
+    apart = [census(0, seq(2000, 2500), seq(3500, 4000)), census(1), census(2)]
+    assert len(merge_sequences(seq_run, config, apart, _positions(seq_run, (9500, 10000))).sequences) == 2
+
+
+def test_merge_rejects_sequences_in_footage_that_is_not_live(run):
+    seq_run, data = sequences_run(run)
+    _, config = load_config(seq_run, data)
+    censuses = [census(0, seq(2000, 2300), seq(2500, 2900, actor="b")), census(1), census(2)]
+    batch = merge_sequences(seq_run, config, censuses, _positions(seq_run, (2400, 3000)))
+    assert batch.rejected_not_live == 1 and [q.actor_player_id for q in batch.sequences] == ["a"]
     with pytest.raises(ValueError, match="every sequence window"):
         merge_sequences(seq_run, config, censuses[:2], _positions(seq_run, (2200, 3000)))
 
 
-def test_published_sequences_derive_classes_outcome_and_evidence(run, completed_at):
+def test_published_sequences_list_untimed_techniques_with_derived_classes_and_outcome(run, completed_at):
     seq_run, data = sequences_run(run)
     _, config = load_config(seq_run, data)
     censuses = [
-        census(0, seq(step(1200, outcome="unsuccessful"), step(1500, technique="cross"),
-                      step(2000, 3500, "takedown_attempt", "double_leg", outcome="unsuccessful"),
+        census(0, seq(1200, 3500, step(outcome="unsuccessful"), step(technique="cross"),
+                      step("takedown_attempt", "double_leg", outcome="unsuccessful"),
                       summary="jab, cross, then a stuffed double leg")),
-        census(1, seq(step(8000, outcome="unsuccessful"), actor="b")),
+        census(1, seq(8000, 8400, step(outcome="unsuccessful"), actor="b")),
         census(2),
     ]
     batch = merge_sequences(seq_run, config, censuses, _positions(seq_run, (10000, 10500)))
-    revision = normalize_sequences(seq_run, batch, completed_at=completed_at)
-    first, second = revision.techniques
+    first, second = normalize_sequences(seq_run, batch, completed_at=completed_at).techniques
     assert [a.value for a in first.action_classes] == ["strike_punch", "takedown_attempt"]
-    assert first.outcome.value == "successful" and first.outcome_bounds == first.steps[1].bounds
-    assert (first.bounds.start_ms, first.bounds.end_ms) == (1200, 3500)
+    assert first.outcome.value == "successful" and first.outcome_bounds == first.bounds
+    assert (first.bounds.start_ms, first.bounds.end_ms) == (1200, 3500) and first.steps[0].bounds is None
     assert first.notes == "jab, cross, then a stuffed double leg"
     assert second.outcome.value == "unsuccessful" and second.actor_player_id == "b"
-    assert first.strike_target is None and first.significant is None
 
 
 class Provider:
@@ -231,7 +216,7 @@ class Provider:
                 evidence="a on top", geometry=None)])
         elif request.node_id == "sequence_census":
             index, start = context["window_index"], context["window"]["start_ms"]
-            sequences = [seq(step(start + 200), step(start + 500, technique="cross"))] if index == 0 else []
+            sequences = [seq(start + 200, start + 800, step(), step(technique="cross"))] if index == 0 else []
             data = dict(window_index=index, sequences=sequences)
         else:
             raise AssertionError(request.node_id)

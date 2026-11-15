@@ -428,9 +428,8 @@ def parse_response(prepared, response_text):
         for sequence in result.sequences:
             if sequence.actor_player_id is not None and sequence.actor_player_id not in players:
                 raise ValueError("a sequence names its fighter by player id")
-            for step in sequence.steps:
-                if not window.start_ms <= step.start_ms < step.end_ms <= window.end_ms:
-                    raise ValueError("sequence steps must lie inside the window")
+            if not window.start_ms <= sequence.start_ms < sequence.end_ms <= window.end_ms:
+                raise ValueError("a sequence must lie inside the window")
     elif isinstance(result, StrikeAuditV1):
         census = context["census"]["strikes"]
         if result.window_index != context["window_index"]:

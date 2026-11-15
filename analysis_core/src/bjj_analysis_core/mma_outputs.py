@@ -251,14 +251,13 @@ MmaTechniqueName = _enum(
 
 
 class SequenceStepV1(AnalysisContract):
-    """One technique of a chain, in absolute source-video milliseconds.
+    """One technique of a chain. Steps are listed in order and not timed one by one
+    (founder 2026-11-15: report exchanges); the sequence carries the time span.
 
     Field order is answer order: the model describes what it sees (evidence) before
     it classifies, so it does not commit to a class it then contradicts.
     """
 
-    start_ms: NonNegativeInt
-    end_ms: NonNegativeInt
     evidence: Identifier
     action: MmaTechniqueAction
     technique: MmaTechniqueName | None
@@ -272,14 +271,11 @@ class SequenceStepV1(AnalysisContract):
 
     @model_validator(mode="after")
     def published_rules(self):
-        if self.end_ms <= self.start_ms:
-            raise ValueError("a step ends after it starts")
         self.published().check(MMA)
         return self
 
     def published(self) -> TechniqueStepV1:
         return TechniqueStepV1(
-            bounds=TimeRangeMs(start_ms=self.start_ms, end_ms=self.end_ms),
             action=self.action.value,
             technique=None if self.technique is None else self.technique.value,
             note=self.note or None,
@@ -299,17 +295,18 @@ class SequenceV1(AnalysisContract):
     actor_appearance: Identifier
     actor_player_id: Identifier | None
     actor_sentinel: Literal["contested", "unclear"] | None
+    start_ms: NonNegativeInt
+    end_ms: NonNegativeInt
     steps: tuple[SequenceStepV1, ...]
 
     @model_validator(mode="after")
-    def one_actor_ordered_steps(self):
+    def one_actor_and_a_span(self):
         if (self.actor_player_id is None) == (self.actor_sentinel is None):
             raise ValueError("a sequence names its fighter or a sentinel, not both")
         if not self.steps:
             raise ValueError("a sequence has at least one step")
-        starts = [s.start_ms for s in self.steps]
-        if starts != sorted(starts):
-            raise ValueError("sequence steps are ordered by start")
+        if self.end_ms <= self.start_ms:
+            raise ValueError("a sequence ends after it starts")
         return self
 
 
@@ -327,6 +324,7 @@ class MergedSequenceV1(AnalysisContract):
     actor_player_id: Identifier | None
     actor_sentinel: Literal["contested", "unclear"] | None
     summary: Identifier
+    bounds: TimeRangeMs
     steps: tuple[TechniqueStepV1, ...]
 
 
@@ -336,5 +334,4 @@ class SequenceBatchV1(VersionedAnalysisContract):
     sequences: tuple[MergedSequenceV1, ...]
     census_sequences: NonNegativeInt
     merged_copies: NonNegativeInt
-    rejected_not_live_steps: NonNegativeInt
-    splits: NonNegativeInt
+    rejected_not_live: NonNegativeInt
