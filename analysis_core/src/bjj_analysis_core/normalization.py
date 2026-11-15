@@ -77,7 +77,7 @@ def _revision(run, completed_at, component, items):
     return final
 
 
-def normalize_positions(run, scan, critiques, *, completed_at):
+def normalize_positions(run, scan, critiques, *, completed_at, unchecked=()):
     """Every rough transition needs one decision; no missing critiques or sorting.
 
     Rejected transitions vanish only by explicit decision. Confirmed corrected
@@ -92,9 +92,13 @@ def normalize_positions(run, scan, critiques, *, completed_at):
         pack.position_critique.model_validate(c) for c in critiques
     )
     by_index = {} if decisions is None else {c.transition_index: c for c in decisions}
-    if decisions is not None and (len(by_index) != len(decisions) or set(by_index) != set(
-        range(len(scan.transitions))
-    )):
+    # unchecked: transitions a ground re-scan already checked (grounds.py); they stand.
+    unchecked = frozenset(unchecked)
+    if decisions is not None and (
+        len(by_index) != len(decisions)
+        or set(by_index) & unchecked
+        or set(by_index) | unchecked != set(range(len(scan.transitions)))
+    ):
         raise ValueError(
             "exactly one critique is required for every scanned transition"
         )
@@ -108,7 +112,7 @@ def normalize_positions(run, scan, critiques, *, completed_at):
     start, state, intervals = run.spec.scope.start_ms, scan.initial_state, []
     boundaries = []
     for index, transition in enumerate(scan.transitions):
-        if decisions is None:
+        if decisions is None or index in unchecked:
             boundaries.append((transition.at_ms, transition.state_after))
             continue
         decision = by_index[index]

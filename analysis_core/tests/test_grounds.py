@@ -127,6 +127,10 @@ class Provider:
             data = dict(phase_index=context["phase_index"], states=[dict(
                 at_ms=context["window"]["start_ms"], position="side_control", top_player_id="a",
                 evidence="a on top")])
+        elif request.node_id == "position_critique":
+            data = dict(transition_index=context["transition_index"], confirmed=True,
+                        corrected_at_ms=context["proposed"]["at_ms"] + 3000,
+                        state_after=context["proposed"]["state_after"], reason="looks later")
         elif request.node_id == "technique_scan":
             data = dict(events=[])
         elif request.node_id == "technique_analyze":
@@ -168,3 +172,40 @@ def test_full_dag_publishes_the_re_scanned_top_fighter(run, tmp_path):
     assert side and all(p.roles == ("pinning_player", "pinned_player") for p in side)
     assert positions[-1].position == "striking_range"
     journal.close()
+
+
+def test_position_checks_skip_transitions_the_ground_re_scan_already_checked(run, tmp_path):
+    """A critique retime near a re-scanned phase could cross its high-fps boundaries."""
+    data = ground_config(technique_critique=None, technique_validate=None, strike_audit=None,
+                         knockdown_check=None)  # position_critique stays configured
+    ground_run = strikes_run(run, data, MMA_GROUND_WORKFLOW_ID)
+    at = [ground_run.registered_at]
+
+    def clock():
+        at[0] += timedelta(milliseconds=1)
+        return at[0]
+
+    async def guard():
+        return None
+
+    provider, journal = Provider(clock), DiskJournal(tmp_path / "j.sqlite")
+    result = asyncio.run(execute_pipeline(ground_run, data, journal=journal, provider=provider, sink=Sink(),
+                                          guard=guard, clock=clock, max_parallel_calls=4))
+    # Every transition of this short scope is inside the phase or within a critique's reach.
+    assert "position_critique" not in provider.calls
+    assert any(p.position == "side_control" for p in result.positions.positions)
+    journal.close()
+
+
+def test_normalization_accepts_exactly_the_declared_unchecked_transitions(run, completed_at):
+    from bjj_analysis_core.normalization import normalize_positions
+
+    ground_run, _ = ground(run)
+    scan = MMA_GROUND.position_scan.model_validate(SCAN)
+    critique = dict(schema_version=1, transition_index=2, confirmed=True, corrected_at_ms=7200,
+                    state_after=SCAN["transitions"][2]["state_after"], reason="stands up")
+    revision = normalize_positions(ground_run, scan, [critique], completed_at=completed_at, unchecked=(0, 1))
+    assert [p.bounds.start_ms for p in revision.positions] == [1000, 3000, 6000, 7200]
+    for bad in ((0,), (0, 1, 2)):
+        with pytest.raises(ValueError, match="exactly one critique"):
+            normalize_positions(ground_run, scan, [critique], completed_at=completed_at, unchecked=bad)

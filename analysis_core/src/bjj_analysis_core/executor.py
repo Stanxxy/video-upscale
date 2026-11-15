@@ -183,6 +183,7 @@ async def execute_pipeline(
                 context={},
             )
         )
+        rescanned = ()
         if pack.ground_rescan:
             # Re-check every ground phase in a short look-back window, then let the
             # checks (if any) and normalization work on the merged scan.
@@ -217,6 +218,17 @@ async def execute_pipeline(
                 lambda at: apply_ground_rescans(pack, run, cfg, rough, rescans),
                 pack.position_scan,
             )
+            # The re-scan is the check inside ground phases: a position critique there
+            # (or one whose retime could reach into a phase) would re-time the high-fps
+            # boundaries from a coarser look, and could cross them.
+            reach = [
+                (core.start_ms - cfg.position_critique_forward_ms, core.end_ms + cfg.position_critique_back_ms)
+                for core, _ in phases
+            ]
+            rescanned = tuple(
+                i for i, t in enumerate(scan.transitions) if any(a <= t.at_ms <= b for a, b in reach)
+            )
+        checked = [i for i in range(len(scan.transitions)) if i not in rescanned]
 
         def critique(index, transition, state_before):
             at = transition.at_ms
@@ -255,6 +267,7 @@ async def execute_pipeline(
                 [
                     (lambda i=i, t=t, b=b: critique(i, t, b))
                     for i, (t, b) in enumerate(zip(scan.transitions, befores, strict=True))
+                    if i in checked
                 ],
                 limit,
             )
@@ -262,6 +275,9 @@ async def execute_pipeline(
             # Serial: each check's context carries the previous confirmed state.
             decisions, state_before = [], scan.initial_state
             for index, transition in enumerate(scan.transitions):
+                if index in rescanned:
+                    state_before = transition.state_after  # accepted from the re-scan
+                    continue
                 decision = await critique(index, transition, state_before)
                 decisions.append(decision)
                 # Rejected rough states do not poison the next critique's context.
@@ -276,8 +292,9 @@ async def execute_pipeline(
             dict(
                 scan=scan.model_dump(mode="json"),
                 critiques=None if decisions is None else [d.model_dump(mode="json") for d in decisions],
+                **({"rescanned": list(rescanned)} if rescanned else {}),
             ),
-            lambda at: normalize_positions(run, scan, decisions, completed_at=at),
+            lambda at: normalize_positions(run, scan, decisions, completed_at=at, unchecked=rescanned),
             AnalysisRevisionV1,
         )
         await publish(
