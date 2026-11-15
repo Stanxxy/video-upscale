@@ -73,7 +73,7 @@
   .sr-verdicts button[aria-pressed=true] { background:var(--ink); color:#111; font-weight:600; }
   .sr-verdicts kbd, .sr-keys kbd { font:10px ui-monospace,monospace; border:1px solid var(--line); border-radius:3px; padding:0 3px; margin-right:4px; color:var(--muted); }
   .sr-keys { color:var(--muted); font-size:11px; }
-  .sr-list { max-height:300px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px; }
+  .sr-list { position:relative; max-height:300px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px; }
   .sr-list button { width:100%; display:grid; grid-template-columns:62px 92px minmax(0,1fr) auto; gap:8px; text-align:left; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; padding:5px 8px; }
   .sr-list button[aria-current=true] { background:#ffffff14; }
   .src { font-size:10px; padding:1px 5px; border-radius:3px; border:1px solid var(--line); white-space:nowrap; }
@@ -102,6 +102,22 @@
       <div class="player"><video id="vid" controls playsinline preload="metadata"></video></div>
       <p class="muted" style="margin:6px 0 0">Playhead <span id="now">0:00.0</span></p>
     </section>
+    <section id="results-section" hidden>
+      <h2>Results <span id="results-meta" class="muted" style="text-transform:none; letter-spacing:0"></span></h2>
+      <div class="row" style="align-items:center">
+        <div class="seg" id="ev-filter" style="flex:0 0 auto">
+          <button data-f="all" aria-pressed="true">All</button><button data-f="strike" aria-pressed="false">Strikes</button><button data-f="other" aria-pressed="false">Grappling</button>
+        </div>
+        <span style="flex:1"></span>
+        <button id="dl" style="flex:0 0 auto">Download JSON</button>
+      </div>
+      <div class="lane-label">Positions</div><div class="lane" id="lane-pos"></div>
+      <div class="lane-label" id="lane-a-label">Fighter A</div><div class="lane" id="lane-a"></div>
+      <div class="lane-label" id="lane-b-label">Fighter B</div><div class="lane" id="lane-b"></div>
+      <div class="events" id="events"></div>
+    </section>
+  </div>
+  <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
     <section id="sr">
       <h2>Strike review <span class="muted" style="text-transform:none; letter-spacing:0">two runs' strikes, one by one; your verdicts become strike ground truth</span></h2>
       <div class="sr-head">
@@ -130,22 +146,17 @@
         </details>
       </div>
     </section>
-    <section id="results-section" hidden>
-      <h2>Results <span id="results-meta" class="muted" style="text-transform:none; letter-spacing:0"></span></h2>
-      <div class="row" style="align-items:center">
-        <div class="seg" id="ev-filter" style="flex:0 0 auto">
-          <button data-f="all" aria-pressed="true">All</button><button data-f="strike" aria-pressed="false">Strikes</button><button data-f="other" aria-pressed="false">Grappling</button>
-        </div>
-        <span style="flex:1"></span>
-        <button id="dl" style="flex:0 0 auto">Download JSON</button>
-      </div>
-      <div class="lane-label">Positions</div><div class="lane" id="lane-pos"></div>
-      <div class="lane-label" id="lane-a-label">Fighter A</div><div class="lane" id="lane-a"></div>
-      <div class="lane-label" id="lane-b-label">Fighter B</div><div class="lane" id="lane-b"></div>
-      <div class="events" id="events"></div>
+    <section>
+      <h2>Run <span id="run-state"></span></h2>
+      <p id="run-meta" class="muted"></p>
+      <div class="table-wrap"><table id="progress"></table></div>
+      <div class="row" style="margin-top:8px"><button id="resume" hidden>Resume (retries failed calls only)</button><button id="cancel" hidden>Cancel</button></div>
+      <p id="run-error" class="err"></p>
     </section>
-  </div>
-  <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
+    <section>
+      <h2>Previous runs</h2>
+      <div class="runs" id="runs"></div>
+    </section>
     <section>
       <h2>Run setup</h2>
       <label>Workflow</label>
@@ -171,17 +182,6 @@
       <p id="estimate" class="muted"></p>
       <button id="run" class="primary">Run analysis</button>
       <p id="run-err" class="err"></p>
-    </section>
-    <section>
-      <h2>Run <span id="run-state"></span></h2>
-      <p id="run-meta" class="muted"></p>
-      <div class="table-wrap"><table id="progress"></table></div>
-      <div class="row" style="margin-top:8px"><button id="resume" hidden>Resume (retries failed calls only)</button><button id="cancel" hidden>Cancel</button></div>
-      <p id="run-error" class="err"></p>
-    </section>
-    <section>
-      <h2>Previous runs</h2>
-      <div class="runs" id="runs"></div>
     </section>
   </div>
 </main>
@@ -438,7 +438,9 @@ function srList() {
     return '<button data-k="' + it.key + '" aria-current="' + (it === cur) + '"><span>' + fmt(it.t_ms) + '</span><span class="src src-' + it.source + '">' + ({both:'both', a:'A only', b:'B only', added:'added'})[it.source] + '</span><span>' + esc(nameOf(it.actor) + ' · ' + cls) + '</span><span class="vd ' + (v ? (REAL.has(v) ? 'real' : v === 'not_a_strike' ? 'fake' : '') : '') + '">' + (v ? v.replace(/_/g, ' ') : '·') + '</span></button>';
   }).join('') || '<p class="muted" style="padding:8px">Nothing in this filter.</p>';
   $('sr-list').querySelectorAll('button').forEach(b => b.onclick = () => { sr.i = sr.items.findIndex(x => x.key === b.dataset.k); srShow(true); });
-  $('sr-list').querySelector('[aria-current=true]')?.scrollIntoView({block:'nearest'});
+  // Keep the current strike in view inside the list only; never scroll the page away from the video.
+  const list = $('sr-list'), row = list.querySelector('[aria-current=true]');
+  if (row && (row.offsetTop < list.scrollTop || row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = row.offsetTop - list.clientHeight / 2;
 }
 function srSide(title, s) {
   if (!s) return '<div class="sr-side none"><h3>' + title + '</h3><div>Not detected</div></div>';
