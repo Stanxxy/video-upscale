@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from service import qa_core
+from service import strike_review as review
 from service.routes.qa_vlm import _require_gemini_key
 
 _runs: Optional[qa_core.CoreRuns] = None
@@ -136,6 +137,45 @@ async def core_fighter_crop(run_id: str, index: int):
     return Response(content=path.read_bytes(), media_type="image/png")
 
 
+def _run_strikes(core, run_id):
+    status = _job(run_id).status(run_id)
+    if status["state"] != "succeeded":
+        raise HTTPException(status_code=409, detail=f"run {run_id} has not succeeded")
+    techniques = (core.result(run_id).get("techniques") or {}).get("techniques") or []
+    return status["request"], techniques
+
+
+async def strike_review_pairs():
+    return dict(pairs=review.load_pairs(_core().settings.root))
+
+
+async def strike_review(a: str, b: str):
+    """Both runs' strikes over the part of the video both analysed, matched, with labels."""
+    core = _core()
+    req_a, tech_a = _run_strikes(core, a)
+    req_b, tech_b = _run_strikes(core, b)
+    if req_a["youtube_id"] != req_b["youtube_id"]:
+        raise HTTPException(status_code=400, detail="the two runs analysed different videos")
+    start, end = max(req_a["start_ms"], req_b["start_ms"]), min(req_a["end_ms"], req_b["end_ms"])
+    if end <= start:
+        raise HTTPException(status_code=400, detail="the two runs do not overlap")
+    items = review.match(review.strikes(tech_a, start, end), review.strikes(tech_b, start, end))
+    return dict(
+        youtube_id=req_a["youtube_id"], start_ms=start, end_ms=end,
+        fighters=[f["name"] for f in req_a["fighters"]], fighters_b=[f["name"] for f in req_b["fighters"]],
+        a=dict(run_id=a, label=req_a.get("label"), sport=req_a["sport"]),
+        b=dict(run_id=b, label=req_b.get("label"), sport=req_b["sport"]),
+        items=items, labels=review.load_labels(core.settings.root, req_a["youtube_id"]),
+    )
+
+
+async def strike_label(youtube_id: str, body: review.LabelIn):
+    core = _core()
+    if not qa_core.YOUTUBE_ID.fullmatch(youtube_id):
+        raise HTTPException(status_code=400, detail="invalid YouTube id")
+    return dict(labels=review.save_label(core.settings.root, youtube_id, body))
+
+
 def mount(app):
     app.post("/qa/core/estimate")(core_estimate)
     app.get("/qa/core/media/{youtube_id}")(core_media)
@@ -148,3 +188,6 @@ def mount(app):
     app.post("/qa/core/runs/{run_id}/resume")(core_resume)
     app.post("/qa/core/runs/{run_id}/cancel")(core_cancel)
     app.get("/qa/core/runs/{run_id}/fighter/{index}")(core_fighter_crop)
+    app.get("/qa/core/strike-review/pairs")(strike_review_pairs)
+    app.get("/qa/core/strike-review")(strike_review)
+    app.put("/qa/core/strike-labels/{youtube_id}")(strike_label)
