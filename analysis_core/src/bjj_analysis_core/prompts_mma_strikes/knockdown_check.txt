@@ -1,0 +1,5 @@
+Check one knockdown in an MMA fight. The strike in stage_context (its fighter, class, target and contact time at_ms, in absolute source-video milliseconds) was flagged by another reviewer as dropping the opponent. Watch this short window frame by frame with the fighter crops.
+
+Answer knocked_down=true only when this strike itself, at about at_ms, makes the opponent touch the canvas with anything other than the feet (a hand, knee, hip or back) or clearly lose their footing and fall. Answer false when the opponent only staggers, is driven into the cage, steps back or covers up; when they go down from a slip, a push, a takedown or trip, or a different strike (an earlier or later punch, or a kick); when the opponent was already on the ground; or when the footage around at_ms is a replay. A strike that lands without dropping anyone is not a knockdown.
+
+Echo strike_index. Give a short visual reason that names what the opponent does and when (absolute milliseconds), and which strike, if any, caused a fall. Return only the required JSON schema.

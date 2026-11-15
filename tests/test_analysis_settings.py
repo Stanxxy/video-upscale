@@ -117,9 +117,11 @@ def test_portable_six_node_preset_is_explicit_and_does_not_claim_qualification()
                  "technique_critique", "technique_analyze", "technique_validate"):
         node = getattr(config, name)
         assert node.model == "gemini-3.8-flash"
-        assert node.thinking == "high"
+        assert node.thinking == ("low" if name.endswith(("critique", "validate")) else "high")
         assert node.media_resolution == "low"
         assert node.fps == (1 if name.endswith("scan") else 10)
+    assert config.position_critique_context == "proposed"
+    assert config.strike_census is None and config.knockdown_check is None
 
 
 def test_one_override_is_retained_raw_and_changes_only_its_mapped_axis():
@@ -308,16 +310,27 @@ def test_production_dag_artifacts_match_advertised_model_and_native_preset():
     assert versions["gemini-3.8-flash"] == frozenset({"gemini-3.8-flash"})
 
 
-def test_mma_dag_preset_artifact_matches_its_pack_and_generator():
+def test_mma_dag_preset_artifact_is_the_windowed_strike_workflow():
     from pathlib import Path
-    from service.analysis_preset import gemini38_mma_preset, gemini38_preset
-    from bjj_analysis_core.packs import MMA
+    from service.analysis_preset import gemini38_mma_strikes_preset
+    from bjj_analysis_core.packs import MMA_STRIKES
     from bjj_analysis_core.requests import CoreConfigV1, prompt_bundle_sha256
 
     root = Path(__file__).resolve().parents[1] / "config" / "analysis"
-    saved = CoreConfigV1.model_validate_json((root / "gemini38-mma.json").read_bytes())
-    assert saved == gemini38_mma_preset()
-    assert saved.prompt_bundle_sha256 == prompt_bundle_sha256(MMA)
-    bjj = gemini38_preset()
-    assert saved.technique_scan.fps == 5
-    assert saved.model_copy(update={"prompt_bundle_sha256": bjj.prompt_bundle_sha256, "technique_scan": bjj.technique_scan}) == bjj
+    saved = CoreConfigV1.model_validate_json((root / "gemini38-mma-strikes.json").read_bytes())
+    assert saved == gemini38_mma_strikes_preset()
+    assert saved.prompt_bundle_sha256 == prompt_bundle_sha256(MMA_STRIKES)
+    assert (saved.strike_census.thinking, saved.strike_census.fps) == ("high", 10)
+    assert saved.strike_audit.thinking == saved.knockdown_check.thinking == "low"
+    assert saved.position_critique_context == "proposed"
+
+
+def test_published_preset_files_are_the_generator_bytes():
+    """The S3 artifact digest is over these bytes; a model-equal rewrite is not enough."""
+    from pathlib import Path
+    from service.analysis_preset import PRESET_FILES, preset_bytes
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    assert sorted(p.name for p in root.glob("gemini38*.json")) == sorted(PRESET_FILES)
+    for name, build in PRESET_FILES.items():
+        assert (root / name).read_bytes() == preset_bytes(build()), name

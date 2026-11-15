@@ -15,7 +15,7 @@ from shared_lib.models.position_taxonomy import position_taxonomy_manifest
 from shared_lib.models.simplified_taxonomy import AXIS3_ACTION, AXIS4_OUTCOME
 from shared_lib.models.sport_taxonomy import vocabulary
 
-from bjj_analysis_core import MMA_WORKFLOW_ID, WORKFLOW_ID
+from bjj_analysis_core import MMA_STRIKES_WORKFLOW_ID, MMA_WORKFLOW_ID, WORKFLOW_ID
 from bjj_analysis_core import mma_outputs as mma
 from bjj_analysis_core.outputs import (
     PositionCritiqueInputV1,
@@ -40,6 +40,11 @@ class AnalysisPack:
     taxonomy: Mapping[str, object]
     # Prompt keys a sport adds to the initial prompt (none for BJJ).
     extra_prompt_keys: tuple
+
+    @property
+    def windowed_strikes(self):
+        """Strikes come from the per-window census, not the per-candidate chain."""
+        return "strike_census" in self.outputs
 
     @property
     def position_scan(self):
@@ -127,7 +132,29 @@ MMA = AnalysisPack(
     extra_prompt_keys=("strike_classes", "strike_targets"),
 )
 
-PACKS = MappingProxyType({pack.workflow_id: pack for pack in (BJJ, MMA)})
+# MMA with a windowed strike census (bjj_analysis_core.strikes): the technique scan
+# finds grappling attacks only; strikes are counted per short window, in parallel.
+MMA_STRIKES = AnalysisPack(
+    workflow_id=MMA_STRIKES_WORKFLOW_ID,
+    taxonomy_id="mma.v1",
+    prompts_dir="prompts_mma_strikes",
+    outputs=MappingProxyType(
+        {
+            **MMA.outputs,
+            "strike_census": mma.StrikeCensusV1,
+            "strike_audit": mma.StrikeAuditV1,
+            "knockdown_check": mma.KnockdownCheckV1,
+        }
+    ),
+    position_critique_input=mma.MmaPositionCritiqueInputV1,
+    technique_candidate=mma.MmaTechniqueCandidateV1,
+    taxonomy=MMA.taxonomy,
+    extra_prompt_keys=MMA.extra_prompt_keys,
+)
+
+PACKS = MappingProxyType(
+    {pack.workflow_id: pack for pack in (BJJ, MMA, MMA_STRIKES)}
+)
 
 
 def pack_for(run):

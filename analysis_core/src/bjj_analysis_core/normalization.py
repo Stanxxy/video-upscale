@@ -19,6 +19,10 @@ from shared_lib.models.analysis_results import (
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 from shared_lib.models.analysis_timeline import content_sha256
 
+from shared_lib.models.sport_taxonomy import vocabulary as _vocabulary
+
+STRIKE_ACTIONS = frozenset(_vocabulary("mma.v1").strike_actions)
+
 
 def _context(run, completed_at):
     run = RegisteredAIRunV1.model_validate(run)
@@ -130,7 +134,7 @@ def normalize_positions(run, scan, critiques, *, completed_at):
     return _revision(run, completed_at, "positions", intervals)
 
 
-def normalize_techniques(run, candidates, decisions, *, completed_at):
+def normalize_techniques(run, candidates, decisions, *, completed_at, strikes=()):
     """One terminal decision per candidate; no silent drops or inferred outcomes.
 
     Candidates/decisions must be checkpointed by the host. Input order is kept;
@@ -159,6 +163,13 @@ def normalize_techniques(run, candidates, decisions, *, completed_at):
         if decision.verdict == "ditch":
             continue
         data = decision.technique
+        if pack.windowed_strikes and any(
+            a.value in STRIKE_ACTIONS for a in data.action_classes
+        ):
+            # Windowed strike workflow: strikes come only from the census. A position-
+            # change candidate the chain labels as a strike is the census's strike seen
+            # a second time (it duplicated knockdowns in the Round 1 run), not a new one.
+            continue
         if decision.verdict == "agree" and data != candidate.proposed:
             raise ValueError("agree must preserve the proposed technique exactly")
         if not candidate.observation_window.contains(data.bounds):
@@ -172,4 +183,17 @@ def normalize_techniques(run, candidates, decisions, *, completed_at):
             **data.model_dump(exclude={"schema_version", "bounds"}),
         )
         events.append(event)
+    # Windowed strike census (mma-windowed-strikes): already merged, one event each.
+    if strikes and not pack.windowed_strikes:
+        raise ValueError("only the windowed strike workflow publishes census strikes")
+    for index, data in enumerate(strikes):
+        data = pack.technique_analysis.model_validate(data)
+        if not run.spec.scope.contains(data.bounds):
+            raise ValueError("strike bounds exceed the selected scope")
+        events.append(
+            TechniqueEventV1(
+                **_common(run, uuid5(run.spec.run_id, f"strike:v1:{index}"), data.bounds),
+                **data.model_dump(exclude={"schema_version", "bounds"}),
+            )
+        )
     return _revision(run, completed_at, "techniques", events)

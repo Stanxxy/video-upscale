@@ -68,8 +68,17 @@ This is local implementation, not production deployment or live model qualificat
 
 The founder approved Gemini3.8 production selection on September21 after the
 real-video run. `config/analysis/gemini38.json` is the canonical new-run preset:
-all six nodes use `gemini-3.8-flash`, high thinking, low media resolution,
-1fps scans and10fps detailed stages. The high-resolution experiment is excluded.
+all six nodes use `gemini-3.8-flash` and low media resolution; scans and technique
+analysis use high thinking, the three checks (position critique, technique critique,
+technique validate) low thinking (founder, 2026-11-14), with
+1fps scans and10fps detailed stages; position checks run in parallel, each against
+the scan's own previous state (`position_critique_context: proposed`). The
+high-resolution experiment is excluded. `config/analysis/gemini38-mma-strikes.json`
+is the MMA preset for workflow `mma-windowed-strikes`: strikes come from one 10fps
+census per 20s window (2s overlap) plus a low-thinking audit per window and a
+low-thinking second look at every flagged knockdown; grappling keeps the
+per-candidate chain on a 2fps scan. Regenerate both files with
+`python service/analysis_preset.py`; the published digest is over these exact bytes.
 `config/analysis/qualified-models.json` binds the model ID to the returned version
 observed in all21 calls of the completed real-video native DAG.
 
