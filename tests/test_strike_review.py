@@ -87,3 +87,11 @@ def test_timing_and_several_techniques_are_flags_beside_the_verdict(tmp_path):
     assert only_timing["fighter-a@1300"]["count"] is None  # a count belongs to holds_several
     with pytest.raises(ValidationError):
         sr.LabelIn(key="fighter-a@1300", verdict="landed", source="both", flags=["blurry"])
+
+
+def test_a_note_or_flag_is_kept_without_a_verdict_and_only_an_empty_label_is_removed(tmp_path):
+    kept = sr.save_label(tmp_path, "XFBseoY4ER0", sr.LabelIn(key="fighter-a@900", verdict=None, source="a", note=" starts late "))
+    assert kept["fighter-a@900"]["verdict"] is None and kept["fighter-a@900"]["note"] == "starts late"
+    flagged = sr.save_label(tmp_path, "XFBseoY4ER0", sr.LabelIn(key="fighter-a@900", verdict=None, source="a", flags=["timing_off"]))
+    assert flagged["fighter-a@900"]["flags"] == ["timing_off"] and flagged["fighter-a@900"]["note"] == ""
+    assert sr.save_label(tmp_path, "XFBseoY4ER0", sr.LabelIn(key="fighter-a@900", verdict=None, source="a")) == {}

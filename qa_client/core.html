@@ -400,7 +400,7 @@ async function srInit() {
 }
 $('sr-pair').onchange = () => { const p = sr.pairs[$('sr-pair').value]; if (!p) return; $('sr-a').value = p.a; $('sr-b').value = p.b; srLoad(); };
 $('sr-load').onclick = srLoad;
-segmented($('sr-filter'), v => { sr.filter = v; srView(); if (!sr.view.includes(sr.items[sr.i]) && sr.view.length) { sr.i = sr.items.indexOf(sr.view[0]); } srShow(false); });
+segmented($('sr-filter'), async v => { await srFlush(); sr.filter = v; srView(); if (!sr.view.includes(sr.items[sr.i]) && sr.view.length) { sr.i = sr.items.indexOf(sr.view[0]); } srShow(false); });
 segmented($('sr-speed'), v => { sr.rate = Number(v); video().playbackRate = sr.rate; });
 async function srLoad() {
   const a = $('sr-a').value, b = $('sr-b').value; if (!a || !b) { $('sr-msg').textContent = 'Choose two runs.'; return; }
@@ -452,7 +452,7 @@ function srList() {
     const v = verdictOf(it), side = it.a || it.b, cls = side ? [it.a, it.b].filter(Boolean).map(s => unitName(s).replace(/strike /g, '').replace('ground strike', 'ground')).join(' / ') : 'added';
     return '<button data-k="' + it.key + '" aria-current="' + (it === cur) + '"><span>' + fmt(it.t_ms) + '</span><span class="src src-' + it.source + '">' + ({both:'both', a:'A only', b:'B only', added:'added'})[it.source] + '</span><span>' + esc(nameOf(it.actor) + ' · ' + cls) + '</span><span class="vd ' + (v ? (REAL.has(v) ? 'real' : v === 'not_a_strike' ? 'fake' : '') : '') + '">' + (v ? (VERDICT_NAMES[v] || v.replace(/_/g, ' ')) : '·') + srMarks(it) + '</span></button>';
   }).join('') || '<p class="muted" style="padding:8px">Nothing in this filter.</p>';
-  $('sr-list').querySelectorAll('button').forEach(b => b.onclick = () => { sr.i = sr.items.findIndex(x => x.key === b.dataset.k); srShow(true); });
+  $('sr-list').querySelectorAll('button').forEach(b => b.onclick = () => srGo(sr.items.findIndex(x => x.key === b.dataset.k), true));
   // Keep the current strike in view inside the list only; never scroll the page away from the video.
   const list = $('sr-list'), row = list.querySelector('[aria-current=true]');
   if (row && (row.offsetTop < list.scrollTop || row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = row.offsetTop - list.clientHeight / 2;
@@ -465,23 +465,65 @@ function srSide(title, s) {
   const span = fmt(s.bounds.start_ms) + '–' + fmt(s.bounds.end_ms) + ' (' + ((s.bounds.end_ms - s.bounds.start_ms) / 1000).toFixed(1) + ' s)';
   return '<div class="sr-side"><h3>' + title + ' · clip ' + span + '</h3><div class="what">' + esc(what) + '</div>' + chain + '<div class="why">' + esc([...new Set([s.notes, s.evidence].filter(Boolean))].join('\n')) + '</div></div>';
 }
+/* Notes and flags save on their own as you type (with or without a verdict); a draft
+   the server has not confirmed stays in memory, is shown again on return, and is saved
+   before moving to another item. The status next to the box says which. */
+const srDraft = {};
+let srTimer = null, srChain = Promise.resolve();
+const srSaved = key => { const l = sr.data.labels[key]; return {note:l?.note || '', flags:l?.flags || [], count:l?.count ?? null}; };
+const srCurrentExtras = key => srDraft[key] || srSaved(key);
+function srState(text, bad) { const s = $('sr-save-state'); if (s) { s.textContent = text; s.style.color = bad ? '#ff6b6b' : ''; } }
+function srStateFor(it) {
+  if (srDraft[it.key]) return 'Not saved yet…';
+  const l = sr.data.labels[it.key];
+  return l && (l.note || (l.flags || []).length) ? 'Saved ✓ ' + new Date(l.labelled_at).toLocaleTimeString() : '';
+}
+function srPut(it, verdict, extras) {
+  const run = async () => {
+    const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:it.key, verdict, source:it.source, ...extras})});
+    sr.data.labels = r.labels;
+  };
+  const p = srChain.then(run); srChain = p.catch(() => {}); return p;
+}
+async function srPersist(it) {
+  const extras = srDraft[it.key]; if (!extras) return true;
+  if (sr.items[sr.i]?.key === it.key) srState('Saving…');
+  try { await srPut(it, verdictOf(it) || null, extras); }
+  catch (e) { if (sr.items[sr.i]?.key === it.key) srState('NOT saved: ' + e.message + ' (your text is kept here; retrying when you leave this item)', true); return false; }
+  if (srDraft[it.key] === extras) delete srDraft[it.key];
+  const here = sr.items[sr.i]?.key; srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === here)); srSummary(); srList();
+  if (sr.items[sr.i]?.key === it.key) srState(srStateFor(it));
+  return true;
+}
+async function srFlush() {
+  if (srTimer) { clearTimeout(srTimer); srTimer = null; }
+  const it = sr.items[sr.i]; return it ? srPersist(it) : true;
+}
+function srEdited() {
+  const it = sr.items[sr.i]; if (!it) return;
+  srDraft[it.key] = srExtras(); srState('Not saved yet…');
+  clearTimeout(srTimer); srTimer = setTimeout(() => { srTimer = null; srPersist(it); }, 600);
+}
 function srShow(play) {
   const it = sr.items[sr.i]; if (!it) { $('sr-cur').innerHTML = '<p class="muted">No techniques in this comparison.</p>'; return; }
-  const v = verdictOf(it), pos = sr.view.indexOf(it), lab = sr.data.labels[it.key], flags = lab?.flags || [];
+  const v = verdictOf(it), pos = sr.view.indexOf(it), ex = srCurrentExtras(it.key), flags = ex.flags;
   $('sr-cur').innerHTML = '<div class="top"><span><b>' + fmt(it.t_ms) + '</b> · ' + esc(nameOf(it.actor)) + ' <span class="src src-' + it.source + '">' + ({both:'both runs', a:'A only', b:'B only', added:'added by you'})[it.source] + '</span></span><span class="muted">' + (pos >= 0 ? (pos + 1) + ' of ' + sr.view.length + ' in this filter' : 'outside this filter') + '</span></div>' +
     (it.source === 'added' ? '' : '<div class="sr-cmp">' + srSide('A', it.a) + srSide('B', it.b) + '</div>') +
-    '<input id="sr-note" placeholder="Note (optional): e.g. covers two jabs, starts 0.5 s late" value="' + esc(lab?.note || '') + '" style="width:100%">' +
+    '<input id="sr-note" placeholder="Note (saves as you type): e.g. covers two jabs, starts 0.5 s late" value="' + esc(ex.note) + '" style="width:100%">' +
     '<div class="sr-flags"><label title="The class is right but the clip starts or ends in the wrong place (key T)"><input type="checkbox" id="sr-f-timing"' + (flags.includes('timing_off') ? ' checked' : '') + '><kbd>T</kbd>Timing off</label>' +
     '<label title="The run gave one clip for what is really several techniques (key M)"><input type="checkbox" id="sr-f-several"' + (flags.includes('holds_several') ? ' checked' : '') + '><kbd>M</kbd>Holds more than one technique</label>' +
-    '<label>how many <input type="number" id="sr-count" min="2" max="50" value="' + (lab?.count || '') + '"></label>' +
-    '<button id="sr-save" style="flex:0 0 auto" title="Save the note and flags with the chosen verdict (Enter in the note)">Save note + flags</button></div>' +
+    '<label>how many <input type="number" id="sr-count" min="2" max="50" value="' + (ex.count || '') + '"></label>' +
+    '<span id="sr-save-state" class="muted" role="status" aria-live="polite"></span></div>' +
     '<div class="sr-verdicts">' + VERDICTS.map(([k, t, key]) => '<button data-v="' + k + '" aria-pressed="' + (v === k) + '"><kbd>' + key + '</kbd>' + t + '</button>').join('') + '</div>' +
-    '<div class="row" style="align-items:center"><button id="sr-prev" style="flex:0 0 auto">← Previous</button><button id="sr-replay" style="flex:0 0 auto">Replay</button><button id="sr-tight" style="flex:0 0 auto" title="Play exactly the clip the run gave (key C)">Play its clip only</button><button id="sr-next" style="flex:0 0 auto">Next →</button><span class="sr-keys"><kbd>space</kbd>replay <kbd>←</kbd><kbd>→</kbd>move <kbd>1</kbd>–<kbd>7</kbd>,<kbd>0</kbd>verdict (moves on) <kbd>T</kbd><kbd>M</kbd>flags <kbd>C</kbd>clip only</span></div>';
+    '<div class="row" style="align-items:center"><button id="sr-prev" style="flex:0 0 auto">← Previous</button><button id="sr-replay" style="flex:0 0 auto">Replay</button><button id="sr-tight" style="flex:0 0 auto" title="Play exactly the clip the run gave (key C)">Play its clip only</button><button id="sr-next" style="flex:0 0 auto">Next →</button><span class="sr-keys"><kbd>space</kbd>replay <kbd>←</kbd><kbd>→</kbd>move <kbd>1</kbd>–<kbd>7</kbd>,<kbd>0</kbd>verdict (moves on) <kbd>T</kbd><kbd>M</kbd>flags <kbd>C</kbd>clip only <kbd>Esc</kbd>leave the note box</span></div>';
   $('sr-cur').querySelectorAll('.sr-verdicts button').forEach(b => b.onclick = () => srLabel(b.dataset.v));
   $('sr-prev').onclick = () => srMove(-1); $('sr-next').onclick = () => srMove(1); $('sr-replay').onclick = srPlay; $('sr-tight').onclick = srPlayClip;
-  $('sr-save').onclick = () => srSaveExtras();
-  $('sr-note').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); srSaveExtras(); } };
-  $('sr-count').oninput = () => { if ($('sr-count').value) $('sr-f-several').checked = true; };
+  $('sr-note').oninput = srEdited;
+  $('sr-note').onkeydown = e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); srFlush(); e.target.blur(); } };
+  $('sr-note').onblur = () => srFlush();
+  $('sr-f-timing').onchange = srEdited; $('sr-f-several').onchange = srEdited;
+  $('sr-count').oninput = () => { if ($('sr-count').value) $('sr-f-several').checked = true; srEdited(); };
+  srState(srStateFor(it));
   srList();
   if (play) srPlay();
 }
@@ -502,29 +544,23 @@ function srExtras() {
   const n = parseInt($('sr-count')?.value, 10);
   return {note:($('sr-note')?.value || '').trim(), flags, count:flags.includes('holds_several') && n >= 2 ? n : null};
 }
-async function srSaveExtras() {
-  const it = sr.items[sr.i], v = it && verdictOf(it);
-  if (!v) { $('sr-msg').textContent = 'Pick a verdict first (1–7, 0); the note and flags are saved with it.'; return; }
-  await srLabel(v, true);
-}
-function srMove(step) {
+async function srGo(index, play) { await srFlush(); sr.i = index; srShow(play); }
+async function srMove(step) {
   const pos = sr.view.indexOf(sr.items[sr.i]);
   const next = pos < 0 ? sr.view.find(it => it.t_ms >= sr.items[sr.i].t_ms) : sr.view[pos + step];
-  if (next) { sr.i = sr.items.indexOf(next); srShow(true); }
+  if (next) await srGo(sr.items.indexOf(next), true);
 }
-async function srLabel(verdict, stay) {
+async function srLabel(verdict) {
   const it = sr.items[sr.i]; if (!it) return;
-  const extras = srExtras(), old = sr.data.labels[it.key];
-  // Pressing the chosen verdict again clears it, unless the note or flags changed: then it saves them.
-  const same = old && old.note === extras.note && (old.flags || []).join() === extras.flags.join() && (old.count ?? null) === extras.count;
-  const clear = !stay && verdictOf(it) === verdict && same;
-  try {
-    const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:it.key, verdict:clear ? null : verdict, source:it.source, ...extras})});
-    sr.data.labels = r.labels;
-  } catch (e) { $('sr-msg').textContent = 'Not saved: ' + e.message; return; }
-  const before = sr.items[sr.i]; srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === before.key)); srView();
-  if (stay) { srShow(false); $('sr-msg').textContent = 'Saved.'; return; }
-  if (!clear) { const cur = sr.items[sr.i]; const next = sr.view.find(x => x.t_ms > cur.t_ms || (x.t_ms === cur.t_ms && x.key > cur.key)); if (next) { sr.i = sr.items.indexOf(next); srShow(true); return; } }
+  if (srTimer) { clearTimeout(srTimer); srTimer = null; }
+  const extras = srDraft[it.key] || srSaved(it.key);
+  // Pressing the chosen verdict again clears the verdict; the note and flags stay.
+  const clear = verdictOf(it) === verdict && !srDraft[it.key];
+  try { await srPut(it, clear ? null : verdict, extras); }
+  catch (e) { srState('NOT saved: ' + e.message, true); return; }
+  if (srDraft[it.key] === extras) delete srDraft[it.key];
+  srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === it.key)); srView();
+  if (!clear) { const next = sr.view.find(x => x.t_ms > it.t_ms || (x.t_ms === it.t_ms && x.key > it.key)); if (next) { sr.i = sr.items.indexOf(next); srShow(true); return; } }
   srShow(false);
 }
 $('sr-add').onclick = async () => {
@@ -539,7 +575,7 @@ document.addEventListener('keydown', e => {
   if (!sr.data || $('sr-body').hidden || e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
   const v = VERDICTS.find(x => x[2] === e.key);
   if (v) { e.preventDefault(); srLabel(v[0]); }
-  else if (e.key === 't' || e.key === 'm') { e.preventDefault(); const box = $(e.key === 't' ? 'sr-f-timing' : 'sr-f-several'); if (box) { box.checked = !box.checked; if (verdictOf(sr.items[sr.i])) srSaveExtras(); else $('sr-msg').textContent = 'Flag set; it is saved with the verdict you pick (1–7, 0).'; } }
+  else if (e.key === 't' || e.key === 'm') { e.preventDefault(); const box = $(e.key === 't' ? 'sr-f-timing' : 'sr-f-several'); if (box) { box.checked = !box.checked; srEdited(); } }
   else if (e.key === 'c') { e.preventDefault(); srPlayClip(); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); srMove(1); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); srMove(-1); }

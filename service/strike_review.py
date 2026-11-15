@@ -38,7 +38,8 @@ class LabelIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(pattern=r"^(fighter-a|fighter-b)@\d{1,9}$")
-    verdict: Optional[Verdict]  # None clears the label
+    # None with no note and no flags removes the label; a note or flags alone are kept.
+    verdict: Optional[Verdict]
     source: Literal["both", "a", "b", "added"]
     note: str = Field(default="", max_length=500)
     # Independent of the verdict: the class can be right while the clip is wrong.
@@ -133,12 +134,12 @@ def load_labels(root: Path, youtube_id: str) -> dict:
 def save_label(root: Path, youtube_id: str, label: LabelIn) -> dict:
     """Set or clear one label; the file is replaced atomically."""
     labels = load_labels(root, youtube_id)
-    if label.verdict is None:
+    if label.verdict is None and not label.note.strip() and not label.flags:
         labels.pop(label.key, None)
     else:
         actor, at = label.key.split("@")
         labels[label.key] = dict(
-            verdict=label.verdict, source=label.source, note=label.note, actor=actor, t_ms=int(at),
+            verdict=label.verdict, source=label.source, note=label.note.strip(), actor=actor, t_ms=int(at),
             flags=sorted(set(label.flags)), count=label.count if "holds_several" in label.flags else None,
             labelled_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
