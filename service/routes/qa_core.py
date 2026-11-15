@@ -150,7 +150,7 @@ async def strike_review_pairs():
 
 
 async def strike_review(a: str, b: str):
-    """Both runs' strikes over the part of the video both analysed, matched, with labels."""
+    """Both runs' techniques over the part of the video both analysed, matched, with labels."""
     core = _core()
     req_a, tech_a = _run_strikes(core, a)
     req_b, tech_b = _run_strikes(core, b)
@@ -159,7 +159,7 @@ async def strike_review(a: str, b: str):
     start, end = max(req_a["start_ms"], req_b["start_ms"]), min(req_a["end_ms"], req_b["end_ms"])
     if end <= start:
         raise HTTPException(status_code=400, detail="the two runs do not overlap")
-    items = review.match(review.strikes(tech_a, start, end), review.strikes(tech_b, start, end))
+    items = review.match(review.techniques(tech_a, start, end), review.techniques(tech_b, start, end))
     return dict(
         youtube_id=req_a["youtube_id"], start_ms=start, end_ms=end,
         fighters=[f["name"] for f in req_a["fighters"]], fighters_b=[f["name"] for f in req_b["fighters"]],

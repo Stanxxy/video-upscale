@@ -10,3 +10,8 @@ MMA_STRIKES_WORKFLOW_ID = "mma-windowed-strikes"
 # The windowed strike workflow plus a ground re-scan that re-checks who is on top in
 # every ground phase (bjj_analysis_core.grounds). VLM Studio experiment; not admitted.
 MMA_GROUND_WORKFLOW_ID = "mma-windowed-strikes-ground"
+# MMA technique sequences (founder 2026-11-15): one windowed census returns every
+# fighter's chain of techniques of any class, replacing the technique scan/analysis
+# and the strike census (bjj_analysis_core.sequences); keeps the ground re-scan.
+# VLM Studio experiment; not admitted.
+MMA_SEQUENCES_WORKFLOW_ID = "mma-sequences-ground"

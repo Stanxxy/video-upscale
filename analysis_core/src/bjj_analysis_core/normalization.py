@@ -213,3 +213,13 @@ def normalize_techniques(run, candidates, decisions, *, completed_at, strikes=()
             )
         )
     return _revision(run, completed_at, "techniques", events)
+
+
+def normalize_sequences(run, batch, *, completed_at):
+    """The sequence workflow's technique component: one event per merged sequence."""
+    from bjj_analysis_core.sequences import sequence_events
+
+    run, completed_at = _context(run, completed_at)
+    if not pack_for(run).sequences:
+        raise ValueError("only the sequence workflow publishes sequences")
+    return _revision(run, completed_at, "techniques", sequence_events(run, batch, _common))

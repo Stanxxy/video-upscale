@@ -234,3 +234,101 @@ class GroundRescanV1(VersionedAnalysisContract):
         if times != sorted(set(times)):
             raise ValueError("ground states must be in strictly increasing time order")
         return self
+
+
+# --- Technique sequences (workflow mma-sequences-ground) ------------------------------
+# One census per short window returns every fighter's chain of techniques of any class
+# (jab-cross into a double leg into ground strikes is one sequence). The step rules are
+# shared_lib's TechniqueStepV1 rules, checked here so a malformed answer is retried per
+# call; bjj_analysis_core.sequences merges windows and publishes events with steps.
+from pydantic import PositiveInt  # noqa: E402
+from shared_lib.models.analysis_results import TechniqueStepV1  # noqa: E402
+
+MmaTechniqueName = _enum(
+    "MmaTechniqueName",
+    tuple(dict.fromkeys(n for names in MMA.technique_names.values() for n in names)),
+)
+
+
+class SequenceStepV1(AnalysisContract):
+    """One technique of a chain, in absolute source-video milliseconds."""
+
+    start_ms: NonNegativeInt
+    end_ms: NonNegativeInt
+    action: MmaTechniqueAction
+    technique: MmaTechniqueName | None
+    note: StrictStr | None
+    outcome: Literal["successful", "unsuccessful", "unclear"]
+    strike_target: MmaStrikeTarget | None
+    significant: StrictBool | None
+    knockdown: StrictBool
+    repeat: PositiveInt
+    landed: NonNegativeInt | None
+    evidence: Identifier
+
+    @model_validator(mode="after")
+    def published_rules(self):
+        if self.end_ms <= self.start_ms:
+            raise ValueError("a step ends after it starts")
+        self.published().check(MMA)
+        return self
+
+    def published(self) -> TechniqueStepV1:
+        return TechniqueStepV1(
+            bounds=TimeRangeMs(start_ms=self.start_ms, end_ms=self.end_ms),
+            action=self.action.value,
+            technique=None if self.technique is None else self.technique.value,
+            note=self.note or None,
+            outcome=self.outcome,
+            strike_target=None if self.strike_target is None else self.strike_target.value,
+            significant=self.significant,
+            knockdown=self.knockdown,
+            repeat=self.repeat,
+            landed=self.landed,
+            evidence=self.evidence,
+        )
+
+
+class SequenceV1(AnalysisContract):
+    actor_player_id: Identifier | None
+    actor_sentinel: Literal["contested", "unclear"] | None
+    summary: Identifier
+    steps: tuple[SequenceStepV1, ...]
+
+    @model_validator(mode="after")
+    def one_actor_ordered_steps(self):
+        if (self.actor_player_id is None) == (self.actor_sentinel is None):
+            raise ValueError("a sequence names its fighter or a sentinel, not both")
+        if not self.steps:
+            raise ValueError("a sequence has at least one step")
+        starts = [s.start_ms for s in self.steps]
+        if starts != sorted(starts):
+            raise ValueError("sequence steps are ordered by start")
+        return self
+
+
+class SequenceCensusV1(VersionedAnalysisContract):
+    window_index: NonNegativeInt
+    sequences: tuple[SequenceV1, ...]
+
+
+class SequenceWindowInputV1(AnalysisContract):
+    window_index: NonNegativeInt
+    window: TimeRangeMs
+
+
+class MergedSequenceV1(AnalysisContract):
+    actor_player_id: Identifier | None
+    actor_sentinel: Literal["contested", "unclear"] | None
+    summary: Identifier
+    steps: tuple[TechniqueStepV1, ...]
+
+
+class SequenceBatchV1(VersionedAnalysisContract):
+    """Deterministic merge result: final sequences in time order."""
+
+    sequences: tuple[MergedSequenceV1, ...]
+    census_sequences: NonNegativeInt
+    merged_copies: NonNegativeInt
+    rejected_not_live_steps: NonNegativeInt
+    splits: NonNegativeInt
