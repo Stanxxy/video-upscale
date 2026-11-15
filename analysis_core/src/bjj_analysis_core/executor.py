@@ -21,11 +21,18 @@ from bjj_analysis_core.grounds import apply_ground_rescans, ground_phases, resca
 from bjj_analysis_core.mma_outputs import (
     GroundRescanV1,
     KnockdownCheckV1,
+    SequenceBatchV1,
+    SequenceCensusV1,
     StrikeAuditV1,
     StrikeBatchV1,
     StrikeCensusV1,
 )
-from bjj_analysis_core.normalization import normalize_positions, normalize_techniques
+from bjj_analysis_core.normalization import (
+    normalize_positions,
+    normalize_sequences,
+    normalize_techniques,
+)
+from bjj_analysis_core.sequences import merge_sequences, sequence_windows
 from bjj_analysis_core.strikes import (
     apply_knockdown_checks,
     contact_ms,
@@ -356,6 +363,51 @@ async def execute_pipeline(
         audits = await summary("strike_audit", audits, tuple[StrikeAuditV1, ...])
         return censuses, audits
 
+    if pack.sequences:
+        # One census per window, independent of positions (parallel with the
+        # position branch); not-live footage is rejected at the merge.
+        windows = sequence_windows(run, cfg)
+
+        def sequence_step(index, window):
+            async def step():
+                return await model(
+                    prepare_call(
+                        run,
+                        config_bytes,
+                        "sequence_census",
+                        input_window=window,
+                        context=dict(window_index=index, window=window),
+                    ),
+                    item=str(index),
+                )
+
+            return step
+
+        async def sequence_branch():
+            censuses = await _ordered(
+                [sequence_step(i, w) for i, w in enumerate(windows)], limit
+            )
+            return await summary("sequence_census", censuses, tuple[SequenceCensusV1, ...])
+
+        positions, censuses = await _ordered([position_branch, sequence_branch], limit)
+        batch = await deterministic(
+            "sequence_merge",
+            dict(
+                censuses=[c.model_dump(mode="json") for c in censuses],
+                positions=positions.model_dump(mode="json"),
+            ),
+            lambda at: merge_sequences(run, cfg, censuses, positions),
+            SequenceBatchV1,
+        )
+        techniques = await deterministic(
+            "techniques_normalize",
+            dict(sequences=batch.model_dump(mode="json")),
+            lambda at: normalize_sequences(run, batch, completed_at=at),
+            AnalysisRevisionV1,
+        )
+        await publish("techniques", techniques)
+        await guard()
+        return ExecutionResultV1(positions=positions, techniques=techniques)
     if pack.windowed_strikes:
         positions, technique_scan, (censuses, audits) = await _ordered(
             [position_branch, technique_scan_step, strike_branch], limit

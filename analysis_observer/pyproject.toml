@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bjj-analysis-observer"
-version = "0.2.1"
+version = "0.2.2"
 description = "Read-only durable BJJ analysis observation for account and session hosts"
 requires-python = ">=3.12"
 dependencies = [
-    "bjj-analysis-core==0.3.0.post6",
-    "shared-lib>=1.14.0,<1.15",
+    "bjj-analysis-core==0.3.0.post7",
+    "shared-lib>=1.15.0,<1.16",
     "pydantic>=2.10,<3",
     "cassandra-driver>=3.29.2,<4",
 ]

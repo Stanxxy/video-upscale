@@ -1,10 +1,13 @@
-"""VLM Studio strike review: two runs' strikes side by side, and hand labels as ground truth.
+"""VLM Studio technique review: two runs' techniques side by side, hand labels as ground truth.
 
-Two runs of the same video (for example 3.8 Flash and Hydrogen) are compared over the
-part of the video both analysed. A strike of one run and a strike of the other are the
-same strike when the same fighter throws them within MATCH_MS of each other (nearest
-pairs first). The reviewer labels every item; labels are stored per video, keyed by the
-fighter and the strike time, so they stay valid as ground truth for any later run.
+Two runs of the same video (for example the per-strike workflow and the sequence
+workflow) are compared over the part of the video both analysed. The review unit is one
+technique: a per-strike or grappling event, or one step of a sequence (shown with its
+whole chain). Units of the two runs are the same technique when the same fighter does
+them within MATCH_MS (both strikes) or MATCH_GRAPPLING_MS (otherwise) of each other,
+nearest pairs first, whatever class each run gave it: a takedown one run calls a punch
+is one item. Labels are stored per video, keyed by the fighter and the unit's time
+(a strike's contact, any other technique's start), so they stay valid for later runs.
 """
 
 from __future__ import annotations
@@ -19,9 +22,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 STRIKES = frozenset({"strike_punch", "strike_kick", "strike_knee", "strike_elbow", "ground_strike"})
 MATCH_MS = 400
+MATCH_GRAPPLING_MS = 1000
 ACTORS = ("fighter-a", "fighter-b")
-Verdict = Literal["landed", "missed", "contact_unclear", "not_a_strike", "wrong_fighter", "unsure"]
-REAL = frozenset({"landed", "missed", "contact_unclear", "wrong_fighter"})
+# landed/missed read "worked"/"failed" for a technique that is not a strike;
+# not_a_strike is "not a technique" (the stored value predates sequences).
+Verdict = Literal[
+    "landed", "missed", "contact_unclear", "not_a_strike", "wrong_fighter",
+    "wrong_class", "wrong_technique", "unsure",
+]
+REAL = frozenset({"landed", "missed", "contact_unclear", "wrong_fighter", "wrong_class", "wrong_technique"})
 
 
 class LabelIn(BaseModel):
@@ -33,39 +42,64 @@ class LabelIn(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
-def _strike(t, index):
+def _name(step):
+    name = (step.get("technique") or step["action"]).replace("_", " ")
+    return name + (f" ×{step['repeat']}" if step.get("repeat", 1) > 1 else "")
+
+
+def _unit(t, index, step=None, position=None):
+    """One technique: an event without steps, or one step of a sequence event."""
+    source = step or t
+    classes = [step["action"]] if step else list(t["action_classes"])
+    strike = bool(set(classes) & STRIKES)
+    bounds = source["bounds"]
+    if step is None:
+        at = (bounds["start_ms"] + bounds["end_ms"]) // 2 if strike else bounds["start_ms"]
+    else:
+        at = bounds["end_ms"] if strike else bounds["start_ms"]  # a strike step ends at contact
+    steps = t.get("steps")
     return dict(
         index=index,
-        t_ms=(t["bounds"]["start_ms"] + t["bounds"]["end_ms"]) // 2,
-        bounds=t["bounds"],
+        step=position,
+        t_ms=at,
+        bounds=bounds,
         actor=t.get("actor_player_id"),
-        classes=list(t["action_classes"]),
-        target=t.get("strike_target"),
-        outcome=t.get("outcome"),
-        significant=t.get("significant"),
-        knockdown=bool(t.get("knockdown")),
+        classes=classes,
+        strike=strike,
+        technique=(step or {}).get("technique"),
+        repeat=(step or {}).get("repeat", 1),
+        landed=(step or {}).get("landed"),
+        target=source.get("strike_target"),
+        outcome=source.get("outcome"),
+        significant=source.get("significant"),
+        knockdown=bool(source.get("knockdown")),
         notes=t.get("notes") or "",
-        evidence=t.get("outcome_evidence") or t.get("evidence") or "",
+        evidence=(step or {}).get("evidence") or t.get("outcome_evidence") or t.get("evidence") or "",
+        chain=[_name(s) for s in steps] if steps else None,
     )
 
 
-def strikes(techniques, start_ms, end_ms):
-    """The strikes of one run inside [start_ms, end_ms), in time order."""
-    found = [
-        _strike(t, i)
-        for i, t in enumerate(techniques)
-        if set(t.get("action_classes") or ()) & STRIKES and t.get("actor_player_id") in ACTORS
-    ]
-    return sorted((s for s in found if start_ms <= s["t_ms"] < end_ms), key=lambda s: (s["t_ms"], s["index"]))
+def techniques(events, start_ms, end_ms):
+    """The techniques of one run inside [start_ms, end_ms), in time order."""
+    found = []
+    for i, t in enumerate(events):
+        if t.get("actor_player_id") not in ACTORS:
+            continue
+        if t.get("steps"):
+            found += [_unit(t, i, s, k) for k, s in enumerate(t["steps"])]
+        else:
+            found.append(_unit(t, i))
+    return sorted((s for s in found if start_ms <= s["t_ms"] < end_ms), key=lambda s: (s["t_ms"], s["index"], s["step"] or 0))
 
 
-def match(a, b, tolerance_ms=MATCH_MS):
-    """Review items: matched pairs plus each run's unmatched strikes, in time order."""
+def match(a, b):
+    """Review items: matched pairs plus each run's unmatched techniques, in time order."""
     candidates = sorted(
         (abs(x["t_ms"] - y["t_ms"]), i, j)
         for i, x in enumerate(a)
         for j, y in enumerate(b)
-        if x["actor"] == y["actor"] and abs(x["t_ms"] - y["t_ms"]) <= tolerance_ms
+        if x["actor"] == y["actor"]
+        and abs(x["t_ms"] - y["t_ms"]) <= (MATCH_MS if x["strike"] and y["strike"] else MATCH_GRAPPLING_MS)
     )
     used_a, used_b, pairs = set(), set(), []
     for _, i, j in candidates:
