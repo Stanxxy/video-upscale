@@ -197,15 +197,14 @@ def test_parallel_position_checks_follow_the_preset_unless_the_run_says_otherwis
         assert qa_core.build_config(sport, {}, True).position_critique_context == "proposed"
 
 
-def test_hydrogen_is_a_studio_experiment_model_with_its_own_rate():
-    """VLM Studio may run Gemini 4 Hydrogen; production qualification is untouched."""
+def test_studio_runs_the_production_qualified_models_and_prices_hydrogen():
+    """Hydrogen is production-qualified (founder 2026-11-15); Studio runs exactly that list."""
     import json
     from datetime import date
 
     production = json.loads(qa_core.QUALIFIED_MODELS.read_text())
-    assert "gemini-4-hydrogen" not in production
-    assert qa_core.studio_models()["gemini-4-hydrogen"] == ["gemini-4-hydrogen"]
-    assert qa_core.studio_models()["gemini-3.8-flash"] == production["gemini-3.8-flash"]
+    assert production["gemini-4-hydrogen"] == ["gemini-4-hydrogen"]
+    assert qa_core.studio_models() == production
     assert qa_core._rate("gemini-4-hydrogen", date(2026, 11, 15)) == {"input": 1.50, "output": 7.50, "cached": 0.075}
     config = qa_core.build_config("bjj", {n: qa_core.NodeOverride(model="gemini-4-hydrogen") for n in (
         "position_scan", "position_critique", "technique_scan", "technique_critique", "technique_analyze", "technique_validate")})

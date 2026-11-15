@@ -138,3 +138,17 @@ def apply_ground_rescans(pack, run, config, scan, rescans):
         initial_state=timeline[0][1],
         transitions=tuple(dict(at_ms=at, state_after=state) for at, state in timeline[1:]),
     )
+
+
+def rescanned_transitions(config, phases, merged):
+    """Indexes of merged-scan transitions a position check must leave alone.
+
+    The re-scan is the check inside ground phases: a position critique there (or one
+    whose retime could reach into a phase) would re-time the high-fps boundaries from
+    a coarser look, and could cross them.
+    """
+    reach = [
+        (core.start_ms - config.position_critique_forward_ms, core.end_ms + config.position_critique_back_ms)
+        for core, _ in phases
+    ]
+    return tuple(i for i, t in enumerate(merged.transitions) if any(a <= t.at_ms <= b for a, b in reach))

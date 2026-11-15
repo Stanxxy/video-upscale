@@ -17,7 +17,7 @@ from bjj_analysis_core.discovery import (
     unchecked_worklist,
 )
 from bjj_analysis_core.execution import StepRunner
-from bjj_analysis_core.grounds import apply_ground_rescans, ground_phases
+from bjj_analysis_core.grounds import apply_ground_rescans, ground_phases, rescanned_transitions
 from bjj_analysis_core.mma_outputs import (
     GroundRescanV1,
     KnockdownCheckV1,
@@ -218,16 +218,7 @@ async def execute_pipeline(
                 lambda at: apply_ground_rescans(pack, run, cfg, rough, rescans),
                 pack.position_scan,
             )
-            # The re-scan is the check inside ground phases: a position critique there
-            # (or one whose retime could reach into a phase) would re-time the high-fps
-            # boundaries from a coarser look, and could cross them.
-            reach = [
-                (core.start_ms - cfg.position_critique_forward_ms, core.end_ms + cfg.position_critique_back_ms)
-                for core, _ in phases
-            ]
-            rescanned = tuple(
-                i for i, t in enumerate(scan.transitions) if any(a <= t.at_ms <= b for a, b in reach)
-            )
+            rescanned = rescanned_transitions(cfg, phases, scan)
         checked = [i for i in range(len(scan.transitions)) if i not in rescanned]
 
         def critique(index, transition, state_before):

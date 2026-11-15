@@ -4,6 +4,7 @@ Checkpoint statuses are last recorded facts, NOT worker liveness. Callers must
 separately project lifecycle/heartbeat and delivery readiness. No synthetic percent.
 """
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID, uuid5
@@ -14,12 +15,13 @@ from bjj_analysis_core.outputs import (
     TechniqueAnalysisInputV1,
 )
 from bjj_analysis_core.mma_outputs import StrikeBatchV1
+from bjj_analysis_core.grounds import ground_phases, rescanned_transitions
 from bjj_analysis_core.packs import PACKS, pack_for
 from bjj_analysis_core.requests import load_config
 from bjj_analysis_core.strikes import strike_windows
 from pydantic import TypeAdapter
 from shared_lib.models.analysis_contracts import NodeProgressV1
-from shared_lib.models.analysis_progress import FANOUT_NODES, WORKFLOW_NODE_ORDERS
+from shared_lib.models.analysis_progress import FANOUT_NODES, SKIPPABLE_NODES, WORKFLOW_NODE_ORDERS
 
 HOST_NODES = {"provider_upload", "dag_complete", "provider_cleanup"}
 FANOUTS = FANOUT_NODES
@@ -77,11 +79,23 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     except ValueError as error:
         raise ProgressEvidenceError("registered run has a mismatched taxonomy") from error
     order = WORKFLOW_NODE_ORDERS[run.spec.workflow_id]
+    # The run's own admitted configuration says which check steps it leaves out and,
+    # for the MMA workflows, where its strike windows and ground phases are.
+    config_bytes = await journal.config_bytes()
+    try:
+        fields = json.loads(config_bytes)
+    except ValueError as error:
+        raise ProgressEvidenceError("registered run configuration is unusable") from error
+    skipped = {
+        node for node in SKIPPABLE_NODES - {"knockdowns_apply"}
+        if node in order and node in fields and fields[node] is None
+    }
+    if "knockdown_check" in skipped:
+        skipped.add("knockdowns_apply")  # it only applies knockdown checks
     config = None
     if pack.windowed_strikes:
-        # Strike windows come from the run's own admitted configuration.
         try:
-            _, config = load_config(run, await journal.config_bytes())
+            _, config = load_config(run, config_bytes)
         except ValueError as error:
             raise ProgressEvidenceError("registered run configuration is unusable") from error
 
@@ -121,19 +135,23 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
         merged = output("strikes_merge", StrikeBatchV1)
         items = {
             "strike_census": windows,
-            "strike_audit": windows if config.strike_audit is not None else [],
+            "strike_audit": windows,
             "knockdown_check": (
-                []
-                if config.knockdown_check is None
-                else None
-                if merged is None
-                else [str(i) for i, s in enumerate(merged.strikes) if s.knockdown]
+                None if merged is None else [str(i) for i, s in enumerate(merged.strikes) if s.knockdown]
             ),
         }
+    checked = None if scan is None else [str(i) for i in range(len(scan.transitions))]
+    if pack.ground_rescan:
+        # Ground pieces come from the rough scan; checks skip what the re-scan covered.
+        phases = None if scan is None else ground_phases(run, config, scan)
+        ground = output("ground_merge", pack.position_scan)
+        items["ground_rescan"] = None if phases is None else [str(i) for i in range(len(phases))]
+        checked = None if ground is None else [
+            str(i) for i in range(len(ground.transitions))
+            if i not in rescanned_transitions(config, phases, ground)
+        ]
     items |= {
-        "position_critique": (
-            None if scan is None else [str(i) for i in range(len(scan.transitions))]
-        ),
+        "position_critique": checked,
         "technique_critique": (
             None if batch is None else [item.candidate_id for item in batch.candidates]
         ),
@@ -149,6 +167,11 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     views = []
     for node in order:
         head = heads[node]
+        if node in skipped:
+            if head is not None:
+                raise ProgressEvidenceError("a step the configuration leaves out has a checkpoint")
+            views.append(NodeView(node, "skipped", 0, None, ()))
+            continue
         if node not in FANOUTS:
             progress = None if head is None else head.progress
             views.append(

@@ -130,7 +130,7 @@ def test_a_failed_audit_shows_where_the_strike_branch_stopped(tmp_path):
     journal.close()
 
 
-def test_a_run_without_audit_or_knockdown_check_reports_them_as_empty(tmp_path):
+def test_a_run_without_audit_or_knockdown_check_reports_them_as_skipped(tmp_path):
     config = config_bytes(audit=False, knockdown_check=None)
     run = windowed_run(config)
     journal = Journal(tmp_path / "j.sqlite", run, config)
@@ -138,5 +138,67 @@ def test_a_run_without_audit_or_knockdown_check_reports_them_as_empty(tmp_path):
     rows = {n.node_id: n for n in asyncio.run(read_progress(journal, guard=guard)).nodes}
     assert rows["strike_census"].recorded_status == "succeeded"
     for node in ("strike_audit", "knockdown_check", "knockdowns_apply"):
-        assert rows[node].recorded_status == "not_started", node
+        assert (rows[node].recorded_status, rows[node].total_items, rows[node].checkpoints) == ("skipped", None, ()), node
     journal.close()
+
+
+def ground_run(config):
+    from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID
+
+    return strikes_run(windowed_run(config), config, MMA_GROUND_WORKFLOW_ID)
+
+
+@pytest.mark.parametrize("checks", [False, True])
+def test_the_ground_workflow_reports_its_re_check_pieces_and_skipped_checks(tmp_path, checks):
+    from shared_lib.models.analysis_progress import GROUND_NODE_ORDER
+    from test_grounds import Provider as GroundProvider, ground_config
+
+    off = dict(technique_critique=None, technique_validate=None, strike_audit=None, knockdown_check=None)
+    config = ground_config(**off, **({} if checks else dict(position_critique=None)))
+    run = ground_run(config)
+    journal = Journal(tmp_path / "j.sqlite", run, config)
+    at = [run.registered_at]
+
+    def clock():
+        at[0] += timedelta(milliseconds=1)
+        return at[0]
+
+    asyncio.run(execute_pipeline(run, config, journal=journal, provider=GroundProvider(clock), sink=Sink(),
+                                 guard=guard, clock=clock, max_parallel_calls=4))
+    view = asyncio.run(read_progress(journal, guard=guard))
+    rows = {n.node_id: n for n in view.nodes}
+    assert tuple(rows) == GROUND_NODE_ORDER
+    assert (rows["ground_rescan"].recorded_status, rows["ground_rescan"].completed_items,
+            rows["ground_rescan"].total_items) == ("succeeded", 1, 1)
+    assert rows["ground_merge"].recorded_status == "succeeded"
+    skipped = {n for n, r in rows.items() if r.recorded_status == "skipped"}
+    assert skipped == {"technique_critique", "technique_validate", "strike_audit", "knockdown_check",
+                       "knockdowns_apply"} | (set() if checks else {"position_critique"})
+    if checks:
+        # Every transition of this short scope is inside or near the re-checked piece.
+        assert (rows["position_critique"].recorded_status, rows["position_critique"].total_items) == ("succeeded", 0)
+    assert rows["techniques_publish"].recorded_status == "succeeded"
+    public(view)
+    journal.close()
+
+
+def test_a_skipped_step_with_a_checkpoint_is_inconsistent_evidence(tmp_path):
+    from bjj_analysis_observer.progress import ProgressEvidenceError, _step
+
+    with_audit, without = config_bytes(), config_bytes(audit=False, knockdown_check=None)
+    audited = windowed_run(with_audit)
+    ref = audited.spec.effective_config.model_copy(update={"sha256": hashlib.sha256(without).hexdigest()})
+    plain = audited.model_copy(update={"spec": audited.spec.model_copy(update={"effective_config": ref})})
+    first, second = Journal(tmp_path / "a.sqlite", audited, with_audit), Journal(tmp_path / "b.sqlite", plain, without)
+    asyncio.run(execute(audited, with_audit, first, Provider(None)))
+    asyncio.run(execute(plain, without, second, Provider(None)))
+    assert {n.node_id: n.recorded_status for n in asyncio.run(read_progress(second, guard=guard)).nodes}[
+        "strike_audit"] == "skipped"
+    # The same run id's audit summary appears in the run whose configuration has no audit.
+    step = _step(plain.spec.run_id, "strike_audit")
+    body, sha = first.db.execute("SELECT body, sha FROM heads WHERE id=?", (str(step),)).fetchone()
+    second.db.execute("INSERT INTO heads VALUES (?,?,?,?)", (str(step), 1, body, sha))
+    second.db.commit()
+    with pytest.raises(ProgressEvidenceError, match="leaves out has a checkpoint"):
+        asyncio.run(read_progress(second, guard=guard))
+    first.close(), second.close()

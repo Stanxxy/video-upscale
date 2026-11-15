@@ -88,13 +88,11 @@ SPORTS = {
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
 QUALIFIED_MODELS = ENGINE_ROOT / "config" / "analysis" / "qualified-models.json"
-# Models VLM Studio may run for experiments in addition to the production qualification
-# (never written to qualified-models.json): model id -> accepted returned versions.
-STUDIO_EXPERIMENT_MODELS = {"gemini-4-hydrogen": ["gemini-4-hydrogen"]}
 
 
 def studio_models():
-    return {**json.loads(QUALIFIED_MODELS.read_text()), **STUDIO_EXPERIMENT_MODELS}
+    """VLM Studio runs exactly the production-qualified models."""
+    return json.loads(QUALIFIED_MODELS.read_text())
 
 # Google's published Standard paid-tier rate (https://ai.google.dev/gemini-api/docs/pricing),
 # the same table s34 VLM Studio used. Thinking tokens bill as output. An unlisted

@@ -2,7 +2,11 @@
 
 Provider qualification remains a separate host input, backed by live evidence.
 ``preset_bytes`` writes the exact artifact bytes published under
-``qualified-presets/gemini38-<sha256>.json`` (``config/analysis/*.json``).
+``qualified-presets/<name>-<sha256>.json`` (``config/analysis/*.json``).
+
+Production presets (founder 2026-11-15): Gemini 4 Hydrogen on every model step and
+no check steps, for both sports; MMA adds the ground re-scan (who is on top).
+The gemini38 presets stay for runs admitted with them and for VLM Studio.
 """
 
 import json
@@ -82,9 +86,11 @@ CHECK_NODES = ("position_critique", "technique_critique", "technique_validate", 
 
 
 def hydrogen_unchecked(config: CoreConfigV1) -> CoreConfigV1:
-    """VLM Studio experiment: every model step on gemini-4-hydrogen, no check steps.
+    """Every model step on gemini-4-hydrogen, no check steps.
 
-    Scans, census and analysis keep their thinking; the first pass stands as-is.
+    Scans, census and analysis keep their thinking; the first pass stands as-is
+    (x-mma 2026-11-15: Hydrogen's checks changed 0 of 205 answers, and without them
+    Hydrogen matched or beat the 3.8 Flash workflow on BJJ positions).
     """
     on = lambda node: None if node is None else node.model_copy(update={"model": "gemini-4-hydrogen"})
     return config.model_copy(update={
@@ -94,16 +100,26 @@ def hydrogen_unchecked(config: CoreConfigV1) -> CoreConfigV1:
 
 
 def with_ground_rescan(config: CoreConfigV1, model: str = "gemini-4-hydrogen") -> CoreConfigV1:
-    """VLM Studio experiment: the windowed MMA preset plus a ground re-scan node.
+    """The windowed MMA preset plus a ground re-scan node.
 
     Workflow mma-windowed-strikes-ground: each ground phase of the position scan is
     re-scanned at 5 fps in 20 s windows that start 5 s early; the model names the top
-    fighter (bjj_analysis_core.grounds). Not admitted in production.
+    fighter (bjj_analysis_core.grounds). x-mma 2026-11-15: who is on top 71% -> 91%.
     """
     return config.model_copy(update={
         "prompt_bundle_sha256": prompt_bundle_sha256(MMA_GROUND),
         "ground_rescan": NodeConfigV1(model=model, thinking="high", media_resolution="low", fps=5),
     })
+
+
+def hydrogen_preset() -> CoreConfigV1:
+    """The production BJJ preset: Hydrogen, no check steps."""
+    return hydrogen_unchecked(gemini38_preset())
+
+
+def hydrogen_mma_ground_preset() -> CoreConfigV1:
+    """The production MMA preset: Hydrogen, no check steps, ground re-scan."""
+    return with_ground_rescan(hydrogen_unchecked(gemini38_mma_strikes_preset()))
 
 
 # Ground re-scan fields are written only into ground presets.
@@ -117,6 +133,8 @@ _WINDOWED_FIELDS = {
 PRESET_FILES = {
     "gemini38.json": gemini38_preset,
     "gemini38-mma-strikes.json": gemini38_mma_strikes_preset,
+    "hydrogen.json": hydrogen_preset,
+    "hydrogen-mma-ground.json": hydrogen_mma_ground_preset,
 }
 
 
