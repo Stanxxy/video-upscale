@@ -211,3 +211,14 @@ def test_hydrogen_is_a_studio_experiment_model_with_its_own_rate():
         "position_scan", "position_critique", "technique_scan", "technique_critique", "technique_analyze", "technique_validate")})
     assert {getattr(config, n).model for n in ("position_scan", "technique_validate")} == {"gemini-4-hydrogen"}
     assert (config.position_scan.thinking, config.technique_validate.thinking) == ("high", "low")
+
+
+def test_hydrogen_no_check_arms_run_only_first_pass_steps_on_hydrogen():
+    for sport, model_nodes in (("bjj_h", ("position_scan", "technique_scan", "technique_analyze")),
+                               ("mma_v2_h", ("position_scan", "technique_scan", "technique_analyze", "strike_census"))):
+        config = qa_core.build_config(sport, {})
+        assert {getattr(config, n).model for n in model_nodes} == {"gemini-4-hydrogen"}
+        assert all(getattr(config, n) is None for n in (
+            "position_critique", "technique_critique", "technique_validate", "strike_audit", "knockdown_check"))
+    # Thinking is unchanged from the release presets.
+    assert qa_core.build_config("mma_v2_h", {}).strike_census.thinking == "high"
