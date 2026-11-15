@@ -14,6 +14,7 @@ from bjj_analysis_core.discovery import (
     build_candidates,
     critique_window,
     resolve_temporal_critiques,
+    unchecked_worklist,
 )
 from bjj_analysis_core.execution import StepRunner
 from bjj_analysis_core.mma_outputs import (
@@ -205,7 +206,9 @@ async def execute_pipeline(
                 item=str(index),
             )
 
-        if cfg.position_critique_context == "proposed":
+        if cfg.position_critique is None:
+            decisions = None  # no position check: the scan's transitions stand
+        elif cfg.position_critique_context == "proposed":
             # Each check sees the scan's own previous state: no dependency, parallel.
             # A scan with no transitions has no checks (and no "before" states).
             befores = ((scan.initial_state,) + tuple(
@@ -227,14 +230,15 @@ async def execute_pipeline(
                 # Rejected rough states do not poison the next critique's context.
                 if decision.confirmed:
                     state_before = decision.state_after
-        decisions = await summary(
-            "position_critique", decisions, tuple[pack.position_critique, ...]
-        )
+        if decisions is not None:
+            decisions = await summary(
+                "position_critique", decisions, tuple[pack.position_critique, ...]
+            )
         positions = await deterministic(
             "positions_normalize",
             dict(
                 scan=scan.model_dump(mode="json"),
-                critiques=[d.model_dump(mode="json") for d in decisions],
+                critiques=None if decisions is None else [d.model_dump(mode="json") for d in decisions],
             ),
             lambda at: normalize_positions(run, scan, decisions, completed_at=at),
             AnalysisRevisionV1,
@@ -384,21 +388,30 @@ async def execute_pipeline(
 
         return step
 
-    temporal = await _ordered([critique_step(c) for c in batch.candidates], limit)
-    temporal = await summary(
-        "technique_critique", temporal, tuple[TemporalCritiqueV1, ...]
-    )
-    work = await deterministic(
-        "technique_worklist",
-        dict(
-            candidates=batch.model_dump(mode="json"),
-            decisions=[d.model_dump(mode="json") for d in temporal],
-        ),
-        lambda at: resolve_temporal_critiques(
-            run, config_bytes, batch.candidates, temporal
-        ),
-        tuple[TechniqueAnalysisInputV1, ...],
-    )
+    if cfg.technique_critique is None:
+        # No temporal check: each candidate is analyzed in the scan's own bounds.
+        work = await deterministic(
+            "technique_worklist",
+            dict(candidates=batch.model_dump(mode="json"), decisions=None),
+            lambda at: unchecked_worklist(run, config_bytes, batch.candidates),
+            tuple[TechniqueAnalysisInputV1, ...],
+        )
+    else:
+        temporal = await _ordered([critique_step(c) for c in batch.candidates], limit)
+        temporal = await summary(
+            "technique_critique", temporal, tuple[TemporalCritiqueV1, ...]
+        )
+        work = await deterministic(
+            "technique_worklist",
+            dict(
+                candidates=batch.model_dump(mode="json"),
+                decisions=[d.model_dump(mode="json") for d in temporal],
+            ),
+            lambda at: resolve_temporal_critiques(
+                run, config_bytes, batch.candidates, temporal
+            ),
+            tuple[TechniqueAnalysisInputV1, ...],
+        )
     def analyze_step(target):
         async def step():
             return await model(
@@ -445,17 +458,20 @@ async def execute_pipeline(
 
         return step
 
-    verdicts = await _ordered(
-        [validate_step(t, c) for t, c in zip(work, candidates, strict=True)], limit
-    )
-    verdicts = await summary(
-        "technique_validate", verdicts, tuple[pack.technique_decision, ...]
-    )
+    if cfg.technique_validate is None:
+        verdicts = None  # no validator: each analysis stands as proposed
+    else:
+        verdicts = await _ordered(
+            [validate_step(t, c) for t, c in zip(work, candidates, strict=True)], limit
+        )
+        verdicts = await summary(
+            "technique_validate", verdicts, tuple[pack.technique_decision, ...]
+        )
     techniques = await deterministic(
         "techniques_normalize",
         dict(
             candidates=[c.model_dump(mode="json") for c in candidates],
-            verdicts=[d.model_dump(mode="json") for d in verdicts],
+            verdicts=None if verdicts is None else [d.model_dump(mode="json") for d in verdicts],
             **({"strikes": [s.model_dump(mode="json") for s in strikes]} if strikes else {}),
         ),
         lambda at: normalize_techniques(

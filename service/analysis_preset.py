@@ -78,6 +78,21 @@ def gemini38_mma_strikes_preset(*, audit=True) -> CoreConfigV1:
     )
 
 
+CHECK_NODES = ("position_critique", "technique_critique", "technique_validate", "strike_audit", "knockdown_check")
+
+
+def hydrogen_unchecked(config: CoreConfigV1) -> CoreConfigV1:
+    """VLM Studio experiment: every model step on gemini-4-hydrogen, no check steps.
+
+    Scans, census and analysis keep their thinking; the first pass stands as-is.
+    """
+    on = lambda node: None if node is None else node.model_copy(update={"model": "gemini-4-hydrogen"})
+    return config.model_copy(update={
+        **{n: None for n in CHECK_NODES},
+        **{n: on(getattr(config, n)) for n in ("position_scan", "technique_scan", "technique_analyze", "strike_census")},
+    })
+
+
 # Windowed-workflow fields are written only into windowed presets.
 _WINDOWED_FIELDS = {
     "strike_census", "strike_audit", "knockdown_check", "strike_window_ms", "strike_overlap_ms",

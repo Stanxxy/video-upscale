@@ -120,11 +120,13 @@ class CoreConfigV1(VersionedAnalysisContract):
     core_version: Literal[CORE_VERSION] = CORE_VERSION
     prompt_bundle_sha256: Sha256
     position_scan: NodeConfigV1
-    position_critique: NodeConfigV1
+    # A null check node means "no check": the first pass is used as-is (the scan's
+    # transitions, the scan's event bounds, the analysis). Explicit, never implied.
+    position_critique: NodeConfigV1 | None
     technique_scan: NodeConfigV1
-    technique_critique: NodeConfigV1
+    technique_critique: NodeConfigV1 | None
     technique_analyze: NodeConfigV1
-    technique_validate: NodeConfigV1
+    technique_validate: NodeConfigV1 | None
     candidates: CandidateConfigV1
     # Full executor bounds are versioned with the effective run configuration.
     position_critique_back_ms: NonNegativeInt = Field(default=4000, le=30000)
@@ -192,6 +194,8 @@ def prepare_call(
     if node_id not in pack.outputs:
         raise ValueError("unknown core node")
     bundle = prompt_bundle(pack)
+    if getattr(config, node_id) is None:
+        raise ValueError(f"this run has no {node_id} node")
     window = TimeRangeMs.model_validate(input_window)
     if not run.spec.scope.contains(window):
         raise ValueError("model observation window exceeds admitted scope")

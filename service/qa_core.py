@@ -41,7 +41,12 @@ from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 from service.analysis_gemini import GeminiProvider, S3GeminiArtifacts
 from service.analysis_media import S3RunMedia
-from service.analysis_preset import gemini38_mma_preset, gemini38_mma_strikes_preset, gemini38_preset
+from service.analysis_preset import (
+    gemini38_mma_preset,
+    gemini38_mma_strikes_preset,
+    gemini38_preset,
+    hydrogen_unchecked,
+)
 from service.analysis_run_host import DurableGeminiRun
 
 logger = logging.getLogger("service.qa_core")
@@ -64,6 +69,9 @@ SPORTS = {
     "mma": (MMA_WORKFLOW_ID, "mma.v1", gemini38_mma_preset),
     "mma_v2": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", gemini38_mma_strikes_preset),
     "mma_v2_census": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", lambda: gemini38_mma_strikes_preset(audit=False)),
+    # Experiment arms: Gemini 4 Hydrogen on every model step, no check steps.
+    "bjj_h": (WORKFLOW_ID, "bjj.v1", lambda: hydrogen_unchecked(gemini38_preset())),
+    "mma_v2_h": (MMA_STRIKES_WORKFLOW_ID, "mma.v1", lambda: hydrogen_unchecked(gemini38_mma_strikes_preset())),
 }
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
@@ -104,7 +112,7 @@ class NodeOverride(BaseModel):
 
 class CoreRunIn(BaseModel):
     youtube_id: str = Field(pattern=YOUTUBE_ID.pattern)
-    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census"]
+    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census", "bjj_h", "mma_v2_h"]
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
     fighters: tuple[FighterIn, FighterIn]
