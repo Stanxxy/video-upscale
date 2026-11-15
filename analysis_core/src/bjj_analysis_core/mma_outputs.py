@@ -251,10 +251,15 @@ MmaTechniqueName = _enum(
 
 
 class SequenceStepV1(AnalysisContract):
-    """One technique of a chain, in absolute source-video milliseconds."""
+    """One technique of a chain, in absolute source-video milliseconds.
+
+    Field order is answer order: the model describes what it sees (evidence) before
+    it classifies, so it does not commit to a class it then contradicts.
+    """
 
     start_ms: NonNegativeInt
     end_ms: NonNegativeInt
+    evidence: Identifier
     action: MmaTechniqueAction
     technique: MmaTechniqueName | None
     note: StrictStr | None
@@ -264,7 +269,6 @@ class SequenceStepV1(AnalysisContract):
     knockdown: StrictBool
     repeat: PositiveInt
     landed: NonNegativeInt | None
-    evidence: Identifier
 
     @model_validator(mode="after")
     def published_rules(self):
@@ -290,9 +294,11 @@ class SequenceStepV1(AnalysisContract):
 
 
 class SequenceV1(AnalysisContract):
+    # Describe the attacker before naming them: a fighter is chosen from what is seen.
+    summary: Identifier
+    actor_appearance: Identifier
     actor_player_id: Identifier | None
     actor_sentinel: Literal["contested", "unclear"] | None
-    summary: Identifier
     steps: tuple[SequenceStepV1, ...]
 
     @model_validator(mode="after")

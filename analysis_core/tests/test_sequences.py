@@ -64,7 +64,8 @@ def step(start, end=None, action="strike_punch", technique="jab", outcome="succe
 
 
 def seq(*steps, actor="a", summary="a chain"):
-    return dict(actor_player_id=actor, actor_sentinel=None, summary=summary, steps=list(steps))
+    return dict(summary=summary, actor_appearance=f"{actor} shorts", actor_player_id=actor, actor_sentinel=None,
+                steps=list(steps))
 
 
 def census(index, *sequences):
