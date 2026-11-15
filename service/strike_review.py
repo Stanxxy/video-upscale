@@ -30,7 +30,7 @@ Verdict = Literal[
     "landed", "missed", "contact_unclear", "not_a_strike", "wrong_fighter",
     "wrong_class", "wrong_technique", "unsure",
 ]
-Flag = Literal["timing_off", "holds_several"]
+Flag = Literal["correct", "timing_off", "holds_several"]
 REAL = frozenset({"landed", "missed", "contact_unclear", "wrong_fighter", "wrong_class", "wrong_technique"})
 
 
@@ -43,7 +43,8 @@ class LabelIn(BaseModel):
     source: Literal["both", "a", "b", "added"]
     note: str = Field(default="", max_length=500)
     # Independent of the verdict: the class can be right while the clip is wrong.
-    # timing_off: the technique's start/end cut is wrong. holds_several: the clip the
+    # correct: fighter, class, technique name and clip are all right (the verdict
+    # still says whether it landed). timing_off: the technique's start/end cut is wrong. holds_several: the clip the
     # run gave holds more than one technique (count: how many, when known).
     flags: list[Flag] = Field(default_factory=list)
     count: Optional[int] = Field(default=None, ge=2, le=50)
