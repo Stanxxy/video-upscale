@@ -57,8 +57,8 @@ NODES = (
     "strike_audit",
     "knockdown_check",
 )
-# Workflows VLM Studio can run. "mma_v2*" is the windowed strike census DAG (not admitted
-# in production); "mma_v2_census" publishes the census without the per-window audit.
+# Workflows VLM Studio can run. "mma_v2" is the production MMA workflow (windowed strike
+# census + audit); "mma_v2_census" skips the audit; "mma" is the v1 per-strike chain baseline.
 SPORTS = {
     "bjj": (WORKFLOW_ID, "bjj.v1", gemini38_preset),
     "mma": (MMA_WORKFLOW_ID, "mma.v1", gemini38_mma_preset),

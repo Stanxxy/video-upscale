@@ -351,3 +351,32 @@ async def test_proposed_context_runs_position_checks_in_parallel_with_scan_state
     assert fast[3].max_in_flight <= 6
     # Every transition is confirmed here, so confirmed and proposed contexts agree.
     assert [p.position for p in one.positions.positions] == [p.position for p in many.positions.positions]
+
+
+@pytest.mark.asyncio
+async def test_proposed_context_with_no_scan_transitions_runs_no_position_checks(
+    run, configuration, lanes, monkeypatch
+):
+    """A scope that stays in one position: zero checks, the initial state is the timeline."""
+    import hashlib
+    import sys
+
+    from bjj_analysis_core.requests import CoreConfigV1
+    from shared_lib.models.analysis_run_record import RegisteredAIRunV1
+
+    monkeypatch.setattr(sys.modules[__name__], "TRANSITIONS", ())
+    proposed = (
+        CoreConfigV1.model_validate_json(configuration)
+        .model_copy(update={"position_critique_context": "proposed"})
+        .model_dump_json()
+        .encode()
+    )
+    spec = run.spec.model_copy(
+        update={"effective_config": run.spec.effective_config.model_copy(
+            update={"sha256": hashlib.sha256(proposed).hexdigest()})}
+    )
+    parallel_run = RegisteredAIRunV1.model_validate({**run.model_dump(), "spec": spec.model_dump()})
+    lane = lanes("proposed-empty")
+    result = await execute(parallel_run, proposed, lane, max_parallel_calls=6)
+    assert "position_critique" not in lane[3].max_by_node
+    assert len(result.positions.positions) == 1

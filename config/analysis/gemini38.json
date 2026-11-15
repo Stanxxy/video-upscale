@@ -47,5 +47,6 @@
   },
   "position_critique_back_ms": 4000,
   "position_critique_forward_ms": 6000,
+  "position_critique_context": "proposed",
   "max_call_attempts": 2
 }

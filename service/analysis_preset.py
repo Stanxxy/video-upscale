@@ -1,7 +1,12 @@
-"""Explicit new-run preset; never rewrites an admitted configuration artifact.
+"""Explicit new-run presets; never rewrites an admitted configuration artifact.
 
 Provider qualification remains a separate host input, backed by live evidence.
+``preset_bytes`` writes the exact artifact bytes published under
+``qualified-presets/gemini38-<sha256>.json`` (``config/analysis/*.json``).
 """
+
+import json
+from pathlib import Path
 
 from bjj_analysis_core.outputs import CandidateConfigV1
 from bjj_analysis_core.packs import MMA, MMA_STRIKES
@@ -15,6 +20,8 @@ def gemini38_preset() -> CoreConfigV1:
     # Checks and validation confirm or reject a proposal in a short window; they
     # run at low thinking (founder 2026-11-14: high thinking made every check
     # 20-40 s and most of the spend). Scans and analysis keep high thinking.
+    # Position checks see the scan's own previous state, so they run in parallel
+    # (x-mma 2026-11-14: same checkpoint accuracy, 13.0 -> 4.8 min on 3 min of BJJ).
     check = node.model_copy(update={"thinking": "low"})
     return CoreConfigV1(
         prompt_bundle_sha256=prompt_bundle_sha256(),
@@ -25,15 +32,15 @@ def gemini38_preset() -> CoreConfigV1:
         technique_analyze=node,
         technique_validate=check,
         candidates=CandidateConfigV1(),
+        position_critique_context="proposed",
     )
 
 
 def gemini38_mma_preset() -> CoreConfigV1:
-    """The BJJ preset on the MMA pack; the technique scan samples 5 fps.
+    """MMA v1 (VLM Studio comparison only): the BJJ preset on the MMA pack, 5 fps scan.
 
-    Single strikes last a few hundred milliseconds, so a 1 fps scan cannot
-    propose them as separate candidates. The x-mma strike experiment measures
-    1/5/10 fps; retune this value from its result.
+    Production MMA runs the windowed strike workflow (``gemini38_mma_strikes_preset``);
+    v1 reviews every strike through the per-candidate chain and is kept as its baseline.
     """
     bjj = gemini38_preset()
     return bjj.model_copy(
@@ -45,7 +52,7 @@ def gemini38_mma_preset() -> CoreConfigV1:
 
 
 def gemini38_mma_strikes_preset(*, audit=True) -> CoreConfigV1:
-    """Windowed strike census (workflow mma-windowed-strikes); not admitted in production.
+    """The production MMA preset: windowed strike census (workflow mma-windowed-strikes).
 
     Strikes: one census call per 20 s window at 10 fps (high thinking: it is the
     detector) and, when ``audit``, one low-thinking audit per window. Grappling keeps
@@ -69,3 +76,32 @@ def gemini38_mma_strikes_preset(*, audit=True) -> CoreConfigV1:
         knockdown_check=check,
         position_critique_context="proposed",
     )
+
+
+# Windowed-workflow fields are written only into windowed presets.
+_WINDOWED_FIELDS = {
+    "strike_census", "strike_audit", "knockdown_check", "strike_window_ms", "strike_overlap_ms",
+}
+
+# Published artifacts: file name -> generator.
+PRESET_FILES = {
+    "gemini38.json": gemini38_preset,
+    "gemini38-mma-strikes.json": gemini38_mma_strikes_preset,
+}
+
+
+def preset_bytes(config: CoreConfigV1) -> bytes:
+    """The canonical artifact bytes for one preset (indented JSON, trailing newline)."""
+    data = config.model_dump(mode="json")
+    if config.strike_census is None:
+        data = {k: v for k, v in data.items() if k not in _WINDOWED_FIELDS}
+    return (json.dumps(data, indent=2) + "\n").encode()
+
+
+def write_preset_files(root: Path) -> None:
+    for name, build in PRESET_FILES.items():
+        (root / name).write_bytes(preset_bytes(build()))
+
+
+if __name__ == "__main__":
+    write_preset_files(Path(__file__).resolve().parents[1] / "config" / "analysis")

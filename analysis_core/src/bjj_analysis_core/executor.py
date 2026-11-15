@@ -207,9 +207,10 @@ async def execute_pipeline(
 
         if cfg.position_critique_context == "proposed":
             # Each check sees the scan's own previous state: no dependency, parallel.
-            befores = (scan.initial_state,) + tuple(
-                t.state_after for t in scan.transitions[:-1]
-            )
+            # A scan with no transitions has no checks (and no "before" states).
+            befores = ((scan.initial_state,) + tuple(
+                t.state_after for t in scan.transitions
+            ))[: len(scan.transitions)]
             decisions = await _ordered(
                 [
                     (lambda i=i, t=t, b=b: critique(i, t, b))

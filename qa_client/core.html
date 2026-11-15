@@ -96,7 +96,7 @@
     <section>
       <h2>Run setup</h2>
       <label>Workflow</label>
-      <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma" aria-pressed="true" title="Production MMA DAG: every strike goes through critique, analyze and validate">MMA (production)</button><button data-v="mma_v2" aria-pressed="false" title="Windowed strike census + one audit per 20 s window; grappling keeps the per-candidate chain">MMA v2</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button></div>
+      <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma_v2" aria-pressed="true" title="Production MMA DAG: windowed strike census + one audit per 20 s window + knockdown check; grappling keeps the per-candidate chain">MMA (production)</button><button data-v="mma" aria-pressed="false" title="MMA v1 baseline: every strike goes through critique, analyze and validate">MMA v1</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button></div>
       <div class="row">
         <div><label for="start">Scope start (m:ss)</label><input id="start" value="0:00"></div>
         <button id="start-now" style="flex:0 0 auto">= playhead</button>
@@ -139,7 +139,7 @@ const api = (path, opts={}) => fetch($('backend').value.replace(/\/$/,'') + path
 const fmt = ms => { const s = Math.max(0, ms) / 1000, m = Math.floor(s / 60); return m + ':' + (s - m * 60).toFixed(1).padStart(4, '0'); };
 const parseT = v => { const p = String(v).trim().split(':').map(Number); if (p.some(isNaN)) return NaN; return Math.round((p.length === 2 ? p[0] * 60 + p[1] : p[0]) * 1000); };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const state = { youtubeId:null, duration:null, sport:'mma', config:null, overrides:{}, fighters:[{},{}], runId:null, poll:null, result:null, filter:'all' };
+const state = { youtubeId:null, duration:null, sport:'mma_v2', config:null, overrides:{}, fighters:[{},{}], runId:null, poll:null, result:null, filter:'all' };
 const video = () => $('vid');
 let stopAt = null;
 

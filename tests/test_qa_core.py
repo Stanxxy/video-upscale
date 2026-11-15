@@ -190,7 +190,8 @@ def test_v2_workflows_use_the_strike_pack_and_census_only_drops_the_audit():
 
 
 def test_parallel_position_checks_follow_the_preset_unless_the_run_says_otherwise():
-    assert qa_core.build_config("mma_v2", {}).position_critique_context == "proposed"
-    assert qa_core.build_config("mma", {}).position_critique_context == "confirmed"
-    assert qa_core.build_config("mma", {}, True).position_critique_context == "proposed"
-    assert qa_core.build_config("mma_v2", {}, False).position_critique_context == "confirmed"
+    # Every production preset runs position checks in parallel; a run can opt out.
+    for sport in ("bjj", "mma", "mma_v2"):
+        assert qa_core.build_config(sport, {}).position_critique_context == "proposed"
+        assert qa_core.build_config(sport, {}, False).position_critique_context == "confirmed"
+        assert qa_core.build_config(sport, {}, True).position_critique_context == "proposed"
