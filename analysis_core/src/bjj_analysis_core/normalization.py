@@ -7,13 +7,8 @@ replayed outputs produce identical revisions and never receive review acceptance
 
 from uuid import uuid5
 
-from bjj_analysis_core import CORE_VERSION, WORKFLOW_ID
-from bjj_analysis_core.outputs import (
-    PositionCritiqueV1,
-    PositionScanV1,
-    TechniqueCandidateV1,
-    TechniqueDecisionV1,
-)
+from bjj_analysis_core import CORE_VERSION
+from bjj_analysis_core.packs import pack_for
 from pydantic import AwareDatetime, TypeAdapter
 from shared_lib.models.analysis_contracts import TimeRangeMs
 from shared_lib.models.analysis_results import (
@@ -24,12 +19,17 @@ from shared_lib.models.analysis_results import (
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 from shared_lib.models.analysis_timeline import content_sha256
 
+from shared_lib.models.sport_taxonomy import vocabulary as _vocabulary
+
+STRIKE_ACTIONS = frozenset(_vocabulary("mma.v1").strike_actions)
+
 
 def _context(run, completed_at):
     run = RegisteredAIRunV1.model_validate(run)
     completed_at = TypeAdapter(AwareDatetime).validate_python(completed_at)
-    if run.spec.core_version != CORE_VERSION or run.spec.workflow_id != WORKFLOW_ID:
+    if run.spec.core_version != CORE_VERSION:
         raise ValueError("registered run requires a different core version")
+    pack_for(run)  # an unknown workflow or taxonomy mismatch fails here
     if completed_at < run.registered_at:
         raise ValueError("component completion precedes registered run")
     return run, completed_at
@@ -44,6 +44,7 @@ def _common(run, item_id, bounds):
         item_id=item_id,
         bounds=bounds,
         player_ids=tuple(a.player_id for a in run.spec.athletes),
+        taxonomy_id=run.spec.taxonomy_id,
     )
 
 
@@ -61,6 +62,7 @@ def _revision(run, completed_at, component, items):
         player_ids=tuple(a.player_id for a in run.spec.athletes),
         created_at=completed_at,
         author=run.spec.owner,
+        taxonomy_id=run.spec.taxonomy_id,
         **{component: tuple(items)},
     )
     final = AnalysisRevisionV1.model_validate(
@@ -75,7 +77,7 @@ def _revision(run, completed_at, component, items):
     return final
 
 
-def normalize_positions(run, scan, critiques, *, completed_at):
+def normalize_positions(run, scan, critiques, *, completed_at, unchecked=()):
     """Every rough transition needs one decision; no missing critiques or sorting.
 
     Rejected transitions vanish only by explicit decision. Confirmed corrected
@@ -83,11 +85,19 @@ def normalize_positions(run, scan, critiques, *, completed_at):
     Do not merge adjacent states: doing so can discard evidence or a reset cue.
     """
     run, completed_at = _context(run, completed_at)
-    scan = PositionScanV1.model_validate(scan)
-    decisions = tuple(PositionCritiqueV1.model_validate(c) for c in critiques)
-    by_index = {c.transition_index: c for c in decisions}
-    if len(by_index) != len(decisions) or set(by_index) != set(
-        range(len(scan.transitions))
+    pack = pack_for(run)
+    scan = pack.position_scan.model_validate(scan)
+    # critiques=None: the run has no position check; the scan's transitions stand.
+    decisions = None if critiques is None else tuple(
+        pack.position_critique.model_validate(c) for c in critiques
+    )
+    by_index = {} if decisions is None else {c.transition_index: c for c in decisions}
+    # unchecked: transitions a ground re-scan already checked (grounds.py); they stand.
+    unchecked = frozenset(unchecked)
+    if decisions is not None and (
+        len(by_index) != len(decisions)
+        or set(by_index) & unchecked
+        or set(by_index) | unchecked != set(range(len(scan.transitions)))
     ):
         raise ValueError(
             "exactly one critique is required for every scanned transition"
@@ -101,7 +111,10 @@ def normalize_positions(run, scan, critiques, *, completed_at):
         previous_rough = transition.at_ms
     start, state, intervals = run.spec.scope.start_ms, scan.initial_state, []
     boundaries = []
-    for index in range(len(scan.transitions)):
+    for index, transition in enumerate(scan.transitions):
+        if decisions is None or index in unchecked:
+            boundaries.append((transition.at_ms, transition.state_after))
+            continue
         decision = by_index[index]
         if decision.confirmed:
             boundaries.append((decision.corrected_at_ms, decision.state_after))
@@ -131,7 +144,7 @@ def normalize_positions(run, scan, critiques, *, completed_at):
     return _revision(run, completed_at, "positions", intervals)
 
 
-def normalize_techniques(run, candidates, decisions, *, completed_at):
+def normalize_techniques(run, candidates, decisions, *, completed_at, strikes=()):
     """One terminal decision per candidate; no silent drops or inferred outcomes.
 
     Candidates/decisions must be checkpointed by the host. Input order is kept;
@@ -139,15 +152,19 @@ def normalize_techniques(run, candidates, decisions, *, completed_at):
     event's clip is rejected, never clamped or assigned a fixed padding tail.
     """
     run, completed_at = _context(run, completed_at)
-    candidates = tuple(TechniqueCandidateV1.model_validate(c) for c in candidates)
+    pack = pack_for(run)
+    candidates = tuple(pack.technique_candidate.model_validate(c) for c in candidates)
     candidate_ids = tuple(c.candidate_id for c in candidates)
-    decisions = tuple(TechniqueDecisionV1.model_validate(d) for d in decisions)
+    # decisions=None: the run has no validator; each analysis stands as proposed.
+    unchecked = decisions is None
+    decisions = () if unchecked else tuple(
+        pack.technique_decision.model_validate(d) for d in decisions
+    )
     by_id = {d.candidate_id: d for d in decisions}
-    if (
-        len(set(candidate_ids)) != len(candidate_ids)
-        or len(by_id) != len(decisions)
+    if len(set(candidate_ids)) != len(candidate_ids) or (not unchecked and (
+        len(by_id) != len(decisions)
         or set(by_id) != set(candidate_ids)
-    ):
+    )):
         raise ValueError(
             "exactly one decision is required for every technique candidate"
         )
@@ -155,11 +172,21 @@ def normalize_techniques(run, candidates, decisions, *, completed_at):
     for candidate in candidates:
         if not run.spec.scope.contains(candidate.observation_window):
             raise ValueError("candidate observation window exceeds selected scope")
-        decision = by_id[candidate.candidate_id]
-        if decision.verdict == "ditch":
+        if unchecked:
+            data = candidate.proposed
+        else:
+            decision = by_id[candidate.candidate_id]
+            if decision.verdict == "ditch":
+                continue
+            data = decision.technique
+        if pack.windowed_strikes and any(
+            a.value in STRIKE_ACTIONS for a in data.action_classes
+        ):
+            # Windowed strike workflow: strikes come only from the census. A position-
+            # change candidate the chain labels as a strike is the census's strike seen
+            # a second time (it duplicated knockdowns in the Round 1 run), not a new one.
             continue
-        data = decision.technique
-        if decision.verdict == "agree" and data != candidate.proposed:
+        if not unchecked and decision.verdict == "agree" and data != candidate.proposed:
             raise ValueError("agree must preserve the proposed technique exactly")
         if not candidate.observation_window.contains(data.bounds):
             raise ValueError("technique bounds exceed the supplied observation window")
@@ -172,4 +199,17 @@ def normalize_techniques(run, candidates, decisions, *, completed_at):
             **data.model_dump(exclude={"schema_version", "bounds"}),
         )
         events.append(event)
+    # Windowed strike census (mma-windowed-strikes): already merged, one event each.
+    if strikes and not pack.windowed_strikes:
+        raise ValueError("only the windowed strike workflow publishes census strikes")
+    for index, data in enumerate(strikes):
+        data = pack.technique_analysis.model_validate(data)
+        if not run.spec.scope.contains(data.bounds):
+            raise ValueError("strike bounds exceed the selected scope")
+        events.append(
+            TechniqueEventV1(
+                **_common(run, uuid5(run.spec.run_id, f"strike:v1:{index}"), data.bounds),
+                **data.model_dump(exclude={"schema_version", "bounds"}),
+            )
+        )
     return _revision(run, completed_at, "techniques", events)

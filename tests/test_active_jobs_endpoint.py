@@ -2,16 +2,15 @@
 
 Verifies:
 1. Empty list when no jobs are in the store.
-2. Every non-terminal JobStatus (PENDING, DOWNLOADING, DETECTING,
-   WAITING_FOR_DETECTION, TRACKING, UPSCALING, UPLOADING, PUBLISHING,
-   AWAITING_CORRECTION, INTERRUPTED) appears in /jobs/active.
+2. Every non-terminal JobStatus (PENDING: a job is PENDING in memory from
+   admission until it reaches a terminal state) appears in /jobs/active.
 3. Terminal jobs (COMPLETED, FAILED, CANCELLED) are excluded.
 4. Multiple non-terminal jobs are all returned.
 5. The endpoint is read-only — no state mutation after the call.
 6. Response schema: HTTP 200, body has .active list with id/state/started_at.
 7. REGRESSION (C1): the active set == complement of the terminal set.
-   TRACKING and all GPU-working states must be reported active, not silently
-   dropped by a hardcoded non-terminal allowlist that drifts from the enum.
+   Every in-flight state must be reported active, not silently dropped by a
+   hardcoded non-terminal allowlist that drifts from the enum.
 """
 from __future__ import annotations
 
@@ -159,43 +158,20 @@ async def test_every_non_terminal_status_is_active(service_client, service_compo
 
 
 # ---------------------------------------------------------------------------
-# 4b. Explicit spot-check: TRACKING, UPSCALING, DETECTING all active
+# 4b. Explicit spot-check: an admitted (PENDING) job is active
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_gpu_working_states_are_active(service_client, service_components):
-    """TRACKING, UPSCALING, DETECTING must all appear in /jobs/active.
-
-    These are the GPU-consuming states.  If any of them is silently excluded
-    the GPU-guard gives a false 'safe' signal → catastrophic mid-job restart.
-    """
+async def test_pending_job_is_active(service_client, service_components):
+    """An admitted job is PENDING in memory until it reaches a terminal
+    state; the release guard must see it."""
     _, job_store, _ = service_components
     from service.models import TrackRequest
 
-    gpu_states = [
-        JobStatus.TRACKING,
-        JobStatus.UPSCALING,
-        JobStatus.DETECTING,
-        JobStatus.DOWNLOADING,
-        JobStatus.WAITING_FOR_DETECTION,
-        JobStatus.UPLOADING,
-        JobStatus.PUBLISHING,
-    ]
-
-    status_to_job_id: dict[JobStatus, str] = {}
-    for status in gpu_states:
-        request = TrackRequest(bucket="b", key="k.mp4")
-        job = await job_store.create_job(request)
-        await job_store.update_job(job.job_id, status=status)
-        status_to_job_id[status] = job.job_id
+    job = await job_store.create_job(TrackRequest(bucket="b", key="k.mp4"))
 
     resp = await service_client.get("/jobs/active")
     assert resp.status_code == 200
-    active_ids = {e["job_id"] for e in resp.json()["active"]}
-
-    for status, job_id in status_to_job_id.items():
-        assert job_id in active_ids, (
-            f"GPU-working status {status.value!r} must appear in /jobs/active"
-        )
+    assert job.job_id in {e["job_id"] for e in resp.json()["active"]}
 
 
 # ---------------------------------------------------------------------------
@@ -226,22 +202,9 @@ def test_active_states_equals_complement_of_terminal():
         f"{_ACTIVE_STATES & _TERMINAL_STATES}"
     )
 
-    # Verify specific GPU states are in the active set
-    for gpu_status in (
-        JobStatus.TRACKING,
-        JobStatus.UPSCALING,
-        JobStatus.DETECTING,
-        JobStatus.DOWNLOADING,
-        JobStatus.WAITING_FOR_DETECTION,
-        JobStatus.UPLOADING,
-        JobStatus.PUBLISHING,
-        JobStatus.AWAITING_CORRECTION,
-        JobStatus.INTERRUPTED,
-        JobStatus.PENDING,
-    ):
-        assert gpu_status.value in _ACTIVE_STATES, (
-            f"{gpu_status.value!r} must be in _ACTIVE_STATES (fail-safe)"
-        )
+    assert JobStatus.PENDING.value in _ACTIVE_STATES, (
+        "'pending' must be in _ACTIVE_STATES (fail-safe)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -255,13 +218,7 @@ async def test_active_jobs_multiple_non_terminal(service_client, service_compone
     from service.models import TrackRequest
 
     created_ids = set()
-    for non_terminal in (
-        JobStatus.PENDING,
-        JobStatus.AWAITING_CORRECTION,
-        JobStatus.INTERRUPTED,
-        JobStatus.TRACKING,
-        JobStatus.UPSCALING,
-    ):
+    for non_terminal in (JobStatus.PENDING, JobStatus.PENDING, JobStatus.PENDING):
         request = TrackRequest(bucket="b", key="k.mp4")
         job = await job_store.create_job(request)
         await job_store.update_job(job.job_id, status=non_terminal)

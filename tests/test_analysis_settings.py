@@ -117,9 +117,11 @@ def test_portable_six_node_preset_is_explicit_and_does_not_claim_qualification()
                  "technique_critique", "technique_analyze", "technique_validate"):
         node = getattr(config, name)
         assert node.model == "gemini-3.8-flash"
-        assert node.thinking == "high"
+        assert node.thinking == ("low" if name.endswith(("critique", "validate")) else "high")
         assert node.media_resolution == "low"
         assert node.fps == (1 if name.endswith("scan") else 10)
+    assert config.position_critique_context == "proposed"
+    assert config.strike_census is None and config.knockdown_check is None
 
 
 def test_one_override_is_retained_raw_and_changes_only_its_mapped_axis():
@@ -304,5 +306,59 @@ def test_production_dag_artifacts_match_advertised_model_and_native_preset():
     saved = CoreConfigV1.model_validate_json((root / "gemini38.json").read_bytes())
     assert saved == gemini38_preset()
     versions = qualified_model_versions(json.loads((root / "qualified-models.json").read_text()))
-    assert set(versions) == set(get_analysis_settings_capabilities().qualified_models)
-    assert versions["gemini-3.8-flash"] == frozenset({"gemini-3.8-flash"})
+    # The DAG qualifies Hydrogen (founder 2026-11-15) and keeps 3.8 Flash for runs admitted
+    # with it; the legacy jobs path still advertises 3.8 Flash only.
+    assert versions == {"gemini-3.8-flash": frozenset({"gemini-3.8-flash"}),
+                        "gemini-4-hydrogen": frozenset({"gemini-4-hydrogen"})}
+    assert get_analysis_settings_capabilities().qualified_models == ("gemini-3.8-flash",)
+
+
+def test_mma_dag_preset_artifact_is_the_windowed_strike_workflow():
+    from pathlib import Path
+    from service.analysis_preset import gemini38_mma_strikes_preset
+    from bjj_analysis_core.packs import MMA_STRIKES
+    from bjj_analysis_core.requests import CoreConfigV1, prompt_bundle_sha256
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    saved = CoreConfigV1.model_validate_json((root / "gemini38-mma-strikes.json").read_bytes())
+    assert saved == gemini38_mma_strikes_preset()
+    assert saved.prompt_bundle_sha256 == prompt_bundle_sha256(MMA_STRIKES)
+    assert (saved.strike_census.thinking, saved.strike_census.fps) == ("high", 10)
+    assert saved.strike_audit.thinking == saved.knockdown_check.thinking == "low"
+    assert saved.position_critique_context == "proposed"
+
+
+def test_published_preset_files_are_the_generator_bytes():
+    """The S3 artifact digest is over these bytes; a model-equal rewrite is not enough."""
+    from pathlib import Path
+    from service.analysis_preset import PRESET_FILES, preset_bytes
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    assert sorted(p.name for p in root.glob("*.json") if p.name != "qualified-models.json") == sorted(PRESET_FILES)
+    for name, build in PRESET_FILES.items():
+        assert (root / name).read_bytes() == preset_bytes(build()), name
+
+
+def test_hydrogen_production_presets_are_exactly_what_vlm_studio_measured():
+    """Hydrogen everywhere, no check steps; MMA adds the ground re-scan (x-mma 2026-11-15)."""
+    from pathlib import Path
+    from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID, WORKFLOW_ID
+    from bjj_analysis_core.packs import BJJ, MMA_GROUND
+    from bjj_analysis_core.requests import prompt_bundle_sha256
+    from service import qa_core
+    from service.analysis_preset import hydrogen_mma_ground_preset, hydrogen_preset, preset_bytes
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    for name, build, sport, workflow, pack in (
+        ("hydrogen.json", hydrogen_preset, "bjj_h", WORKFLOW_ID, BJJ),
+        ("hydrogen-mma-ground.json", hydrogen_mma_ground_preset, "mma_v2_hg", MMA_GROUND_WORKFLOW_ID, MMA_GROUND),
+    ):
+        config = build()
+        assert (root / name).read_bytes() == preset_bytes(qa_core.build_config(sport, {}))
+        assert qa_core.SPORTS[sport][0] == workflow and config.prompt_bundle_sha256 == prompt_bundle_sha256(pack)
+        models = {getattr(config, n).model for n in type(config).model_fields
+                  if getattr(getattr(config, n), "model", None)}
+        assert models == {"gemini-4-hydrogen"}
+        assert all(getattr(config, n) is None for n in (
+            "position_critique", "technique_critique", "technique_validate", "strike_audit", "knockdown_check"))
+    assert hydrogen_mma_ground_preset().ground_rescan.fps == 5

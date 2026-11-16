@@ -7,7 +7,8 @@ from uuid import uuid4
 import httpx
 import pytest
 from bjj_analysis_observer.checkpoints import KeyspacesCheckpointReader
-from bjj_analysis_observer.progress import FANOUTS, NODES, ProgressEvidenceError, _step
+from bjj_analysis_observer.progress import FANOUTS, ProgressEvidenceError, _step
+from shared_lib.models.analysis_progress import NODE_ORDER as NODES
 from shared_lib.infrastructure.annotation_store import AnnotationNotFound
 from test_dispatch import dispatch_tables, setup_dispatch
 from test_worker import leases
@@ -47,7 +48,7 @@ async def test_completed_zero_fanouts_require_and_report_explicit_summaries(
     await dispatch.dispatch(run.spec.run_id)
     count = len(wire.calls)
     view = await dispatch.progress(run.spec.run_id)
-    for node in FANOUTS:
+    for node in FANOUTS & set(NODES):  # a BJJ run has no strike or ground steps
         row = nodes(view)[node]
         assert (row.recorded_status, row.completed_items, row.total_items) == (
             "succeeded",
@@ -136,9 +137,7 @@ def positive_transport(dispatch, run, wire, entered, release):
                 actor_player_id=run.spec.athletes[0].player_id,
                 actor_sentinel=None,
                 outcome="successful",
-                technique_shortlist=None,
-                technique_guess="choke",
-                notes="",
+                notes="choke",
                 evidence="grip",
                 outcome_evidence="tap",
                 outcome_bounds=dict(start_ms=end - 2, end_ms=end - 1),
@@ -184,7 +183,7 @@ async def test_active_fanout_and_completed_dynamic_nodes_from_real_dag(setup_dis
             task.cancel()
         await asyncio.gather(task, return_exceptions=True)
     view = nodes(await dispatch.progress(run.spec.run_id))
-    for node in FANOUTS:
+    for node in FANOUTS & set(NODES):  # a BJJ run has no strike or ground steps
         assert (
             view[node].recorded_status,
             view[node].completed_items,

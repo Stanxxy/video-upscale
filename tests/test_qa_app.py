@@ -3,7 +3,7 @@
 Regression guard for the bug this module fixes: ``service.app:app``'s lifespan
 unconditionally constructs ``KeyspacesClient()`` (Cassandra) at startup, so it
 cannot run standalone for the QA VLM lane. ``service.qa_app:app`` must import
-and serve ``/health`` with zero Keyspaces/Cassandra/SAM2 involvement.
+and serve ``/health`` with zero Keyspaces/Cassandra involvement.
 """
 from __future__ import annotations
 

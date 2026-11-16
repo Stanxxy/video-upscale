@@ -4,43 +4,27 @@ Checkpoint statuses are last recorded facts, NOT worker liveness. Callers must
 separately project lifecycle/heartbeat and delivery readiness. No synthetic percent.
 """
 
+import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID, uuid5
 
-from bjj_analysis_core import CORE_VERSION, WORKFLOW_ID
+from bjj_analysis_core import CORE_VERSION
 from bjj_analysis_core.outputs import (
     CandidateBatchV1,
-    PositionScanV1,
     TechniqueAnalysisInputV1,
 )
+from bjj_analysis_core.mma_outputs import StrikeBatchV1
+from bjj_analysis_core.grounds import ground_phases, rescanned_transitions
+from bjj_analysis_core.packs import PACKS, pack_for
+from bjj_analysis_core.requests import load_config
+from bjj_analysis_core.strikes import strike_windows
 from pydantic import TypeAdapter
 from shared_lib.models.analysis_contracts import NodeProgressV1
+from shared_lib.models.analysis_progress import FANOUT_NODES, SKIPPABLE_NODES, WORKFLOW_NODE_ORDERS
 
-NODES = (
-    "provider_upload",
-    "position_scan",
-    "position_critique",
-    "positions_normalize",
-    "positions_publish",
-    "technique_scan",
-    "position_technique_candidates",
-    "technique_critique",
-    "technique_worklist",
-    "technique_analyze",
-    "technique_validate",
-    "techniques_normalize",
-    "techniques_publish",
-    "dag_complete",
-    "provider_cleanup",
-)
 HOST_NODES = {"provider_upload", "dag_complete", "provider_cleanup"}
-FANOUTS = {
-    "position_critique",
-    "technique_critique",
-    "technique_analyze",
-    "technique_validate",
-}
+FANOUTS = FANOUT_NODES
 SUPPORTED_CORE_VERSION = "0.3.0"
 
 
@@ -83,11 +67,37 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
         or not 0 <= max_item_reads <= 2000
     ):
         raise ValueError("live read authority and bounded item budget required")
-    if CORE_VERSION != SUPPORTED_CORE_VERSION or (
-        run.spec.workflow_id,
-        run.spec.core_version,
-    ) != (WORKFLOW_ID, SUPPORTED_CORE_VERSION):
+    if (
+        CORE_VERSION != SUPPORTED_CORE_VERSION
+        or run.spec.core_version != SUPPORTED_CORE_VERSION
+        or run.spec.workflow_id not in PACKS
+        or run.spec.workflow_id not in WORKFLOW_NODE_ORDERS
+    ):
         raise ProgressEvidenceError("no progress reader for registered core/workflow")
+    try:
+        pack = pack_for(run)
+    except ValueError as error:
+        raise ProgressEvidenceError("registered run has a mismatched taxonomy") from error
+    order = WORKFLOW_NODE_ORDERS[run.spec.workflow_id]
+    # The run's own admitted configuration says which check steps it leaves out and,
+    # for the MMA workflows, where its strike windows and ground phases are.
+    config_bytes = await journal.config_bytes()
+    try:
+        fields = json.loads(config_bytes)
+    except ValueError as error:
+        raise ProgressEvidenceError("registered run configuration is unusable") from error
+    skipped = {
+        node for node in SKIPPABLE_NODES - {"knockdowns_apply"}
+        if node in order and node in fields and fields[node] is None
+    }
+    if "knockdown_check" in skipped:
+        skipped.add("knockdowns_apply")  # it only applies knockdown checks
+    config = None
+    if pack.windowed_strikes:
+        try:
+            _, config = load_config(run, config_bytes)
+        except ValueError as error:
+            raise ProgressEvidenceError("registered run configuration is unusable") from error
 
     async def read(node, item=None):
         await guard()
@@ -108,7 +118,7 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
 
     # Read topology sources before their dependent summaries. A racing read that
     # cannot justify a summary fails explicitly rather than claiming empty success.
-    heads = {node: await read(node) for node in NODES}
+    heads = {node: await read(node) for node in order}
 
     def output(node, value_type):
         record = heads[node]
@@ -116,13 +126,32 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
             return None
         return TypeAdapter(value_type).validate_json(record.result_json)
 
-    scan = output("position_scan", PositionScanV1)
+    scan = output("position_scan", pack.position_scan)
     batch = output("position_technique_candidates", CandidateBatchV1)
     work = output("technique_worklist", tuple[TechniqueAnalysisInputV1, ...])
-    items = {
-        "position_critique": (
-            None if scan is None else [str(i) for i in range(len(scan.transitions))]
-        ),
+    items = {}
+    if config is not None:
+        windows = [str(i) for i in range(len(strike_windows(run, config)))]
+        merged = output("strikes_merge", StrikeBatchV1)
+        items = {
+            "strike_census": windows,
+            "strike_audit": windows,
+            "knockdown_check": (
+                None if merged is None else [str(i) for i, s in enumerate(merged.strikes) if s.knockdown]
+            ),
+        }
+    checked = None if scan is None else [str(i) for i in range(len(scan.transitions))]
+    if pack.ground_rescan:
+        # Ground pieces come from the rough scan; checks skip what the re-scan covered.
+        phases = None if scan is None else ground_phases(run, config, scan)
+        ground = output("ground_merge", pack.position_scan)
+        items["ground_rescan"] = None if phases is None else [str(i) for i in range(len(phases))]
+        checked = None if ground is None else [
+            str(i) for i in range(len(ground.transitions))
+            if i not in rescanned_transitions(config, phases, ground)
+        ]
+    items |= {
+        "position_critique": checked,
         "technique_critique": (
             None if batch is None else [item.candidate_id for item in batch.candidates]
         ),
@@ -136,8 +165,13 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     if sum(len(ids) for ids in items.values() if ids is not None) > max_item_reads:
         raise ProgressEvidenceError("progress item read budget exceeded")
     views = []
-    for node in NODES:
+    for node in order:
         head = heads[node]
+        if node in skipped:
+            if head is not None:
+                raise ProgressEvidenceError("a step the configuration leaves out has a checkpoint")
+            views.append(NodeView(node, "skipped", 0, None, ()))
+            continue
         if node not in FANOUTS:
             progress = None if head is None else head.progress
             views.append(

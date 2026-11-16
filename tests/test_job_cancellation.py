@@ -24,10 +24,9 @@ async def test_cancel_active_in_memory_job(service_client, service_components):
     assert in_memory.status == JobStatus.CANCELLED
     lifecycle = await jobs_store.get_lifecycle(job.job_id)
     assert lifecycle["job_state"] == JobState.CANCELLED.value
-    checkpoint = jobs_store._checkpoints[(job.job_id, PipelineStage.TRACK.value)]
+    checkpoint = jobs_store._checkpoints[(job.job_id, PipelineStage.CANCELLATION.value)]
     data = checkpoint["checkpoint_data"]
     assert data["schema_version"] == 1
-    assert data["pending_detection"] is None
     assert data["artifacts"] == {}
     assert {
         "progress_percent",
@@ -50,11 +49,10 @@ async def test_cancel_keyspaces_only_job(service_client, service_components):
     lifecycle = await jobs_store.get_lifecycle("keyspaces-only-job")
     assert lifecycle["job_state"] == JobState.CANCELLED.value
     checkpoint = jobs_store._checkpoints[
-        ("keyspaces-only-job", PipelineStage.TRACK.value)
+        ("keyspaces-only-job", PipelineStage.CANCELLATION.value)
     ]
     data = checkpoint["checkpoint_data"]
     assert data["schema_version"] == 1
-    assert data["pending_detection"] is None
     assert data["artifacts"] == {}
     assert "worker_state" in data
     assert data["reason"] == "user_cancelled"

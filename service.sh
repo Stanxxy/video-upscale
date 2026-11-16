@@ -167,8 +167,6 @@ cmd_start() {
         echo "  Create one with:"
         echo "    python3 -m venv venv"
         echo "    venv/bin/pip install -r requirements-service.txt"
-        echo "  Optional legacy GPU/tracking revival:"
-        echo "    venv/bin/pip install -r requirements-legacy-gpu.txt"
         return 1
     fi
 
@@ -194,7 +192,7 @@ cmd_start() {
         if [[ -n "${BJJ_RELOAD_DIR:-}" ]]; then
             uvicorn_cmd+=(--reload-dir "$BJJ_RELOAD_DIR")
         else
-            uvicorn_cmd+=(--reload-dir service --reload-dir tracking_pipeline)
+            uvicorn_cmd+=(--reload-dir service)
         fi
     fi
     if [[ -n "$BJJ_UVICORN_EXTRA" ]]; then
@@ -308,7 +306,7 @@ cmd_dev() {
     if [[ -n "${BJJ_RELOAD_DIR:-}" ]]; then
         uvicorn_cmd+=(--reload-dir "$BJJ_RELOAD_DIR")
     else
-        uvicorn_cmd+=(--reload-dir service --reload-dir tracking_pipeline)
+        uvicorn_cmd+=(--reload-dir service)
     fi
     if [[ -n "$BJJ_UVICORN_EXTRA" ]]; then
         # shellcheck disable=SC2206
@@ -349,7 +347,7 @@ Environment variables:
   BJJ_LOG_LEVEL      Log level       (default: info for start, debug for dev)
   BJJ_FOREGROUND=1   With start: run in foreground (logs to terminal, no nohup)
   BJJ_RELOAD=1       With start: add --reload (prefer ./service.sh dev)
-  BJJ_RELOAD_DIR     Extra uvicorn --reload-dir args (default dev: service + tracking_pipeline)
+  BJJ_RELOAD_DIR     Extra uvicorn --reload-dir args (default dev: service)
   BJJ_UVICORN_EXTRA  Extra uvicorn CLI tokens (word-split; dev and start)
 EOF
 }

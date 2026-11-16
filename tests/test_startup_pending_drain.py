@@ -48,6 +48,7 @@ async def test_drain_schedules_pending_after_claim(monkeypatch):
             "job_id": "j-repl",
             "video_id": "v1",
             "job_state": "PENDING",
+            "pipeline_kind": "highlight_v2",
             "owner_instance_id": "old-owner",
             "replacement_job_id": None,
         },
@@ -63,7 +64,6 @@ async def test_drain_schedules_pending_after_claim(monkeypatch):
         scheduled.append((job_id, request))
 
     cfg = ServiceConfig(
-        detection_timeout=86400.0,
         s3_endpoint_url="http://localhost:4566",
     )
     routes_mod.init_routes(cfg, job_store, jobs_store, instance_id="new-1")
@@ -100,7 +100,6 @@ async def test_drain_skips_non_pending(monkeypatch):
         scheduled.append(job_id)
 
     cfg = ServiceConfig(
-        detection_timeout=86400.0,
         s3_endpoint_url="http://localhost:4566",
     )
     routes_mod.init_routes(cfg, job_store, jobs_store, instance_id="srv")
@@ -123,6 +122,7 @@ async def test_drain_skips_when_claim_lost(monkeypatch):
         return_value={
             "job_id": "j1",
             "job_state": "PENDING",
+            "pipeline_kind": "highlight_v2",
             "owner_instance_id": "other",
             "replacement_job_id": None,
         },
@@ -136,7 +136,6 @@ async def test_drain_skips_when_claim_lost(monkeypatch):
         scheduled.append(job_id)
 
     cfg = ServiceConfig(
-        detection_timeout=86400.0,
         s3_endpoint_url="http://localhost:4566",
     )
     routes_mod.init_routes(cfg, job_store, jobs_store, instance_id="srv")
@@ -158,6 +157,7 @@ async def test_drain_marks_pre_r4_request_failed_after_claim(monkeypatch):
         return_value={
             "job_id": "old-job",
             "job_state": "PENDING",
+            "pipeline_kind": "highlight_v2",
             "owner_instance_id": "old-owner",
             "replacement_job_id": None,
         },
@@ -176,3 +176,35 @@ async def test_drain_marks_pre_r4_request_failed_after_claim(monkeypatch):
     args = jobs_store.set_state.await_args
     assert args.args[:2] == ("old-job", JobState.FAILED)
     assert "effective analysis settings snapshot" in args.kwargs["error_message"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pipeline_kind", [None, "tracking"])
+async def test_drain_fails_retired_tracking_rows_with_explicit_reason(monkeypatch, pipeline_kind):
+    job_store = InMemoryJobStore()
+    jobs_store = AsyncMock()
+    jobs_store.list_active_recovery_index_rows_newest_first = AsyncMock(
+        return_value=[{"job_id": "legacy-job"}],
+    )
+    jobs_store.get_lifecycle = AsyncMock(
+        return_value={
+            "job_id": "legacy-job",
+            "job_state": "PENDING",
+            "pipeline_kind": pipeline_kind,
+            "owner_instance_id": "old-owner",
+            "replacement_job_id": None,
+        },
+    )
+    jobs_store.get_request = AsyncMock(return_value=json.dumps(_minimal_track_request()))
+    jobs_store.claim_pending_job_takeover = AsyncMock(return_value=True)
+    jobs_store.set_state = AsyncMock(return_value=True)
+    routes_mod.init_routes(ServiceConfig(), job_store, jobs_store, instance_id="new-owner")
+    scheduled = []
+    monkeypatch.setattr(routes_mod, "_schedule_job", lambda *args: scheduled.append(args))
+
+    await routes_mod.drain_orphan_pending_jobs_on_startup("new-owner")
+
+    assert scheduled == []
+    args = jobs_store.set_state.await_args
+    assert args.args[:2] == ("legacy-job", JobState.FAILED)
+    assert "retired local tracking pipeline" in args.kwargs["error_message"]

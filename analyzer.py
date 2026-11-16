@@ -52,13 +52,8 @@ def _build_response_schema(player_ids):
     D5 (simplified-4-axis-taxonomy adoption, 2026-07-12): promotes the QA
     pipeline's ENUM-constrained axis1/axis3/axis4 schema
     (``service/pipelines/simplified_tags.py``) into production, replacing the
-    old free-string ``action``/``technique`` fields (which relied on
-    post-hoc frozenset sanitization in ``taxonomy_mapper.py`` — a silent
-    ``unknown -> other`` path this closes at the source). ``technique_guess``
-    is a deliberately UNCONSTRAINED free-text field (D1) — a drift/regression
-    signal only, never gating, mapped into the curated per-class shortlist by
-    ``taxonomy_mapper.resolve_technique_shortlist`` downstream in
-    ``service/sns.py``.
+    old free-string ``action``/``technique`` fields. The specific move is
+    described in ``reasoning`` only; there is no technique list.
 
     ``actor_player_id`` is UNCHANGED from the pre-existing production
     machinery (D5 — do NOT adopt the QA pipeline's free-text/positional
@@ -107,14 +102,6 @@ def _build_response_schema(player_ids):
                 type=types.Type.STRING,
                 enum=list(taxonomy_mapper.AXIS4_OUTCOME),
                 description="Axis 4 — Outcome. Exactly one exact enum value from the taxonomy.",
-            ),
-            "technique_guess": types.Schema(
-                type=types.Type.STRING,
-                description=(
-                    "OPTIONAL free-text specific-technique guess (e.g. 'possibly a kimura'). "
-                    "Ungated — never defines or replaces the enum axes above; a drift/"
-                    "regression signal only."
-                ),
             ),
             "actor_player_id": types.Schema(**actor_schema_kwargs),
             "identity_uncertain": types.Schema(
@@ -248,9 +235,7 @@ class BJJTechniqueAnalyzer:
            `axis3_action` (Axis 3 — Action/Technique Class, one or more enum values), and
            `axis4_outcome` (Axis 4 — Outcome, exactly one enum value) MUST use exact values from
            the taxonomy. Do NOT invent new values, do NOT abbreviate, do NOT combine axes.
-        6. **Optional technique guess**: `technique_guess` is OPTIONAL free text (e.g. "possibly a
-           kimura") — it never gates or replaces the enum axes above.
-        7. **Generate Output**: Return ONLY valid JSON matching this format:
+        6. **Generate Output**: Return ONLY valid JSON matching this format:
         {{
             "current_context_summary": "string",
             "clips": [
@@ -260,7 +245,6 @@ class BJJTechniqueAnalyzer:
                     "axis1_position": ["<Axis 1 enum value>", "..."],
                     "axis3_action": ["<Axis 3 enum value>", "..."],
                     "axis4_outcome": "<Axis 4 enum value>",
-                    "technique_guess": "string (optional, e.g. 'double leg takedown')",
                     "actor_player_id": "the player_id of the athlete performing the technique (must be one of the provided players)",
                     "identity_uncertain": false,
                     "reasoning": "string — may mention gi color / top-bottom as a descriptor, never as identity",
@@ -603,7 +587,7 @@ class BJJMultiAgentAnalyzer:
         4. Use EXACT enum values from the taxonomy for `axis1_position` (Axis 1 — Position,
            one or more values), `axis3_action` (Axis 3 — Action/Technique Class, one or more
            values), and `axis4_outcome` (Axis 4 — Outcome, exactly one value). Do NOT invent
-           new values. `technique_guess` is OPTIONAL free text and never gates these axes.
+           new values.
         5. Output the final analysis in the required JSON format:
         {{
             "current_context_summary": "string",
@@ -614,7 +598,6 @@ class BJJMultiAgentAnalyzer:
                     "axis1_position": ["<Axis 1 enum value>", "..."],
                     "axis3_action": ["<Axis 3 enum value>", "..."],
                     "axis4_outcome": "<Axis 4 enum value>",
-                    "technique_guess": "string (optional, e.g. 'double leg takedown')",
                     "actor_player_id": "the player_id of the athlete performing the technique (must be one of the provided players)",
                     "identity_uncertain": false,
                     "reasoning": "string — may mention gi color / top-bottom as a descriptor, never as identity",

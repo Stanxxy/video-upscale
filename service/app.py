@@ -4,7 +4,7 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 
-# SAM2 uses tqdm in propagate_in_video; disable bar output so service.log stays readable.
+# Keep progress-bar output out of service.log.
 os.environ.setdefault("TQDM_DISABLE", "1")
 
 from dotenv import load_dotenv

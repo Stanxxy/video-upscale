@@ -111,8 +111,8 @@ async def test_endpoint_returns_clips_validation_and_previews(monkeypatch, _patc
     _patch_analyzer(monkeypatch, {
         "current_context_summary": "guard work",
         "clips": [{
-            "start_frame": 0, "end_frame": 5, "action": "guard_pass",
-            "technique": "knee_cut_pass", "specific_technique": "Knee Cut Pass",
+            "start_frame": 0, "end_frame": 5, "axis1_position": ["open_guard"],
+            "axis3_action": ["guard_pass"], "axis4_outcome": "successful",
             "actor_player_id": PID_A, "identity_uncertain": False,
             "reasoning": "white gi on top driving the pass", "confidence": 0.8,
         }],
@@ -128,7 +128,10 @@ async def test_endpoint_returns_clips_validation_and_previews(monkeypatch, _patc
     assert len(body["clips"]) == 1
     clip = body["clips"][0]
     assert clip["actor_player_id"] == PID_A
-    assert clip["action"] == "guard_pass"
+    assert clip["axis3_action"] == ["guard_pass"]
+    assert clip["axis1_position"] == ["open_guard"]
+    assert clip["axis4_outcome"] == "successful"
+    assert "action" not in clip and "technique" not in clip
     assert clip["reasoning"].startswith("white gi")
 
     val = body["validation"]
@@ -151,8 +154,8 @@ async def test_out_of_enum_actor_player_id_is_flagged(monkeypatch, _patch_io, cl
     # WITHOUT raising; the endpoint must mark it all_in_enum=false + offender [0].
     _patch_analyzer(monkeypatch, {
         "clips": [
-            {"action": "mount", "actor_player_id": PID_A, "reasoning": "ok"},
-            {"action": "submission_attempt", "actor_player_id": "athlete in black gi",
+            {"axis3_action": ["transition"], "actor_player_id": PID_A, "reasoning": "ok"},
+            {"axis3_action": ["submission_arm_lock"], "actor_player_id": "athlete in black gi",
              "reasoning": "gi-color leaked into identity"},
         ],
     })

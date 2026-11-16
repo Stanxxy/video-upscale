@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Literal, Protocol
 from uuid import UUID, uuid5
 
+from bjj_analysis_core.packs import pack_for
 from bjj_analysis_core.requests import (
     PreparedCallV1,
     canonical_json,
@@ -279,7 +280,7 @@ class StepRunner:
 
     async def model(self, request, *, item=None):
         request = PreparedCallV1.model_validate(request)
-        bundle = prompt_bundle()
+        bundle = prompt_bundle(pack_for(self.run))
         initial = strict_json(request.initial_prompt)
         # Re-run the request builder's stage/window/context checks. Advisory
         # content is trusted persisted upstream output, not browser parameters.

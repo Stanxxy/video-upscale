@@ -1,7 +1,7 @@
 """Frame sampling + role-labeled detect + semantic top-2 crop (build plan §4).
 
 Reuses (imports, never copies) ``qa_vlm._resolve_stream_url``/``_run_detect``/
-``_detect_schema`` and ``utils.get_union_box``/``get_padded_square_box``. The
+``_detect_schema`` and ``box_geometry.get_union_box``/``get_padded_square_box``. The
 multi-frame ffmpeg extraction below is NEW code that sits alongside (not inside)
 ``qa_vlm._grab_frame_via_ffmpeg`` — the existing single-frame path is untouched.
 
@@ -18,7 +18,7 @@ from typing import Optional
 
 from PIL import Image
 
-from utils import get_padded_square_box, get_union_box
+from service.pipelines.box_geometry import get_padded_square_box, get_union_box
 
 logger = logging.getLogger("service.pipelines.frame_source")
 

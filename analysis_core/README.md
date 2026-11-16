@@ -3,7 +3,7 @@
 `bjj-analysis-core` 0.3.0 is an installable, provider-neutral package. It contains
 six prompt/request contracts (position scan/critique and technique scan/critique/
 analyze/validate), deterministic candidate union and pure normalization into the approved shared production
-position/technique revision models. The full serial executor now connects these
+position/technique revision models. The full executor (serial by default, explicit bounded fan-out for independent technique items) now connects these
 stages through explicit provider, checkpoint and publication ports. It is **not
 activated in production**; concrete production adapters remain required.
 

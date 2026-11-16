@@ -26,18 +26,12 @@ class _DuckCandidate:
     player_id: Optional[str] = None
     track_id: Optional[int] = None
     identity_uncertain: Optional[bool] = None
-    action: Optional[str] = None
-    technique: Optional[str] = None
-    result: Optional[str] = None
-    confidence: Optional[float] = None
     notes: str = ""
     schema_version: int = 1
     axis1_position: Optional[List[str]] = None
     axis3_action: Optional[List[str]] = None
     axis4_outcome: Optional[str] = None
     actor_sentinel: Optional[str] = None
-    technique_shortlist: Optional[str] = None
-    technique_guess: Optional[str] = None
 
 
 class _FakeSNSClient:
@@ -102,8 +96,9 @@ def test_clip_to_axis_only_event_real_construction_succeeds():
     event = clip_to_axis_only_event(_clip(), uuid4())
     assert event.start_time == "00:01:05"
     assert event.end_time == "00:02:10"
-    assert event.event_candidates[0].schema_version == 3
-    assert event.event_candidates[0].action is None
+    candidate = event.event_candidates[0]
+    assert candidate.schema_version == 3
+    assert candidate.axis3_action == ["submission_arm_lock"]
 
 
 # --------------------------------------------------------------------------- #
@@ -121,7 +116,7 @@ def test_clip_to_axis_only_event_publish_payload_has_no_legacy_keys():
 
     assert message["event_candidates"][0]["schema_version"] == 3
     for legacy_key in ("action", "technique", "result", "confidence"):
-        assert message["event_candidates"][0][legacy_key] is None
+        assert message["event_candidates"][0].get(legacy_key) is None
 
     # Round-trips through the EXACT publisher serialization path too (never
     # a second, divergent serializer for the real vs. test-inspected shape).
@@ -130,7 +125,7 @@ def test_clip_to_axis_only_event_publish_payload_has_no_legacy_keys():
     published_message = json.loads(publisher.client.published[0]["Message"])
     assert published_message["event_candidates"][0]["schema_version"] == 3
     for legacy_key in ("action", "technique", "result", "confidence"):
-        assert published_message["event_candidates"][0][legacy_key] is None
+        assert published_message["event_candidates"][0].get(legacy_key) is None
 
 
 # --------------------------------------------------------------------------- #
@@ -151,7 +146,7 @@ def test_publish_axis_only_event_publishes_bjj_event_detected():
     assert json.loads(call["Message"]) == {"video_id": "v1", "event_candidates": []}
 
 
-def test_publish_analysis_complete_omits_tracking_s3_uri():
+def test_publish_analysis_complete_carries_result_uri_and_count():
     publisher = _make_publisher()
 
     publisher.publish_analysis_complete(
@@ -163,7 +158,7 @@ def test_publish_analysis_complete_omits_tracking_s3_uri():
     assert call["MessageAttributes"]["event_type"]["StringValue"] == "analysis_complete"
     body = json.loads(call["Message"])
     assert body["result_s3_uri"] == "s3://bucket/base_key_v2_events.json"
-    assert body["tracking_s3_uri"] is None
+    assert "tracking_s3_uri" not in body
     assert body["total_event_count"] == 5
 
 
@@ -174,4 +169,4 @@ def test_publish_analysis_complete_no_result_uri_stays_none():
 
     body = json.loads(publisher.client.published[0]["Message"])
     assert body["result_s3_uri"] is None
-    assert body["tracking_s3_uri"] is None
+    assert "tracking_s3_uri" not in body

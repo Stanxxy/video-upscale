@@ -6,23 +6,32 @@ This module performs no network I/O and imports no lab, service or database code
 
 import hashlib
 import json
-from importlib.resources import files
+from functools import cache
 from typing import Literal
 
-from bjj_analysis_core import CORE_VERSION, WORKFLOW_ID
+from bjj_analysis_core import CORE_VERSION
 from bjj_analysis_core.outputs import (
     CandidateConfigV1,
-    PositionCritiqueInputV1,
     PositionCritiqueV1,
     PositionScanV1,
     TechniqueAnalysisInputV1,
     TechniqueAnalysisV1,
-    TechniqueCandidateV1,
     TechniqueDecisionV1,
     TechniqueScanV1,
     TemporalCritiqueInputV1,
     TemporalCritiqueV1,
 )
+from bjj_analysis_core.mma_outputs import (
+    GroundRescanInputV1,
+    GroundRescanV1,
+    KnockdownCheckInputV1,
+    KnockdownCheckV1,
+    StrikeAuditInputV1,
+    StrikeAuditV1,
+    StrikeCensusV1,
+    StrikeWindowInputV1,
+)
+from bjj_analysis_core.packs import BJJ, PACKS, pack_for
 from pydantic import Field, StrictStr
 from shared_lib.models.analysis_contracts import (
     AnalysisContract,
@@ -35,12 +44,6 @@ from shared_lib.models.analysis_contracts import (
 )
 from shared_lib.models.analysis_results import AnalysisRevisionV1
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
-from shared_lib.models.position_taxonomy import position_taxonomy_manifest
-from shared_lib.models.simplified_taxonomy import (
-    AXIS3_ACTION,
-    AXIS4_OUTCOME,
-    TECHNIQUE_SHORTLISTS,
-)
 
 NodeId = Literal[
     "position_scan",
@@ -49,15 +52,13 @@ NodeId = Literal[
     "technique_critique",
     "technique_analyze",
     "technique_validate",
+    "strike_census",
+    "strike_audit",
+    "knockdown_check",
+    "ground_rescan",
 ]
-OUTPUTS = {
-    "position_scan": PositionScanV1,
-    "position_critique": PositionCritiqueV1,
-    "technique_scan": TechniqueScanV1,
-    "technique_critique": TemporalCritiqueV1,
-    "technique_analyze": TechniqueAnalysisV1,
-    "technique_validate": TechniqueDecisionV1,
-}
+# The BJJ pack's node outputs (every pack has the same nodes).
+OUTPUTS = BJJ.outputs
 
 
 def canonical_json(value):
@@ -85,25 +86,30 @@ def strict_json(text):
     return json.loads(text, object_pairs_hook=pairs, parse_constant=invalid)
 
 
-def prompt_bundle():
+def prompt_bundle(pack=BJJ):
     return {
         "core_version": CORE_VERSION,
-        "prompts": {
-            node: files("bjj_analysis_core")
-            .joinpath("prompts", f"{node}.txt")
-            .read_text(encoding="utf-8")
-            for node in OUTPUTS
-        },
-        "positions": position_taxonomy_manifest(),
-        "action_classes": list(AXIS3_ACTION),
-        "outcomes": list(AXIS4_OUTCOME),
-        "technique_classes": TECHNIQUE_SHORTLISTS,
-        "schemas": {node: model.model_json_schema() for node, model in OUTPUTS.items()},
+        "prompts": {node: pack.prompt(node) for node in pack.outputs},
+        **{key: value for key, value in pack.taxonomy.items()},
+        "schemas": {node: model.model_json_schema() for node, model in pack.outputs.items()},
     }
 
 
-def prompt_bundle_sha256():
-    return hashlib.sha256(canonical_json(prompt_bundle()).encode("utf-8")).hexdigest()
+def prompt_bundle_sha256(pack=BJJ):
+    return hashlib.sha256(canonical_json(prompt_bundle(pack)).encode("utf-8")).hexdigest()
+
+
+@cache
+def _pack_by_bundle():
+    return {prompt_bundle_sha256(pack): pack for pack in PACKS.values()}
+
+
+def pack_for_bundle(bundle_sha256):
+    """A prepared call names its pack by the prompt bundle it was built from."""
+    try:
+        return _pack_by_bundle()[bundle_sha256]
+    except KeyError:
+        raise ValueError("prepared call uses an unknown prompt bundle") from None
 
 
 class NodeConfigV1(AnalysisContract):
@@ -117,16 +123,36 @@ class CoreConfigV1(VersionedAnalysisContract):
     core_version: Literal[CORE_VERSION] = CORE_VERSION
     prompt_bundle_sha256: Sha256
     position_scan: NodeConfigV1
-    position_critique: NodeConfigV1
+    # A null check node means "no check": the first pass is used as-is (the scan's
+    # transitions, the scan's event bounds, the analysis). Explicit, never implied.
+    position_critique: NodeConfigV1 | None
     technique_scan: NodeConfigV1
-    technique_critique: NodeConfigV1
+    technique_critique: NodeConfigV1 | None
     technique_analyze: NodeConfigV1
-    technique_validate: NodeConfigV1
+    technique_validate: NodeConfigV1 | None
     candidates: CandidateConfigV1
     # Full executor bounds are versioned with the effective run configuration.
     position_critique_back_ms: NonNegativeInt = Field(default=4000, le=30000)
     position_critique_forward_ms: PositiveInt = Field(default=6000, le=30000)
+    # "confirmed": each position check sees the previous *confirmed* state, so the
+    # checks run one at a time. "proposed": each sees the scan's own previous state,
+    # so all checks run in parallel (the serial chain dominates long MMA fights).
+    position_critique_context: Literal["confirmed", "proposed"] = "confirmed"
     max_call_attempts: PositiveInt = Field(default=2, le=3)
+    # Windowed strike census (workflow mma-windowed-strikes only; absent elsewhere).
+    # No strike_audit config means the census is published without a second pass.
+    strike_census: NodeConfigV1 | None = None
+    strike_audit: NodeConfigV1 | None = None
+    # Second look at each census knockdown (windowed workflow only; optional).
+    knockdown_check: NodeConfigV1 | None = None
+    strike_window_ms: PositiveInt = Field(default=20000, ge=5000, le=60000)
+    strike_overlap_ms: NonNegativeInt = Field(default=2000, le=10000)
+    # Ground re-scan (workflow mma-windowed-strikes-ground only): each ground phase of
+    # the position scan is re-scanned in windows of ground_window_ms that start
+    # ground_lookback_ms early (bjj_analysis_core.grounds).
+    ground_rescan: NodeConfigV1 | None = None
+    ground_window_ms: PositiveInt = Field(default=20000, ge=5000, le=60000)
+    ground_lookback_ms: NonNegativeInt = Field(default=5000, le=15000)
 
 
 class PreparedCallV1(VersionedAnalysisContract):
@@ -149,13 +175,24 @@ def load_config(run, config_bytes):
     if digest != run.spec.effective_config.sha256:
         raise ValueError("configuration bytes differ from admitted run")
     config = CoreConfigV1.model_validate(strict_json(config_bytes))
-    bundle_hash = prompt_bundle_sha256()
-    if (
-        run.spec.core_version != CORE_VERSION
-        or run.spec.workflow_id != WORKFLOW_ID
-        or config.prompt_bundle_sha256 != bundle_hash
-    ):
+    if run.spec.core_version != CORE_VERSION or run.spec.workflow_id not in PACKS:
         raise ValueError("core or prompt bundle differs from admitted configuration")
+    pack = pack_for(run)
+    if config.prompt_bundle_sha256 != prompt_bundle_sha256(pack):
+        raise ValueError("core or prompt bundle differs from admitted configuration")
+    if pack.windowed_strikes:
+        if config.strike_census is None:
+            raise ValueError("the windowed strike workflow needs a strike_census node")
+        if config.strike_overlap_ms >= config.strike_window_ms:
+            raise ValueError("strike window overlap must be shorter than the window")
+    elif (
+        config.strike_census is not None
+        or config.strike_audit is not None
+        or config.knockdown_check is not None
+    ):
+        raise ValueError("strike census nodes belong only to the windowed strike workflow")
+    if pack.ground_rescan != (config.ground_rescan is not None):
+        raise ValueError("the ground re-scan node belongs exactly to the ground workflow")
     return run, config
 
 
@@ -164,9 +201,12 @@ def prepare_call(
 ):
     """Use persisted stage input, not raw browser configuration or guessed models."""
     run, config = load_config(run, config_bytes)
-    if node_id not in OUTPUTS:
+    pack = pack_for(run)
+    if node_id not in pack.outputs:
         raise ValueError("unknown core node")
-    bundle = prompt_bundle()
+    bundle = prompt_bundle(pack)
+    if getattr(config, node_id) is None:
+        raise ValueError(f"this run has no {node_id} node")
     window = TimeRangeMs.model_validate(input_window)
     if not run.spec.scope.contains(window):
         raise ValueError("model observation window exceeds admitted scope")
@@ -179,12 +219,53 @@ def prepare_call(
             )
     else:
         context_model = {
-            "position_critique": PositionCritiqueInputV1,
+            "position_critique": pack.position_critique_input,
             "technique_critique": TemporalCritiqueInputV1,
             "technique_analyze": TechniqueAnalysisInputV1,
-            "technique_validate": TechniqueCandidateV1,
+            "technique_validate": pack.technique_candidate,
+            "strike_census": StrikeWindowInputV1,
+            "strike_audit": StrikeAuditInputV1,
+            "knockdown_check": KnockdownCheckInputV1,
+            "ground_rescan": GroundRescanInputV1,
         }[node_id]
         parsed = context_model.model_validate(context)
+        if node_id == "knockdown_check":
+            from bjj_analysis_core.strikes import knockdown_window
+
+            if config.knockdown_check is None:
+                raise ValueError("this run has no knockdown check node")
+            if advisory_positions is not None:
+                raise ValueError("the knockdown check is visually independent")
+            if not parsed.strike.knockdown:
+                raise ValueError("only a flagged knockdown is checked")
+            if window != knockdown_window(run, parsed.at_ms):
+                raise ValueError("knockdown check window differs from its strike")
+        if node_id in ("strike_census", "strike_audit"):
+            from bjj_analysis_core.strikes import strike_windows
+
+            if node_id == "strike_audit" and config.strike_audit is None:
+                raise ValueError("this run has no strike audit node")
+            if advisory_positions is not None:
+                raise ValueError("the strike census is visually independent")
+            windows = strike_windows(run, config)
+            index = parsed.window_index
+            if index >= len(windows) or window != windows[index]:
+                raise ValueError("strike window differs from the admitted tiling")
+            if node_id == "strike_census" and parsed.window != window:
+                raise ValueError("strike census context names a different window")
+            if node_id == "strike_audit" and parsed.census.window_index != index:
+                raise ValueError("strike audit reviews another window's census")
+        if node_id == "ground_rescan":
+            from bjj_analysis_core.grounds import AFTER_MS
+
+            if advisory_positions is not None:
+                raise ValueError("the ground re-scan is visually independent")
+            expected = TimeRangeMs(
+                start_ms=max(run.spec.scope.start_ms, parsed.core.start_ms - config.ground_lookback_ms),
+                end_ms=min(run.spec.scope.end_ms, parsed.core.end_ms + AFTER_MS),
+            )
+            if parsed.window != window or window != expected:
+                raise ValueError("ground re-scan window differs from its phase and look-back")
         if node_id == "technique_critique":
             from bjj_analysis_core.discovery import critique_window
 
@@ -236,7 +317,7 @@ def prepare_call(
         "position_taxonomy": bundle["positions"],
         "action_classes": bundle["action_classes"],
         "outcomes": bundle["outcomes"],
-        "technique_classes": bundle["technique_classes"],
+        **{key: bundle[key] for key in pack.extra_prompt_keys},
         "stage_context": context,
         "advisory_positions": advisory,
     }
@@ -255,7 +336,8 @@ def prepare_call(
 def parse_response(prepared, response_text):
     """Reject malformed JSON/schema/window violations; no repairs or code fences."""
     prepared = PreparedCallV1.model_validate(prepared)
-    result = OUTPUTS[prepared.node_id].model_validate(strict_json(response_text))
+    pack = pack_for_bundle(prepared.prompt_bundle_sha256)
+    result = pack.outputs[prepared.node_id].model_validate(strict_json(response_text))
     window = prepared.input_window
     context = strict_json(prepared.initial_prompt)["stage_context"]
     if isinstance(result, PositionScanV1):
@@ -294,6 +376,54 @@ def parse_response(prepared, response_text):
             raise ValueError(
                 "exhausted outcome must retain evidence through window end"
             )
+    elif isinstance(result, StrikeCensusV1):
+        if result.window_index != context["window_index"]:
+            raise ValueError("census answers a different window")
+        # The window's last frame is visible to the model: its end is inclusive here
+        # (the overlap with the next window catches it twice; the merge keeps one).
+        last = window.start_ms
+        for strike in result.strikes:
+            if not last <= strike.at_ms <= window.end_ms:
+                raise ValueError("census strikes must be ordered inside the window")
+            last = strike.at_ms
+    elif isinstance(result, StrikeAuditV1):
+        census = context["census"]["strikes"]
+        if result.window_index != context["window_index"]:
+            raise ValueError("audit answers a different window")
+        if [d.census_index for d in result.decisions] != list(range(len(census))):
+            raise ValueError("audit must decide every census strike once, in order")
+        for decision in result.decisions:
+            if decision.verdict == "retime" and not window.start_ms <= decision.at_ms <= window.end_ms:
+                raise ValueError("retimed strike falls outside the window")
+            if (
+                decision.verdict == "keep"
+                and decision.at_ms is not None
+                and decision.at_ms != census[decision.census_index]["at_ms"]
+            ):
+                raise ValueError("a kept strike keeps its census time; use retime to move it")
+        for strike in result.added:
+            if not window.start_ms <= strike.at_ms <= window.end_ms:
+                raise ValueError("added strike falls outside the window")
+    elif isinstance(result, GroundRescanV1):
+        from bjj_analysis_core.grounds import TOP_BOTTOM
+
+        if result.phase_index != context["phase_index"]:
+            raise ValueError("ground re-scan answers a different phase")
+        players = {p["player_id"] for p in strict_json(prepared.initial_prompt)["ordered_players"]}
+        core = context["core"]
+        if result.states[0].at_ms > core["start_ms"]:
+            raise ValueError("ground re-scan must describe its phase from the start")
+        for state in result.states:
+            if not window.start_ms <= state.at_ms < window.end_ms:
+                raise ValueError("ground state falls outside the window")
+            if state.position.value in TOP_BOTTOM:
+                if state.top_player_id not in players:
+                    raise ValueError("a ground position names its top fighter by player id")
+            elif state.top_player_id is not None:
+                raise ValueError("a neutral position has no top fighter")
+    elif isinstance(result, KnockdownCheckV1):
+        if result.strike_index != context["strike_index"]:
+            raise ValueError("knockdown check answers a different strike")
     elif isinstance(result, TechniqueAnalysisV1):
         if result.bounds != window:
             raise ValueError("analysis must preserve the authoritative temporal bounds")

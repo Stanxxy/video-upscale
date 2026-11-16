@@ -155,7 +155,7 @@ class AnalyzeConfig(BaseModel):
 
     ``return_format="simplified-tags-v1"`` is a QA-EXPERIMENT format (NOT
     production clips-v1): a 4-axis taxonomy (position/actor/action_class/
-    outcome + specific_technique_guess), built and enum-constrained entirely in
+    outcome), built and enum-constrained entirely in
     ``service/pipelines/simplified_tags.py`` — never routed through
     ``analyzer.py``'s clips-v1 prompt. Only supported for ``agent_mode="single"``
     (no multi-agent Judge synthesis path for this format); ``system_instruction``

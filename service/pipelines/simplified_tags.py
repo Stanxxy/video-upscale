@@ -1,6 +1,5 @@
 """QA-layer ``simplified-tags-v1`` analyze path — a NEW experimental 4-axis
-Gemini tagging format (position / actor / action_class / outcome +
-``specific_technique_guess``), kept entirely separate from ``analyzer.py``'s
+Gemini tagging format (position / actor / action_class / outcome), kept entirely separate from ``analyzer.py``'s
 production ``clips-v1`` prompt/schema.
 
 Provenance: ``working_log/BJJ_TAXONOMY_SIMPLIFIED_GEMINI_TAGGING.md`` (proposal).
@@ -201,9 +200,7 @@ def build_response_schema() -> types.Schema:
 
     ``position``/``action_class``/``outcome`` are STRING enums (the proven
     string-enum pattern from ``analyzer._build_response_schema``) constrained
-    to the frozen value sets above. ``actor`` and ``specific_technique_guess``
-    are free-text/ungated per the contract; ``specific_technique_guess`` is
-    optional (absent from ``required``).
+    to the frozen value sets above. ``actor`` is free text per the contract.
     """
     tag_schema = types.Schema(
         type=types.Type.OBJECT,
@@ -233,13 +230,6 @@ def build_response_schema() -> types.Schema:
                 type=types.Type.STRING,
                 enum=list(OUTCOME_VALUES),
                 description="Axis 4 (outcome) — exactly one enum value.",
-            ),
-            "specific_technique_guess": types.Schema(
-                type=types.Type.STRING,
-                description=(
-                    "Optional free-text specific-technique guess (e.g. 'possibly a kimura'). "
-                    "Ungated — never defines/gates the enum axes above."
-                ),
             ),
             "confidence": types.Schema(type=types.Type.NUMBER, format="float", description="Confidence 0.0-1.0."),
         },
@@ -278,10 +268,8 @@ def build_prompt(frame_indices: list[int], previous_context: Optional[str]) -> s
        moment. Never a bare 'top'/'bottom' token.
     4. `action_class`: EXACTLY one Action Class enum value (Axis 3).
     5. `outcome`: EXACTLY one Outcome enum value (Axis 4).
-    6. `specific_technique_guess`: OPTIONAL free-text specific-name guess (e.g.
-       "possibly a kimura") — never gates or replaces the enum fields above.
-    7. `confidence`: 0.0-1.0.
-    8. Use PREVIOUS CONTEXT to maintain continuity across windows and update
+    6. `confidence`: 0.0-1.0.
+    7. Use PREVIOUS CONTEXT to maintain continuity across windows and update
        `current_context_summary` for the next window.
 
     Return ONLY valid JSON matching this shape — no prose:
@@ -295,7 +283,6 @@ def build_prompt(frame_indices: list[int], previous_context: Optional[str]) -> s
                 "actor": "string",
                 "action_class": "<Axis 3 enum value>",
                 "outcome": "<Axis 4 enum value>",
-                "specific_technique_guess": "string (optional)",
                 "confidence": 0.0
             }}
         ]
@@ -450,10 +437,6 @@ def build_video_response_schema() -> types.Schema:
                 enum=list(OUTCOME_VALUES),
                 description="Axis 4 (outcome) — exactly one enum value.",
             ),
-            "specific_technique_guess": types.Schema(
-                type=types.Type.STRING,
-                description="Optional free-text specific-technique guess. Ungated.",
-            ),
             "confidence": types.Schema(type=types.Type.NUMBER, format="float", description="Confidence 0.0-1.0."),
         },
     )
@@ -510,10 +493,8 @@ def build_video_prompt(previous_context: Optional[str]) -> str:
        fabricated identity.
     4. `action_class`: EXACTLY one Action Class enum value (Axis 3).
     5. `outcome`: EXACTLY one Outcome enum value (Axis 4).
-    6. `specific_technique_guess`: OPTIONAL free-text specific-name guess — never
-       gates or replaces the enum fields above.
-    7. `confidence`: 0.0-1.0.
-    8. Use PREVIOUS CONTEXT to maintain narrative continuity and update
+    6. `confidence`: 0.0-1.0.
+    7. Use PREVIOUS CONTEXT to maintain narrative continuity and update
        `current_context_summary` for the next chunk (positions/who's ahead only
        — not a list of events already reported).
 
@@ -529,7 +510,6 @@ def build_video_prompt(previous_context: Optional[str]) -> str:
                 "actor_gi_color": "string (optional)",
                 "action_class": "<Axis 3 enum value>",
                 "outcome": "<Axis 4 enum value>",
-                "specific_technique_guess": "string (optional)",
                 "confidence": 0.0
             }}
         ]
