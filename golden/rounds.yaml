@@ -1,0 +1,8 @@
+# Bake-off rounds: the founder-labelled minute is inside CW R2 (3:50-4:47 of XFBseoY4ER0).
+# Fighter crops are the Studio runs' reference crops (ordered: fighter-a, fighter-b).
+cw-r2: {source: XFBseoY4ER0, start_ms: 230000, end_ms: 470000, crops_run: c03f7d6b-2fd7-4a2e-a5ec-795e1176fadc,
+        fighters: [Dark brown shorts, Light grey shorts]}
+cw-r3: {source: XFBseoY4ER0, start_ms: 470000, end_ms: 650000, crops_run: d9023936-b030-47db-881c-a7c5975c0304,
+        fighters: [Dark brown shorts, Light grey shorts]}
+fa-r2: {source: 1ACTKcuQZyQ, start_ms: 520000, end_ms: 760000, crops_run: c1f2bd47-610b-451e-9c48-8041caddc7df,
+        fighters: [Orange shorts, Black shorts]}
