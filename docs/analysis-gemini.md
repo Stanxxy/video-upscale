@@ -64,9 +64,18 @@ from an independently rebuilt request. Each crop is paired with its ordered stab
 player ID and display name, with exact inline bytes. The full uploaded video uses
 integer-millisecond offsets formatted as protobuf durations (e.g. `0.500s`), exact
 FPS, admitted thinking/media resolution, one candidate, and structured JSON output.
-No clip-origin rebasing, arbitrary padding or timestamp repair is performed.
+No clip-origin rebasing, arbitrary padding or timestamp repair is performed on the bytes.
 
-The request keeps the core's absolute-millisecond prompts unchanged. Qualification
+The core keeps the Analyzer source timeline (presentation time minus the container
+start_time). Gemini re-bases an uploaded file so its first video frame is 0, so a file
+whose video stream starts after its container (normal for YouTube and phone files)
+differs by the measured offset (video start - container start, floored to ms). Only
+this adapter maps it, for every node of every workflow (``service/analysis_time_map.py``):
+the prompt, the observation window and the video offsets go to the provider minus the
+offset, and every time in the reply comes back plus it. A video that starts before its
+container, or after the container ends, or has no readable start times, is rejected
+before any provider call with a specific reason that the progress snapshot shows as
+``lifecycle.stop_reason``. Qualification
 must prove the selected model's response clock, native sampling, crop identity and
 all six output schemas; HTTP fixtures cannot establish those behaviors. See
 [generateContent / VideoMetadata / GenerationConfig](https://ai.google.dev/api/generate-content).
