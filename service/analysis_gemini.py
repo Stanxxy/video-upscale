@@ -28,6 +28,8 @@ from pydantic import AwareDatetime, TypeAdapter
 from shared_lib.models.analysis_contracts import CallUsageV1, PrivateArtifactRef
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
+from service.analysis_time_map import to_provider, to_source
+
 ORIGIN = "https://generativelanguage.googleapis.com"
 MAX_RESPONSE_BYTES = 16 * 1024 * 1024
 logger = logging.getLogger(__name__)
@@ -593,8 +595,15 @@ class GeminiProvider:
                     }
                 },
             ]
+        origin = self.media.time_origin.offset_ms
         window = request.input_window
+        start_ms, end_ms = max(0, window.start_ms - origin), window.end_ms - origin
+        if end_ms <= start_ms:
+            raise GeminiBoundaryError("observation window precedes the first video frame")
         offset = lambda ms: f"{ms // 1000}.{ms % 1000:03d}s"
+        prompt = request.initial_prompt
+        if origin:
+            prompt = canonical_json(to_provider(initial, origin))
         parts += [
             {
                 "fileData": {
@@ -602,12 +611,12 @@ class GeminiProvider:
                     "mimeType": self.uploaded.mime_type,
                 },
                 "videoMetadata": {
-                    "startOffset": offset(window.start_ms),
-                    "endOffset": offset(window.end_ms),
+                    "startOffset": offset(start_ms),
+                    "endOffset": offset(end_ms),
                     "fps": request.config.fps,
                 },
             },
-            {"text": request.initial_prompt},
+            {"text": prompt},
         ]
         return dict(
             contents=[{"role": "user", "parts": parts}],
@@ -716,6 +725,14 @@ class GeminiProvider:
                     )
                 pieces.append(part["text"])
             text = "".join(pieces)
+            origin = self.media.time_origin.offset_ms
+            if origin and text:
+                try:
+                    mapped = to_source(strict_json(text), origin)
+                except ValueError:
+                    mapped = None  # malformed JSON: usage is kept, strict parse fails
+                if mapped is not None:
+                    text = canonical_json(mapped)
         # Blocked/truncated output is explicitly no usable JSON, never an empty
         # event list. The executor persists usage then fails strict response parse.
         return ProviderReplyV1(text=text, usage=usage)

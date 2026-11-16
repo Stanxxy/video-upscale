@@ -259,7 +259,7 @@ async def test_consumer_failure_also_cleans(resolver, inputs):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["offset", "audio", "multiple_video"])
+@pytest.mark.parametrize("kind", ["audio", "multiple_video"])
 async def test_unqualified_video_clock_or_streams_rejected(
     resolver, inputs, adapter, tmp_path, kind
 ):
@@ -281,11 +281,7 @@ async def test_unqualified_video_clock_or_streams_rejected(
             "-threads",
             "1",
         ]
-        args += (
-            ["-output_ts_offset", "5"]
-            if kind == "offset"
-            else ["-map", "0:v", "-map", "0:v"]
-        )
+        args += ["-map", "0:v", "-map", "0:v"]
     subprocess.run(
         base + args + [str(path)], capture_output=True, timeout=30, check=True
     )
@@ -300,7 +296,7 @@ async def test_unqualified_video_clock_or_streams_rejected(
     source = put(path.read_bytes(), kind + ".mp4")
     with pytest.raises(
         adapter.MediaIntegrityError,
-        match="time origin" if kind == "offset" else "one unambiguous",
+        match="no video stream" if kind == "audio" else "more than one video stream",
     ):
         async with resolver.open(
             altered(run, source=source, source_duration_ms=duration_ms)

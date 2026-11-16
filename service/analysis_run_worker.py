@@ -219,7 +219,7 @@ class KeyspacesRunLease:
                 raise LeaseLost("heartbeat lost ownership")
             await self.guard()
 
-    async def finish(self, *, completed):
+    async def finish(self, *, completed, stop_reason=None):
         """Caller supplies success only after DurableGeminiRun.execute returns."""
         async with self._lock:
             await self.guard()
@@ -230,8 +230,8 @@ class KeyspacesRunLease:
             try:
                 if not await self._mutate(
                     row,
-                    "job_state=%s,updated_at=%s,completed_at=%s",
-                    [state, now, now if completed else None],
+                    "job_state=%s,updated_at=%s,completed_at=%s,error_message=%s",
+                    [state, now, now if completed else None, stop_reason or ""],
                 ):
                     raise LeaseLost("terminal transition lost ownership")
             finally:
@@ -302,14 +302,14 @@ async def run_position_attempt(
         await heart
         await lease.finish(completed=True)
         return result
-    except DeterministicPreparationRejected:
+    except DeterministicPreparationRejected as rejection:
         # This marker is emitted only before the host yields to provider work.
         # The failing host task has already unwound its media/provider contexts;
         # stop and join heartbeats before making one guarded CAS transition.
         stop.set()
         await heart
         try:
-            await lease.finish(completed=False)
+            await lease.finish(completed=False, stop_reason=str(rejection)[:200])
         except BaseException:
             # A lost owner, failed authority check or uncertain Cassandra CAS must
             # remain uncertain. Never force an INTERRUPTED transition.
