@@ -2,6 +2,8 @@
 
     python -m golden.bakeoff run --models kimi-k3.1-pro,qwen4-max --rounds cw-r2,cw-r3,fa-r2 [--windows 0]
     python -m golden.bakeoff report
+    python -m golden.bakeoff g2-tasks --model kimi-k3.1-pro --out g2.jsonl     # founder corrects these first
+    python -m golden.bakeoff rescore --export export.jsonl                     # every model vs the corrections
 
 Answers are cached per model, round and window (a rerun only calls what is missing or failed),
 so the bake-off can be resumed and re-scored for free. Run with OPENROUTER_API_KEY in the env.
@@ -130,6 +132,73 @@ def report():
     return rows
 
 
+def g2_tasks(model_id: str, out: Path):
+    """Correction tasks for the bake-off rounds from one model's merged answers (batch g2, queued first)."""
+    from golden import tasks
+    rs, made = rounds(), []
+    for index, (rid, r) in enumerate(rs.items()):
+        seqs, stats = collect(model_id, rid, r)
+        if seqs is None:
+            raise SystemExit(f"{model_id} {rid} is incomplete")
+        src = dict(youtube_id=r["source"], title=f"Bake-off round {rid}", channel="", license="evaluation",
+                   url=f"https://www.youtube.com/watch?v={r['source']}", fighters=list(r["fighters"]))
+        made += tasks.build([s for s in seqs if s["steps"]], batch="g2", source_index=index, source=src,
+                            video=media.source_path(r["source"]), video_duration_ms=r["end_ms"] + 2000, model=model_id,
+                            prompt_version="census-exchange-v1", clip_dir=media.ROOT / "x-mmagold" / "g2" / "clips")
+    tasks.write_jsonl(made, out)
+    print(f"{len(made)} tasks -> {out}")
+
+
+def rescore(export: Path):
+    """Score every model against the founder's corrections of batch g2 (export of the task table).
+
+    A corrected sequence (accept/corrected) is a gold sequence: its fighter, span and technique kinds. A model is
+    credited when one of its sequences overlaps the span (found) and belongs to the same fighter (right fighter);
+    'not a sequence' spans count the model's sequences that overlap them (false alarms). Bias: the tasks started
+    from one model's proposals, so sequences every model missed are only in the founder's free-text notes.
+    """
+    gold_by_source = {}
+    for line in Path(export).read_text().splitlines():
+        t = json.loads(line)
+        c = t.get("correction") or {}
+        if t["batch"] != "g2" or c.get("verdict") not in ("accept", "corrected", "not_sequence"):
+            continue
+        gold_by_source.setdefault(t["source"]["youtube_id"], []).append(
+            dict(span=t["span"], verdict=c["verdict"], actor=c.get("actor"),
+                 kinds={gold.kind(s.get("technique") or s["action"]) for s in c.get("steps") or []}))
+    rows = []
+    for m in registry():
+        totals = dict(model=m, gold=0, found=0, right_fighter=0, kinds_exact=0, not_seq=0, false_alarm=0, rounds=0)
+        for rid, r in rounds().items():
+            seqs, _ = collect(m, rid, r) if (OUT / m / rid).exists() else (None, None)
+            golds = [g for g in gold_by_source.get(r["source"], []) if r["start_ms"] <= g["span"]["start_ms"] < r["end_ms"]]
+            if seqs is None or not golds:
+                continue
+            totals["rounds"] += 1
+            for g in golds:
+                lo, hi = g["span"]["start_ms"] - PAD, g["span"]["end_ms"] + PAD
+                over = [q for q in seqs if q["start"] <= hi and q["end"] >= lo]
+                if g["verdict"] == "not_sequence":
+                    totals["not_seq"] += 1
+                    totals["false_alarm"] += bool(over)
+                    continue
+                totals["gold"] += 1
+                totals["found"] += bool(over)
+                mine = [q for q in over if q["actor"] == g["actor"]]
+                totals["right_fighter"] += bool(mine)
+                totals["kinds_exact"] += {gold.kind(st["technique"] or st["action"]) for q in mine for st in q["steps"]} == g["kinds"]
+        if totals["rounds"]:
+            rows.append(totals)
+    for t in rows:
+        print(f"{t['model']:20s} rounds {t['rounds']} | found {t['found']}/{t['gold']} right fighter {t['right_fighter']}/{t['gold']} "
+              f"kinds exact {t['kinds_exact']}/{t['gold']} | false alarms {t['false_alarm']}/{t['not_seq']}")
+    (OUT / "rescore.json").write_text(json.dumps(rows, indent=1))
+    return rows
+
+
+PAD = 600
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -139,9 +208,18 @@ def main():
     r.add_argument("--windows", default=None, help="comma-separated window indexes (default: all)")
     r.add_argument("--parallel", type=int, default=6)
     sub.add_parser("report")
+    t = sub.add_parser("g2-tasks")
+    t.add_argument("--model", required=True)
+    t.add_argument("--out", required=True)
+    rs = sub.add_parser("rescore")
+    rs.add_argument("--export", required=True)
     a = ap.parse_args()
     if a.cmd == "run":
         run(a.models.split(","), a.rounds.split(","), [int(x) for x in a.windows.split(",")] if a.windows else None, a.parallel)
+    elif a.cmd == "g2-tasks":
+        g2_tasks(a.model, Path(a.out))
+    elif a.cmd == "rescore":
+        rescore(Path(a.export))
     else:
         report()
 

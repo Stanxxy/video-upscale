@@ -212,6 +212,55 @@ def train(tasks_path, pose_dir, report_path=None, model_path=None):
     return report
 
 
+def probe(task_files, embedding_files, report_path=None):
+    """Technique classes from frozen V-JEPA 2 clip embeddings: one logistic regression per class.
+
+    Leave-videos-out cross-validation; labels as in ``label_of`` (founder where corrected, else pre-label).
+    """
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import f1_score, roc_auc_score
+    from sklearn.model_selection import GroupKFold
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    emb = {}
+    for f in embedding_files:
+        emb.update(dict(np.load(f)))
+    rows = []
+    for f in task_files:
+        for line in Path(f).read_text().splitlines():
+            t = json.loads(line)
+            tid = t.get("task_id") or t.get("id")
+            actor, kinds, source = label_of(t)
+            if source == "dropped" or tid not in emb:
+                continue
+            rows.append(dict(video=t["source"]["youtube_id"], x=emb[tid], kinds=kinds, source=source))
+    X = np.stack([r["x"] for r in rows])
+    groups = np.array([r["video"] for r in rows])
+    videos = sorted(set(groups))
+    folds = GroupKFold(n_splits=min(5, len(videos)))
+    report = dict(sequences=len(rows), videos=len(videos), label_sources=dict(Counter(r["source"] for r in rows)), kinds={})
+    for kind in KINDS:
+        y = np.array([kind in r["kinds"] for r in rows], dtype=int)
+        if y.sum() < 15 or (len(y) - y.sum()) < 15:
+            report["kinds"][kind] = dict(positives=int(y.sum()), skipped="too few")
+            continue
+        p = np.zeros(len(rows))
+        for tr, te in folds.split(X, y, groups):
+            if len(set(y[tr])) < 2:
+                p[te] = y[tr].mean()
+                continue
+            m = make_pipeline(StandardScaler(), LogisticRegression(C=0.05, max_iter=2000, class_weight="balanced"))
+            m.fit(X[tr], y[tr])
+            p[te] = m.predict_proba(X[te])[:, 1]
+        report["kinds"][kind] = dict(positives=int(y.sum()), base_rate=round(float(y.mean()), 3),
+                                     auc=round(float(roc_auc_score(y, p)), 3), f1=round(float(f1_score(y, p > 0.5)), 3))
+    if report_path:
+        Path(report_path).write_text(json.dumps(report, indent=1))
+    print(json.dumps(report, indent=1))
+    return report
+
+
 def gold(pose_path, boxes_path, fps, offset_ms, model_path):
     """Who threw each founder-labelled technique (CW R2 3:50-4:47), from pose alone."""
     from golden import gold as g
@@ -247,6 +296,10 @@ def main():
     t.add_argument("--pose-dir", required=True)
     t.add_argument("--report")
     t.add_argument("--model")
+    pr = sub.add_parser("probe")
+    pr.add_argument("--tasks", nargs="+", required=True)
+    pr.add_argument("--embeddings", nargs="+", required=True)
+    pr.add_argument("--report")
     g = sub.add_parser("gold")
     g.add_argument("--pose", required=True)
     g.add_argument("--boxes", required=True)
@@ -256,6 +309,8 @@ def main():
     a = ap.parse_args()
     if a.cmd == "train":
         train(a.tasks, a.pose_dir, a.report, a.model)
+    elif a.cmd == "probe":
+        probe(a.tasks, a.embeddings, a.report)
     else:
         gold(a.pose, a.boxes, a.fps, a.offset_ms, a.model)
 

@@ -1,12 +1,12 @@
-"""G4: pre-label whole boxed videos with the bake-off winner, then write correction tasks.
+"""G4: pre-label whole videos with the bake-off winner, then write correction tasks.
 
     python -m golden.prelabel run --model kimi-k3.1-pro --videos ID[,ID...] [--parallel 8]
-    python -m golden.prelabel tasks --model kimi-k3.1-pro --batch g4a --out tasks.jsonl
+    python -m golden.prelabel tasks --model kimi-k3.1-pro --batch g4 --out tasks.jsonl
 
-Inputs per video (temp_data/x-mmagold/g4): ``videos/<id>.mp4`` (source), ``track/<id>.boxes.json`` (gx10
-track_assign at 10 fps), ``boxed/<id>.mp4`` and ``boxed/<id>-0.png``/``-1.png`` (render_boxes). Windows where
-the tracker sees too little of the fighters (walkouts, interviews, replays, breaks) are not sent: they get an
-empty census, which is what the model is asked to return for non-live footage anyway.
+Inputs per video (temp_data/x-mmagold/g4): ``videos/<id>.mp4`` (source) and ``names/<id>.json`` (name_fighters:
+the two fighters named by their kit). Fighter identity is by those names, not tracker boxes: the tracker's
+appearance split failed on overhead fisheye footage (red mat read as skin, fighters lying down, merged tracks),
+which is most of the G4 sources. Every window is sent; the model returns nothing for non-live footage.
 """
 from __future__ import annotations
 
@@ -20,13 +20,9 @@ import yaml
 
 from golden import census, runner, tasks
 from golden.media import ROOT
-from golden.render_boxes import presence
 
 G4 = ROOT / "x-mmagold" / "g4"
 HERE = Path(__file__).resolve().parent
-NAMES = ("Red box A", "Blue box B")
-TRACK_FPS = 10
-MIN_ANY, MIN_BOTH = 0.5, 0.2   # share of a window's tracking frames with >=1 / 2 fighters boxed
 
 
 def duration_ms(path: Path) -> int:
@@ -35,25 +31,17 @@ def duration_ms(path: Path) -> int:
     return int(float(out) * 1000)
 
 
+def video_path(video_id: str) -> Path:
+    return G4 / "videos" / f"{video_id}.mp4"
+
+
+def names(video_id: str) -> tuple[str, str]:
+    n = json.loads((G4 / "names" / f"{video_id}.json").read_text())
+    return n["fighter_a"], n["fighter_b"]
+
+
 def scope_for(video_id: str) -> census.Scope:
-    return census.Scope(0, duration_ms(G4 / "boxed" / f"{video_id}.mp4"), NAMES)
-
-
-def live_windows(video_id: str, scope: census.Scope) -> list[bool]:
-    data = json.loads((G4 / "track" / f"{video_id}.boxes.json").read_text())
-    seen = presence(data, TRACK_FPS)
-    out = []
-    for w in scope.windows():
-        frames = range(int(w.start_ms / 1000 * TRACK_FPS) + 1, int(w.end_ms / 1000 * TRACK_FPS) + 1)
-        counts = [seen.get(f, 0) for f in frames]
-        n = max(len(counts), 1)
-        out.append(sum(c >= 1 for c in counts) / n >= MIN_ANY and sum(c == 2 for c in counts) / n >= MIN_BOTH)
-    return out
-
-
-def crops(video_id: str):
-    return [(pid, name, (G4 / "boxed" / f"{video_id}-{i}.png").read_bytes())
-            for i, (pid, name) in enumerate(zip(census.PLAYER_IDS, NAMES))]
+    return census.Scope(0, duration_ms(video_path(video_id)), names(video_id))
 
 
 def out_dir(model_id: str, video_id: str) -> Path:
@@ -65,17 +53,14 @@ def run(model_id: str, video_ids: list[str], parallel: int):
     jobs = []
     for vid in video_ids:
         scope = scope_for(vid)
-        live = live_windows(vid, scope)
-        (out_dir(model_id, vid)).mkdir(parents=True, exist_ok=True)
-        (out_dir(model_id, vid) / "live.json").write_text(json.dumps(live))
-        print(f"{vid}: {sum(live)}/{len(live)} windows live", flush=True)
-        jobs += [(vid, scope, i) for i, ok in enumerate(live) if ok]
+        n = len(scope.windows())
+        print(f"{vid}: {n} windows, fighters {scope.fighters}", flush=True)
+        jobs += [(vid, scope, i) for i in range(n)]
     total = 0.0
 
     def one(job):
         vid, scope, i = job
-        return vid, runner.call_window(entry, scope, i, G4 / "boxed" / f"{vid}.mp4", crops(vid),
-                                       out_dir(model_id, vid) / f"w{i:03d}.json")
+        return vid, runner.call_window(entry, scope, i, video_path(vid), [], out_dir(model_id, vid) / f"w{i:03d}.json")
 
     with ThreadPoolExecutor(parallel) as pool:
         for vid, rec in pool.map(one, jobs):
@@ -89,12 +74,8 @@ def merged(model_id: str, video_id: str):
     from bjj_analysis_core.mma_outputs import SequenceCensusV1
 
     scope = scope_for(video_id)
-    live = json.loads((out_dir(model_id, video_id) / "live.json").read_text())
     censuses = []
-    for i, ok in enumerate(live):
-        if not ok:
-            censuses.append(SequenceCensusV1(schema_version=1, window_index=i, sequences=()))
-            continue
+    for i in range(len(scope.windows())):
         rec = json.loads((out_dir(model_id, video_id) / f"w{i:03d}.json").read_text())
         if not rec["ok"]:
             raise SystemExit(f"{video_id} window {i} has no valid answer; rerun `run` first")
@@ -108,11 +89,16 @@ def build_tasks(model_id: str, batch: str, out: Path):
     all_tasks = []
     for index, c in enumerate(order):
         vid = c["youtube_id"]
-        if not (out_dir(model_id, vid) / "live.json").exists():
+        if not out_dir(model_id, vid).exists():
             continue
-        seqs = [s for s in merged(model_id, vid) if s["steps"]]
-        source = dict(youtube_id=vid, title=c["title"], channel=c["channel_title"], license=c["license"], url=c["url"])
-        made = tasks.build(seqs, batch=batch, source_index=index, source=source, video=G4 / "boxed" / f"{vid}.mp4",
+        try:
+            seqs = [s for s in merged(model_id, vid) if s["steps"]]
+        except SystemExit as incomplete:
+            print(f"{vid}: skipped ({incomplete})")
+            continue
+        source = dict(youtube_id=vid, title=c["title"], channel=c["channel_title"], license=c["license"], url=c["url"],
+                      fighters=list(names(vid)))
+        made = tasks.build(seqs, batch=batch, source_index=index, source=source, video=video_path(vid),
                            video_duration_ms=scope_for(vid).end_ms, model=model_id, prompt_version="census-exchange-v1",
                            clip_dir=G4 / "clips")
         print(f"{vid}: {len(made)} tasks")
