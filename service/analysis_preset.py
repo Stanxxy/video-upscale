@@ -123,7 +123,8 @@ def hydrogen_mma_ground_preset() -> CoreConfigV1:
 
 
 def hydrogen_mma_sequences_preset() -> CoreConfigV1:
-    """MMA technique sequences (VLM Studio experiment; plan 2026-11-15-mma-technique-sequences).
+    """MMA technique sequences: the production MMA preset from release x-mmaseq
+    (plans 2026-11-15-mma-technique-sequences, 2026-11-17-mma-sequences-production).
 
     Hydrogen, no check steps. The position scan (1 fps) and ground re-scan (5 fps) are
     the production MMA preset's; one high-thinking census per 20 s window (5 s overlap)
@@ -162,6 +163,7 @@ PRESET_FILES = {
     "gemini38-mma-strikes.json": gemini38_mma_strikes_preset,
     "hydrogen.json": hydrogen_preset,
     "hydrogen-mma-ground.json": hydrogen_mma_ground_preset,
+    "hydrogen-mma-sequences.json": hydrogen_mma_sequences_preset,
 }
 
 

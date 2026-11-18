@@ -202,3 +202,34 @@ def test_a_skipped_step_with_a_checkpoint_is_inconsistent_evidence(tmp_path):
     with pytest.raises(ProgressEvidenceError, match="leaves out has a checkpoint"):
         asyncio.run(read_progress(second, guard=guard))
     first.close(), second.close()
+
+
+def test_the_sequence_workflow_reports_its_census_windows_and_merge(tmp_path):
+    from shared_lib.models.analysis_progress import SEQUENCE_NODE_ORDER
+    from test_sequences import Provider as SequenceProvider, sequence_config, sequences_run
+
+    config = sequence_config()
+    run, _ = sequences_run(windowed_run(config), config)
+    journal = Journal(tmp_path / "j.sqlite", run, config)
+    unstarted = {n.node_id: n for n in asyncio.run(read_progress(journal, guard=guard)).nodes}
+    assert tuple(unstarted) == SEQUENCE_NODE_ORDER
+    # Scope 1000-11000 in 5 s windows with 2 s overlap -> 3 windows, known before any call.
+    assert (unstarted["sequence_census"].recorded_status, unstarted["sequence_census"].total_items) == (
+        "not_started", 3)
+    at = [run.registered_at]
+
+    def clock():
+        at[0] += timedelta(milliseconds=1)
+        return at[0]
+
+    asyncio.run(execute_pipeline(run, config, journal=journal, provider=SequenceProvider(clock), sink=Sink(),
+                                 guard=guard, clock=clock, max_parallel_calls=4))
+    view = asyncio.run(read_progress(journal, guard=guard))
+    rows = {n.node_id: n for n in view.nodes}
+    assert (rows["sequence_census"].recorded_status, rows["sequence_census"].completed_items,
+            rows["sequence_census"].total_items) == ("succeeded", 3, 3)
+    assert rows["sequence_merge"].recorded_status == "succeeded"
+    assert rows["position_critique"].recorded_status == "skipped"
+    assert rows["techniques_publish"].recorded_status == "succeeded"
+    public(view)
+    journal.close()

@@ -18,6 +18,7 @@ from bjj_analysis_core.mma_outputs import StrikeBatchV1
 from bjj_analysis_core.grounds import ground_phases, rescanned_transitions
 from bjj_analysis_core.packs import PACKS, pack_for
 from bjj_analysis_core.requests import load_config
+from bjj_analysis_core.sequences import sequence_windows
 from bjj_analysis_core.strikes import strike_windows
 from pydantic import TypeAdapter
 from shared_lib.models.analysis_contracts import NodeProgressV1
@@ -80,7 +81,7 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
         raise ProgressEvidenceError("registered run has a mismatched taxonomy") from error
     order = WORKFLOW_NODE_ORDERS[run.spec.workflow_id]
     # The run's own admitted configuration says which check steps it leaves out and,
-    # for the MMA workflows, where its strike windows and ground phases are.
+    # for the MMA workflows, where its strike or sequence windows and ground phases are.
     config_bytes = await journal.config_bytes()
     try:
         fields = json.loads(config_bytes)
@@ -93,7 +94,7 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     if "knockdown_check" in skipped:
         skipped.add("knockdowns_apply")  # it only applies knockdown checks
     config = None
-    if pack.windowed_strikes:
+    if pack.windowed_strikes or pack.sequences:
         try:
             _, config = load_config(run, config_bytes)
         except ValueError as error:
@@ -121,7 +122,9 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     heads = {node: await read(node) for node in order}
 
     def output(node, value_type):
-        record = heads[node]
+        # A step outside this workflow's order (the sequence workflow has no
+        # technique scan or worklist) has no output.
+        record = heads.get(node)
         if record is None or record.phase != "succeeded":
             return None
         return TypeAdapter(value_type).validate_json(record.result_json)
@@ -130,7 +133,9 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     batch = output("position_technique_candidates", CandidateBatchV1)
     work = output("technique_worklist", tuple[TechniqueAnalysisInputV1, ...])
     items = {}
-    if config is not None:
+    if pack.sequences:
+        items = {"sequence_census": [str(i) for i in range(len(sequence_windows(run, config)))]}
+    elif config is not None:
         windows = [str(i) for i in range(len(strike_windows(run, config)))]
         merged = output("strikes_merge", StrikeBatchV1)
         items = {

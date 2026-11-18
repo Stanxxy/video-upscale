@@ -194,7 +194,7 @@ def test_published_sequences_list_untimed_techniques_with_derived_classes_and_ou
     first, second = normalize_sequences(seq_run, batch, completed_at=completed_at).techniques
     assert [a.value for a in first.action_classes] == ["strike_punch", "takedown_attempt"]
     assert first.outcome.value == "successful" and first.outcome_bounds == first.bounds
-    assert (first.bounds.start_ms, first.bounds.end_ms) == (1200, 3500) and first.steps[0].bounds is None
+    assert (first.bounds.start_ms, first.bounds.end_ms) == (1200, 3500) and "bounds" not in first.steps[0].model_dump()
     assert first.notes == "jab, cross, then a stuffed double leg"
     assert second.outcome.value == "unsuccessful" and second.actor_player_id == "b"
 

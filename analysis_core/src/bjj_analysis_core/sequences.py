@@ -20,11 +20,7 @@ from uuid import uuid5
 
 from bjj_analysis_core.mma_outputs import MergedSequenceV1, SequenceBatchV1, SequenceCensusV1
 from shared_lib.models.analysis_contracts import TimeRangeMs
-from shared_lib.models.analysis_results import (
-    TechniqueEventV1,
-    sequence_classes,
-    sequence_outcome,
-)
+from shared_lib.models.analysis_results import TechniqueEventV1, sequence_event_fields
 
 SAME_GAP_MS = 300
 
@@ -113,17 +109,17 @@ def sequence_events(run, batch, common):
     events = []
     for index, sequence in enumerate(SequenceBatchV1.model_validate(batch).sequences):
         steps, bounds = sequence.steps, sequence.bounds
-        outcome = sequence_outcome(steps)
+        derived = sequence_event_fields(steps)
+        outcome = derived["outcome"]
         if not run.spec.scope.contains(bounds):
             raise ValueError("sequence bounds exceed the selected scope")
         decider = next((s for s in steps if s.outcome.value == "successful"), steps[-1])
         events.append(
             TechniqueEventV1(
                 **common(run, uuid5(run.spec.run_id, f"sequence:v1:{index}"), bounds),
-                action_classes=sequence_classes(steps),
+                **derived,
                 actor_player_id=sequence.actor_player_id,
                 actor_sentinel=sequence.actor_sentinel,
-                outcome=outcome,
                 notes=sequence.summary,
                 evidence=sequence.summary,
                 outcome_evidence=decider.evidence or sequence.summary,
