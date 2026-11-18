@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 
 from bjj_analysis_core.outputs import CandidateConfigV1
-from bjj_analysis_core.packs import MMA, MMA_GROUND, MMA_STRIKES
+from bjj_analysis_core.packs import MMA, MMA_GROUND, MMA_SEQUENCES, MMA_STRIKES
 from bjj_analysis_core.requests import CoreConfigV1, NodeConfigV1, prompt_bundle_sha256
 
 
@@ -122,6 +122,31 @@ def hydrogen_mma_ground_preset() -> CoreConfigV1:
     return with_ground_rescan(hydrogen_unchecked(gemini38_mma_strikes_preset()))
 
 
+def hydrogen_mma_sequences_preset() -> CoreConfigV1:
+    """MMA technique sequences: the production MMA preset from release x-mmaseq
+    (plans 2026-11-15-mma-technique-sequences, 2026-11-17-mma-sequences-production).
+
+    Hydrogen, no check steps. The position scan (1 fps) and ground re-scan (5 fps) are
+    the production MMA preset's; one high-thinking census per 20 s window (5 s overlap)
+    at 10 fps returns every fighter's chain of techniques. There is no technique scan,
+    analysis or strike census.
+    """
+    node = NodeConfigV1(model="gemini-4-hydrogen", thinking="high", media_resolution="low", fps=10)
+    return CoreConfigV1(
+        prompt_bundle_sha256=prompt_bundle_sha256(MMA_SEQUENCES),
+        position_scan=node.model_copy(update={"fps": 1}),
+        position_critique=None,
+        technique_scan=None,
+        technique_critique=None,
+        technique_analyze=None,
+        technique_validate=None,
+        candidates=None,
+        position_critique_context="proposed",
+        ground_rescan=node.model_copy(update={"fps": 5}),
+        sequence_census=node,
+    )
+
+
 # Ground re-scan fields are written only into ground presets.
 _GROUND_FIELDS = {"ground_rescan", "ground_window_ms", "ground_lookback_ms"}
 # Windowed-workflow fields are written only into windowed presets.
@@ -129,12 +154,16 @@ _WINDOWED_FIELDS = {
     "strike_census", "strike_audit", "knockdown_check", "strike_window_ms", "strike_overlap_ms",
 }
 
+# Sequence fields are written only into sequence presets.
+_SEQUENCE_FIELDS = {"sequence_census", "sequence_window_ms", "sequence_overlap_ms"}
+
 # Published artifacts: file name -> generator.
 PRESET_FILES = {
     "gemini38.json": gemini38_preset,
     "gemini38-mma-strikes.json": gemini38_mma_strikes_preset,
     "hydrogen.json": hydrogen_preset,
     "hydrogen-mma-ground.json": hydrogen_mma_ground_preset,
+    "hydrogen-mma-sequences.json": hydrogen_mma_sequences_preset,
 }
 
 
@@ -145,6 +174,8 @@ def preset_bytes(config: CoreConfigV1) -> bytes:
         data = {k: v for k, v in data.items() if k not in _WINDOWED_FIELDS}
     if config.ground_rescan is None:
         data = {k: v for k, v in data.items() if k not in _GROUND_FIELDS}
+    if config.sequence_census is None:
+        data = {k: v for k, v in data.items() if k not in _SEQUENCE_FIELDS}
     return (json.dumps(data, indent=2) + "\n").encode()
 
 

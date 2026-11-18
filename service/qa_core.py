@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field
 from bjj_analysis_core import (
     CORE_VERSION,
     MMA_GROUND_WORKFLOW_ID,
+    MMA_SEQUENCES_WORKFLOW_ID,
     MMA_STRIKES_WORKFLOW_ID,
     MMA_WORKFLOW_ID,
     WORKFLOW_ID,
@@ -51,6 +52,7 @@ from service.analysis_preset import (
     gemini38_mma_preset,
     gemini38_mma_strikes_preset,
     gemini38_preset,
+    hydrogen_mma_sequences_preset,
     hydrogen_unchecked,
     with_ground_rescan,
 )
@@ -69,6 +71,7 @@ NODES = (
     "strike_audit",
     "knockdown_check",
     "ground_rescan",
+    "sequence_census",
 )
 # Workflows VLM Studio can run. "mma_v2" is the production MMA workflow (windowed strike
 # census + audit); "mma_v2_census" skips the audit; "mma" is the v1 per-strike chain baseline.
@@ -84,6 +87,8 @@ SPORTS = {
     "mma_v2_hg": (MMA_GROUND_WORKFLOW_ID, "mma.v1",
                   lambda: with_ground_rescan(hydrogen_unchecked(gemini38_mma_strikes_preset()))),
     "mma_v2_g": (MMA_GROUND_WORKFLOW_ID, "mma.v1", lambda: with_ground_rescan(gemini38_mma_strikes_preset())),
+    # Technique sequences: one census per window returns every chain of techniques.
+    "mma_seq_h": (MMA_SEQUENCES_WORKFLOW_ID, "mma.v1", hydrogen_mma_sequences_preset),
 }
 YOUTUBE_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
@@ -132,7 +137,7 @@ class NodeOverride(BaseModel):
 
 class CoreRunIn(BaseModel):
     youtube_id: str = Field(pattern=YOUTUBE_ID.pattern)
-    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census", "bjj_h", "mma_v2_h", "mma_v2_hg", "mma_v2_g"]
+    sport: Literal["bjj", "mma", "mma_v2", "mma_v2_census", "bjj_h", "mma_v2_h", "mma_v2_hg", "mma_v2_g", "mma_seq_h"]
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
     fighters: tuple[FighterIn, FighterIn]
@@ -314,12 +319,17 @@ def estimate(config: CoreConfigV1, start_ms, end_ms):
     """Scan-call input tokens only; per-item calls are unknown until the scans answer."""
     seconds = (end_ms - start_ms) / 1000
     out = {}
-    for node in ("position_scan", "technique_scan", "strike_census"):
+    windowed = {
+        "strike_census": (config.strike_window_ms, config.strike_overlap_ms),
+        "sequence_census": (config.sequence_window_ms, config.sequence_overlap_ms),
+    }
+    for node in ("position_scan", "technique_scan", "strike_census", "sequence_census"):
         cfg = getattr(config, node)
         if cfg is None:
             continue
         # The census sees every window; overlaps make it slightly more than the scope.
-        span = seconds * (config.strike_window_ms / (config.strike_window_ms - config.strike_overlap_ms) if node == "strike_census" else 1)
+        size, overlap = windowed.get(node, (1, 0))
+        span = seconds * size / (size - overlap)
         tokens = int(span * cfg.fps * _FRAME_TOKENS[cfg.media_resolution])
         rate = _rate(cfg.model, date.today())
         out[node] = {"frames": int(span * cfg.fps), "input_tokens": tokens,
@@ -561,7 +571,7 @@ class CoreRuns:
             node.update(succeeded=states.count("succeeded"), running=sum(s in {"running", "retrying"} for s in states),
                         failed=states.count("failed"), seen=len(states), usd=round(node["usd"], 4))
             summary.append(node)
-        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "ground_rescan", "ground_merge", "strike_census", "strike_audit", "strikes_merge", "knockdown_check", "knockdowns_apply",
+        order = {n: i for i, n in enumerate(("provider_upload", "position_scan", "ground_rescan", "ground_merge", "sequence_census", "sequence_merge", "strike_census", "strike_audit", "strikes_merge", "knockdown_check", "knockdowns_apply",
                                              "position_critique", "positions_normalize",
                                              "positions_publish", "technique_scan", "position_technique_candidates",
                                              "technique_critique", "technique_worklist", "technique_analyze",

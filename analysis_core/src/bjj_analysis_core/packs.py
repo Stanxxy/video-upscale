@@ -15,7 +15,13 @@ from shared_lib.models.position_taxonomy import position_taxonomy_manifest
 from shared_lib.models.simplified_taxonomy import AXIS3_ACTION, AXIS4_OUTCOME
 from shared_lib.models.sport_taxonomy import vocabulary
 
-from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID, MMA_STRIKES_WORKFLOW_ID, MMA_WORKFLOW_ID, WORKFLOW_ID
+from bjj_analysis_core import (
+    MMA_GROUND_WORKFLOW_ID,
+    MMA_SEQUENCES_WORKFLOW_ID,
+    MMA_STRIKES_WORKFLOW_ID,
+    MMA_WORKFLOW_ID,
+    WORKFLOW_ID,
+)
 from bjj_analysis_core import mma_outputs as mma
 from bjj_analysis_core.outputs import (
     PositionCritiqueInputV1,
@@ -40,8 +46,9 @@ class AnalysisPack:
     taxonomy: Mapping[str, object]
     # Prompt keys a sport adds to the initial prompt (none for BJJ).
     extra_prompt_keys: tuple
-    # A pack that extends another reads the prompts it does not override from there.
-    base_prompts_dir: str | None = None
+    # A pack that extends others reads the prompts it does not override from them,
+    # first match wins.
+    base_prompts_dirs: tuple = ()
 
     @property
     def windowed_strikes(self):
@@ -52,6 +59,11 @@ class AnalysisPack:
     def ground_rescan(self):
         """Ground phases are re-scanned to re-check who is on top (grounds.py)."""
         return "ground_rescan" in self.outputs
+
+    @property
+    def sequences(self):
+        """Techniques come from the windowed sequence census (sequences.py) only."""
+        return "sequence_census" in self.outputs
 
     @property
     def position_scan(self):
@@ -70,10 +82,11 @@ class AnalysisPack:
         return self.outputs["technique_validate"]
 
     def prompt(self, node):
-        own = files("bjj_analysis_core").joinpath(self.prompts_dir, f"{node}.txt")
-        if not own.is_file() and self.base_prompts_dir is not None:
-            own = files("bjj_analysis_core").joinpath(self.base_prompts_dir, f"{node}.txt")
-        return own.read_text(encoding="utf-8")
+        for folder in (self.prompts_dir, *self.base_prompts_dirs):
+            own = files("bjj_analysis_core").joinpath(folder, f"{node}.txt")
+            if own.is_file():
+                return own.read_text(encoding="utf-8")
+        raise ValueError(f"no prompt for {node}")
 
 
 def _outputs(scan, critique, analysis, decision):
@@ -170,11 +183,33 @@ MMA_GROUND = AnalysisPack(
     technique_candidate=mma.MmaTechniqueCandidateV1,
     taxonomy=MMA.taxonomy,
     extra_prompt_keys=MMA.extra_prompt_keys,
-    base_prompts_dir="prompts_mma_strikes",
+    base_prompts_dirs=("prompts_mma_strikes",),
+)
+
+# MMA technique sequences: the position scan and ground re-scan of MMA_GROUND, and
+# one windowed census of every fighter's chain of techniques (sequences.py). There is
+# no technique scan, analysis or strike census, and no check step.
+MMA_SEQUENCES = AnalysisPack(
+    workflow_id=MMA_SEQUENCES_WORKFLOW_ID,
+    taxonomy_id="mma.v1",
+    prompts_dir="prompts_mma_sequences",
+    outputs=MappingProxyType(
+        {
+            "position_scan": mma.MmaPositionScanV1,
+            "position_critique": mma.MmaPositionCritiqueV1,
+            "ground_rescan": mma.GroundRescanV1,
+            "sequence_census": mma.SequenceCensusV1,
+        }
+    ),
+    position_critique_input=mma.MmaPositionCritiqueInputV1,
+    technique_candidate=mma.MmaTechniqueCandidateV1,
+    taxonomy=MappingProxyType({**MMA.taxonomy, "technique_names": _MMA_VOCAB["technique_names"]}),
+    extra_prompt_keys=MMA.extra_prompt_keys + ("technique_names",),
+    base_prompts_dirs=("prompts_mma_ground", "prompts_mma_strikes"),
 )
 
 PACKS = MappingProxyType(
-    {pack.workflow_id: pack for pack in (BJJ, MMA, MMA_STRIKES, MMA_GROUND)}
+    {pack.workflow_id: pack for pack in (BJJ, MMA, MMA_STRIKES, MMA_GROUND, MMA_SEQUENCES)}
 )
 
 

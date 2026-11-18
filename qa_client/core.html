@@ -73,10 +73,17 @@
   .sr-verdicts button[aria-pressed=true] { background:var(--ink); color:#111; font-weight:600; }
   .sr-verdicts kbd, .sr-keys kbd { font:10px ui-monospace,monospace; border:1px solid var(--line); border-radius:3px; padding:0 3px; margin-right:4px; color:var(--muted); }
   .sr-keys { color:var(--muted); font-size:11px; }
+  .chain { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .chain span { border:1px solid var(--line); border-radius:4px; padding:1px 6px; font-size:11px; color:var(--muted); }
+  .sr-flags { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+  .sr-flags label { display:flex; gap:6px; align-items:center; margin:0; color:var(--ink); font-size:12px; }
+  .sr-flags input[type=number] { width:56px; }
+  .chain span.here { border-color:var(--ink); color:var(--ink); font-weight:600; }
   .sr-list { position:relative; max-height:300px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px; }
   .sr-list button { width:100%; display:grid; grid-template-columns:62px 92px minmax(0,1fr) auto; gap:8px; text-align:left; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; padding:5px 8px; }
   .sr-list button[aria-current=true] { background:#ffffff14; }
   .src { font-size:10px; padding:1px 5px; border-radius:3px; border:1px solid var(--line); white-space:nowrap; }
+  .sq-a { color:#e5484d; border-color:#e5484d66; } .sq-b { color:#4c8df6; border-color:#4c8df666; }
   .src-both { color:var(--ok); border-color:#3fb95066; } .src-a { color:var(--blue); border-color:#4c8dff66; } .src-b { color:var(--warn); border-color:#d2992266; } .src-added { color:#d2a8ff; border-color:#d2a8ff66; }
   .vd { font-size:11px; color:var(--muted); white-space:nowrap; } .vd.real { color:var(--ok); } .vd.fake { color:#ff8b8b; }
   .state-succeeded { color:var(--ok); } .state-failed, .state-interrupted { color:#ff8b8b; } .state-running, .state-preparing, .state-queued { color:var(--warn); }
@@ -118,8 +125,34 @@
     </section>
   </div>
   <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
+    <section id="sq">
+      <h2>Sequence review <span class="muted" style="text-transform:none; letter-spacing:0">one run's sequences, one at a time: flag what is wrong, say what really happened</span></h2>
+      <div class="sr-head">
+        <div><label for="sq-run">Run</label><select id="sq-run" style="width:100%"></select></div>
+        <button id="sq-load" style="flex:0 0 auto">Review this run</button>
+      </div>
+      <p id="sq-msg" class="muted"></p>
+      <div id="sq-body" hidden>
+        <div class="sr-sum" id="sq-sum"></div>
+        <div class="row" style="align-items:center; flex-wrap:wrap; gap:8px">
+          <div class="seg" id="sq-filter" style="flex:0 1 auto; flex-wrap:wrap; max-width:100%"><button data-f="all" aria-pressed="true">All</button><button data-f="todo" aria-pressed="false">Not reviewed</button><button data-f="a" aria-pressed="false">Fighter A</button><button data-f="b" aria-pressed="false">Fighter B</button></div>
+          <div class="seg" id="sq-speed" style="flex:0 0 auto"><button data-v="0.25" aria-pressed="false">¼×</button><button data-v="0.5" aria-pressed="true">½×</button><button data-v="1" aria-pressed="false">1×</button></div>
+        </div>
+        <div class="sr-cur" id="sq-cur"></div>
+        <div class="sr-list" id="sq-list"></div>
+        <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">A sequence the run missed</summary>
+          <div class="row" style="margin-top:6px; flex-wrap:wrap; gap:6px">
+            <select id="sq-add-actor"></select>
+            <input id="sq-add-note" placeholder="What happened (e.g. jab, jab, low kick)" style="flex:1 1 180px; min-width:0">
+            <button id="sq-add" style="flex:0 0 auto">Add at playhead</button>
+          </div>
+          <p class="muted" style="margin:4px 0 0">Pause where the sequence starts, then add it.</p>
+        </details>
+      </div>
+    </section>
+    <details id="sr-wrap"><summary class="muted" style="cursor:pointer; padding:4px 0">Compare two runs technique by technique (older review)</summary>
     <section id="sr">
-      <h2>Strike review <span class="muted" style="text-transform:none; letter-spacing:0">two runs' strikes, one by one; your verdicts become strike ground truth</span></h2>
+      <h2>Technique review <span class="muted" style="text-transform:none; letter-spacing:0">two runs' techniques (strikes, takedowns, clinch, ground) one by one; your verdicts become ground truth</span></h2>
       <div class="sr-head">
         <div><label for="sr-pair">Prepared comparison</label><select id="sr-pair" style="width:100%"><option value="">Choose a clip…</option></select></div>
         <div><label for="sr-a">Run A</label><select id="sr-a" style="width:100%"></select></div>
@@ -130,22 +163,24 @@
       <div id="sr-body" hidden>
         <div class="sr-sum" id="sr-sum"></div>
         <div class="row" style="align-items:center">
-          <div class="seg" id="sr-filter" style="flex:0 0 auto"><button data-f="all" aria-pressed="true">All</button><button data-f="both" aria-pressed="false">Both</button><button data-f="a" aria-pressed="false">A only</button><button data-f="b" aria-pressed="false">B only</button><button data-f="todo" aria-pressed="false">Not reviewed</button></div>
+          <div class="seg" id="sr-filter" style="flex:0 1 auto; flex-wrap:wrap; max-width:100%"><button data-f="all" aria-pressed="true">All</button><button data-f="both" aria-pressed="false">Both</button><button data-f="a" aria-pressed="false">A only</button><button data-f="b" aria-pressed="false">B only</button><button data-f="grappling" aria-pressed="false">Grappling</button><button data-f="todo" aria-pressed="false">Not reviewed</button></div>
           <span style="flex:1"></span>
           <div class="seg" id="sr-speed" style="flex:0 0 auto"><button data-v="0.25" aria-pressed="false">¼×</button><button data-v="0.5" aria-pressed="true">½×</button><button data-v="1" aria-pressed="false">1×</button></div>
         </div>
         <div class="sr-cur" id="sr-cur"></div>
         <div class="sr-list" id="sr-list"></div>
-        <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">A strike neither run found</summary>
+        <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">A technique neither run found</summary>
           <div class="row" style="margin-top:6px; align-items:center">
             <select id="sr-add-actor"></select>
             <select id="sr-add-verdict"><option value="landed">landed</option><option value="missed">missed</option><option value="contact_unclear">contact unclear</option></select>
+            <input id="sr-add-note" placeholder="What was it? (e.g. double leg)" style="flex:1 1 160px; min-width:0">
             <button id="sr-add" style="flex:0 0 auto">Add at playhead</button>
           </div>
           <p class="muted" style="margin:4px 0 0">Pause on the moment of contact (or the punch's full extension), then add it.</p>
         </details>
       </div>
     </section>
+    </details>
     <section>
       <h2>Run <span id="run-state"></span></h2>
       <p id="run-meta" class="muted"></p>
@@ -160,7 +195,7 @@
     <section>
       <h2>Run setup</h2>
       <label>Workflow</label>
-      <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma_v2" aria-pressed="true" title="Production MMA DAG: windowed strike census + one audit per 20 s window + knockdown check; grappling keeps the per-candidate chain">MMA (production)</button><button data-v="mma" aria-pressed="false" title="MMA v1 baseline: every strike goes through critique, analyze and validate">MMA v1</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button><button data-v="mma_v2_h" aria-pressed="false" title="Experiment: Gemini 4 Hydrogen on every model step, no check steps">MMA, Hydrogen no checks</button><button data-v="bjj_h" aria-pressed="false" title="Experiment: Gemini 4 Hydrogen on every model step, no check steps">BJJ, Hydrogen no checks</button><button data-v="mma_v2_hg" aria-pressed="false" title="Experiment: Hydrogen no checks + ground re-scan (who is on top, 5 fps, 5 s look-back)">MMA, Hydrogen + ground re-scan</button><button data-v="mma_v2_g" aria-pressed="false" title="Experiment: production MMA preset + Hydrogen ground re-scan">MMA + ground re-scan</button></div>
+      <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma_v2" aria-pressed="true" title="Production MMA DAG: windowed strike census + one audit per 20 s window + knockdown check; grappling keeps the per-candidate chain">MMA (production)</button><button data-v="mma" aria-pressed="false" title="MMA v1 baseline: every strike goes through critique, analyze and validate">MMA v1</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button><button data-v="mma_v2_h" aria-pressed="false" title="Experiment: Gemini 4 Hydrogen on every model step, no check steps">MMA, Hydrogen no checks</button><button data-v="bjj_h" aria-pressed="false" title="Experiment: Gemini 4 Hydrogen on every model step, no check steps">BJJ, Hydrogen no checks</button><button data-v="mma_v2_hg" aria-pressed="false" title="Experiment: Hydrogen no checks + ground re-scan (who is on top, 5 fps, 5 s look-back)">MMA, Hydrogen + ground re-scan</button><button data-v="mma_v2_g" aria-pressed="false" title="Experiment: production MMA preset + Hydrogen ground re-scan">MMA + ground re-scan</button><button data-v="mma_seq_h" aria-pressed="false" title="Experiment: technique sequences. Hydrogen, no checks, ground re-scan; one census per 20 s window returns every fighter's chain of techniques">MMA sequences (Hydrogen)</button></div>
       <label for="all-model">Model for every step</label>
       <select id="all-model"><option value="">Preset (per step)</option><option>gemini-3.8-flash</option><option>gemini-4-hydrogen</option></select>
       <div class="row">
@@ -376,8 +411,11 @@ function renderEvents() {
 $('dl').onclick = () => { const r = state.result; if (!r) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], {type:'application/json'})); a.download = 'core-' + state.runId + '.json'; a.click(); };
 
 /* ---------- strike review ---------- */
-const VERDICTS = [['landed','Landed','1'],['missed','Missed','2'],['contact_unclear','Contact unclear','3'],['not_a_strike','Not a strike','4'],['wrong_fighter','Wrong fighter','5'],['unsure','Unsure','0']];
-const REAL = new Set(['landed','missed','contact_unclear','wrong_fighter']);
+// landed/missed mean worked/failed for a technique that is not a strike.
+const VERDICTS = [['landed','Landed / worked','1'],['missed','Missed / failed','2'],['contact_unclear','Contact unclear','3'],['not_a_strike','Not a technique','4'],['wrong_fighter','Wrong fighter','5'],['wrong_class','Wrong class (e.g. takedown called a punch)','6'],['wrong_technique','Right class, wrong technique','7'],['unsure','Unsure','0']];
+const REAL = new Set(['landed','missed','contact_unclear','wrong_fighter','wrong_class','wrong_technique']);
+const VERDICT_NAMES = {not_a_strike:'not a technique', wrong_class:'wrong class', wrong_technique:'wrong technique'};
+const unitName = s => (s.technique || s.classes.join(', ')).replace(/_/g, ' ') + (s.repeat > 1 ? ' ×' + s.repeat + (s.landed != null ? ' (' + s.landed + ' landed)' : '') : '');
 const sr = { data:null, pairs:[], items:[], view:[], i:0, filter:'all', rate:0.5, runs:[] };
 async function srInit() {
   try {
@@ -390,13 +428,13 @@ async function srInit() {
 }
 $('sr-pair').onchange = () => { const p = sr.pairs[$('sr-pair').value]; if (!p) return; $('sr-a').value = p.a; $('sr-b').value = p.b; srLoad(); };
 $('sr-load').onclick = srLoad;
-segmented($('sr-filter'), v => { sr.filter = v; srView(); if (!sr.view.includes(sr.items[sr.i]) && sr.view.length) { sr.i = sr.items.indexOf(sr.view[0]); } srShow(false); });
+segmented($('sr-filter'), async v => { await srFlush(); sr.filter = v; srView(); if (!sr.view.includes(sr.items[sr.i]) && sr.view.length) { sr.i = sr.items.indexOf(sr.view[0]); } srShow(false); });
 segmented($('sr-speed'), v => { sr.rate = Number(v); video().playbackRate = sr.rate; });
 async function srLoad() {
   const a = $('sr-a').value, b = $('sr-b').value; if (!a || !b) { $('sr-msg').textContent = 'Choose two runs.'; return; }
   $('sr-msg').textContent = 'Loading…';
   try {
-    sr.data = await api('/qa/core/strike-review?a=' + a + '&b=' + b);
+    sr.data = await api('/qa/core/strike-review?a=' + a + '&b=' + b); activeReview = 'sr';
     if (state.youtubeId !== sr.data.youtube_id) { $('yt-input').value = sr.data.youtube_id; await loadVideo(); }
     const d = sr.data, warn = d.fighters.join() !== d.fighters_b.join() ? ' · warning: the runs name the fighters differently (' + d.fighters_b.join(' vs ') + ')' : '';
     $('sr-msg').innerHTML = '<b>A</b> ' + esc(d.a.label || d.a.run_id.slice(0, 8)) + ' · <b>B</b> ' + esc(d.b.label || d.b.run_id.slice(0, 8)) + ' · ' + fmt(d.start_ms) + '–' + fmt(d.end_ms) + ' · ' + esc(d.fighters.join(' vs ')) + esc(warn);
@@ -413,7 +451,7 @@ function srMerge() {
 const nameOf = actor => sr.data.fighters['ab'.indexOf(actor.slice(-1))] || actor;
 const verdictOf = it => sr.data.labels[it.key]?.verdict;
 function srView() {
-  sr.view = sr.items.filter(it => sr.filter === 'all' || (sr.filter === 'todo' ? !verdictOf(it) : it.source === sr.filter));
+  sr.view = sr.items.filter(it => sr.filter === 'all' || (sr.filter === 'todo' ? !verdictOf(it) : sr.filter === 'grappling' ? [it.a, it.b].some(s => s && !s.strike) : it.source === sr.filter));
   srSummary(); srList();
 }
 function srSummary() {
@@ -422,78 +460,289 @@ function srSummary() {
     const mine = its.filter(it => it[side]), judged = mine.filter(it => lab(it) && lab(it) !== 'unsure'), real = judged.filter(it => REAL.has(lab(it)));
     const allReal = its.filter(it => REAL.has(lab(it))).length, foundReal = its.filter(it => it[side] && REAL.has(lab(it))).length;
     const landedCalls = real.filter(it => ['landed','missed'].includes(lab(it)));
+    const classCalls = real.filter(it => lab(it) !== 'wrong_fighter'), classOk = classCalls.filter(it => !['wrong_class','wrong_technique'].includes(lab(it))).length;
     const landedOk = landedCalls.filter(it => (it[side].outcome === 'successful') === (lab(it) === 'landed')).length;
-    return [mine.length, judged.length ? Math.round(real.length / judged.length * 100) + '%' : '–', allReal ? Math.round(foundReal / allReal * 100) + '%' : '–', landedCalls.length ? Math.round(landedOk / landedCalls.length * 100) + '%' : '–'];
+    return [mine.length, judged.length ? Math.round(real.length / judged.length * 100) + '%' : '–', allReal ? Math.round(foundReal / allReal * 100) + '%' : '–', landedCalls.length ? Math.round(landedOk / landedCalls.length * 100) + '%' : '–', classCalls.length ? Math.round(classOk / classCalls.length * 100) + '%' : '–'];
   };
   const A = stat('a'), B = stat('b'), n = s => its.filter(it => it.source === s).length;
   $('sr-sum').innerHTML =
     '<div><span class="muted">Reviewed</span><b>' + done + ' / ' + its.length + '</b><span class="muted">both ' + n('both') + ' · A only ' + n('a') + ' · B only ' + n('b') + (n('added') ? ' · added ' + n('added') : '') + '</span></div>' +
-    '<div><span class="muted">A: ' + esc(sr.data.a.sport) + '</span><b>' + A[0] + ' strikes</b><span class="muted">real: ' + A[1] + ' · found ' + A[2] + ' of all real · landed/missed right: ' + A[3] + '</span></div>' +
-    '<div><span class="muted">B: ' + esc(sr.data.b.sport) + '</span><b>' + B[0] + ' strikes</b><span class="muted">real: ' + B[1] + ' · found ' + B[2] + ' of all real · landed/missed right: ' + B[3] + '</span></div>';
+    '<div><span class="muted">A: ' + esc(sr.data.a.sport) + '</span><b>' + A[0] + ' techniques</b><span class="muted">real: ' + A[1] + ' · found ' + A[2] + ' of all real · landed/missed right: ' + A[3] + ' · technique right: ' + A[4] + '</span></div>' +
+    '<div><span class="muted">B: ' + esc(sr.data.b.sport) + '</span><b>' + B[0] + ' techniques</b><span class="muted">real: ' + B[1] + ' · found ' + B[2] + ' of all real · landed/missed right: ' + B[3] + ' · technique right: ' + B[4] + '</span></div>';
+}
+function srMarks(it) {
+  const l = sr.data.labels[it.key]; if (!l) return '';
+  return ((l.flags || []).includes('correct') ? ' · ✓' : '') + ((l.flags || []).includes('timing_off') ? ' · timing' : '') + ((l.flags || []).includes('holds_several') ? ' · ×' + (l.count || '2+') : '') + (l.note ? ' · ✎' : '');
 }
 function srList() {
   const cur = sr.items[sr.i];
   $('sr-list').innerHTML = sr.view.map(it => {
-    const v = verdictOf(it), side = it.a || it.b, cls = side ? side.classes.join(',').replace(/strike_|ground_strike/g, m => m === 'ground_strike' ? 'ground' : '') : 'added';
-    return '<button data-k="' + it.key + '" aria-current="' + (it === cur) + '"><span>' + fmt(it.t_ms) + '</span><span class="src src-' + it.source + '">' + ({both:'both', a:'A only', b:'B only', added:'added'})[it.source] + '</span><span>' + esc(nameOf(it.actor) + ' · ' + cls) + '</span><span class="vd ' + (v ? (REAL.has(v) ? 'real' : v === 'not_a_strike' ? 'fake' : '') : '') + '">' + (v ? v.replace(/_/g, ' ') : '·') + '</span></button>';
+    const v = verdictOf(it), side = it.a || it.b, cls = side ? [it.a, it.b].filter(Boolean).map(s => unitName(s).replace(/strike /g, '').replace('ground strike', 'ground')).join(' / ') : 'added';
+    return '<button data-k="' + it.key + '" aria-current="' + (it === cur) + '"><span>' + fmt(it.t_ms) + '</span><span class="src src-' + it.source + '">' + ({both:'both', a:'A only', b:'B only', added:'added'})[it.source] + '</span><span>' + esc(nameOf(it.actor) + ' · ' + cls) + '</span><span class="vd ' + (v ? (REAL.has(v) ? 'real' : v === 'not_a_strike' ? 'fake' : '') : '') + '">' + (v ? (VERDICT_NAMES[v] || v.replace(/_/g, ' ')) : '·') + srMarks(it) + '</span></button>';
   }).join('') || '<p class="muted" style="padding:8px">Nothing in this filter.</p>';
-  $('sr-list').querySelectorAll('button').forEach(b => b.onclick = () => { sr.i = sr.items.findIndex(x => x.key === b.dataset.k); srShow(true); });
+  $('sr-list').querySelectorAll('button').forEach(b => b.onclick = () => srGo(sr.items.findIndex(x => x.key === b.dataset.k), true));
   // Keep the current strike in view inside the list only; never scroll the page away from the video.
   const list = $('sr-list'), row = list.querySelector('[aria-current=true]');
   if (row && (row.offsetTop < list.scrollTop || row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = row.offsetTop - list.clientHeight / 2;
 }
 function srSide(title, s) {
   if (!s) return '<div class="sr-side none"><h3>' + title + '</h3><div>Not detected</div></div>';
-  const out = s.outcome === 'successful' ? 'landed' : s.outcome === 'unsuccessful' ? 'missed' : s.outcome;
-  return '<div class="sr-side"><h3>' + title + ' · ' + fmt(s.t_ms) + '</h3><div class="what">' + esc(s.classes.join(', ').replace(/_/g, ' ') + ' → ' + (s.target || '?') + ' · ' + out + (s.significant ? ' · significant' : '') + (s.knockdown ? ' · KNOCKDOWN' : '')) + '</div><div class="why">' + esc([...new Set([s.notes, s.evidence].filter(Boolean))].join('\n')) + '</div></div>';
+  const out = s.outcome === 'successful' ? (s.strike ? 'landed' : 'worked') : s.outcome === 'unsuccessful' ? (s.strike ? 'missed' : 'failed') : s.outcome;
+  const what = unitName(s) + (s.technique ? ' (' + s.classes.join(', ').replace(/_/g, ' ') + ')' : '') + (s.strike ? ' → ' + (s.target || '?') : '') + ' · ' + out + (s.strike && s.significant ? ' · significant' : '') + (s.knockdown ? ' · KNOCKDOWN' : '');
+  const chain = s.chain ? '<div class="chain" title="The whole sequence this step belongs to">' + s.chain.map((c, k) => '<span' + (k === s.step ? ' class="here"' : '') + '>' + esc(c) + '</span>').join('') + '</div>' : '';
+  const span = fmt(s.bounds.start_ms) + '–' + fmt(s.bounds.end_ms) + ' (' + ((s.bounds.end_ms - s.bounds.start_ms) / 1000).toFixed(1) + ' s)';
+  return '<div class="sr-side"><h3>' + title + ' · clip ' + span + '</h3><div class="what">' + esc(what) + '</div>' + chain + '<div class="why">' + esc([...new Set([s.notes, s.evidence].filter(Boolean))].join('\n')) + '</div></div>';
+}
+/* Notes and flags save on their own as you type (with or without a verdict); a draft
+   the server has not confirmed stays in memory, is shown again on return, and is saved
+   before moving to another item. The status next to the box says which. */
+const srDraft = {};
+let srTimer = null, srChain = Promise.resolve();
+const srSaved = key => { const l = sr.data.labels[key]; return {note:l?.note || '', flags:l?.flags || [], count:l?.count ?? null}; };
+const srCurrentExtras = key => srDraft[key] || srSaved(key);
+function srState(text, bad) { const s = $('sr-save-state'); if (s) { s.textContent = text; s.style.color = bad ? '#ff6b6b' : ''; } }
+function srStateFor(it) {
+  if (srDraft[it.key]) return 'Not saved yet…';
+  const l = sr.data.labels[it.key];
+  return l && (l.note || (l.flags || []).length) ? 'Saved ✓ ' + new Date(l.labelled_at).toLocaleTimeString() : '';
+}
+function srPut(it, verdict, extras) {
+  const run = async () => {
+    const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:it.key, verdict, source:it.source, ...extras})});
+    sr.data.labels = r.labels;
+  };
+  const p = srChain.then(run); srChain = p.catch(() => {}); return p;
+}
+async function srPersist(it) {
+  const extras = srDraft[it.key]; if (!extras) return true;
+  if (sr.items[sr.i]?.key === it.key) srState('Saving…');
+  try { await srPut(it, verdictOf(it) || null, extras); }
+  catch (e) { if (sr.items[sr.i]?.key === it.key) srState('NOT saved: ' + e.message + ' (your text is kept here; retrying when you leave this item)', true); return false; }
+  if (srDraft[it.key] === extras) delete srDraft[it.key];
+  const here = sr.items[sr.i]?.key; srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === here)); srSummary(); srList();
+  if (sr.items[sr.i]?.key === it.key) srState(srStateFor(it));
+  return true;
+}
+async function srFlush() {
+  if (srTimer) { clearTimeout(srTimer); srTimer = null; }
+  const it = sr.items[sr.i]; return it ? srPersist(it) : true;
+}
+function srEdited() {
+  const it = sr.items[sr.i]; if (!it) return;
+  srDraft[it.key] = srExtras(); srState('Not saved yet…');
+  clearTimeout(srTimer); srTimer = setTimeout(() => { srTimer = null; srPersist(it); }, 600);
 }
 function srShow(play) {
-  const it = sr.items[sr.i]; if (!it) { $('sr-cur').innerHTML = '<p class="muted">No strikes in this comparison.</p>'; return; }
-  const v = verdictOf(it), pos = sr.view.indexOf(it);
+  const it = sr.items[sr.i]; if (!it) { $('sr-cur').innerHTML = '<p class="muted">No techniques in this comparison.</p>'; return; }
+  const v = verdictOf(it), pos = sr.view.indexOf(it), ex = srCurrentExtras(it.key), flags = ex.flags;
   $('sr-cur').innerHTML = '<div class="top"><span><b>' + fmt(it.t_ms) + '</b> · ' + esc(nameOf(it.actor)) + ' <span class="src src-' + it.source + '">' + ({both:'both runs', a:'A only', b:'B only', added:'added by you'})[it.source] + '</span></span><span class="muted">' + (pos >= 0 ? (pos + 1) + ' of ' + sr.view.length + ' in this filter' : 'outside this filter') + '</span></div>' +
     (it.source === 'added' ? '' : '<div class="sr-cmp">' + srSide('A', it.a) + srSide('B', it.b) + '</div>') +
+    '<input id="sr-note" placeholder="Note (saves as you type): e.g. covers two jabs, starts 0.5 s late" value="' + esc(ex.note) + '" style="width:100%">' +
+    '<div class="sr-flags"><label title="Fighter, technique name and clip are all right; the verdict says whether it landed (key Y)"><input type="checkbox" id="sr-f-correct"' + (flags.includes('correct') ? ' checked' : '') + '><kbd>Y</kbd>Correct</label>' +
+    '<label title="The class is right but the clip starts or ends in the wrong place (key T)"><input type="checkbox" id="sr-f-timing"' + (flags.includes('timing_off') ? ' checked' : '') + '><kbd>T</kbd>Timing off</label>' +
+    '<label title="The run gave one clip for what is really several techniques (key M)"><input type="checkbox" id="sr-f-several"' + (flags.includes('holds_several') ? ' checked' : '') + '><kbd>M</kbd>Holds more than one technique</label>' +
+    '<label>how many <input type="number" id="sr-count" min="2" max="50" value="' + (ex.count || '') + '"></label>' +
+    '<span id="sr-save-state" class="muted" role="status" aria-live="polite"></span></div>' +
     '<div class="sr-verdicts">' + VERDICTS.map(([k, t, key]) => '<button data-v="' + k + '" aria-pressed="' + (v === k) + '"><kbd>' + key + '</kbd>' + t + '</button>').join('') + '</div>' +
-    '<div class="row" style="align-items:center"><button id="sr-prev" style="flex:0 0 auto">← Previous</button><button id="sr-replay" style="flex:0 0 auto">Replay</button><button id="sr-next" style="flex:0 0 auto">Next →</button><span class="sr-keys"><kbd>space</kbd>replay <kbd>←</kbd><kbd>→</kbd>move <kbd>1</kbd>–<kbd>5</kbd>,<kbd>0</kbd>verdict (moves on)</span></div>';
+    '<div class="row" style="align-items:center"><button id="sr-prev" style="flex:0 0 auto">← Previous</button><button id="sr-replay" style="flex:0 0 auto">Replay</button><button id="sr-tight" style="flex:0 0 auto" title="Play exactly the clip the run gave (key C)">Play its clip only</button><button id="sr-next" style="flex:0 0 auto">Next →</button><span class="sr-keys"><kbd>space</kbd>replay <kbd>←</kbd><kbd>→</kbd>move <kbd>1</kbd>–<kbd>7</kbd>,<kbd>0</kbd>verdict (moves on) <kbd>Y</kbd>correct <kbd>T</kbd><kbd>M</kbd>flags <kbd>C</kbd>clip only <kbd>Esc</kbd>leave the note box</span></div>';
   $('sr-cur').querySelectorAll('.sr-verdicts button').forEach(b => b.onclick = () => srLabel(b.dataset.v));
-  $('sr-prev').onclick = () => srMove(-1); $('sr-next').onclick = () => srMove(1); $('sr-replay').onclick = srPlay;
+  $('sr-prev').onclick = () => srMove(-1); $('sr-next').onclick = () => srMove(1); $('sr-replay').onclick = srPlay; $('sr-tight').onclick = srPlayClip;
+  $('sr-note').oninput = srEdited;
+  $('sr-note').onkeydown = e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); srFlush(); e.target.blur(); } };
+  $('sr-note').onblur = () => srFlush();
+  $('sr-f-correct').onchange = srEdited; $('sr-f-timing').onchange = srEdited; $('sr-f-several').onchange = srEdited;
+  $('sr-count').oninput = () => { if ($('sr-count').value) $('sr-f-several').checked = true; srEdited(); };
+  srState(srStateFor(it));
   srList();
   if (play) srPlay();
 }
-function srPlay() { const it = sr.items[sr.i]; if (!it) return; video().playbackRate = sr.rate; seek(it.t_ms - 1500, it.t_ms + 1000); }
-function srMove(step) {
+function srPlay() {
+  const it = sr.items[sr.i]; if (!it) return; video().playbackRate = sr.rate;
+  // A grappling step plays until its result (at most 6 s); a strike 1 s past contact.
+  const ends = [it.a, it.b].filter(Boolean).map(s => s.bounds.end_ms + 500);
+  seek(it.t_ms - 1500, Math.min(Math.max(it.t_ms + 1000, ...ends), it.t_ms + 6000));
+}
+function srPlayClip() {
+  const it = sr.items[sr.i]; if (!it) return; const s = it.b || it.a; if (!s) return;
+  video().playbackRate = sr.rate; seek(s.bounds.start_ms, s.bounds.end_ms);
+}
+function srExtras() {
+  const flags = [];
+  if ($('sr-f-correct')?.checked) flags.push('correct');
+  if ($('sr-f-timing')?.checked) flags.push('timing_off');
+  if ($('sr-f-several')?.checked) flags.push('holds_several');
+  const n = parseInt($('sr-count')?.value, 10);
+  return {note:($('sr-note')?.value || '').trim(), flags, count:flags.includes('holds_several') && n >= 2 ? n : null};
+}
+async function srGo(index, play) { await srFlush(); sr.i = index; srShow(play); }
+async function srMove(step) {
   const pos = sr.view.indexOf(sr.items[sr.i]);
   const next = pos < 0 ? sr.view.find(it => it.t_ms >= sr.items[sr.i].t_ms) : sr.view[pos + step];
-  if (next) { sr.i = sr.items.indexOf(next); srShow(true); }
+  if (next) await srGo(sr.items.indexOf(next), true);
 }
 async function srLabel(verdict) {
   const it = sr.items[sr.i]; if (!it) return;
-  const clear = verdictOf(it) === verdict;
-  try {
-    const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:it.key, verdict:clear ? null : verdict, source:it.source})});
-    sr.data.labels = r.labels;
-  } catch (e) { $('sr-msg').textContent = 'Not saved: ' + e.message; return; }
-  const before = sr.items[sr.i]; srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === before.key)); srView();
-  if (!clear) { const cur = sr.items[sr.i]; const next = sr.view.find(x => x.t_ms > cur.t_ms || (x.t_ms === cur.t_ms && x.key > cur.key)); if (next) { sr.i = sr.items.indexOf(next); srShow(true); return; } }
+  if (srTimer) { clearTimeout(srTimer); srTimer = null; }
+  const extras = srDraft[it.key] || srSaved(it.key);
+  // Pressing the chosen verdict again clears the verdict; the note and flags stay.
+  const clear = verdictOf(it) === verdict && !srDraft[it.key];
+  try { await srPut(it, clear ? null : verdict, extras); }
+  catch (e) { srState('NOT saved: ' + e.message, true); return; }
+  if (srDraft[it.key] === extras) delete srDraft[it.key];
+  srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === it.key)); srView();
+  if (!clear) { const next = sr.view.find(x => x.t_ms > it.t_ms || (x.t_ms === it.t_ms && x.key > it.key)); if (next) { sr.i = sr.items.indexOf(next); srShow(true); return; } }
   srShow(false);
 }
 $('sr-add').onclick = async () => {
   if (!sr.data) return;
   const t = nowMs(), actor = $('sr-add-actor').value;
   if (t < sr.data.start_ms || t >= sr.data.end_ms) { $('sr-msg').textContent = 'The playhead is outside this comparison (' + fmt(sr.data.start_ms) + '–' + fmt(sr.data.end_ms) + ').'; return; }
-  try { const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:actor + '@' + t, verdict:$('sr-add-verdict').value, source:'added'})}); sr.data.labels = r.labels; }
+  try { const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:actor + '@' + t, verdict:$('sr-add-verdict').value, source:'added', note:$('sr-add-note').value.trim()})}); sr.data.labels = r.labels; }
   catch (e) { $('sr-msg').textContent = 'Not saved: ' + e.message; return; }
   srMerge(); sr.i = sr.items.findIndex(x => x.key === actor + '@' + t); srView(); srShow(false);
 };
 document.addEventListener('keydown', e => {
-  if (!sr.data || $('sr-body').hidden || e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (activeReview === 'sq' || !sr.data || $('sr-body').hidden || e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
   const v = VERDICTS.find(x => x[2] === e.key);
   if (v) { e.preventDefault(); srLabel(v[0]); }
+  else if (e.key === 't' || e.key === 'm' || e.key === 'y') { e.preventDefault(); const box = $({t:'sr-f-timing', m:'sr-f-several', y:'sr-f-correct'}[e.key]); if (box) { box.checked = !box.checked; srEdited(); } }
+  else if (e.key === 'c') { e.preventDefault(); srPlayClip(); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); srMove(1); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); srMove(-1); }
   else if (e.key === ' ' && !e.target.closest('button, video')) { e.preventDefault(); srPlay(); }
 });
 
-loadDefaults(); loadRuns(); srInit();
+/* ---------- sequence review (one run) ---------- */
+const SQ_FLAGS = [['correct','Correct','y'],['wrong_fighter','Wrong fighter','f'],['missed_techniques','Missed techniques','i'],['extra_techniques','Extra techniques','e'],['wrong_names','Wrong names','n'],['wrong_landed','Landed/missed wrong','l'],['not_real','Not a real sequence (defence, nothing)','x'],['duplicate','Duplicate','d'],['timing_off','Timing off','t']];
+const sq = { data:null, items:[], view:[], i:0, filter:'all', rate:0.5, draft:{}, timer:null, chain:Promise.resolve() };
+let activeReview = null;
+async function sqInit() {
+  try {
+    const r = await api('/qa/core/runs');
+    const runs = r.runs.filter(x => x.state === 'succeeded' && x.sport !== 'bjj' && x.sport !== 'bjj_h');
+    $('sq-run').innerHTML = '<option value="">Choose a run…</option>' + runs.map(x => '<option value="' + x.run_id + '">' + esc((x.label || x.youtube_id) + ' · ' + x.sport + ' · ' + fmt(x.start_ms) + '–' + fmt(x.end_ms)) + '</option>').join('');
+  } catch (e) { $('sq-msg').textContent = e.message; }
+}
+$('sq-load').onclick = async () => {
+  const run = $('sq-run').value; if (!run) { $('sq-msg').textContent = 'Choose a run.'; return; }
+  $('sq-msg').textContent = 'Loading…';
+  try {
+    sq.data = await api('/qa/core/sequence-review?run=' + run);
+    if (state.youtubeId !== sq.data.youtube_id) { $('yt-input').value = sq.data.youtube_id; await loadVideo(); }
+    activeReview = 'sq';
+    const d = sq.data;
+    $('sq-msg').innerHTML = esc(d.run.label || d.run.run_id.slice(0, 8)) + ' · ' + fmt(d.start_ms) + '–' + fmt(d.end_ms) + ' · <span style="color:#e5484d">A ' + esc(d.fighters[0]) + '</span> vs <span style="color:#4c8df6">B ' + esc(d.fighters[1]) + '</span>';
+    $('sq-add-actor').innerHTML = d.fighters.map((f, i) => '<option value="fighter-' + 'ab'[i] + '">' + 'AB'[i] + ' · ' + esc(f) + '</option>').join('');
+    sqMerge(); sq.i = 0; $('sq-body').hidden = false; sqView(); sqShow(false);
+  } catch (e) { $('sq-msg').textContent = e.message; }
+};
+segmented($('sq-filter'), async v => { await sqFlush(); sq.filter = v; sqView(); if (!sq.view.includes(sq.items[sq.i]) && sq.view.length) sq.i = sq.items.indexOf(sq.view[0]); sqShow(false); });
+segmented($('sq-speed'), v => { sq.rate = Number(v); video().playbackRate = sq.rate; });
+function sqMerge() {
+  const d = sq.data, keys = new Set(d.sequences.map(x => x.key));
+  const added = Object.entries(d.labels).filter(([k, l]) => l.source === 'added' && !keys.has(k) && l.t_ms >= d.start_ms && l.t_ms < d.end_ms)
+    .map(([k, l]) => ({key:k, added:true, start_ms:l.t_ms, end_ms:l.t_ms + 2000, actor:l.actor, chain:[], summary:''}));
+  sq.items = [...d.sequences, ...added].sort((x, y) => x.start_ms - y.start_ms);
+}
+const sqWho = it => it.actor ? ('AB'['ab'.indexOf(it.actor.slice(-1))] + ' · ' + sq.data.fighters['ab'.indexOf(it.actor.slice(-1))]) : (it.sentinel || '?');
+const sqLabel = key => sq.data.labels[key];
+const sqSaved = key => { const l = sqLabel(key); return {flags:l?.flags || [], count:l?.count ?? null, note:l?.note || ''}; };
+const sqCurrent = key => sq.draft[key] || sqSaved(key);
+function sqView() {
+  sq.view = sq.items.filter(it => sq.filter === 'all' || (sq.filter === 'todo' ? !sqLabel(it.key) : it.actor === 'fighter-' + sq.filter));
+  sqSummary(); sqList();
+}
+function sqSummary() {
+  const its = sq.items.filter(x => !x.added), lab = its.map(x => sqLabel(x.key)).filter(Boolean);
+  const n = f => lab.filter(l => l.flags.includes(f)).length;
+  const added = sq.items.filter(x => x.added).length;
+  $('sq-sum').innerHTML = '<div><span class="muted">Reviewed</span><b>' + lab.length + ' / ' + its.length + '</b><span class="muted">sequences in this run' + (added ? ' · ' + added + ' you added' : '') + '</span></div>' +
+    '<div><span class="muted">Correct</span><b>' + n('correct') + '</b><span class="muted">of ' + lab.length + ' reviewed</span></div>' +
+    '<div><span class="muted">Problems</span><b>' + (lab.length - n('correct')) + '</b><span class="muted">wrong fighter ' + n('wrong_fighter') + ' · missed ' + n('missed_techniques') + ' · extra ' + n('extra_techniques') + ' · names ' + n('wrong_names') + ' · not real ' + n('not_real') + ' · duplicate ' + n('duplicate') + '</span></div>';
+}
+function sqChain(it) {
+  return it.chain.map(c => '<span title="' + esc(c.evidence) + '" style="' + (c.outcome === 'successful' ? 'border-color:var(--ink);color:var(--ink)' : '') + '">' + esc(c.name) + (c.outcome === 'successful' ? ' ✓' : c.outcome === 'unclear' ? ' ?' : '') + (c.landed != null && c.repeat > 1 ? ' (' + c.landed + ' landed)' : '') + '</span>').join('');
+}
+function sqList() {
+  const cur = sq.items[sq.i];
+  $('sq-list').innerHTML = sq.view.map(it => {
+    const l = sqLabel(it.key), mark = l ? (l.flags.includes('correct') ? 'correct' : (l.flags.length ? l.flags.length + ' issue' + (l.flags.length > 1 ? 's' : '') : 'note')) + (l.note ? ' ✎' : '') : '·';
+    return '<button data-k="' + it.key + '" aria-current="' + (it === cur) + '"><span>' + fmt(it.start_ms) + '</span><span class="src ' + (it.actor === 'fighter-a' ? 'sq-a' : 'sq-b') + '">' + (it.added ? 'added' : sqWho(it).slice(0, 1)) + '</span><span>' + esc(it.added ? (l?.note || 'added by you') : it.chain.map(c => c.name).join(' · ')) + '</span><span class="vd ' + (l?.flags.includes('correct') ? 'real' : l ? 'fake' : '') + '">' + esc(mark) + '</span></button>';
+  }).join('') || '<p class="muted" style="padding:8px">Nothing in this filter.</p>';
+  $('sq-list').querySelectorAll('button').forEach(b => b.onclick = () => sqGo(sq.items.findIndex(x => x.key === b.dataset.k), true));
+  const list = $('sq-list'), row = list.querySelector('[aria-current=true]');
+  if (row && (row.offsetTop < list.scrollTop || row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = row.offsetTop - list.clientHeight / 2;
+}
+function sqState(text, bad) { const s = $('sq-save-state'); if (s) { s.textContent = text; s.style.color = bad ? '#ff6b6b' : ''; } }
+function sqStateFor(it) { if (sq.draft[it.key]) return 'Not saved yet…'; const l = sqLabel(it.key); return l ? 'Saved ✓ ' + new Date(l.labelled_at).toLocaleTimeString() : ''; }
+function sqShow(play) {
+  const it = sq.items[sq.i]; if (!it) { $('sq-cur').innerHTML = '<p class="muted">No sequences in this run.</p>'; return; }
+  const ex = sqCurrent(it.key), pos = sq.view.indexOf(it);
+  $('sq-cur').innerHTML = '<div class="top"><span><b>' + fmt(it.start_ms) + '–' + fmt(it.end_ms) + '</b> · <span style="color:' + (it.actor === 'fighter-a' ? '#e5484d' : '#4c8df6') + '">' + esc(sqWho(it)) + '</span></span><span class="muted">' + (pos >= 0 ? (pos + 1) + ' of ' + sq.view.length : 'outside this filter') + '</span></div>' +
+    (it.added ? '<p class="muted">Added by you.</p>' : '<div class="sr-side"><div class="what">' + it.chain.length + ' technique' + (it.chain.length === 1 ? '' : 's') + ' · ' + (it.outcome === 'successful' ? 'something landed' : it.outcome === 'unsuccessful' ? 'nothing landed' : 'unclear') + '</div><div class="chain" title="✓ landed or worked, ? unclear">' + sqChain(it) + '</div><div class="why">' + esc(it.summary) + '</div></div>') +
+    '<div class="sr-flags">' + SQ_FLAGS.map(([k, t, key]) => '<label><input type="checkbox" data-f="' + k + '"' + (ex.flags.includes(k) ? ' checked' : '') + '><kbd>' + key.toUpperCase() + '</kbd>' + t + '</label>').join('') + '</div>' +
+    '<div class="sr-flags"><label>Techniques it really had <input type="number" id="sq-count" min="0" max="60" value="' + (ex.count ?? '') + '"></label><span id="sq-save-state" class="muted" role="status" aria-live="polite"></span></div>' +
+    '<input id="sq-note" placeholder="What really happened (saves as you type): e.g. jab, hook, low kick by A" value="' + esc(ex.note) + '" style="width:100%">' +
+    '<div class="row" style="align-items:center; flex-wrap:wrap; gap:6px"><button id="sq-prev" style="flex:0 0 auto">← Previous</button><button id="sq-replay" style="flex:0 0 auto">Replay</button><button id="sq-next" style="flex:0 0 auto">Next →</button><span class="sr-keys"><kbd>space</kbd>replay <kbd>←</kbd><kbd>→</kbd>move · letters toggle flags · <kbd>Enter</kbd> next · <kbd>Esc</kbd> leave the note</span></div>';
+  $('sq-cur').querySelectorAll('.sr-flags input[type=checkbox]').forEach(b => b.onchange = sqEdited);
+  $('sq-count').oninput = sqEdited; $('sq-note').oninput = sqEdited;
+  $('sq-note').onkeydown = e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); sqFlush(); e.target.blur(); } };
+  $('sq-note').onblur = () => sqFlush();
+  $('sq-prev').onclick = () => sqMove(-1); $('sq-next').onclick = () => sqMove(1); $('sq-replay').onclick = sqPlay;
+  sqState(sqStateFor(it)); sqList();
+  if (play) sqPlay();
+}
+function sqExtras() {
+  const flags = [...$('sq-cur').querySelectorAll('.sr-flags input[type=checkbox]:checked')].map(b => b.dataset.f);
+  const n = parseInt($('sq-count')?.value, 10);
+  return {flags, count:Number.isFinite(n) ? n : null, note:($('sq-note')?.value || '').trim()};
+}
+function sqPut(it, extras) {
+  const run = async () => { const r = await api('/qa/core/sequence-labels/' + sq.data.youtube_id, {method:'PUT', body:JSON.stringify({key:it.key, source:it.added ? 'added' : 'run', ...extras})}); sq.data.labels = r.labels; };
+  const p = sq.chain.then(run); sq.chain = p.catch(() => {}); return p;
+}
+async function sqPersist(it) {
+  const extras = sq.draft[it.key]; if (!extras) return true;
+  if (sq.items[sq.i]?.key === it.key) sqState('Saving…');
+  try { await sqPut(it, extras); }
+  catch (e) { if (sq.items[sq.i]?.key === it.key) sqState('NOT saved: ' + e.message + ' (kept here; retried when you leave)', true); return false; }
+  if (sq.draft[it.key] === extras) delete sq.draft[it.key];
+  const here = sq.items[sq.i]?.key; sqMerge(); sq.i = Math.max(0, sq.items.findIndex(x => x.key === here)); sqSummary(); sqList();
+  if (sq.items[sq.i]?.key === it.key) sqState(sqStateFor(it));
+  return true;
+}
+async function sqFlush() { if (sq.timer) { clearTimeout(sq.timer); sq.timer = null; } const it = sq.items[sq.i]; return it ? sqPersist(it) : true; }
+function sqEdited() {
+  const it = sq.items[sq.i]; if (!it) return;
+  sq.draft[it.key] = sqExtras(); sqState('Not saved yet…');
+  clearTimeout(sq.timer); sq.timer = setTimeout(() => { sq.timer = null; sqPersist(it); }, 600);
+}
+function sqPlay() { const it = sq.items[sq.i]; if (!it) return; video().playbackRate = sq.rate; seek(it.start_ms - 1000, it.end_ms + 1000); }
+async function sqGo(index, play) { await sqFlush(); sq.i = index; sqShow(play); }
+async function sqMove(step) {
+  const pos = sq.view.indexOf(sq.items[sq.i]);
+  const next = pos < 0 ? sq.view.find(x => x.start_ms >= sq.items[sq.i].start_ms) : sq.view[pos + step];
+  if (next) await sqGo(sq.items.indexOf(next), true);
+}
+$('sq-add').onclick = async () => {
+  if (!sq.data) return;
+  const t = nowMs(), actor = $('sq-add-actor').value;
+  if (t < sq.data.start_ms || t >= sq.data.end_ms) { $('sq-msg').textContent = 'The playhead is outside this run (' + fmt(sq.data.start_ms) + '–' + fmt(sq.data.end_ms) + ').'; return; }
+  const note = $('sq-add-note').value.trim() || 'missed sequence';
+  try { const r = await api('/qa/core/sequence-labels/' + sq.data.youtube_id, {method:'PUT', body:JSON.stringify({key:actor + '@' + t, source:'added', flags:[], note})}); sq.data.labels = r.labels; }
+  catch (e) { $('sq-msg').textContent = 'Not saved: ' + e.message; return; }
+  $('sq-add-note').value = ''; sqMerge(); sq.i = sq.items.findIndex(x => x.key === actor + '@' + t); sqView(); sqShow(false);
+};
+document.addEventListener('keydown', e => {
+  if (activeReview !== 'sq' || !sq.data || $('sq-body').hidden || e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const f = SQ_FLAGS.find(x => x[2] === e.key);
+  if (f) { e.preventDefault(); const box = $('sq-cur').querySelector('input[data-f="' + f[0] + '"]'); if (box) { box.checked = !box.checked; sqEdited(); } }
+  else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); sqMove(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); sqMove(-1); }
+  else if (e.key === ' ' && !e.target.closest('button, video')) { e.preventDefault(); sqPlay(); }
+});
+
+loadDefaults(); loadRuns(); srInit(); sqInit();
 </script>
 </body>
 </html>

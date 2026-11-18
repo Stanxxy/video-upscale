@@ -25,6 +25,8 @@ from bjj_analysis_core.mma_outputs import (
     GroundRescanInputV1,
     GroundRescanV1,
     KnockdownCheckInputV1,
+    SequenceCensusV1,
+    SequenceWindowInputV1,
     KnockdownCheckV1,
     StrikeAuditInputV1,
     StrikeAuditV1,
@@ -56,6 +58,7 @@ NodeId = Literal[
     "strike_audit",
     "knockdown_check",
     "ground_rescan",
+    "sequence_census",
 ]
 # The BJJ pack's node outputs (every pack has the same nodes).
 OUTPUTS = BJJ.outputs
@@ -126,11 +129,12 @@ class CoreConfigV1(VersionedAnalysisContract):
     # A null check node means "no check": the first pass is used as-is (the scan's
     # transitions, the scan's event bounds, the analysis). Explicit, never implied.
     position_critique: NodeConfigV1 | None
-    technique_scan: NodeConfigV1
+    # Null exactly in the sequence workflow, which has no technique scan or analysis.
+    technique_scan: NodeConfigV1 | None
     technique_critique: NodeConfigV1 | None
-    technique_analyze: NodeConfigV1
+    technique_analyze: NodeConfigV1 | None
     technique_validate: NodeConfigV1 | None
-    candidates: CandidateConfigV1
+    candidates: CandidateConfigV1 | None
     # Full executor bounds are versioned with the effective run configuration.
     position_critique_back_ms: NonNegativeInt = Field(default=4000, le=30000)
     position_critique_forward_ms: PositiveInt = Field(default=6000, le=30000)
@@ -153,6 +157,14 @@ class CoreConfigV1(VersionedAnalysisContract):
     ground_rescan: NodeConfigV1 | None = None
     ground_window_ms: PositiveInt = Field(default=20000, ge=5000, le=60000)
     ground_lookback_ms: NonNegativeInt = Field(default=5000, le=15000)
+    # Technique sequences (workflow mma-sequences-ground only): one census per window
+    # of sequence_window_ms; the overlap must hold a whole standing chain.
+    sequence_census: NodeConfigV1 | None = None
+    sequence_window_ms: PositiveInt = Field(default=20000, ge=5000, le=60000)
+    sequence_overlap_ms: NonNegativeInt = Field(default=5000, le=15000)
+
+
+_TECHNIQUE_NODES = ("technique_scan", "technique_critique", "technique_analyze", "technique_validate", "candidates")
 
 
 class PreparedCallV1(VersionedAnalysisContract):
@@ -193,6 +205,18 @@ def load_config(run, config_bytes):
         raise ValueError("strike census nodes belong only to the windowed strike workflow")
     if pack.ground_rescan != (config.ground_rescan is not None):
         raise ValueError("the ground re-scan node belongs exactly to the ground workflow")
+    if pack.sequences:
+        if config.sequence_census is None:
+            raise ValueError("the sequence workflow needs a sequence_census node")
+        if config.sequence_overlap_ms >= config.sequence_window_ms:
+            raise ValueError("sequence window overlap must be shorter than the window")
+        if any(getattr(config, n) is not None for n in _TECHNIQUE_NODES):
+            raise ValueError("the sequence workflow has no technique scan, checks or analysis")
+    else:
+        if config.sequence_census is not None:
+            raise ValueError("the sequence census belongs only to the sequence workflow")
+        if any(getattr(config, n) is None for n in ("technique_scan", "technique_analyze", "candidates")):
+            raise ValueError("this workflow needs its technique scan and analysis")
     return run, config
 
 
@@ -227,6 +251,7 @@ def prepare_call(
             "strike_audit": StrikeAuditInputV1,
             "knockdown_check": KnockdownCheckInputV1,
             "ground_rescan": GroundRescanInputV1,
+            "sequence_census": SequenceWindowInputV1,
         }[node_id]
         parsed = context_model.model_validate(context)
         if node_id == "knockdown_check":
@@ -255,6 +280,15 @@ def prepare_call(
                 raise ValueError("strike census context names a different window")
             if node_id == "strike_audit" and parsed.census.window_index != index:
                 raise ValueError("strike audit reviews another window's census")
+        if node_id == "sequence_census":
+            from bjj_analysis_core.sequences import sequence_windows
+
+            if advisory_positions is not None:
+                raise ValueError("the sequence census is visually independent")
+            windows = sequence_windows(run, config)
+            index = parsed.window_index
+            if index >= len(windows) or window != windows[index] or parsed.window != window:
+                raise ValueError("sequence window differs from the admitted tiling")
         if node_id == "ground_rescan":
             from bjj_analysis_core.grounds import AFTER_MS
 
@@ -386,6 +420,16 @@ def parse_response(prepared, response_text):
             if not last <= strike.at_ms <= window.end_ms:
                 raise ValueError("census strikes must be ordered inside the window")
             last = strike.at_ms
+    elif isinstance(result, SequenceCensusV1):
+        if result.window_index != context["window_index"]:
+            raise ValueError("census answers a different window")
+        players = {p["player_id"] for p in strict_json(prepared.initial_prompt)["ordered_players"]}
+        # The window's last frame is visible to the model: its end is inclusive here.
+        for sequence in result.sequences:
+            if sequence.actor_player_id is not None and sequence.actor_player_id not in players:
+                raise ValueError("a sequence names its fighter by player id")
+            if not window.start_ms <= sequence.start_ms < sequence.end_ms <= window.end_ms:
+                raise ValueError("a sequence must lie inside the window")
     elif isinstance(result, StrikeAuditV1):
         census = context["census"]["strikes"]
         if result.window_index != context["window_index"]:

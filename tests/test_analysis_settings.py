@@ -342,16 +342,23 @@ def test_published_preset_files_are_the_generator_bytes():
 def test_hydrogen_production_presets_are_exactly_what_vlm_studio_measured():
     """Hydrogen everywhere, no check steps; MMA adds the ground re-scan (x-mma 2026-11-15)."""
     from pathlib import Path
-    from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID, WORKFLOW_ID
-    from bjj_analysis_core.packs import BJJ, MMA_GROUND
+    from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID, MMA_SEQUENCES_WORKFLOW_ID, WORKFLOW_ID
+    from bjj_analysis_core.packs import BJJ, MMA_GROUND, MMA_SEQUENCES
     from bjj_analysis_core.requests import prompt_bundle_sha256
     from service import qa_core
-    from service.analysis_preset import hydrogen_mma_ground_preset, hydrogen_preset, preset_bytes
+    from service.analysis_preset import (
+        hydrogen_mma_ground_preset,
+        hydrogen_mma_sequences_preset,
+        hydrogen_preset,
+        preset_bytes,
+    )
 
     root = Path(__file__).resolve().parents[1] / "config" / "analysis"
     for name, build, sport, workflow, pack in (
         ("hydrogen.json", hydrogen_preset, "bjj_h", WORKFLOW_ID, BJJ),
         ("hydrogen-mma-ground.json", hydrogen_mma_ground_preset, "mma_v2_hg", MMA_GROUND_WORKFLOW_ID, MMA_GROUND),
+        ("hydrogen-mma-sequences.json", hydrogen_mma_sequences_preset, "mma_seq_h", MMA_SEQUENCES_WORKFLOW_ID,
+         MMA_SEQUENCES),
     ):
         config = build()
         assert (root / name).read_bytes() == preset_bytes(qa_core.build_config(sport, {}))
@@ -362,3 +369,6 @@ def test_hydrogen_production_presets_are_exactly_what_vlm_studio_measured():
         assert all(getattr(config, n) is None for n in (
             "position_critique", "technique_critique", "technique_validate", "strike_audit", "knockdown_check"))
     assert hydrogen_mma_ground_preset().ground_rescan.fps == 5
+    sequences = hydrogen_mma_sequences_preset()
+    assert sequences.ground_rescan.fps == 5 and sequences.sequence_census.fps == 10
+    assert sequences.technique_scan is None and sequences.technique_analyze is None and sequences.strike_census is None

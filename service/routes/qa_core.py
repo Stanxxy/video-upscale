@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from service import qa_core
+from service import sequence_review as seqreview
 from service import strike_review as review
 from service.routes.qa_vlm import _require_gemini_key
 
@@ -150,7 +151,7 @@ async def strike_review_pairs():
 
 
 async def strike_review(a: str, b: str):
-    """Both runs' strikes over the part of the video both analysed, matched, with labels."""
+    """Both runs' techniques over the part of the video both analysed, matched, with labels."""
     core = _core()
     req_a, tech_a = _run_strikes(core, a)
     req_b, tech_b = _run_strikes(core, b)
@@ -159,7 +160,7 @@ async def strike_review(a: str, b: str):
     start, end = max(req_a["start_ms"], req_b["start_ms"]), min(req_a["end_ms"], req_b["end_ms"])
     if end <= start:
         raise HTTPException(status_code=400, detail="the two runs do not overlap")
-    items = review.match(review.strikes(tech_a, start, end), review.strikes(tech_b, start, end))
+    items = review.match(review.techniques(tech_a, start, end), review.techniques(tech_b, start, end))
     return dict(
         youtube_id=req_a["youtube_id"], start_ms=start, end_ms=end,
         fighters=[f["name"] for f in req_a["fighters"]], fighters_b=[f["name"] for f in req_b["fighters"]],
@@ -174,6 +175,25 @@ async def strike_label(youtube_id: str, body: review.LabelIn):
     if not qa_core.YOUTUBE_ID.fullmatch(youtube_id):
         raise HTTPException(status_code=400, detail="invalid YouTube id")
     return dict(labels=review.save_label(core.settings.root, youtube_id, body))
+
+
+async def sequence_review(run: str):
+    """One run's sequences with this video's sequence labels."""
+    core = _core()
+    req, events = _run_strikes(core, run)
+    return dict(
+        youtube_id=req["youtube_id"], start_ms=req["start_ms"], end_ms=req["end_ms"],
+        fighters=[f["name"] for f in req["fighters"]],
+        run=dict(run_id=run, label=req.get("label"), sport=req["sport"]),
+        sequences=seqreview.sequences(events), labels=seqreview.load_labels(core.settings.root, req["youtube_id"]),
+    )
+
+
+async def sequence_label(youtube_id: str, body: seqreview.SequenceLabelIn):
+    core = _core()
+    if not qa_core.YOUTUBE_ID.fullmatch(youtube_id):
+        raise HTTPException(status_code=400, detail="invalid YouTube id")
+    return dict(labels=seqreview.save_label(core.settings.root, youtube_id, body))
 
 
 def mount(app):
@@ -191,3 +211,5 @@ def mount(app):
     app.get("/qa/core/strike-review/pairs")(strike_review_pairs)
     app.get("/qa/core/strike-review")(strike_review)
     app.put("/qa/core/strike-labels/{youtube_id}")(strike_label)
+    app.get("/qa/core/sequence-review")(sequence_review)
+    app.put("/qa/core/sequence-labels/{youtube_id}")(sequence_label)
