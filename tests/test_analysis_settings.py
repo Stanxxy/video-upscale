@@ -37,11 +37,11 @@ def test_capability_manifest_is_the_approved_production_contract():
     manifest = get_analysis_settings_capabilities()
 
     assert manifest.schema_version == 1
-    assert manifest.qualified_models == ("gemini-3.5-flash",)
+    assert manifest.qualified_models == ("gemini-3.8-flash",)
     assert manifest.media_resolutions == ("low", "medium", "high")
     assert manifest.analysis_fps == (1, 10)
-    assert manifest.thinking_levels == ("off", "low", "medium", "high")
-    assert manifest.recommended.model == "gemini-3.5-flash"
+    assert manifest.thinking_levels == ("low", "medium", "high")
+    assert manifest.recommended.model == "gemini-3.8-flash"
     assert manifest.recommended.media_resolution == "low"
     assert manifest.recommended.analysis_fps == 10
     assert manifest.recommended.thinking == "high"
@@ -57,7 +57,7 @@ def test_omitted_overrides_resolve_to_complete_immutable_stage_snapshot():
     effective = admitted.effective_analysis_config
     for stage_name in ("scan", "critique", "taxonomy", "actor"):
         stage = getattr(effective, stage_name)
-        assert stage.model == "gemini-3.5-flash"
+        assert stage.model == "gemini-3.8-flash"
         assert stage.media_resolution == "low"
         assert stage.thinking == "high"
     assert effective.scan.fps is None
@@ -80,6 +80,48 @@ def test_effective_snapshot_rejects_taxonomy_actor_fps_divergence():
         match="taxonomy and actor analysis_fps must be identical",
     ):
         EffectiveAnalysisConfig.model_validate(payload)
+
+
+@pytest.mark.parametrize("thinking", ["low", "medium", "high"])
+@pytest.mark.parametrize("resolution", ["low", "medium", "high"])
+@pytest.mark.parametrize("fps", [1, 10])
+def test_gemini38_explicit_supported_options_reach_every_stage(thinking, resolution, fps):
+    admitted = resolve_analysis_settings(TrackRequest(
+        bucket="b", key="match.mp4", analysis_model="gemini-3.8-flash",
+        analysis_thinking=thinking, analysis_media_resolution=resolution, analysis_fps=fps,
+    ))
+    configured = apply_effective_analysis_config(
+        get_default("highlight-scan-critique-analyze"), admitted.effective_analysis_config
+    )
+    stages = {stage.id: stage.config for stage in configured.stages}
+    for config in (stages["highlight_scan"], stages["highlight_critique"],
+                   stages["highlight_analyze"], stages["highlight_analyze"]["actor"]):
+        assert config["model"] == "gemini-3.8-flash"
+        assert config["thinking"] == thinking
+        assert config["media_resolution"] == resolution
+    assert stages["highlight_analyze"]["fps"] == fps
+
+
+@pytest.mark.parametrize("value", ["off", "minimal"])
+def test_gemini38_cannot_disable_thinking(value):
+    with pytest.raises((ValidationError, AnalysisSettingsValidationError)):
+        resolve_analysis_settings(TrackRequest(
+            bucket="b", key="match.mp4", analysis_thinking=value,
+        ))
+
+
+def test_portable_six_node_preset_is_explicit_and_does_not_claim_qualification():
+    from service.analysis_preset import gemini38_preset
+    config = gemini38_preset()
+    for name in ("position_scan", "position_critique", "technique_scan",
+                 "technique_critique", "technique_analyze", "technique_validate"):
+        node = getattr(config, name)
+        assert node.model == "gemini-3.8-flash"
+        assert node.thinking == ("low" if name.endswith(("critique", "validate")) else "high")
+        assert node.media_resolution == "low"
+        assert node.fps == (1 if name.endswith("scan") else 10)
+    assert config.position_critique_context == "proposed"
+    assert config.strike_census is None and config.knockdown_check is None
 
 
 def test_one_override_is_retained_raw_and_changes_only_its_mapped_axis():
@@ -106,8 +148,8 @@ def test_one_override_is_retained_raw_and_changes_only_its_mapped_axis():
     ("field", "value", "allowed"),
     [
         ("analysis_fps", 15, "1, 10"),
-        ("analysis_model", "gemini-3.1-flash-lite", "gemini-3.5-flash"),
-        ("analysis_thinking", "maximum", "off, low, medium, high"),
+        ("analysis_model", "gemini-3.1-flash-lite", "gemini-3.8-flash"),
+        ("analysis_thinking", "maximum", "low, medium, high"),
     ],
 )
 def test_off_manifest_values_fail_closed_with_allowed_values(field, value, allowed):
@@ -131,15 +173,15 @@ def test_effective_snapshot_maps_to_a_deep_copied_pipeline():
         admitted.effective_analysis_config,
     )
     stages = {stage.id: stage.config for stage in configured.stages}
-    assert stages["highlight_scan"]["model"] == "gemini-3.5-flash"
+    assert stages["highlight_scan"]["model"] == "gemini-3.8-flash"
     assert stages["highlight_scan"]["media_resolution"] == "low"
     assert stages["highlight_scan"]["thinking"] == "high"
     assert "fps" not in stages["highlight_scan"]
-    assert stages["highlight_critique"]["model"] == "gemini-3.5-flash"
+    assert stages["highlight_critique"]["model"] == "gemini-3.8-flash"
     assert "fps" not in stages["highlight_critique"]
     assert stages["highlight_analyze"]["fps"] == 1
-    assert stages["highlight_analyze"]["model"] == "gemini-3.5-flash"
-    assert stages["highlight_analyze"]["actor"]["model"] == "gemini-3.5-flash"
+    assert stages["highlight_analyze"]["model"] == "gemini-3.8-flash"
+    assert stages["highlight_analyze"]["actor"]["model"] == "gemini-3.8-flash"
     assert get_default("highlight-scan-critique-analyze") == original
 
 
@@ -252,3 +294,81 @@ async def test_interrupted_pre_r4_request_fails_visibly(
     assert lifecycle["job_state"] == "FAILED"
     assert "valid effective analysis settings snapshot" in lifecycle["error_message"]
     assert scheduled_jobs == []
+
+
+def test_production_dag_artifacts_match_advertised_model_and_native_preset():
+    from pathlib import Path
+    from service.analysis_preset import gemini38_preset
+    from service.analysis_gemini import qualified_model_versions
+    from bjj_analysis_core.requests import CoreConfigV1
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    saved = CoreConfigV1.model_validate_json((root / "gemini38.json").read_bytes())
+    assert saved == gemini38_preset()
+    versions = qualified_model_versions(json.loads((root / "qualified-models.json").read_text()))
+    # The DAG qualifies Hydrogen (founder 2026-11-15) and keeps 3.8 Flash for runs admitted
+    # with it; the legacy jobs path still advertises 3.8 Flash only.
+    assert versions == {"gemini-3.8-flash": frozenset({"gemini-3.8-flash"}),
+                        "gemini-4-hydrogen": frozenset({"gemini-4-hydrogen"})}
+    assert get_analysis_settings_capabilities().qualified_models == ("gemini-3.8-flash",)
+
+
+def test_mma_dag_preset_artifact_is_the_windowed_strike_workflow():
+    from pathlib import Path
+    from service.analysis_preset import gemini38_mma_strikes_preset
+    from bjj_analysis_core.packs import MMA_STRIKES
+    from bjj_analysis_core.requests import CoreConfigV1, prompt_bundle_sha256
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    saved = CoreConfigV1.model_validate_json((root / "gemini38-mma-strikes.json").read_bytes())
+    assert saved == gemini38_mma_strikes_preset()
+    assert saved.prompt_bundle_sha256 == prompt_bundle_sha256(MMA_STRIKES)
+    assert (saved.strike_census.thinking, saved.strike_census.fps) == ("high", 10)
+    assert saved.strike_audit.thinking == saved.knockdown_check.thinking == "low"
+    assert saved.position_critique_context == "proposed"
+
+
+def test_published_preset_files_are_the_generator_bytes():
+    """The S3 artifact digest is over these bytes; a model-equal rewrite is not enough."""
+    from pathlib import Path
+    from service.analysis_preset import PRESET_FILES, preset_bytes
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    assert sorted(p.name for p in root.glob("*.json") if p.name != "qualified-models.json") == sorted(PRESET_FILES)
+    for name, build in PRESET_FILES.items():
+        assert (root / name).read_bytes() == preset_bytes(build()), name
+
+
+def test_hydrogen_production_presets_are_exactly_what_vlm_studio_measured():
+    """Hydrogen everywhere, no check steps; MMA adds the ground re-scan (x-mma 2026-11-15)."""
+    from pathlib import Path
+    from bjj_analysis_core import MMA_GROUND_WORKFLOW_ID, MMA_SEQUENCES_WORKFLOW_ID, WORKFLOW_ID
+    from bjj_analysis_core.packs import BJJ, MMA_GROUND, MMA_SEQUENCES
+    from bjj_analysis_core.requests import prompt_bundle_sha256
+    from service import qa_core
+    from service.analysis_preset import (
+        hydrogen_mma_ground_preset,
+        hydrogen_mma_sequences_preset,
+        hydrogen_preset,
+        preset_bytes,
+    )
+
+    root = Path(__file__).resolve().parents[1] / "config" / "analysis"
+    for name, build, sport, workflow, pack in (
+        ("hydrogen.json", hydrogen_preset, "bjj_h", WORKFLOW_ID, BJJ),
+        ("hydrogen-mma-ground.json", hydrogen_mma_ground_preset, "mma_v2_hg", MMA_GROUND_WORKFLOW_ID, MMA_GROUND),
+        ("hydrogen-mma-sequences.json", hydrogen_mma_sequences_preset, "mma_seq_h", MMA_SEQUENCES_WORKFLOW_ID,
+         MMA_SEQUENCES),
+    ):
+        config = build()
+        assert (root / name).read_bytes() == preset_bytes(qa_core.build_config(sport, {}))
+        assert qa_core.SPORTS[sport][0] == workflow and config.prompt_bundle_sha256 == prompt_bundle_sha256(pack)
+        models = {getattr(config, n).model for n in type(config).model_fields
+                  if getattr(getattr(config, n), "model", None)}
+        assert models == {"gemini-4-hydrogen"}
+        assert all(getattr(config, n) is None for n in (
+            "position_critique", "technique_critique", "technique_validate", "strike_audit", "knockdown_check"))
+    assert hydrogen_mma_ground_preset().ground_rescan.fps == 5
+    sequences = hydrogen_mma_sequences_preset()
+    assert sequences.ground_rescan.fps == 5 and sequences.sequence_census.fps == 10
+    assert sequences.technique_scan is None and sequences.technique_analyze is None and sequences.strike_census is None

@@ -1,13 +1,8 @@
-"""S12 Phase 1b — service/taxonomy_mapper.py::build_axis_only_candidate
-(item 13, design §5.2/§5.5).
+"""service/taxonomy_mapper.py::build_axis_only_candidate.
 
-The axis-only mapping LOGIC is unit-tested here via a duck-typed
-``candidate_cls`` seam (never by fudging the ``None`` legacy values to make
-a stricter schema accept them) — this keeps the mapping tests independent of
-shared_lib's exact installed version. shared_lib 1.3.0 (installed) relaxed
-``VideoEventCandidate.action``/``.confidence``/etc. to ``Optional`` for
-``schema_version=3``, so the REAL class also constructs successfully now —
-see ``test_real_shared_lib_construction_succeeds`` below.
+The mapping LOGIC is unit-tested via a duck-typed ``candidate_cls`` seam,
+which keeps these tests independent of shared_lib's installed version; the
+real class is exercised in ``test_real_shared_lib_construction_succeeds``.
 """
 from __future__ import annotations
 
@@ -30,18 +25,12 @@ class _DuckCandidate:
     player_id: Optional[str] = None
     track_id: Optional[int] = None
     identity_uncertain: Optional[bool] = None
-    action: Optional[str] = None
-    technique: Optional[str] = None
-    result: Optional[str] = None
-    confidence: Optional[float] = None
     notes: str = ""
     schema_version: int = 1
     axis1_position: Optional[List[str]] = None
     axis3_action: Optional[List[str]] = None
     axis4_outcome: Optional[str] = None
     actor_sentinel: Optional[str] = None
-    technique_shortlist: Optional[str] = None
-    technique_guess: Optional[str] = None
 
 
 def _clip(**overrides) -> dict:
@@ -59,14 +48,11 @@ def _clip(**overrides) -> dict:
 # --------------------------------------------------------------------------- #
 # Mapping logic — always testable against ANY schema (duck-typed injection).
 # --------------------------------------------------------------------------- #
-def test_legacy_fields_are_none_never_fabricated():
+def test_passes_only_axis_and_actor_kwargs():
+    """``_DuckCandidate`` declares no legacy or technique-list field, so any
+    such kwarg raises ``TypeError``."""
     cand = taxonomy_mapper.build_axis_only_candidate(_clip(), "vid-1", candidate_cls=_DuckCandidate)
-    assert cand.action is None
-    assert cand.technique is None
-    assert cand.result is None
-    assert cand.confidence is None
-    assert cand.technique_shortlist is None
-    assert cand.technique_guess is None
+    assert cand.axis3_action == ["submission_arm_lock"]
 
 
 def test_schema_version_is_three():
@@ -99,7 +85,7 @@ def test_real_player_id_maps_to_grounded_identity_fields():
     assert cand.identity_uncertain is False
     assert cand.actor_sentinel is None
     assert cand.role == "Alice"
-    assert cand.track_id is None  # always None for v2 — no tracking exists
+    assert cand.track_id is None
 
 
 def test_sentinel_actor_maps_to_sentinel_fields_and_null_identity():
@@ -134,28 +120,15 @@ def test_no_grounded_identity_at_all_falls_back_to_unknown_role():
     assert cand.role == "Unknown"
 
 
-def test_never_calls_dual_emit_legacy_fields(monkeypatch):
-    """Regression guard for the module docstring's contract: the axis-only
-    path must NEVER touch the dual-emit legacy tables."""
-    def _boom(*a, **kw):
-        raise AssertionError("build_axis_only_candidate must never call dual_emit_legacy_fields")
-
-    monkeypatch.setattr(taxonomy_mapper, "dual_emit_legacy_fields", _boom)
-    taxonomy_mapper.build_axis_only_candidate(_clip(), "vid-1", candidate_cls=_DuckCandidate)  # must not raise
-
-
 # --------------------------------------------------------------------------- #
-# Real shared_lib construction — shared_lib 1.3.0 (installed) relaxed
-# action/technique/result/confidence to Optional for schema_version=3.
+# Real shared_lib construction.
 # --------------------------------------------------------------------------- #
 def test_real_shared_lib_construction_succeeds():
-    """The REAL (default, non-duck-typed) VideoEventCandidate class now
-    constructs successfully with this function's None legacy values —
-    shared_lib 1.3.0's axis-only relaxation (§8.1) has landed."""
+    """The REAL (default, non-duck-typed) VideoEventCandidate class
+    constructs successfully from this function's kwargs."""
     cand = taxonomy_mapper.build_axis_only_candidate(_clip(), "vid-1")
     assert cand.schema_version == 3
-    assert cand.action is None
-    assert cand.confidence is None
+    assert cand.axis3_action == ["submission_arm_lock"]
 
 
 # --------------------------------------------------------------------------- #
@@ -187,7 +160,3 @@ def test_maps_the_single_call_executor_output_shape():
     assert cand.identity_uncertain is False
     assert cand.actor_sentinel is None
     assert cand.notes == "arm trapped, hips elevated | blue gi matches reference image 1"
-    assert cand.action is None
-    assert cand.technique is None
-    assert cand.result is None
-    assert cand.confidence is None

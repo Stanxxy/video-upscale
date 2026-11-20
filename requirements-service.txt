@@ -12,6 +12,7 @@ opencv-python
 Pillow
 numpy
 google-genai
+httpx>=0.28.1,<1
 # QA VLM Studio (server-side YouTube frame grab for /qa/vlm-image): requires
 # system ffmpeg on PATH in addition to this package.
 yt-dlp

@@ -52,6 +52,12 @@ def _ddl_statements(keyspace: str) -> list[str]:
         f"ALTER TABLE {ks}.job_lifecycle ADD chunks_total int",
         f"ALTER TABLE {ks}.job_lifecycle ADD highlights_found_so_far int",
         f"ALTER TABLE {ks}.job_lifecycle ADD attribution_metrics_json text",
+        # S39 owner resume budget (service/analysis_run_recovery.py).
+        (
+            f"CREATE TABLE IF NOT EXISTS {ks}.analysis_run_resumes ("
+            "job_id text, ordinal int, command_id text, requested_at timestamp, "
+            "PRIMARY KEY (job_id, ordinal))"
+        ),
         (
             f"CREATE TABLE IF NOT EXISTS {ks}.job_recovery_index ("
             "recovery_state text,"

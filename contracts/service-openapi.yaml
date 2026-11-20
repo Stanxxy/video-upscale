@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: BJJ Video Tracking & Analysis Service
+  title: BJJ Video Analysis Service
   description: |
-    REST API for the vision engine (hybrid tracking, upscaling, Gemini analysis).
+    REST API for the vision engine (Gemini highlight analysis).
     Consumed by `bjj-vision-backend` and QA tooling.
 
     **Live docs:** FastAPI serves interactive Swagger UI at `/docs` and ReDoc at `/redoc` when the service is running.
@@ -22,7 +22,7 @@ servers:
 
 tags:
   - name: Jobs
-    description: Create, query, cancel, and resume analysis jobs
+    description: Create, query, and cancel analysis jobs
   - name: Streaming
     description: Server-Sent Events for job progress
   - name: System
@@ -32,12 +32,10 @@ paths:
   /track:
     post:
       tags: [Jobs]
-      summary: Start a new tracking / analysis job
+      summary: Start a new analysis job
       description: |
         Creates a job, persists lifecycle + request to Keyspaces (when configured), and schedules asynchronous work.
-        Returns immediately with `pending` status.
-
-        Use **only** for new jobs — not for human-in-the-loop resume (use `POST /jobs/{job_id}/detection_response` or `POST /jobs/{job_id}/resume`).
+        Returns immediately with `pending` status. An interrupted job resumes under the same `job_id` after an engine restart; there is no resume endpoint.
       operationId: createTrackJob
       requestBody:
         required: true
@@ -73,7 +71,7 @@ paths:
       summary: Get job status
       description: |
         Reads Keyspaces lifecycle first; falls back to in-memory job store if no lifecycle row exists.
-        `status` is the Keyspaces `job_state` in lowercase (e.g. `running`, `completed`, `awaiting_correction`).
+        `status` is the Keyspaces `job_state` in lowercase (e.g. `running`, `completed`). A row left by the retired local tracking pipeline reads as `failed` with an explanatory `error_message`.
       operationId: getJob
       parameters:
         - $ref: "#/components/parameters/JobId"
@@ -95,7 +93,7 @@ paths:
       summary: Cancel a job
       description: |
         Marks the job cancelled, writes a cancellation checkpoint, cancels the local asyncio task if running.
-        If the job was already replaced by a new job (`replacement_job_id`), returns 409 — cancel the latest job instead.
+        If the job row carries a `replacement_job_id` (historical rows only), returns 409 — cancel the latest job instead.
       operationId: cancelJob
       parameters:
         - $ref: "#/components/parameters/JobId"
@@ -113,7 +111,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
-          description: Job has a replacement; cancel the replacement job
+          description: Job row has a replacement (historical rows only); cancel the replacement job
           content:
             application/json:
               schema:
@@ -138,8 +136,7 @@ paths:
 
         | `event` | When |
         |--------|------|
-        | `progress` | State or progress changed (`percent` delta ≥ 0.5 or lifecycle state changed). Payload includes `type`, `state` (pipeline stage), `phase` (`stage_message`), `percent`, `frame_idx`, and `total_frames`; highlight-v2 rows add chunk/count/attribution fields when present. |
-        | `detection_needed` | Job state is `AWAITING_CORRECTION` and a checkpoint has `pending_detection`. |
+        | `progress` | State or progress changed (`percent` delta ≥ 0.5 or lifecycle state changed). Payload includes `type`, `state` (pipeline stage), `phase` (`stage_message`), `percent`, `frame_idx`, and `total_frames`; chunk/count/attribution fields are added when present. |
         | `completed` | Job reached `COMPLETED`. Stream ends. |
         | `job_error` | Job `FAILED` / `CANCELLED`, job not found, or repeated internal errors. Stream ends. |
         | `interrupted` | Job state is `INTERRUPTED`. Stream ends. |
@@ -165,90 +162,6 @@ paths:
               schema:
                 type: string
                 description: SSE framing — parse `event:` and `data:` lines per HTML spec
-
-  /jobs/{job_id}/detection_response:
-    post:
-      tags: [Jobs]
-      summary: Submit corrected bounding boxes (human-in-the-loop)
-      description: |
-        For jobs in `AWAITING_CORRECTION`. Creates a **new** job that continues the pipeline with verified boxes,
-        links it as the replacement, and starts work. Returns the new `job_id`.
-      operationId: submitDetectionResponse
-      parameters:
-        - $ref: "#/components/parameters/JobId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ResumeRequest"
-      responses:
-        "200":
-          description: Replacement job created and scheduled
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ResumeJobResponse"
-        "404":
-          description: Job or original request not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Wrong state, replacement already exists, or replacement claim failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Persistence failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /jobs/{job_id}/resume:
-    post:
-      tags: [Jobs]
-      summary: Resume with corrected boxes (alias)
-      description: |
-        Same behavior as `POST /jobs/{job_id}/detection_response`. Called by the analysis service
-        `POST /checkpoints/{job_id}/correct` flow on the backend side.
-      operationId: resumeJob
-      parameters:
-        - $ref: "#/components/parameters/JobId"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ResumeRequest"
-      responses:
-        "200":
-          description: Replacement job created and scheduled
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ResumeJobResponse"
-        "404":
-          description: Job or original request not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Wrong state, replacement already exists, or replacement claim failed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Persistence failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
 
   /health:
     get:
@@ -295,26 +208,6 @@ components:
           type: string
           nullable: true
           description: Populated when submitted via platform; optional for engine-direct jobs
-        sam2_model:
-          type: string
-          default: facebook/sam2.1-hiera-base-plus
-        processing_mode:
-          type: string
-          enum:
-            - standard
-            - fast
-          default: standard
-          description: >
-            Controls pipeline quality/speed tradeoff.
-            "standard" (default): SAM2 base-plus, Real-ESRGAN upscale, full Gemini context chain.
-            "fast": SAM2-tiny, bicubic upscale, high-fanout Gemini (no context chain). Accuracy ≥ 80% of standard.
-        detection_threshold:
-          type: number
-          format: float
-          default: 0.5
-        yolo_model:
-          type: string
-          default: yolo26m
         start_time:
           type: string
           nullable: true
@@ -322,33 +215,6 @@ components:
         end_time:
           type: string
           nullable: true
-        box_a:
-          type: array
-          items:
-            type: number
-          minItems: 4
-          maxItems: 4
-          nullable: true
-          description: "[x1, y1, x2, y2] xyxy — skips detection if provided with box_b"
-        box_b:
-          type: array
-          items:
-            type: number
-          minItems: 4
-          maxItems: 4
-          nullable: true
-        step_size:
-          type: integer
-          nullable: true
-        max_history:
-          type: integer
-          nullable: true
-        max_missing_frames:
-          type: integer
-          nullable: true
-        skip_upscale:
-          type: boolean
-          default: false
         video_id:
           type: string
           format: uuid
@@ -359,73 +225,32 @@ components:
           default: 1
         analyzer_mode:
           $ref: "#/components/schemas/AnalyzerMode"
-        method:
-          type: string
-          default: esrgan
         sns_topic_arn:
           type: string
           nullable: true
-        player_references:
+        athlete_bindings:
           type: array
+          nullable: true
+          description: Reference crops Gemini grounds `actor_player_id` to.
           items:
             type: object
-            additionalProperties:
-              type: string
-          nullable: true
-        resume_from_job_id:
+            required: [player_id, player_name]
+            properties:
+              player_id: {type: string}
+              player_name: {type: string}
+              s3_key: {type: string, nullable: true}
+              track_id: {type: integer, nullable: true, description: Accepted, unused}
+        analysis_model:
           type: string
           nullable: true
-          description: Load checkpoints from this job in Keyspaces
-        resume_tracking_s3_key:
+        analysis_media_resolution:
           type: string
           nullable: true
-        resume_from_frame:
+        analysis_fps:
           type: integer
           nullable: true
-        analysis_raw_s3_key:
+        analysis_thinking:
           type: string
-          nullable: true
-        analysis_window_count:
-          type: integer
-          nullable: true
-        analysis_current_context:
-          type: string
-          nullable: true
-        resume_existing_upload_tracking_key:
-          type: string
-          nullable: true
-        resume_existing_upload_analysis_key:
-          type: string
-          nullable: true
-        resume_existing_upload_annotated_key:
-          type: string
-          nullable: true
-        resume_terminal_publish_done:
-          type: boolean
-          default: false
-
-    ResumeRequest:
-      type: object
-      required: [box_a, box_b]
-      properties:
-        box_a:
-          type: array
-          items:
-            type: number
-          minItems: 4
-          maxItems: 4
-          description: Athlete A bounding box [x1, y1, x2, y2] xyxy
-        box_b:
-          type: array
-          items:
-            type: number
-          minItems: 4
-          maxItems: 4
-          description: Athlete B bounding box [x1, y1, x2, y2] xyxy
-        player_mapping:
-          type: object
-          additionalProperties:
-            type: string
           nullable: true
 
     TrackResponse:
@@ -448,7 +273,7 @@ components:
           type: string
           description: |
             Lowercase Keyspaces job lifecycle state. Typical values include
-            `pending`, `running`, `awaiting_correction`, `interrupted`, `completed`, `failed`, `cancelled`.
+            `pending`, `running`, `interrupted`, `completed`, `failed`, `cancelled`.
         progress_percent:
           type: number
           format: float
@@ -483,20 +308,6 @@ components:
           example: cancelled
         job_id:
           type: string
-
-    ResumeJobResponse:
-      type: object
-      required: [status, job_id, origin_job_id]
-      properties:
-        status:
-          type: string
-          example: resumed
-        job_id:
-          type: string
-          description: New replacement job ID
-        origin_job_id:
-          type: string
-          description: Prior job that was awaiting correction
 
     HealthResponse:
       type: object

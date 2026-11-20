@@ -22,8 +22,7 @@ of one 80-way forced choice.
 **Objective:**
 Analyze a sequence of video frames from a BJJ match and emit one tag per
 distinct grappling exchange. Use ONLY the enum values below for the `position`,
-`action_class`, and `outcome` fields. `actor` and `specific_technique_guess` are
-free text, never gated by the enum axes.
+`action_class`, and `outcome` fields. `actor` is free text, never gated by the enum axes.
 
 ---
 
@@ -92,12 +91,6 @@ labels without losing any decision a coach actually makes.
 | `unsuccessful` | Attempt didn't land |
 | `unclear` | Scramble/contested moment resolved without a clean read |
 
-## Optional bonus field — `specific_technique_guess` (free text, ungated)
-
-You may add a specific-name guess (e.g. "possibly a kimura," "looked like De La
-Riva sweep"). This is low-stakes annotation color for the user to confirm/reject
-in one click — it NEVER gates or defines the Axis 1/3/4 enum labels above.
-
 ## Output contract
 
 Return ONLY valid JSON matching this shape (see the request's response schema
@@ -114,7 +107,6 @@ for the authoritative field list/types):
       "actor": "string (or 'contested'/'unclear')",
       "action_class": "<Axis 3 enum value>",
       "outcome": "<Axis 4 enum value>",
-      "specific_technique_guess": "string (optional)",
       "confidence": 0.0
     }
   ]

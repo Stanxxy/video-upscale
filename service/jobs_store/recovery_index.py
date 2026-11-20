@@ -18,8 +18,6 @@ class RecoveryIndexMixin:
         recovery_state = (
             "ACTIVE"
             if state in (JobState.PENDING, JobState.RUNNING, JobState.INTERRUPTED)
-            else "AWAITING_CORRECTION"
-            if state == JobState.AWAITING_CORRECTION
             else "TERMINAL"
         )
         now = datetime.now(timezone.utc)

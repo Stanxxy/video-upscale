@@ -6,7 +6,7 @@ import logging
 
 from fastapi.responses import StreamingResponse
 
-from service.analysis_keyspaces_enums import JobState, PipelineStage
+from service.analysis_keyspaces_enums import JobState
 from service.routes import state as route_state
 
 logger = logging.getLogger("service.routes")
@@ -39,14 +39,7 @@ async def job_events_sse(job_id: str):
                     last_state = state
                     last_pct = pct
 
-                    if state == JobState.AWAITING_CORRECTION.value:
-                        for stage_name in (PipelineStage.DETECT, PipelineStage.TRACK):
-                            cp = await route_state._jobs_store.get_checkpoint(job_id, stage_name)
-                            if cp and cp.get("checkpoint_data", {}).get("pending_detection"):
-                                det = cp["checkpoint_data"]["pending_detection"]
-                                yield f"event: detection_needed\ndata: {json.dumps(det)}\n\n"
-                                break
-                    elif state == JobState.COMPLETED.value:
+                    if state == JobState.COMPLETED.value:
                         yield f"event: completed\ndata: {{\"job_id\": \"{job_id}\"}}\n\n"
                         return
                     elif state in (JobState.FAILED.value, JobState.CANCELLED.value):
@@ -67,14 +60,10 @@ async def job_events_sse(job_id: str):
                         phase = lifecycle.get("stage_message")
                         if lifecycle.get("pipeline_kind") == "highlight_v2" and phase:
                             progress["phase"] = phase
-                        # S12 Phase 1b (design §1.2): additive, v2-only keys
-                        # — only present once run_highlight_job has actually
-                        # written them (chunk_index/chunks_total/
-                        # highlights_found_so_far). A dormant tracking job's
-                        # lifecycle row never has these columns set, so this
-                        # branch is a no-op for it — byte-identical prior
-                        # payload shape for any consumer that only reads
-                        # state/percent/frame_idx/total_frames.
+                        # S12 Phase 1b (design §1.2): additive keys — only
+                        # present once run_highlight_job has actually written
+                        # them (chunk_index/chunks_total/
+                        # highlights_found_so_far).
                         chunk_index = lifecycle.get("chunk_index")
                         if chunk_index is not None:
                             progress["chunk_index"] = chunk_index

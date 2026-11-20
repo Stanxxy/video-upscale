@@ -56,10 +56,10 @@ logger = logging.getLogger("service.routes")
 # default. Module-level singular constants below are the task DEFAULTS used
 # when a request omits ``model``.
 # --------------------------------------------------------------------------- #
-EVENT_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"]
+EVENT_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"]
 CHAT_MODEL = EVENT_MODELS[0]  # default for /qa/vlm-chat
 
-DETECT_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"]
+DETECT_MODELS = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"]
 DETECT_MODEL = DETECT_MODELS[0]  # default box-only detect tier
 # 404/model-unavailable falls back once to this fixed tier, regardless of
 # which allowlisted model the caller requested (unrelated to user choice).
@@ -234,6 +234,11 @@ def thinking_config_for(model_id: str, ui_level: Optional[str]) -> Optional[type
     than a budget/level combination it would 400 on. Never set both
     ``thinking_level`` and ``thinking_budget`` on the same config.
     """
+    if model_id == "gemini-3.8-flash":
+        if ui_level in ("off", "minimal"):
+            raise HTTPException(status_code=400, detail="gemini-3.8-flash requires low, medium or high thinking")
+        if ui_level is None:
+            return None
     if model_id in IMAGE_MODELS:
         return None
     if ui_level in (None, "off"):

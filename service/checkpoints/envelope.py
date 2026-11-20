@@ -25,13 +25,11 @@ class WorkerStateSnapshot(NamedTuple):
 def make_envelope(
     *,
     worker_state: WorkerStateSnapshot,
-    pending_detection: dict[str, Any] | None = None,
     artifacts: dict[str, Any] | None = None,
     **extras: Any,
 ) -> dict[str, Any]:
     cp: dict[str, Any] = {
         "schema_version": 1,
-        "pending_detection": pending_detection,
         "artifacts": dict(artifacts or {}),
         "worker_state": worker_state.to_dict(),
     }

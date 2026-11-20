@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VLM Studio · Production core</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --ink:#e8ebf0; --muted:#8d95a5; --accent:#e5484d; --ok:#3fb950; --warn:#d29922; --blue:#4c8dff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:13px/1.45 ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:15px; margin:0; }
+  header a { color:var(--muted); }
+  main { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:12px; padding:12px 16px; }
+  @media (max-width:1000px) { main { grid-template-columns:minmax(0,1fr); } }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; min-width:0; }
+  h2 { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 8px; }
+  label { display:block; color:var(--muted); font-size:11px; margin:6px 0 2px; }
+  input, select, button { font:inherit; color:var(--ink); background:#0c0e12; border:1px solid var(--line); border-radius:6px; padding:6px 8px; min-width:0; }
+  button { cursor:pointer; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:white; font-weight:600; }
+  button:disabled { opacity:.5; cursor:default; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+  .row > * { flex:1 1 120px; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+  .seg button { border:0; border-radius:0; background:transparent; }
+  .seg button[aria-pressed=true] { background:var(--ink); color:#111; font-weight:600; }
+  .player { position:relative; width:100%; aspect-ratio:16/9; background:black; border-radius:6px; overflow:hidden; }
+  .player video { position:absolute; inset:0; width:100%; height:100%; }
+  .muted { color:var(--muted); }
+  .err { color:#ff8b8b; white-space:pre-wrap; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  th, td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { color:var(--muted); font-weight:500; font-size:11px; }
+  .table-wrap { overflow-x:auto; }
+  .fighters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  @media (max-width:520px) { .fighters { grid-template-columns:minmax(0,1fr); } }
+  .fighter { border:1px solid var(--line); border-radius:6px; padding:8px; min-width:0; }
+  .frame { position:relative; margin-top:6px; user-select:none; touch-action:none; }
+  .frame img { width:100%; display:block; border-radius:4px; }
+  .frame .box { position:absolute; border:2px solid var(--accent); background:#e5484d22; pointer-events:none; }
+  .crop-preview { height:72px; margin-top:6px; border-radius:4px; }
+  .lane { position:relative; height:26px; background:#0c0e12; border:1px solid var(--line); border-radius:4px; margin:4px 0; overflow:hidden; }
+  .lane > div { position:absolute; top:0; bottom:0; border-right:1px solid #0008; font-size:10px; padding:2px 3px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; cursor:pointer; }
+  .lane .tick { width:2px; padding:0; border:0; }
+  .lane-label { font-size:11px; color:var(--muted); }
+  .pill { display:inline-block; padding:1px 6px; border-radius:10px; border:1px solid var(--line); cursor:pointer; font-variant-numeric:tabular-nums; }
+  .pill:hover { border-color:var(--ink); }
+  .events { max-height:520px; overflow:auto; }
+  .ev { display:grid; grid-template-columns:auto minmax(0,1fr); gap:2px 10px; padding:6px 4px; border-bottom:1px solid var(--line); }
+  .ev .title { font-weight:600; }
+  .ev .why { color:var(--muted); grid-column:2; white-space:pre-wrap; }
+  .ev[data-rejected=true] { opacity:.45; }
+  .tag { font-size:10px; padding:0 5px; border-radius:3px; border:1px solid var(--line); color:var(--muted); margin-left:4px; }
+  .runs { max-height:180px; overflow:auto; }
+  .runs button { width:100%; text-align:left; margin:2px 0; display:flex; gap:8px; justify-content:space-between; }
+  .sr-head { display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; }
+  .sr-head > * { flex:1 1 160px; min-width:0; }
+  .sr-sum { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:6px; margin:8px 0; }
+  .sr-sum div { border:1px solid var(--line); border-radius:6px; padding:6px 8px; }
+  .sr-sum b { display:block; font-size:16px; font-variant-numeric:tabular-nums; }
+  .sr-cur { border:1px solid var(--line); border-radius:8px; padding:10px; margin-top:8px; display:flex; flex-direction:column; gap:8px; }
+  .sr-cur .top { display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between; }
+  .sr-cmp { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+  @media (max-width:520px) { .sr-cmp { grid-template-columns:minmax(0,1fr); } }
+  .sr-side { border:1px solid var(--line); border-radius:6px; padding:8px; min-width:0; }
+  .sr-side h3 { margin:0 0 4px; font-size:11px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:.05em; }
+  .sr-side.none { opacity:.55; }
+  .sr-side .what { font-weight:600; }
+  .sr-side .why { color:var(--muted); white-space:pre-wrap; margin-top:4px; }
+  .sr-verdicts { display:flex; flex-wrap:wrap; gap:6px; }
+  .sr-verdicts button { flex:1 1 auto; }
+  .sr-verdicts button[aria-pressed=true] { background:var(--ink); color:#111; font-weight:600; }
+  .sr-verdicts kbd, .sr-keys kbd { font:10px ui-monospace,monospace; border:1px solid var(--line); border-radius:3px; padding:0 3px; margin-right:4px; color:var(--muted); }
+  .sr-keys { color:var(--muted); font-size:11px; }
+  .chain { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
+  .chain span { border:1px solid var(--line); border-radius:4px; padding:1px 6px; font-size:11px; color:var(--muted); }
+  .sr-flags { display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; }
+  .sr-flags label { display:flex; gap:6px; align-items:center; margin:0; color:var(--ink); font-size:12px; }
+  .sr-flags input[type=number] { width:56px; }
+  .chain span.here { border-color:var(--ink); color:var(--ink); font-weight:600; }
+  .sr-list { position:relative; max-height:300px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px; }
+  .sr-list button { width:100%; display:grid; grid-template-columns:62px 92px minmax(0,1fr) auto; gap:8px; text-align:left; border:0; border-bottom:1px solid var(--line); border-radius:0; background:transparent; padding:5px 8px; }
+  .sr-list button[aria-current=true] { background:#ffffff14; }
+  .src { font-size:10px; padding:1px 5px; border-radius:3px; border:1px solid var(--line); white-space:nowrap; }
+  .sq-a { color:#e5484d; border-color:#e5484d66; } .sq-b { color:#4c8df6; border-color:#4c8df666; }
+  .src-both { color:var(--ok); border-color:#3fb95066; } .src-a { color:var(--blue); border-color:#4c8dff66; } .src-b { color:var(--warn); border-color:#d2992266; } .src-added { color:#d2a8ff; border-color:#d2a8ff66; }
+  .vd { font-size:11px; color:var(--muted); white-space:nowrap; } .vd.real { color:var(--ok); } .vd.fake { color:#ff8b8b; }
+  .state-succeeded { color:var(--ok); } .state-failed, .state-interrupted { color:#ff8b8b; } .state-running, .state-preparing, .state-queued { color:var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>VLM Studio · Production core</h1>
+  <span class="muted">Runs the exact production analysis DAG (BJJ or MMA pack) on a YouTube video, with real Gemini calls.</span>
+  <a href="vlm_studio.html">← QA pipelines</a>
+  <span style="flex:1"></span>
+  <label style="margin:0">Backend <input id="backend" value="http://localhost:8000" size="22"></label>
+</header>
+<main>
+  <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
+    <section>
+      <h2>Video</h2>
+      <div class="row">
+        <div style="flex:3 1 220px"><label for="yt-input">YouTube URL or id</label><input id="yt-input" style="width:100%" placeholder="https://www.youtube.com/watch?v=…"></div>
+        <button id="fetch" style="flex:0 0 auto">Load</button>
+      </div>
+      <p id="media-status" class="muted"></p>
+      <div class="player"><video id="vid" controls playsinline preload="metadata"></video></div>
+      <p class="muted" style="margin:6px 0 0">Playhead <span id="now">0:00.0</span></p>
+    </section>
+    <section id="results-section" hidden>
+      <h2>Results <span id="results-meta" class="muted" style="text-transform:none; letter-spacing:0"></span></h2>
+      <div class="row" style="align-items:center">
+        <div class="seg" id="ev-filter" style="flex:0 0 auto">
+          <button data-f="all" aria-pressed="true">All</button><button data-f="strike" aria-pressed="false">Strikes</button><button data-f="other" aria-pressed="false">Grappling</button>
+        </div>
+        <span style="flex:1"></span>
+        <button id="dl" style="flex:0 0 auto">Download JSON</button>
+      </div>
+      <div class="lane-label">Positions</div><div class="lane" id="lane-pos"></div>
+      <div class="lane-label" id="lane-a-label">Fighter A</div><div class="lane" id="lane-a"></div>
+      <div class="lane-label" id="lane-b-label">Fighter B</div><div class="lane" id="lane-b"></div>
+      <div class="events" id="events"></div>
+    </section>
+  </div>
+  <div style="display:flex; flex-direction:column; gap:12px; min-width:0">
+    <section id="sq">
+      <h2>Sequence review <span class="muted" style="text-transform:none; letter-spacing:0">one run's sequences, one at a time: flag what is wrong, say what really happened</span></h2>
+      <div class="sr-head">
+        <div><label for="sq-run">Run</label><select id="sq-run" style="width:100%"></select></div>
+        <button id="sq-load" style="flex:0 0 auto">Review this run</button>
+      </div>
+      <p id="sq-msg" class="muted"></p>
+      <div id="sq-body" hidden>
+        <div class="sr-sum" id="sq-sum"></div>
+        <div class="row" style="align-items:center; flex-wrap:wrap; gap:8px">
+          <div class="seg" id="sq-filter" style="flex:0 1 auto; flex-wrap:wrap; max-width:100%"><button data-f="all" aria-pressed="true">All</button><button data-f="todo" aria-pressed="false">Not reviewed</button><button data-f="a" aria-pressed="false">Fighter A</button><button data-f="b" aria-pressed="false">Fighter B</button></div>
+          <div class="seg" id="sq-speed" style="flex:0 0 auto"><button data-v="0.25" aria-pressed="false">¼×</button><button data-v="0.5" aria-pressed="true">½×</button><button data-v="1" aria-pressed="false">1×</button></div>
+        </div>
+        <div class="sr-cur" id="sq-cur"></div>
+        <div class="sr-list" id="sq-list"></div>
+        <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">A sequence the run missed</summary>
+          <div class="row" style="margin-top:6px; flex-wrap:wrap; gap:6px">
+            <select id="sq-add-actor"></select>
+            <input id="sq-add-note" placeholder="What happened (e.g. jab, jab, low kick)" style="flex:1 1 180px; min-width:0">
+            <button id="sq-add" style="flex:0 0 auto">Add at playhead</button>
+          </div>
+          <p class="muted" style="margin:4px 0 0">Pause where the sequence starts, then add it.</p>
+        </details>
+      </div>
+    </section>
+    <details id="sr-wrap"><summary class="muted" style="cursor:pointer; padding:4px 0">Compare two runs technique by technique (older review)</summary>
+    <section id="sr">
+      <h2>Technique review <span class="muted" style="text-transform:none; letter-spacing:0">two runs' techniques (strikes, takedowns, clinch, ground) one by one; your verdicts become ground truth</span></h2>
+      <div class="sr-head">
+        <div><label for="sr-pair">Prepared comparison</label><select id="sr-pair" style="width:100%"><option value="">Choose a clip…</option></select></div>
+        <div><label for="sr-a">Run A</label><select id="sr-a" style="width:100%"></select></div>
+        <div><label for="sr-b">Run B</label><select id="sr-b" style="width:100%"></select></div>
+        <button id="sr-load" style="flex:0 0 auto">Compare</button>
+      </div>
+      <p id="sr-msg" class="muted"></p>
+      <div id="sr-body" hidden>
+        <div class="sr-sum" id="sr-sum"></div>
+        <div class="row" style="align-items:center">
+          <div class="seg" id="sr-filter" style="flex:0 1 auto; flex-wrap:wrap; max-width:100%"><button data-f="all" aria-pressed="true">All</button><button data-f="both" aria-pressed="false">Both</button><button data-f="a" aria-pressed="false">A only</button><button data-f="b" aria-pressed="false">B only</button><button data-f="grappling" aria-pressed="false">Grappling</button><button data-f="todo" aria-pressed="false">Not reviewed</button></div>
+          <span style="flex:1"></span>
+          <div class="seg" id="sr-speed" style="flex:0 0 auto"><button data-v="0.25" aria-pressed="false">¼×</button><button data-v="0.5" aria-pressed="true">½×</button><button data-v="1" aria-pressed="false">1×</button></div>
+        </div>
+        <div class="sr-cur" id="sr-cur"></div>
+        <div class="sr-list" id="sr-list"></div>
+        <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">A technique neither run found</summary>
+          <div class="row" style="margin-top:6px; align-items:center">
+            <select id="sr-add-actor"></select>
+            <select id="sr-add-verdict"><option value="landed">landed</option><option value="missed">missed</option><option value="contact_unclear">contact unclear</option></select>
+            <input id="sr-add-note" placeholder="What was it? (e.g. double leg)" style="flex:1 1 160px; min-width:0">
+            <button id="sr-add" style="flex:0 0 auto">Add at playhead</button>
+          </div>
+          <p class="muted" style="margin:4px 0 0">Pause on the moment of contact (or the punch's full extension), then add it.</p>
+        </details>
+      </div>
+    </section>
+    </details>
+    <section>
+      <h2>Run <span id="run-state"></span></h2>
+      <p id="run-meta" class="muted"></p>
+      <div class="table-wrap"><table id="progress"></table></div>
+      <div class="row" style="margin-top:8px"><button id="resume" hidden>Resume (retries failed calls only)</button><button id="cancel" hidden>Cancel</button></div>
+      <p id="run-error" class="err"></p>
+    </section>
+    <section>
+      <h2>Previous runs</h2>
+      <div class="runs" id="runs"></div>
+    </section>
+    <section>
+      <h2>Run setup</h2>
+      <label>Workflow</label>
+      <div class="seg" id="sport" style="flex-wrap:wrap"><button data-v="mma_v2" aria-pressed="true" title="Production MMA DAG: windowed strike census + one audit per 20 s window + knockdown check; grappling keeps the per-candidate chain">MMA (production)</button><button data-v="mma" aria-pressed="false" title="MMA v1 baseline: every strike goes through critique, analyze and validate">MMA v1</button><button data-v="mma_v2_census" aria-pressed="false" title="Windowed strike census without the audit">MMA v2, no audit</button><button data-v="bjj" aria-pressed="false">BJJ</button><button data-v="mma_v2_h" aria-pressed="false" title="Experiment: Gemini 4 Hydrogen on every model step, no check steps">MMA, Hydrogen no checks</button><button data-v="bjj_h" aria-pressed="false" title="Experiment: Gemini 4 Hydrogen on every model step, no check steps">BJJ, Hydrogen no checks</button><button data-v="mma_v2_hg" aria-pressed="false" title="Experiment: Hydrogen no checks + ground re-scan (who is on top, 5 fps, 5 s look-back)">MMA, Hydrogen + ground re-scan</button><button data-v="mma_v2_g" aria-pressed="false" title="Experiment: production MMA preset + Hydrogen ground re-scan">MMA + ground re-scan</button><button data-v="mma_seq_h" aria-pressed="false" title="Experiment: technique sequences. Hydrogen, no checks, ground re-scan; one census per 20 s window returns every fighter's chain of techniques">MMA sequences (Hydrogen)</button></div>
+      <label for="all-model">Model for every step</label>
+      <select id="all-model"><option value="">Preset (per step)</option><option>gemini-3.8-flash</option><option>gemini-4-hydrogen</option></select>
+      <div class="row">
+        <div><label for="start">Scope start (m:ss)</label><input id="start" value="0:00"></div>
+        <button id="start-now" style="flex:0 0 auto">= playhead</button>
+        <div><label for="end">Scope end (m:ss)</label><input id="end" value="1:00"></div>
+        <button id="end-now" style="flex:0 0 auto">= playhead</button>
+      </div>
+      <label>Fighters (identity crops: pause on a clear frame, Grab, then drag a box around the fighter)</label>
+      <div class="fighters">
+        <div class="fighter" data-i="0"><input class="name" value="Fighter A" style="width:100%"><button class="grab" style="margin-top:6px">Grab frame at playhead</button><div class="frame"></div></div>
+        <div class="fighter" data-i="1"><input class="name" value="Fighter B" style="width:100%"><button class="grab" style="margin-top:6px">Grab frame at playhead</button><div class="frame"></div></div>
+      </div>
+      <details style="margin-top:8px"><summary class="muted">Node settings (defaults = production preset)</summary>
+        <div class="table-wrap"><table id="nodes-cfg"></table></div>
+        <label style="display:flex; gap:6px; align-items:center; color:var(--ink); font-size:12px; margin-top:8px"><input type="checkbox" id="par-pos" style="width:auto"> Position checks in parallel (each sees the scan's previous state; preset: <span id="par-pos-preset">—</span>)</label>
+        <div class="row"><div><label for="parallel">Parallel calls</label><input id="parallel" type="number" min="1" max="16" value="6"></div><div><label for="label">Label</label><input id="label" placeholder="optional"></div></div>
+      </details>
+      <p id="estimate" class="muted"></p>
+      <button id="run" class="primary">Run analysis</button>
+      <p id="run-err" class="err"></p>
+    </section>
+  </div>
+</main>
+<script>
+const ALL_NODES = ['position_scan','ground_rescan','position_critique','technique_scan','technique_critique','technique_analyze','technique_validate','strike_census','strike_audit','knockdown_check'];
+const nodes = () => ALL_NODES.filter(n => state.config && state.config[n]);
+const $ = id => document.getElementById(id);
+const api = (path, opts={}) => fetch($('backend').value.replace(/\/$/,'') + path, {headers:{'content-type':'application/json'}, ...opts})
+  .then(async r => { const body = r.headers.get('content-type')?.includes('json') ? await r.json() : await r.blob(); if (!r.ok) throw new Error(body?.detail ? (typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)) : r.statusText); return body; });
+const fmt = ms => { const s = Math.max(0, ms) / 1000, m = Math.floor(s / 60); return m + ':' + (s - m * 60).toFixed(1).padStart(4, '0'); };
+const parseT = v => { const p = String(v).trim().split(':').map(Number); if (p.some(isNaN)) return NaN; return Math.round((p.length === 2 ? p[0] * 60 + p[1] : p[0]) * 1000); };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const state = { youtubeId:null, duration:null, sport:'mma_v2', config:null, overrides:{}, fighters:[{},{}], runId:null, poll:null, result:null, filter:'all' };
+const video = () => $('vid');
+let stopAt = null;
+
+function ytId(v) { const m = String(v).match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([A-Za-z0-9_-]{11})/); return m ? m[1] : (/^[A-Za-z0-9_-]{11}$/.test(v.trim()) ? v.trim() : null); }
+// The player plays the exact local file the run analyses, so every time lines up with the model's clock.
+function nowMs() { return Math.round((video().currentTime || 0) * 1000); }
+function seek(ms, untilMs) { if (!video().src) return; video().currentTime = Math.max(0, ms) / 1000; video().play(); stopAt = untilMs ?? null; }
+setInterval(() => { const t = nowMs(); $('now').textContent = fmt(t); if (stopAt != null && t >= stopAt) { video().pause(); stopAt = null; } }, 100);
+
+function segmented(el, onChange) { el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); onChange(b.dataset.v ?? b.dataset.f); }); }
+segmented($('sport'), v => { state.sport = v; loadDefaults(); });
+$('all-model').addEventListener('change', applyAllModel);
+segmented($('ev-filter'), v => { state.filter = v; renderEvents(); });
+
+async function loadVideo() {
+  const id = ytId($('yt-input').value); if (!id) { $('media-status').textContent = 'Not a YouTube URL or id.'; return; }
+  state.youtubeId = id; $('media-status').textContent = 'Preparing the local copy (first time downloads the video; a few minutes)…'; $('fetch').disabled = true;
+  try {
+    const m = await api('/qa/core/media/' + id + '?download=true');
+    state.duration = m.duration_ms; $('media-status').textContent = 'Local copy ready · ' + fmt(m.duration_ms) + ' · ' + id;
+    const src = $('backend').value.replace(/\/$/,'') + '/qa/core/video/' + id;
+    if (video().src !== src) video().src = src;
+    loadRuns();
+  } catch (e) { $('media-status').textContent = 'Could not prepare the video: ' + e.message; }
+  finally { $('fetch').disabled = false; }
+}
+$('fetch').onclick = loadVideo;
+$('start-now').onclick = () => { $('start').value = fmt(nowMs()); estimate(); };
+$('end-now').onclick = () => { $('end').value = fmt(nowMs()); estimate(); };
+['start','end'].forEach(id => $(id).addEventListener('change', estimate));
+
+// Fighter crop: grab the frame at the playhead, drag a box over it.
+document.querySelectorAll('.fighter').forEach(card => {
+  const i = Number(card.dataset.i), frame = card.querySelector('.frame');
+  card.querySelector('.grab').onclick = async () => {
+    if (!state.youtubeId) return;
+    const t = nowMs(); video().pause();
+    const blob = await api('/qa/core/frame/' + state.youtubeId + '?t_ms=' + t);
+    frame.innerHTML = '<img alt="frame at ' + fmt(t) + '"><div class="box" hidden></div><canvas class="crop-preview" hidden></canvas>';
+    const img = frame.querySelector('img'); img.src = URL.createObjectURL(blob);
+    state.fighters[i] = {frame_ms:t, box:null};
+    let a = null; const box = frame.querySelector('.box');
+    const pt = e => { const r = img.getBoundingClientRect(); return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))]; };
+    const draw = (p, q) => { const l = Math.min(p[0], q[0]), t2 = Math.min(p[1], q[1]), w = Math.abs(p[0] - q[0]), h = Math.abs(p[1] - q[1]); Object.assign(box.style, {left:l*100+'%', top:t2*100+'%', width:w*100+'%', height:h*100+'%'}); box.hidden = false; return [l, t2, w, h]; };
+    img.addEventListener('pointerdown', e => { e.preventDefault(); a = pt(e); img.setPointerCapture(e.pointerId); });
+    img.addEventListener('pointermove', e => { if (a) draw(a, pt(e)); });
+    img.addEventListener('pointerup', e => { if (!a) return; const b = draw(a, pt(e)); a = null; if (b[2] > 0.02 && b[3] > 0.04) { state.fighters[i].box = b; preview(frame, img, b); } validate(); });
+    validate();
+  };
+  card.querySelector('.name').addEventListener('input', validate);
+});
+function preview(frame, img, b) {
+  const c = frame.querySelector('.crop-preview'), w = img.naturalWidth * b[2], h = img.naturalHeight * b[3];
+  c.width = Math.round(w); c.height = Math.round(h); c.getContext('2d').drawImage(img, img.naturalWidth * b[0], img.naturalHeight * b[1], w, h, 0, 0, w, h); c.hidden = false;
+}
+
+async function loadDefaults() {
+  state.overrides = {}; $('all-model').value = '';
+  try { const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:0, end_ms:1000})}); state.config = r.config; $('par-pos').checked = r.config.position_critique_context === 'proposed'; $('par-pos-preset').textContent = r.config.position_critique_context === 'proposed' ? 'parallel' : 'one at a time'; renderNodeCfg(); estimate(); }
+  catch (e) { $('estimate').textContent = 'Backend not reachable: ' + e.message; }
+}
+function applyAllModel() {
+  const m = $('all-model').value;
+  for (const n of nodes()) {
+    state.overrides[n] = {...(state.overrides[n] || {})};
+    if (!m || state.config[n].model === m) delete state.overrides[n].model; else state.overrides[n].model = m;
+  }
+  renderNodeCfg(); estimate();
+}
+function renderNodeCfg() {
+  const opts = (vals, cur) => vals.map(v => '<option' + (String(v) === String(cur) ? ' selected' : '') + '>' + v + '</option>').join('');
+  $('nodes-cfg').innerHTML = '<tr><th>Node</th><th>Model</th><th>Thinking</th><th>Resolution</th><th>FPS</th></tr>' + nodes().map(n => {
+    const c = {...state.config[n], ...(state.overrides[n] || {})};
+    return '<tr data-n="' + n + '"><td>' + n + '</td><td><input data-k="model" value="' + esc(c.model) + '" size="15"></td>' +
+      '<td><select data-k="thinking">' + opts(['minimal','low','medium','high'], c.thinking) + '</select></td>' +
+      '<td><select data-k="media_resolution">' + opts(['low','medium','high'], c.media_resolution) + '</select></td>' +
+      '<td><select data-k="fps">' + opts([1,2,5,10,15], c.fps) + '</select></td></tr>';
+  }).join('');
+  $('nodes-cfg').querySelectorAll('input,select').forEach(el => el.addEventListener('change', () => {
+    const n = el.closest('tr').dataset.n, k = el.dataset.k, v = k === 'fps' ? Number(el.value) : el.value;
+    state.overrides[n] = {...(state.overrides[n] || {})}; if (String(state.config[n][k]) === String(v)) delete state.overrides[n][k]; else state.overrides[n][k] = v; estimate();
+  }));
+}
+async function estimate() {
+  const s = parseT($('start').value), e = parseT($('end').value);
+  if (!(e > s)) { $('estimate').textContent = 'Scope end must follow its start.'; validate(); return; }
+  try {
+    const r = await api('/qa/core/estimate', {method:'POST', body:JSON.stringify({sport:state.sport, start_ms:s, end_ms:e, overrides:state.overrides})});
+    const sc = Object.values(r.scans), usd = sc.reduce((a, x) => a + (x.usd ?? 0), 0), frames = sc.reduce((a, x) => a + x.frames, 0);
+    $('estimate').textContent = 'Scope ' + fmt(e - s) + ' · ' + (r.scans.strike_census ? 'scans + strike census' : 'scans') + ' ≈ ' + frames + ' frames, ≈ $' + usd.toFixed(3) + ' video input. ' +
+      'Thinking output and the per-transition / per-candidate calls come on top; measured: a 60 s MMA window at the default settings cost ≈ $1.7 (12 position checks, 27 technique candidates × 3 calls) and took ≈ 20 min.';
+  } catch (err) { $('estimate').textContent = err.message; }
+  validate();
+}
+function validate() {
+  const ok = state.youtubeId && state.fighters.every(f => f.box) && parseT($('end').value) > parseT($('start').value);
+  $('run').disabled = !ok;
+  $('run').title = ok ? '' : 'Load a video, set the scope and draw a box around both fighters.';
+}
+$('run').onclick = async () => {
+  $('run-err').textContent = '';
+  const names = [...document.querySelectorAll('.fighter .name')].map(x => x.value.trim());
+  const body = {youtube_id:state.youtubeId, sport:state.sport, start_ms:parseT($('start').value), end_ms:parseT($('end').value),
+    fighters:state.fighters.map((f, i) => ({name:names[i], frame_ms:f.frame_ms, box:f.box})), overrides:state.overrides,
+    max_parallel_calls:Number($('parallel').value) || 6, label:$('label').value.trim() || null,
+    parallel_position_checks:$('par-pos').checked};
+  try { const r = await api('/qa/core/runs', {method:'POST', body:JSON.stringify(body)}); openRun(r.run_id); loadRuns(); }
+  catch (e) { $('run-err').textContent = e.message; }
+};
+
+async function loadRuns() {
+  try {
+    const r = await api('/qa/core/runs');
+    $('runs').innerHTML = r.runs.map(x => '<button data-id="' + x.run_id + '"><span>' + esc(x.label || x.youtube_id) + ' · ' + ({mma:'MMA', mma_v2:'MMA v2', mma_v2_census:'MMA v2 no audit', bjj:'BJJ'}[x.sport] || x.sport) + ' ' + fmt(x.start_ms) + '–' + fmt(x.end_ms) + '</span><span class="state-' + x.state + '">' + x.state + '</span></button>').join('') || '<p class="muted">None yet.</p>';
+    $('runs').querySelectorAll('button').forEach(b => b.onclick = () => openRun(b.dataset.id));
+  } catch (e) { $('runs').innerHTML = '<p class="err">' + esc(e.message) + '</p>'; }
+}
+function openRun(id) { state.runId = id; state.result = null; clearInterval(state.poll); refresh(); state.poll = setInterval(refresh, 3000); }
+async function refresh() {
+  const id = state.runId; if (!id) return;
+  let s; try { s = await api('/qa/core/runs/' + id); } catch (e) { $('run-error').textContent = e.message; return; }
+  if (id !== state.runId) return;
+  const req = s.request;
+  if (state.youtubeId !== req.youtube_id) { $('yt-input').value = req.youtube_id; await loadVideo(); }
+  $('run-state').innerHTML = '<span class="state-' + s.state + '">' + s.state + '</span>';
+  $('run-meta').textContent = (req.label ? req.label + ' · ' : '') + ({mma:'MMA', mma_v2:'MMA v2', mma_v2_census:'MMA v2 no audit', bjj:'BJJ'}[req.sport] || req.sport) + ' · ' + fmt(req.start_ms) + '–' + fmt(req.end_ms) + ' · ' + req.fighters.map(f => f.name).join(' vs ') +
+    ' · spend ≈ $' + s.total_usd.toFixed(3) + (s.in_flight_calls ? ' + ' + s.in_flight_calls + ' in flight' : '') + (s.unknown_cost_calls ? ' (+' + s.unknown_cost_calls + ' finished calls without usage: not priced)' : '');
+  $('progress').innerHTML = '<tr><th>Step</th><th>Done</th><th>Running</th><th>Failed</th><th>Calls</th><th>In tok</th><th>Out+think</th><th>$</th></tr>' +
+    s.nodes.map(n => '<tr><td>' + n.node_id + '</td><td>' + n.succeeded + '/' + n.seen + '</td><td>' + (n.running || '') + '</td><td>' + (n.failed || '') + '</td><td>' + (n.calls || '') + '</td><td>' + (n.input_tokens || '') + '</td><td>' + ((n.output_tokens + n.thinking_tokens) || '') + '</td><td>' + (n.calls ? n.usd.toFixed(3) : '') + '</td></tr>').join('');
+  $('run-error').textContent = s.error || '';
+  $('resume').hidden = !['failed','interrupted','cancelled'].includes(s.state);
+  $('cancel').hidden = !['queued','preparing','running'].includes(s.state);
+  if (s.components.length && (!state.result || state.result.components !== s.components.join())) {
+    state.result = await api('/qa/core/runs/' + id + '/result'); state.result.components = s.components.join(); state.result.request = req; renderResults();
+  }
+  if (!['queued','preparing','running'].includes(s.state)) { clearInterval(state.poll); loadRuns(); }
+}
+$('resume').onclick = async () => { try { await api('/qa/core/runs/' + state.runId + '/resume', {method:'POST'}); openRun(state.runId); } catch (e) { $('run-error').textContent = e.message; } };
+$('cancel').onclick = async () => { await api('/qa/core/runs/' + state.runId + '/cancel', {method:'POST'}); refresh(); };
+
+const STRIKES = new Set(['strike_punch','strike_kick','strike_knee','strike_elbow','ground_strike']);
+const PHASE = {striking_range:'#2f6fd6', clinch:'#c28a1e', standing_back_control:'#c28a1e', wall_seated:'#c28a1e'};
+function laneColor(p) { if (p.observation === 'inactive') return 'repeating-linear-gradient(45deg,#333 0 4px,#222 4px 8px)'; if (p.observation !== 'observed') return '#444'; return PHASE[p.position] || '#2f9e5a'; }
+function renderResults() {
+  const r = state.result, req = r.request, s0 = req.start_ms, span = req.end_ms - req.start_ms; $('results-section').hidden = false;
+  const pos = r.positions?.positions || [], tech = r.techniques?.techniques || [];
+  const players = r.positions?.player_ids || r.techniques?.player_ids || ['fighter-a','fighter-b'];
+  const names = Object.fromEntries(players.map((p, i) => [p, req.fighters[i]?.name || p]));
+  $('lane-a-label').textContent = names[players[0]]; $('lane-b-label').textContent = names[players[1]];
+  $('results-meta').textContent = pos.length + ' position spans · ' + (r.techniques ? tech.length + ' techniques' : 'techniques pending');
+  const pct = ms => ((ms - s0) / span * 100) + '%';
+  $('lane-pos').innerHTML = pos.map(p => '<div title="' + esc((p.position || p.interruption_kind || p.observation) + ' ' + fmt(p.bounds.start_ms) + '–' + fmt(p.bounds.end_ms)) + '" style="left:' + pct(p.bounds.start_ms) + ';width:calc(' + pct(p.bounds.end_ms) + ' - ' + pct(p.bounds.start_ms) + ');background:' + laneColor(p) + '" data-s="' + p.bounds.start_ms + '" data-e="' + p.bounds.end_ms + '">' + esc(p.position || p.interruption_kind || p.observation) + '</div>').join('');
+  for (const [lane, pid] of [['lane-a', players[0]], ['lane-b', players[1]]]) {
+    $(lane).innerHTML = tech.filter(t => t.actor_player_id === pid || !t.actor_player_id).map(t => '<div class="tick" title="' + esc(t.action_classes.join(',') + ' ' + fmt(t.bounds.start_ms)) + '" style="left:' + pct(t.bounds.start_ms) + ';background:' + (STRIKES.has(t.action_classes[0]) ? (t.outcome === 'successful' ? '#ff6b6b' : '#ff6b6b66') : '#7ee787') + '" data-s="' + t.bounds.start_ms + '" data-e="' + t.bounds.end_ms + '"></div>').join('');
+  }
+  document.querySelectorAll('.lane > div').forEach(d => d.onclick = () => seek(Number(d.dataset.s), Number(d.dataset.e)));
+  renderEvents();
+}
+function renderEvents() {
+  const r = state.result; if (!r) return;
+  const req = r.request, players = r.techniques?.player_ids || r.positions?.player_ids || [];
+  const names = Object.fromEntries(players.map((p, i) => [p, req.fighters[i]?.name || p]));
+  const items = [...(r.positions?.positions || []).map(p => ({...p, _k:'position'})), ...(r.techniques?.techniques || []).map(t => ({...t, _k:'technique'}))]
+    .filter(x => state.filter === 'all' || (x._k === 'technique' && (state.filter === 'strike') === STRIKES.has(x.action_classes[0])))
+    .sort((a, b) => a.bounds.start_ms - b.bounds.start_ms);
+  $('events').innerHTML = items.map(x => {
+    const when = '<span class="pill" data-s="' + x.bounds.start_ms + '" data-e="' + x.bounds.end_ms + '">' + fmt(x.bounds.start_ms) + '–' + fmt(x.bounds.end_ms) + '</span>';
+    if (x._k === 'position') {
+      const what = x.observation === 'observed' ? x.position + ' · ' + x.roles.map((role, i) => (names[players[i]] || '') + ' ' + role).join(' / ') + (x.cage_contact ? ' · cage' : '') : (x.interruption_kind || x.observation) + (x.interruption_note ? ' — ' + x.interruption_note : '');
+      return '<div class="ev">' + when + '<div class="title">' + esc(what) + '<span class="tag">position</span></div><div class="why">' + esc(x.notes || x.uncertainty_note || '') + '</div></div>';
+    }
+    const actor = x.actor_player_id ? names[x.actor_player_id] : x.actor_sentinel;
+    const strike = STRIKES.has(x.action_classes[0]);
+    const detail = strike ? [x.strike_target, x.outcome === 'successful' ? 'landed' : x.outcome === 'unsuccessful' ? 'missed' : x.outcome, x.significant ? 'significant' : null, x.knockdown ? 'KNOCKDOWN' : null].filter(Boolean).join(' · ') : x.outcome;
+    return '<div class="ev">' + when + '<div class="title">' + esc(x.action_classes.join(', ')) + ' — ' + esc(actor) + ' <span class="muted">' + esc(detail) + '</span><span class="tag">' + (strike ? 'strike' : 'technique') + '</span></div><div class="why">' + esc([x.notes, x.outcome_evidence].filter(Boolean).join('\n')) + '</div></div>';
+  }).join('') || '<p class="muted">Nothing in this filter.</p>';
+  $('events').querySelectorAll('.pill').forEach(p => p.onclick = () => seek(Number(p.dataset.s) - 1000, Number(p.dataset.e) + 1000));
+}
+$('dl').onclick = () => { const r = state.result; if (!r) return; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(r, null, 2)], {type:'application/json'})); a.download = 'core-' + state.runId + '.json'; a.click(); };
+
+/* ---------- strike review ---------- */
+// landed/missed mean worked/failed for a technique that is not a strike.
+const VERDICTS = [['landed','Landed / worked','1'],['missed','Missed / failed','2'],['contact_unclear','Contact unclear','3'],['not_a_strike','Not a technique','4'],['wrong_fighter','Wrong fighter','5'],['wrong_class','Wrong class (e.g. takedown called a punch)','6'],['wrong_technique','Right class, wrong technique','7'],['unsure','Unsure','0']];
+const REAL = new Set(['landed','missed','contact_unclear','wrong_fighter','wrong_class','wrong_technique']);
+const VERDICT_NAMES = {not_a_strike:'not a technique', wrong_class:'wrong class', wrong_technique:'wrong technique'};
+const unitName = s => (s.technique || s.classes.join(', ')).replace(/_/g, ' ') + (s.repeat > 1 ? ' ×' + s.repeat + (s.landed != null ? ' (' + s.landed + ' landed)' : '') : '');
+const sr = { data:null, pairs:[], items:[], view:[], i:0, filter:'all', rate:0.5, runs:[] };
+async function srInit() {
+  try {
+    const [p, r] = await Promise.all([api('/qa/core/strike-review/pairs'), api('/qa/core/runs')]);
+    sr.pairs = p.pairs; sr.runs = r.runs.filter(x => x.state === 'succeeded' && x.sport !== 'bjj' && x.sport !== 'bjj_h');
+    $('sr-pair').innerHTML = '<option value="">Choose a clip…</option>' + sr.pairs.map((x, i) => '<option value="' + i + '">' + esc(x.label) + '</option>').join('');
+    const opt = sr.runs.map(x => '<option value="' + x.run_id + '">' + esc((x.label || x.youtube_id) + ' · ' + x.sport + ' · ' + fmt(x.start_ms) + '–' + fmt(x.end_ms)) + '</option>').join('');
+    $('sr-a').innerHTML = '<option value="">—</option>' + opt; $('sr-b').innerHTML = '<option value="">—</option>' + opt;
+  } catch (e) { $('sr-msg').textContent = e.message; }
+}
+$('sr-pair').onchange = () => { const p = sr.pairs[$('sr-pair').value]; if (!p) return; $('sr-a').value = p.a; $('sr-b').value = p.b; srLoad(); };
+$('sr-load').onclick = srLoad;
+segmented($('sr-filter'), async v => { await srFlush(); sr.filter = v; srView(); if (!sr.view.includes(sr.items[sr.i]) && sr.view.length) { sr.i = sr.items.indexOf(sr.view[0]); } srShow(false); });
+segmented($('sr-speed'), v => { sr.rate = Number(v); video().playbackRate = sr.rate; });
+async function srLoad() {
+  const a = $('sr-a').value, b = $('sr-b').value; if (!a || !b) { $('sr-msg').textContent = 'Choose two runs.'; return; }
+  $('sr-msg').textContent = 'Loading…';
+  try {
+    sr.data = await api('/qa/core/strike-review?a=' + a + '&b=' + b); activeReview = 'sr';
+    if (state.youtubeId !== sr.data.youtube_id) { $('yt-input').value = sr.data.youtube_id; await loadVideo(); }
+    const d = sr.data, warn = d.fighters.join() !== d.fighters_b.join() ? ' · warning: the runs name the fighters differently (' + d.fighters_b.join(' vs ') + ')' : '';
+    $('sr-msg').innerHTML = '<b>A</b> ' + esc(d.a.label || d.a.run_id.slice(0, 8)) + ' · <b>B</b> ' + esc(d.b.label || d.b.run_id.slice(0, 8)) + ' · ' + fmt(d.start_ms) + '–' + fmt(d.end_ms) + ' · ' + esc(d.fighters.join(' vs ')) + esc(warn);
+    $('sr-add-actor').innerHTML = d.fighters.map((f, i) => '<option value="fighter-' + 'ab'[i] + '">' + esc(f) + '</option>').join('');
+    srMerge(); sr.i = 0; $('sr-body').hidden = false; srView(); srShow(false);
+  } catch (e) { $('sr-msg').textContent = e.message; }
+}
+function srMerge() {
+  const d = sr.data, keys = new Set(d.items.map(x => x.key));
+  const added = Object.entries(d.labels).filter(([k, l]) => l.source === 'added' && !keys.has(k) && l.t_ms >= d.start_ms && l.t_ms < d.end_ms)
+    .map(([k, l]) => ({key:k, source:'added', t_ms:l.t_ms, actor:l.actor, a:null, b:null}));
+  sr.items = [...d.items, ...added].sort((x, y) => x.t_ms - y.t_ms);
+}
+const nameOf = actor => sr.data.fighters['ab'.indexOf(actor.slice(-1))] || actor;
+const verdictOf = it => sr.data.labels[it.key]?.verdict;
+function srView() {
+  sr.view = sr.items.filter(it => sr.filter === 'all' || (sr.filter === 'todo' ? !verdictOf(it) : sr.filter === 'grappling' ? [it.a, it.b].some(s => s && !s.strike) : it.source === sr.filter));
+  srSummary(); srList();
+}
+function srSummary() {
+  const its = sr.items, lab = it => verdictOf(it), done = its.filter(lab).length;
+  const stat = side => {
+    const mine = its.filter(it => it[side]), judged = mine.filter(it => lab(it) && lab(it) !== 'unsure'), real = judged.filter(it => REAL.has(lab(it)));
+    const allReal = its.filter(it => REAL.has(lab(it))).length, foundReal = its.filter(it => it[side] && REAL.has(lab(it))).length;
+    const landedCalls = real.filter(it => ['landed','missed'].includes(lab(it)));
+    const classCalls = real.filter(it => lab(it) !== 'wrong_fighter'), classOk = classCalls.filter(it => !['wrong_class','wrong_technique'].includes(lab(it))).length;
+    const landedOk = landedCalls.filter(it => (it[side].outcome === 'successful') === (lab(it) === 'landed')).length;
+    return [mine.length, judged.length ? Math.round(real.length / judged.length * 100) + '%' : '–', allReal ? Math.round(foundReal / allReal * 100) + '%' : '–', landedCalls.length ? Math.round(landedOk / landedCalls.length * 100) + '%' : '–', classCalls.length ? Math.round(classOk / classCalls.length * 100) + '%' : '–'];
+  };
+  const A = stat('a'), B = stat('b'), n = s => its.filter(it => it.source === s).length;
+  $('sr-sum').innerHTML =
+    '<div><span class="muted">Reviewed</span><b>' + done + ' / ' + its.length + '</b><span class="muted">both ' + n('both') + ' · A only ' + n('a') + ' · B only ' + n('b') + (n('added') ? ' · added ' + n('added') : '') + '</span></div>' +
+    '<div><span class="muted">A: ' + esc(sr.data.a.sport) + '</span><b>' + A[0] + ' techniques</b><span class="muted">real: ' + A[1] + ' · found ' + A[2] + ' of all real · landed/missed right: ' + A[3] + ' · technique right: ' + A[4] + '</span></div>' +
+    '<div><span class="muted">B: ' + esc(sr.data.b.sport) + '</span><b>' + B[0] + ' techniques</b><span class="muted">real: ' + B[1] + ' · found ' + B[2] + ' of all real · landed/missed right: ' + B[3] + ' · technique right: ' + B[4] + '</span></div>';
+}
+function srMarks(it) {
+  const l = sr.data.labels[it.key]; if (!l) return '';
+  return ((l.flags || []).includes('correct') ? ' · ✓' : '') + ((l.flags || []).includes('timing_off') ? ' · timing' : '') + ((l.flags || []).includes('holds_several') ? ' · ×' + (l.count || '2+') : '') + (l.note ? ' · ✎' : '');
+}
+function srList() {
+  const cur = sr.items[sr.i];
+  $('sr-list').innerHTML = sr.view.map(it => {
+    const v = verdictOf(it), side = it.a || it.b, cls = side ? [it.a, it.b].filter(Boolean).map(s => unitName(s).replace(/strike /g, '').replace('ground strike', 'ground')).join(' / ') : 'added';
+    return '<button data-k="' + it.key + '" aria-current="' + (it === cur) + '"><span>' + fmt(it.t_ms) + '</span><span class="src src-' + it.source + '">' + ({both:'both', a:'A only', b:'B only', added:'added'})[it.source] + '</span><span>' + esc(nameOf(it.actor) + ' · ' + cls) + '</span><span class="vd ' + (v ? (REAL.has(v) ? 'real' : v === 'not_a_strike' ? 'fake' : '') : '') + '">' + (v ? (VERDICT_NAMES[v] || v.replace(/_/g, ' ')) : '·') + srMarks(it) + '</span></button>';
+  }).join('') || '<p class="muted" style="padding:8px">Nothing in this filter.</p>';
+  $('sr-list').querySelectorAll('button').forEach(b => b.onclick = () => srGo(sr.items.findIndex(x => x.key === b.dataset.k), true));
+  // Keep the current strike in view inside the list only; never scroll the page away from the video.
+  const list = $('sr-list'), row = list.querySelector('[aria-current=true]');
+  if (row && (row.offsetTop < list.scrollTop || row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = row.offsetTop - list.clientHeight / 2;
+}
+function srSide(title, s) {
+  if (!s) return '<div class="sr-side none"><h3>' + title + '</h3><div>Not detected</div></div>';
+  const out = s.outcome === 'successful' ? (s.strike ? 'landed' : 'worked') : s.outcome === 'unsuccessful' ? (s.strike ? 'missed' : 'failed') : s.outcome;
+  const what = unitName(s) + (s.technique ? ' (' + s.classes.join(', ').replace(/_/g, ' ') + ')' : '') + (s.strike ? ' → ' + (s.target || '?') : '') + ' · ' + out + (s.strike && s.significant ? ' · significant' : '') + (s.knockdown ? ' · KNOCKDOWN' : '');
+  const chain = s.chain ? '<div class="chain" title="The whole sequence this step belongs to">' + s.chain.map((c, k) => '<span' + (k === s.step ? ' class="here"' : '') + '>' + esc(c) + '</span>').join('') + '</div>' : '';
+  const span = fmt(s.bounds.start_ms) + '–' + fmt(s.bounds.end_ms) + ' (' + ((s.bounds.end_ms - s.bounds.start_ms) / 1000).toFixed(1) + ' s)';
+  return '<div class="sr-side"><h3>' + title + ' · clip ' + span + '</h3><div class="what">' + esc(what) + '</div>' + chain + '<div class="why">' + esc([...new Set([s.notes, s.evidence].filter(Boolean))].join('\n')) + '</div></div>';
+}
+/* Notes and flags save on their own as you type (with or without a verdict); a draft
+   the server has not confirmed stays in memory, is shown again on return, and is saved
+   before moving to another item. The status next to the box says which. */
+const srDraft = {};
+let srTimer = null, srChain = Promise.resolve();
+const srSaved = key => { const l = sr.data.labels[key]; return {note:l?.note || '', flags:l?.flags || [], count:l?.count ?? null}; };
+const srCurrentExtras = key => srDraft[key] || srSaved(key);
+function srState(text, bad) { const s = $('sr-save-state'); if (s) { s.textContent = text; s.style.color = bad ? '#ff6b6b' : ''; } }
+function srStateFor(it) {
+  if (srDraft[it.key]) return 'Not saved yet…';
+  const l = sr.data.labels[it.key];
+  return l && (l.note || (l.flags || []).length) ? 'Saved ✓ ' + new Date(l.labelled_at).toLocaleTimeString() : '';
+}
+function srPut(it, verdict, extras) {
+  const run = async () => {
+    const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:it.key, verdict, source:it.source, ...extras})});
+    sr.data.labels = r.labels;
+  };
+  const p = srChain.then(run); srChain = p.catch(() => {}); return p;
+}
+async function srPersist(it) {
+  const extras = srDraft[it.key]; if (!extras) return true;
+  if (sr.items[sr.i]?.key === it.key) srState('Saving…');
+  try { await srPut(it, verdictOf(it) || null, extras); }
+  catch (e) { if (sr.items[sr.i]?.key === it.key) srState('NOT saved: ' + e.message + ' (your text is kept here; retrying when you leave this item)', true); return false; }
+  if (srDraft[it.key] === extras) delete srDraft[it.key];
+  const here = sr.items[sr.i]?.key; srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === here)); srSummary(); srList();
+  if (sr.items[sr.i]?.key === it.key) srState(srStateFor(it));
+  return true;
+}
+async function srFlush() {
+  if (srTimer) { clearTimeout(srTimer); srTimer = null; }
+  const it = sr.items[sr.i]; return it ? srPersist(it) : true;
+}
+function srEdited() {
+  const it = sr.items[sr.i]; if (!it) return;
+  srDraft[it.key] = srExtras(); srState('Not saved yet…');
+  clearTimeout(srTimer); srTimer = setTimeout(() => { srTimer = null; srPersist(it); }, 600);
+}
+function srShow(play) {
+  const it = sr.items[sr.i]; if (!it) { $('sr-cur').innerHTML = '<p class="muted">No techniques in this comparison.</p>'; return; }
+  const v = verdictOf(it), pos = sr.view.indexOf(it), ex = srCurrentExtras(it.key), flags = ex.flags;
+  $('sr-cur').innerHTML = '<div class="top"><span><b>' + fmt(it.t_ms) + '</b> · ' + esc(nameOf(it.actor)) + ' <span class="src src-' + it.source + '">' + ({both:'both runs', a:'A only', b:'B only', added:'added by you'})[it.source] + '</span></span><span class="muted">' + (pos >= 0 ? (pos + 1) + ' of ' + sr.view.length + ' in this filter' : 'outside this filter') + '</span></div>' +
+    (it.source === 'added' ? '' : '<div class="sr-cmp">' + srSide('A', it.a) + srSide('B', it.b) + '</div>') +
+    '<input id="sr-note" placeholder="Note (saves as you type): e.g. covers two jabs, starts 0.5 s late" value="' + esc(ex.note) + '" style="width:100%">' +
+    '<div class="sr-flags"><label title="Fighter, technique name and clip are all right; the verdict says whether it landed (key Y)"><input type="checkbox" id="sr-f-correct"' + (flags.includes('correct') ? ' checked' : '') + '><kbd>Y</kbd>Correct</label>' +
+    '<label title="The class is right but the clip starts or ends in the wrong place (key T)"><input type="checkbox" id="sr-f-timing"' + (flags.includes('timing_off') ? ' checked' : '') + '><kbd>T</kbd>Timing off</label>' +
+    '<label title="The run gave one clip for what is really several techniques (key M)"><input type="checkbox" id="sr-f-several"' + (flags.includes('holds_several') ? ' checked' : '') + '><kbd>M</kbd>Holds more than one technique</label>' +
+    '<label>how many <input type="number" id="sr-count" min="2" max="50" value="' + (ex.count || '') + '"></label>' +
+    '<span id="sr-save-state" class="muted" role="status" aria-live="polite"></span></div>' +
+    '<div class="sr-verdicts">' + VERDICTS.map(([k, t, key]) => '<button data-v="' + k + '" aria-pressed="' + (v === k) + '"><kbd>' + key + '</kbd>' + t + '</button>').join('') + '</div>' +
+    '<div class="row" style="align-items:center"><button id="sr-prev" style="flex:0 0 auto">← Previous</button><button id="sr-replay" style="flex:0 0 auto">Replay</button><button id="sr-tight" style="flex:0 0 auto" title="Play exactly the clip the run gave (key C)">Play its clip only</button><button id="sr-next" style="flex:0 0 auto">Next →</button><span class="sr-keys"><kbd>space</kbd>replay <kbd>←</kbd><kbd>→</kbd>move <kbd>1</kbd>–<kbd>7</kbd>,<kbd>0</kbd>verdict (moves on) <kbd>Y</kbd>correct <kbd>T</kbd><kbd>M</kbd>flags <kbd>C</kbd>clip only <kbd>Esc</kbd>leave the note box</span></div>';
+  $('sr-cur').querySelectorAll('.sr-verdicts button').forEach(b => b.onclick = () => srLabel(b.dataset.v));
+  $('sr-prev').onclick = () => srMove(-1); $('sr-next').onclick = () => srMove(1); $('sr-replay').onclick = srPlay; $('sr-tight').onclick = srPlayClip;
+  $('sr-note').oninput = srEdited;
+  $('sr-note').onkeydown = e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); srFlush(); e.target.blur(); } };
+  $('sr-note').onblur = () => srFlush();
+  $('sr-f-correct').onchange = srEdited; $('sr-f-timing').onchange = srEdited; $('sr-f-several').onchange = srEdited;
+  $('sr-count').oninput = () => { if ($('sr-count').value) $('sr-f-several').checked = true; srEdited(); };
+  srState(srStateFor(it));
+  srList();
+  if (play) srPlay();
+}
+function srPlay() {
+  const it = sr.items[sr.i]; if (!it) return; video().playbackRate = sr.rate;
+  // A grappling step plays until its result (at most 6 s); a strike 1 s past contact.
+  const ends = [it.a, it.b].filter(Boolean).map(s => s.bounds.end_ms + 500);
+  seek(it.t_ms - 1500, Math.min(Math.max(it.t_ms + 1000, ...ends), it.t_ms + 6000));
+}
+function srPlayClip() {
+  const it = sr.items[sr.i]; if (!it) return; const s = it.b || it.a; if (!s) return;
+  video().playbackRate = sr.rate; seek(s.bounds.start_ms, s.bounds.end_ms);
+}
+function srExtras() {
+  const flags = [];
+  if ($('sr-f-correct')?.checked) flags.push('correct');
+  if ($('sr-f-timing')?.checked) flags.push('timing_off');
+  if ($('sr-f-several')?.checked) flags.push('holds_several');
+  const n = parseInt($('sr-count')?.value, 10);
+  return {note:($('sr-note')?.value || '').trim(), flags, count:flags.includes('holds_several') && n >= 2 ? n : null};
+}
+async function srGo(index, play) { await srFlush(); sr.i = index; srShow(play); }
+async function srMove(step) {
+  const pos = sr.view.indexOf(sr.items[sr.i]);
+  const next = pos < 0 ? sr.view.find(it => it.t_ms >= sr.items[sr.i].t_ms) : sr.view[pos + step];
+  if (next) await srGo(sr.items.indexOf(next), true);
+}
+async function srLabel(verdict) {
+  const it = sr.items[sr.i]; if (!it) return;
+  if (srTimer) { clearTimeout(srTimer); srTimer = null; }
+  const extras = srDraft[it.key] || srSaved(it.key);
+  // Pressing the chosen verdict again clears the verdict; the note and flags stay.
+  const clear = verdictOf(it) === verdict && !srDraft[it.key];
+  try { await srPut(it, clear ? null : verdict, extras); }
+  catch (e) { srState('NOT saved: ' + e.message, true); return; }
+  if (srDraft[it.key] === extras) delete srDraft[it.key];
+  srMerge(); sr.i = Math.max(0, sr.items.findIndex(x => x.key === it.key)); srView();
+  if (!clear) { const next = sr.view.find(x => x.t_ms > it.t_ms || (x.t_ms === it.t_ms && x.key > it.key)); if (next) { sr.i = sr.items.indexOf(next); srShow(true); return; } }
+  srShow(false);
+}
+$('sr-add').onclick = async () => {
+  if (!sr.data) return;
+  const t = nowMs(), actor = $('sr-add-actor').value;
+  if (t < sr.data.start_ms || t >= sr.data.end_ms) { $('sr-msg').textContent = 'The playhead is outside this comparison (' + fmt(sr.data.start_ms) + '–' + fmt(sr.data.end_ms) + ').'; return; }
+  try { const r = await api('/qa/core/strike-labels/' + sr.data.youtube_id, {method:'PUT', body:JSON.stringify({key:actor + '@' + t, verdict:$('sr-add-verdict').value, source:'added', note:$('sr-add-note').value.trim()})}); sr.data.labels = r.labels; }
+  catch (e) { $('sr-msg').textContent = 'Not saved: ' + e.message; return; }
+  srMerge(); sr.i = sr.items.findIndex(x => x.key === actor + '@' + t); srView(); srShow(false);
+};
+document.addEventListener('keydown', e => {
+  if (activeReview === 'sq' || !sr.data || $('sr-body').hidden || e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const v = VERDICTS.find(x => x[2] === e.key);
+  if (v) { e.preventDefault(); srLabel(v[0]); }
+  else if (e.key === 't' || e.key === 'm' || e.key === 'y') { e.preventDefault(); const box = $({t:'sr-f-timing', m:'sr-f-several', y:'sr-f-correct'}[e.key]); if (box) { box.checked = !box.checked; srEdited(); } }
+  else if (e.key === 'c') { e.preventDefault(); srPlayClip(); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); srMove(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); srMove(-1); }
+  else if (e.key === ' ' && !e.target.closest('button, video')) { e.preventDefault(); srPlay(); }
+});
+
+/* ---------- sequence review (one run) ---------- */
+const SQ_FLAGS = [['correct','Correct','y'],['wrong_fighter','Wrong fighter','f'],['missed_techniques','Missed techniques','i'],['extra_techniques','Extra techniques','e'],['wrong_names','Wrong names','n'],['wrong_landed','Landed/missed wrong','l'],['not_real','Not a real sequence (defence, nothing)','x'],['duplicate','Duplicate','d'],['timing_off','Timing off','t']];
+const sq = { data:null, items:[], view:[], i:0, filter:'all', rate:0.5, draft:{}, timer:null, chain:Promise.resolve() };
+let activeReview = null;
+async function sqInit() {
+  try {
+    const r = await api('/qa/core/runs');
+    const runs = r.runs.filter(x => x.state === 'succeeded' && x.sport !== 'bjj' && x.sport !== 'bjj_h');
+    $('sq-run').innerHTML = '<option value="">Choose a run…</option>' + runs.map(x => '<option value="' + x.run_id + '">' + esc((x.label || x.youtube_id) + ' · ' + x.sport + ' · ' + fmt(x.start_ms) + '–' + fmt(x.end_ms)) + '</option>').join('');
+  } catch (e) { $('sq-msg').textContent = e.message; }
+}
+$('sq-load').onclick = async () => {
+  const run = $('sq-run').value; if (!run) { $('sq-msg').textContent = 'Choose a run.'; return; }
+  $('sq-msg').textContent = 'Loading…';
+  try {
+    sq.data = await api('/qa/core/sequence-review?run=' + run);
+    if (state.youtubeId !== sq.data.youtube_id) { $('yt-input').value = sq.data.youtube_id; await loadVideo(); }
+    activeReview = 'sq';
+    const d = sq.data;
+    $('sq-msg').innerHTML = esc(d.run.label || d.run.run_id.slice(0, 8)) + ' · ' + fmt(d.start_ms) + '–' + fmt(d.end_ms) + ' · <span style="color:#e5484d">A ' + esc(d.fighters[0]) + '</span> vs <span style="color:#4c8df6">B ' + esc(d.fighters[1]) + '</span>';
+    $('sq-add-actor').innerHTML = d.fighters.map((f, i) => '<option value="fighter-' + 'ab'[i] + '">' + 'AB'[i] + ' · ' + esc(f) + '</option>').join('');
+    sqMerge(); sq.i = 0; $('sq-body').hidden = false; sqView(); sqShow(false);
+  } catch (e) { $('sq-msg').textContent = e.message; }
+};
+segmented($('sq-filter'), async v => { await sqFlush(); sq.filter = v; sqView(); if (!sq.view.includes(sq.items[sq.i]) && sq.view.length) sq.i = sq.items.indexOf(sq.view[0]); sqShow(false); });
+segmented($('sq-speed'), v => { sq.rate = Number(v); video().playbackRate = sq.rate; });
+function sqMerge() {
+  const d = sq.data, keys = new Set(d.sequences.map(x => x.key));
+  const added = Object.entries(d.labels).filter(([k, l]) => l.source === 'added' && !keys.has(k) && l.t_ms >= d.start_ms && l.t_ms < d.end_ms)
+    .map(([k, l]) => ({key:k, added:true, start_ms:l.t_ms, end_ms:l.t_ms + 2000, actor:l.actor, chain:[], summary:''}));
+  sq.items = [...d.sequences, ...added].sort((x, y) => x.start_ms - y.start_ms);
+}
+const sqWho = it => it.actor ? ('AB'['ab'.indexOf(it.actor.slice(-1))] + ' · ' + sq.data.fighters['ab'.indexOf(it.actor.slice(-1))]) : (it.sentinel || '?');
+const sqLabel = key => sq.data.labels[key];
+const sqSaved = key => { const l = sqLabel(key); return {flags:l?.flags || [], count:l?.count ?? null, note:l?.note || ''}; };
+const sqCurrent = key => sq.draft[key] || sqSaved(key);
+function sqView() {
+  sq.view = sq.items.filter(it => sq.filter === 'all' || (sq.filter === 'todo' ? !sqLabel(it.key) : it.actor === 'fighter-' + sq.filter));
+  sqSummary(); sqList();
+}
+function sqSummary() {
+  const its = sq.items.filter(x => !x.added), lab = its.map(x => sqLabel(x.key)).filter(Boolean);
+  const n = f => lab.filter(l => l.flags.includes(f)).length;
+  const added = sq.items.filter(x => x.added).length;
+  $('sq-sum').innerHTML = '<div><span class="muted">Reviewed</span><b>' + lab.length + ' / ' + its.length + '</b><span class="muted">sequences in this run' + (added ? ' · ' + added + ' you added' : '') + '</span></div>' +
+    '<div><span class="muted">Correct</span><b>' + n('correct') + '</b><span class="muted">of ' + lab.length + ' reviewed</span></div>' +
+    '<div><span class="muted">Problems</span><b>' + (lab.length - n('correct')) + '</b><span class="muted">wrong fighter ' + n('wrong_fighter') + ' · missed ' + n('missed_techniques') + ' · extra ' + n('extra_techniques') + ' · names ' + n('wrong_names') + ' · not real ' + n('not_real') + ' · duplicate ' + n('duplicate') + '</span></div>';
+}
+function sqChain(it) {
+  return it.chain.map(c => '<span title="' + esc(c.evidence) + '" style="' + (c.outcome === 'successful' ? 'border-color:var(--ink);color:var(--ink)' : '') + '">' + esc(c.name) + (c.outcome === 'successful' ? ' ✓' : c.outcome === 'unclear' ? ' ?' : '') + (c.landed != null && c.repeat > 1 ? ' (' + c.landed + ' landed)' : '') + '</span>').join('');
+}
+function sqList() {
+  const cur = sq.items[sq.i];
+  $('sq-list').innerHTML = sq.view.map(it => {
+    const l = sqLabel(it.key), mark = l ? (l.flags.includes('correct') ? 'correct' : (l.flags.length ? l.flags.length + ' issue' + (l.flags.length > 1 ? 's' : '') : 'note')) + (l.note ? ' ✎' : '') : '·';
+    return '<button data-k="' + it.key + '" aria-current="' + (it === cur) + '"><span>' + fmt(it.start_ms) + '</span><span class="src ' + (it.actor === 'fighter-a' ? 'sq-a' : 'sq-b') + '">' + (it.added ? 'added' : sqWho(it).slice(0, 1)) + '</span><span>' + esc(it.added ? (l?.note || 'added by you') : it.chain.map(c => c.name).join(' · ')) + '</span><span class="vd ' + (l?.flags.includes('correct') ? 'real' : l ? 'fake' : '') + '">' + esc(mark) + '</span></button>';
+  }).join('') || '<p class="muted" style="padding:8px">Nothing in this filter.</p>';
+  $('sq-list').querySelectorAll('button').forEach(b => b.onclick = () => sqGo(sq.items.findIndex(x => x.key === b.dataset.k), true));
+  const list = $('sq-list'), row = list.querySelector('[aria-current=true]');
+  if (row && (row.offsetTop < list.scrollTop || row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight)) list.scrollTop = row.offsetTop - list.clientHeight / 2;
+}
+function sqState(text, bad) { const s = $('sq-save-state'); if (s) { s.textContent = text; s.style.color = bad ? '#ff6b6b' : ''; } }
+function sqStateFor(it) { if (sq.draft[it.key]) return 'Not saved yet…'; const l = sqLabel(it.key); return l ? 'Saved ✓ ' + new Date(l.labelled_at).toLocaleTimeString() : ''; }
+function sqShow(play) {
+  const it = sq.items[sq.i]; if (!it) { $('sq-cur').innerHTML = '<p class="muted">No sequences in this run.</p>'; return; }
+  const ex = sqCurrent(it.key), pos = sq.view.indexOf(it);
+  $('sq-cur').innerHTML = '<div class="top"><span><b>' + fmt(it.start_ms) + '–' + fmt(it.end_ms) + '</b> · <span style="color:' + (it.actor === 'fighter-a' ? '#e5484d' : '#4c8df6') + '">' + esc(sqWho(it)) + '</span></span><span class="muted">' + (pos >= 0 ? (pos + 1) + ' of ' + sq.view.length : 'outside this filter') + '</span></div>' +
+    (it.added ? '<p class="muted">Added by you.</p>' : '<div class="sr-side"><div class="what">' + it.chain.length + ' technique' + (it.chain.length === 1 ? '' : 's') + ' · ' + (it.outcome === 'successful' ? 'something landed' : it.outcome === 'unsuccessful' ? 'nothing landed' : 'unclear') + '</div><div class="chain" title="✓ landed or worked, ? unclear">' + sqChain(it) + '</div><div class="why">' + esc(it.summary) + '</div></div>') +
+    '<div class="sr-flags">' + SQ_FLAGS.map(([k, t, key]) => '<label><input type="checkbox" data-f="' + k + '"' + (ex.flags.includes(k) ? ' checked' : '') + '><kbd>' + key.toUpperCase() + '</kbd>' + t + '</label>').join('') + '</div>' +
+    '<div class="sr-flags"><label>Techniques it really had <input type="number" id="sq-count" min="0" max="60" value="' + (ex.count ?? '') + '"></label><span id="sq-save-state" class="muted" role="status" aria-live="polite"></span></div>' +
+    '<input id="sq-note" placeholder="What really happened (saves as you type): e.g. jab, hook, low kick by A" value="' + esc(ex.note) + '" style="width:100%">' +
+    '<div class="row" style="align-items:center; flex-wrap:wrap; gap:6px"><button id="sq-prev" style="flex:0 0 auto">← Previous</button><button id="sq-replay" style="flex:0 0 auto">Replay</button><button id="sq-next" style="flex:0 0 auto">Next →</button><span class="sr-keys"><kbd>space</kbd>replay <kbd>←</kbd><kbd>→</kbd>move · letters toggle flags · <kbd>Enter</kbd> next · <kbd>Esc</kbd> leave the note</span></div>';
+  $('sq-cur').querySelectorAll('.sr-flags input[type=checkbox]').forEach(b => b.onchange = sqEdited);
+  $('sq-count').oninput = sqEdited; $('sq-note').oninput = sqEdited;
+  $('sq-note').onkeydown = e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); sqFlush(); e.target.blur(); } };
+  $('sq-note').onblur = () => sqFlush();
+  $('sq-prev').onclick = () => sqMove(-1); $('sq-next').onclick = () => sqMove(1); $('sq-replay').onclick = sqPlay;
+  sqState(sqStateFor(it)); sqList();
+  if (play) sqPlay();
+}
+function sqExtras() {
+  const flags = [...$('sq-cur').querySelectorAll('.sr-flags input[type=checkbox]:checked')].map(b => b.dataset.f);
+  const n = parseInt($('sq-count')?.value, 10);
+  return {flags, count:Number.isFinite(n) ? n : null, note:($('sq-note')?.value || '').trim()};
+}
+function sqPut(it, extras) {
+  const run = async () => { const r = await api('/qa/core/sequence-labels/' + sq.data.youtube_id, {method:'PUT', body:JSON.stringify({key:it.key, source:it.added ? 'added' : 'run', ...extras})}); sq.data.labels = r.labels; };
+  const p = sq.chain.then(run); sq.chain = p.catch(() => {}); return p;
+}
+async function sqPersist(it) {
+  const extras = sq.draft[it.key]; if (!extras) return true;
+  if (sq.items[sq.i]?.key === it.key) sqState('Saving…');
+  try { await sqPut(it, extras); }
+  catch (e) { if (sq.items[sq.i]?.key === it.key) sqState('NOT saved: ' + e.message + ' (kept here; retried when you leave)', true); return false; }
+  if (sq.draft[it.key] === extras) delete sq.draft[it.key];
+  const here = sq.items[sq.i]?.key; sqMerge(); sq.i = Math.max(0, sq.items.findIndex(x => x.key === here)); sqSummary(); sqList();
+  if (sq.items[sq.i]?.key === it.key) sqState(sqStateFor(it));
+  return true;
+}
+async function sqFlush() { if (sq.timer) { clearTimeout(sq.timer); sq.timer = null; } const it = sq.items[sq.i]; return it ? sqPersist(it) : true; }
+function sqEdited() {
+  const it = sq.items[sq.i]; if (!it) return;
+  sq.draft[it.key] = sqExtras(); sqState('Not saved yet…');
+  clearTimeout(sq.timer); sq.timer = setTimeout(() => { sq.timer = null; sqPersist(it); }, 600);
+}
+function sqPlay() { const it = sq.items[sq.i]; if (!it) return; video().playbackRate = sq.rate; seek(it.start_ms - 1000, it.end_ms + 1000); }
+async function sqGo(index, play) { await sqFlush(); sq.i = index; sqShow(play); }
+async function sqMove(step) {
+  const pos = sq.view.indexOf(sq.items[sq.i]);
+  const next = pos < 0 ? sq.view.find(x => x.start_ms >= sq.items[sq.i].start_ms) : sq.view[pos + step];
+  if (next) await sqGo(sq.items.indexOf(next), true);
+}
+$('sq-add').onclick = async () => {
+  if (!sq.data) return;
+  const t = nowMs(), actor = $('sq-add-actor').value;
+  if (t < sq.data.start_ms || t >= sq.data.end_ms) { $('sq-msg').textContent = 'The playhead is outside this run (' + fmt(sq.data.start_ms) + '–' + fmt(sq.data.end_ms) + ').'; return; }
+  const note = $('sq-add-note').value.trim() || 'missed sequence';
+  try { const r = await api('/qa/core/sequence-labels/' + sq.data.youtube_id, {method:'PUT', body:JSON.stringify({key:actor + '@' + t, source:'added', flags:[], note})}); sq.data.labels = r.labels; }
+  catch (e) { $('sq-msg').textContent = 'Not saved: ' + e.message; return; }
+  $('sq-add-note').value = ''; sqMerge(); sq.i = sq.items.findIndex(x => x.key === actor + '@' + t); sqView(); sqShow(false);
+};
+document.addEventListener('keydown', e => {
+  if (activeReview !== 'sq' || !sq.data || $('sq-body').hidden || e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const f = SQ_FLAGS.find(x => x[2] === e.key);
+  if (f) { e.preventDefault(); const box = $('sq-cur').querySelector('input[data-f="' + f[0] + '"]'); if (box) { box.checked = !box.checked; sqEdited(); } }
+  else if (e.key === 'ArrowRight' || e.key === 'Enter') { e.preventDefault(); sqMove(1); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); sqMove(-1); }
+  else if (e.key === ' ' && !e.target.closest('button, video')) { e.preventDefault(); sqPlay(); }
+});
+
+loadDefaults(); loadRuns(); srInit(); sqInit();
+</script>
+</body>
+</html>

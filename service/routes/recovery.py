@@ -1,29 +1,27 @@
-"""Startup recovery and interrupted-job replacement."""
+"""Startup recovery for interrupted and pending highlight jobs."""
 
 import json
 import logging
 from datetime import datetime, timezone
 
-from service.analysis_keyspaces_enums import JobState
-from service.checkpoints import build_resume_plan, select_correction_checkpoint
+from service.analysis_keyspaces_enums import RETIRED_TRACKING_MESSAGE, JobState
 from service.checkpoints.highlight_resume import build_highlight_resume_plan
 from service.models import AdmittedTrackRequest
 from service.routes import state as route_state
-from service.routes.resume_job_factory import build_resume_params, create_replacement_job
 import service.routes as routes_pkg
 
 logger = logging.getLogger("service.routes")
 
 
 async def _mark_unrecoverable_highlight_request(job_id: str, message: str) -> None:
-    """Make an exact-replay contract failure terminal and user-visible."""
+    """Make an unrecoverable job terminal and user-visible."""
     route_state._require_write(
         await route_state._jobs_store.set_state(
             job_id,
             JobState.FAILED,
             error_message=message,
         ),
-        "invalid recovered highlight request state",
+        "unrecoverable job state",
     )
 
 
@@ -35,8 +33,8 @@ async def drain_orphan_pending_jobs_on_startup(
     """Re-schedule ``PENDING`` jobs persisted in Keyspaces without a local worker task.
 
     ``RecoveryManager`` only revives stale ``RUNNING`` / ``INTERRUPTED`` lifecycles.
-    Resume/detection handoff creates a replacement row in ``PENDING`` and then calls
-    ``_schedule_job``; if the process exits before ``run_job`` flips the row to
+    ``POST /track`` creates the row in ``PENDING`` and then calls
+    ``_schedule_job``; if the process exits before the job flips the row to
     ``RUNNING``, no asyncio task survives restart — this drain reloads the saved
     admitted request with its effective analysis snapshot and schedules it again.
 
@@ -95,6 +93,14 @@ async def drain_orphan_pending_jobs_on_startup(
             expected_owner_instance_id=expected_owner,
         )
         if not claimed:
+            continue
+
+        if lifecycle.get("pipeline_kind") != "highlight_v2":
+            await _mark_unrecoverable_highlight_request(job_id, RETIRED_TRACKING_MESSAGE)
+            logger.warning(
+                "Startup pending drain: job %s has pipeline_kind=%r (retired); marked FAILED",
+                job_id, lifecycle.get("pipeline_kind"),
+            )
             continue
 
         try:
@@ -187,83 +193,49 @@ async def bootstrap_recovery_on_startup(
 
 
 async def recover_interrupted_job(lifecycle: dict) -> None:
-    """Create and schedule a replacement job for an interrupted worker job.
+    """Resume an interrupted ``highlight_v2`` job.
 
-    S12 Phase 1b (design §6.3): branches on ``lifecycle["pipeline_kind"]``.
-    A ``highlight_v2`` job has NO replacement-job chain at all — its
-    checkpoints are chunk-granularity, not per-process-run-shaped (no SAM2
-    state, no active GPU tensors), so resume is simply
-    "re-invoke ``run_highlight_job`` for the SAME ``job_id``, skipping
-    completed chunks" (``build_highlight_resume_plan``). Everything below
-    the branch is the UNCHANGED tracking-pipeline replacement-job flow
-    (``create_replacement_job``, new ``job_id``, CAS ``claim_replacement``,
-    ``origin_job_id``/``parent_job_id`` lineage) — dormant back-compat
-    default for rows without ``pipeline_kind`` set (absent ->
-    ``"tracking"``, per ``jobs_store.get_lifecycle``)."""
+    There is no replacement-job chain: resume is "re-invoke
+    ``run_highlight_job`` for the SAME ``job_id``, skipping completed chunks"
+    (``build_highlight_resume_plan``). Any other ``pipeline_kind`` (including
+    the NULL/``"tracking"`` rows left by the retired local tracking pipeline)
+    cannot be resumed and is failed with an explicit reason."""
     job_id = lifecycle.get("job_id", "")
     try:
         if lifecycle.get("replacement_job_id"):
             return
 
+        if lifecycle.get("pipeline_kind") != "highlight_v2":
+            await _mark_unrecoverable_highlight_request(job_id, RETIRED_TRACKING_MESSAGE)
+            logger.warning(
+                "Recovery: job %s has pipeline_kind=%r (retired); marked FAILED, not resumed",
+                job_id, lifecycle.get("pipeline_kind"),
+            )
+            return
+
         request_json = await route_state._jobs_store.get_request(job_id)
         if not request_json:
             message = f"Original request not found for interrupted job {job_id}"
-            if lifecycle.get("pipeline_kind") == "highlight_v2":
-                await _mark_unrecoverable_highlight_request(job_id, message)
+            await _mark_unrecoverable_highlight_request(job_id, message)
             raise RuntimeError(message)
 
-        if lifecycle.get("pipeline_kind") == "highlight_v2":
-            checkpoints = await route_state._jobs_store.get_all_checkpoints(job_id)
-            resume_plan = build_highlight_resume_plan(checkpoints)
-            try:
-                request = AdmittedTrackRequest(**json.loads(request_json))
-            except Exception as exc:
-                message = (
-                    "Interrupted job cannot resume without a valid effective "
-                    f"analysis settings snapshot: {exc}"
-                )
-                await _mark_unrecoverable_highlight_request(job_id, message)
-                raise RuntimeError(message) from exc
-            logger.info(
-                "Recovery (highlight_v2): job %s resuming from chunk_index=%d "
-                "(no replacement job — same job_id)",
-                job_id, resume_plan["resume_from_chunk_index"],
-            )
-            routes_pkg._schedule_job(job_id, request)
-            return
-
-        resume_params = json.loads(request_json)
         checkpoints = await route_state._jobs_store.get_all_checkpoints(job_id)
-        correction_stage, _ = select_correction_checkpoint(checkpoints)
-        resume_plan = build_resume_plan(checkpoints)
-        if resume_plan.pipeline_already_complete:
-            logger.info(
-                "Recovery skip: job %s checkpoints show pipeline already terminal-complete",
-                job_id,
+        resume_plan = build_highlight_resume_plan(checkpoints)
+        try:
+            request = AdmittedTrackRequest(**json.loads(request_json))
+        except Exception as exc:
+            message = (
+                "Interrupted job cannot resume without a valid effective "
+                f"analysis settings snapshot: {exc}"
             )
-            route_state._require_write(
-                await route_state._jobs_store.set_state(job_id, JobState.COMPLETED),
-                "mark stale job completed",
-            )
-            return
-
-        resume_params = build_resume_params(
-            job_id, resume_params, checkpoints, resume_plan,
+            await _mark_unrecoverable_highlight_request(job_id, message)
+            raise RuntimeError(message) from exc
+        logger.info(
+            "Recovery (highlight_v2): job %s resuming from chunk_index=%d "
+            "(no replacement job — same job_id)",
+            job_id, resume_plan["resume_from_chunk_index"],
         )
-
-        await create_replacement_job(
-            job_id,
-            lifecycle,
-            resume_params,
-            checkpoints,
-            correction_stage,
-            claim_expected_state=JobState.INTERRUPTED,
-            on_claim_failure="cancel_and_return",
-            lifecycle_operation="recovery replacement lifecycle",
-            request_operation="recovery replacement request",
-            latest_operation="latest recovery replacement",
-            old_checkpoint_operation="interrupted job replacement checkpoint",
-        )
+        routes_pkg._schedule_job(job_id, request)
     except Exception:
         # Re-raise so callers (RecoveryManager, bootstrap) see the failure,
         # but ensure the full stack lands in service.log even when their

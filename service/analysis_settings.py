@@ -19,12 +19,12 @@ class AnalysisSettingsValidationError(ValueError):
 
 _CAPABILITIES = AnalysisSettingsCapabilities(
     schema_version=1,
-    qualified_models=("gemini-3.5-flash",),
+    qualified_models=("gemini-3.8-flash",),
     media_resolutions=("low", "medium", "high"),
     analysis_fps=(1, 10),
-    thinking_levels=("off", "low", "medium", "high"),
+    thinking_levels=("low", "medium", "high"),
     recommended=AnalysisSettingsRecommendation(
-        model="gemini-3.5-flash",
+        model="gemini-3.8-flash",
         media_resolution="low",
         analysis_fps=10,
         thinking="high",

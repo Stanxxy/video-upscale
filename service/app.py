@@ -4,7 +4,7 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 
-# SAM2 uses tqdm in propagate_in_video; disable bar output so service.log stays readable.
+# Keep progress-bar output out of service.log.
 os.environ.setdefault("TQDM_DISABLE", "1")
 
 from dotenv import load_dotenv
@@ -71,6 +71,10 @@ INSTANCE_ID = str(uuid.uuid4())[:8]  # unique per process
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if os.environ.get("BJJ_DAG_ENGINE_ENABLED") == "1" and not getattr(
+        app.state, "dag_owned_entrypoint", False
+    ):
+        raise RuntimeError("DAG engine requires python -m service.dag_server")
     config = ServiceConfig()
     job_store = InMemoryJobStore()
 

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "core_version": "0.3.0",
+  "prompt_bundle_sha256": "5439d26c52515794c9412c6fe52b63f0befeeac475e37becf644a6c01ebe672d",
+  "position_scan": {
+    "model": "gemini-4-hydrogen",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 1
+  },
+  "position_critique": null,
+  "technique_scan": null,
+  "technique_critique": null,
+  "technique_analyze": null,
+  "technique_validate": null,
+  "candidates": null,
+  "position_critique_back_ms": 4000,
+  "position_critique_forward_ms": 6000,
+  "position_critique_context": "proposed",
+  "max_call_attempts": 2,
+  "ground_rescan": {
+    "model": "gemini-4-hydrogen",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 5
+  },
+  "ground_window_ms": 20000,
+  "ground_lookback_ms": 5000,
+  "sequence_census": {
+    "model": "gemini-4-hydrogen",
+    "thinking": "high",
+    "media_resolution": "low",
+    "fps": 10
+  },
+  "sequence_window_ms": 20000,
+  "sequence_overlap_ms": 5000
+}

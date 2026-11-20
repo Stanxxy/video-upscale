@@ -103,13 +103,6 @@ confident-wrong labels without losing any decision a coach actually makes.
 | `unsuccessful` | Attempt didn't land |
 | `unclear` | Scramble/contested moment resolved without a clean read |
 
-## Optional bonus field — `technique_guess` (free text, ungated)
-
-You MAY add a specific-name guess (e.g. "possibly a kimura," "looked like De
-La Riva sweep"). This is low-stakes annotation color for the user to
-confirm/reject in one click — it NEVER gates or defines the Axis 1/3/4 enum
-labels above, and is not validated against any list.
-
 ---
 
 ## Athlete Identification (grounded)
@@ -125,7 +118,7 @@ top/bottom ONLY inside `reasoning`, never as the identity.
 
 1. **The "Climax" Rule:** Center the clip around the *point of maximum impact or transition*.
 2. **Significance Filter:** Do not select low-activity stalling or minor grip fighting. Only select sequences where the match state changes or a major technique is clearly applied.
-3. **Capture Attempts:** Do not wait for a tap-out. If a submission setup is deep and forces a reaction, tag `axis3_action` with the relevant `submission_*` class and set `technique_guess` to the specific submission (e.g., "armbar").
+3. **Capture Attempts:** Do not wait for a tap-out. If a submission setup is deep and forces a reaction, tag `axis3_action` with the relevant `submission_*` class.
 4. **Use Enum Values Only:** `axis1_position`, `axis3_action`, and `axis4_outcome` MUST use exact values from the tables above. Do NOT invent new values, do NOT abbreviate, do NOT combine axes, do NOT fall back to the old top/bottom `role` convention.
 
 ---
@@ -147,7 +140,6 @@ Each clip object must include:
 | `axis3_action` | Array of String | Yes | One or more `axis3_action` values above — exact match |
 | `axis4_outcome` | String | Yes | One `axis4_outcome` value above — exact match |
 | `actor_player_id` | String | Yes | `player_id` of the athlete performing the technique, chosen only from the provided players |
-| `technique_guess` | String | No | Optional free-text specific-technique guess (e.g., "Uchi Mata") — ungated |
 | `identity_uncertain` | Boolean | No | `true` if athletes are too entangled to identify confidently |
 | `reasoning` | String | No | Biomechanical explanation; gi color / top-bottom may appear here as descriptors only — never as identity |
 | `confidence` | Float | No | Certainty 0.0–1.0 |
@@ -164,7 +156,6 @@ Each clip object must include:
       "axis3_action": ["takedown_attempt"],
       "axis4_outcome": "successful",
       "actor_player_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "technique_guess": "Uchi Mata",
       "identity_uncertain": false,
       "reasoning": "Player A secures a collar grip and overhook, off-balances Player B forward, and uses the inner thigh to elevate and throw B to the mat.",
       "confidence": 0.95
@@ -176,7 +167,6 @@ Each clip object must include:
       "axis3_action": ["submission_choke"],
       "axis4_outcome": "unsuccessful",
       "actor_player_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "technique_guess": "Guillotine Choke Attempt",
       "identity_uncertain": false,
       "reasoning": "As Player B shot for a takedown, Player A wrapped the neck and closed the guard. Player B eventually popped their head out.",
       "confidence": 0.88

@@ -1,0 +1,11 @@
+Review the specified position/role/observation transition against the video and
+labelled athlete crops. The rough timestamp and proposed states are hypotheses.
+Confirm only a visible change; correct its absolute source-video millisecond time
+and full state. A genuine matching change later in the observation window is a
+correction, not a rejection merely because its rough timestamp was early.
+For rejection return confirmed=false and null corrected_at_ms/state_after.
+For confirmation return confirmed=true with both corrected fields. Preserve the
+requested transition_index. Explain visible geometry, not an expected BJJ sequence.
+Use supplied semantic role pairs, especially rear controller versus defender and
+turtled athlete versus opponent; never infer these from who is physically above.
+Return only structured JSON. Do not judge dominance, winner or acceptance.

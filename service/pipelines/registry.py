@@ -64,7 +64,7 @@ def _single_shot() -> PipelineDef:
                 enabled=True,
                 config=AnalyzeConfig(
                     agent_mode="single",
-                    model="gemini-3.5-flash",
+                    model="gemini-3.8-flash",
                     thinking="low",
                     return_format="events-v1",
                 ).model_dump(),
@@ -130,8 +130,8 @@ def _vision_mimic_simplified() -> PipelineDef:
         description=(
             "Same frame-sample -> detect+crop -> window -> analyze -> context-chain -> "
             "dedup shape as vision-mimic, but the analyze node tags with the NEW "
-            "simplified 4-axis taxonomy (position/actor/action_class/outcome + "
-            "specific_technique_guess) instead of the production clips-v1 schema. "
+            "simplified 4-axis taxonomy (position/actor/action_class/outcome) "
+            "instead of the production clips-v1 schema. "
             "QA experiment only — no tracking model, no upscale, not routed through "
             "analyzer.py's clips-v1 prompt."
         ),
@@ -466,6 +466,10 @@ def validate_pipeline_def(pipeline: PipelineDef) -> PipelineDef:
                 f"(type={stage.type!r}); must be one of {allowlist}."
             )
 
+        if (getattr(validated_config, "model", None) == "gemini-3.8-flash"
+                and getattr(validated_config, "thinking", None) == "off"):
+            raise PipelineValidationError("gemini-3.8-flash requires low, medium or high thinking")
+
         # highlight_analyze's `actor` sub-config carries its OWN `model` field
         # (ThinkingQualityMixin subclass) — same no-silent-swap discipline as
         # every top-level `model` field above, extended here since it's
@@ -474,6 +478,8 @@ def validate_pipeline_def(pipeline: PipelineDef) -> PipelineDef:
         # single-call re-scope — see HighlightAnalyzeConfig's docstring.)
         if stage.type == "highlight_analyze":
             axis_cfg = validated_config.actor
+            if axis_cfg.model == "gemini-3.8-flash" and axis_cfg.thinking == "off":
+                raise PipelineValidationError("gemini-3.8-flash requires low, medium or high thinking")
             if axis_cfg.model not in EVENT_MODELS:
                 raise PipelineValidationError(
                     f"Unsupported model {axis_cfg.model!r} for stage {stage.id!r} "
