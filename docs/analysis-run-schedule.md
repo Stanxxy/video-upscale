@@ -79,6 +79,10 @@ Each discovered candidate is rehydrated and validated before lifecycle inspectio
   report `explicit_recovery_required`. No automatic recovery/paid retry is granted.
 - `COMPLETED`: reauthorize and confirm completion, then remove only the exact
   discovery hint. Lifecycle, checkpoint, usage and result history remain intact.
+- Retired baseline (`RetiredAnnotationHistory`: the run was admitted against content
+  from before the taxonomy migration, so it can never be dispatched): remove the
+  exact discovery hint, log once at INFO and report `retired`. Nothing else is
+  written; a failed removal reports `unconfirmed` and is retried on the next pass.
 - Invalid registration, revoked access, malformed hints or uncertain failures:
   report `unconfirmed` and retain the entry for inspection/reconciliation.
 

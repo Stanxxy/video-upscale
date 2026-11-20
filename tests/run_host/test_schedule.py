@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -14,6 +15,7 @@ from service.analysis_run_schedule import (
     SchedulePage,
 )
 from service.analysis_run_worker import KeyspacesRunLease
+from shared_lib.models.analysis_metadata import RetiredAnnotationHistory
 
 
 @pytest.fixture
@@ -244,6 +246,59 @@ async def test_access_revocation_retains_hint_without_dispatch(
     page = await queue.process_page(run.spec.run_id.int % 16)
     assert page.attempts[0].status == "unconfirmed" and wire.calls == []
     assert await queue._state(run) is None
+
+
+def retire_baseline(queue, run):
+    async def retired(run_id):
+        raise RetiredAnnotationHistory(run.spec.analysis_id, 0, 49)
+
+    queue.dispatcher.proposals.resolve_delivery_run = retired
+
+
+@pytest.mark.asyncio
+async def test_retired_baseline_removes_hint_once_without_dispatch(
+    setup_dispatch, schedule_table, caplog
+):
+    queue, run, wire = schedule(setup_dispatch)
+    await queue.enqueue(run.spec.run_id)
+    key, shard = queue._key(run), run.spec.run_id.int % 16
+    retire_baseline(queue, run)
+    with caplog.at_level(logging.INFO, logger="service.analysis_run_schedule"):
+        page = await queue.process_page(shard)
+        assert [(a.run_id, a.status) for a in page.attempts] == [
+            (run.spec.run_id, "retired")
+        ]
+        assert await queue._execute(
+            f"SELECT * FROM {queue.index} WHERE recovery_state=%s AND heartbeat_bucket=%s",
+            key[:2],
+        ) == []
+        # The next pass has nothing to read for this run and nothing to report.
+        assert (await queue.process_page(shard)).attempts == ()
+    retired = [r for r in caplog.records if str(run.spec.run_id) in r.getMessage()]
+    assert [r.levelno for r in retired] == [logging.INFO]
+    assert wire.calls == [] and await queue._state(run) is None
+
+
+@pytest.mark.asyncio
+async def test_unconfirmed_retired_hint_removal_is_retried(
+    setup_dispatch, schedule_table
+):
+    queue, run, wire = schedule(setup_dispatch)
+    await queue.enqueue(run.spec.run_id)
+    shard = run.spec.run_id.int % 16
+    retire_baseline(queue, run)
+    execute = queue._execute
+
+    async def failed_delete(query, values, **options):
+        if query.startswith("DELETE"):
+            raise TimeoutError("discovery removal not acknowledged")
+        return await execute(query, values, **options)
+
+    queue._execute = failed_delete
+    assert (await queue.process_page(shard)).attempts[0].status == "unconfirmed"
+    queue._execute = execute
+    assert (await queue.process_page(shard)).attempts[0].status == "retired"
+    assert (await queue.process_page(shard)).attempts == () and wire.calls == []
 
 
 @pytest.mark.asyncio
