@@ -7,9 +7,9 @@ from service.s3 import S3Client
 
 logger = logging.getLogger("service.worker")
 
-# LocalStack's default account. Real AWS topic ARNs use a non-zero account and
-# must never be published through the emulator endpoint.
-_LOCALSTACK_ACCOUNT_ID = "000000000000"
+# LocalStack's default account. Real AWS topic ARNs must never be published
+# through the emulator endpoint.
+_LOCALSTACK_DEFAULT_ACCOUNT_ID = "000000000000"
 
 
 def _make_s3(config: ServiceConfig) -> S3Client:
@@ -30,6 +30,20 @@ def _sns_account_id(topic_arn: str | None) -> str | None:
     return parts[4]
 
 
+def _emulator_account_id(config: ServiceConfig) -> str:
+    """LocalStack account implied by the configured credentials.
+
+    Shared local infra isolates streams by AWS account: the namespace's access key
+    is its 12-digit account id. Any other key (``test``, unset, or a real ``AKIA…``
+    key) means the default emulator account. Real AWS account ARNs therefore never
+    match, because real access keys are not 12-digit account ids.
+    """
+    key = config.aws_access_key_id
+    if len(key) == 12 and key.isdigit():
+        return key
+    return _LOCALSTACK_DEFAULT_ACCOUNT_ID
+
+
 def _sns_endpoint_url(
     config: ServiceConfig, topic_arn: str | None = None,
 ) -> str | None:
@@ -37,7 +51,7 @@ def _sns_endpoint_url(
     if not endpoint:
         return None
     account_id = _sns_account_id(topic_arn)
-    if account_id and account_id != _LOCALSTACK_ACCOUNT_ID:
+    if account_id and account_id != _emulator_account_id(config):
         return None
     return endpoint
 

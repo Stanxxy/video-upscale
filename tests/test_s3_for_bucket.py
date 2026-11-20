@@ -56,3 +56,36 @@ def test_localstack_sns_arn_keeps_emulator_endpoint() -> None:
         config,
         "arn:aws:sns:us-east-1:000000000000:bjj-video-analysis-integration-events",
     ) == "http://127.0.0.1:4566"
+
+
+_NS_ARN = "arn:aws:sns:us-east-1:000000000039:bjj-video-analysis-integration-events"
+
+
+def test_namespaced_emulator_account_keeps_endpoint_for_its_own_arn() -> None:
+    # Shared local infra: the namespace is the 12-digit access key == LocalStack account.
+    config = ServiceConfig(
+        aws_access_key_id="000000000039",
+        sns_endpoint_url="http://127.0.0.1:4566",
+        s3_endpoint_url="http://127.0.0.1:4566",
+    )
+    assert _sns_endpoint_url(config, _NS_ARN) == "http://127.0.0.1:4566"
+
+
+def test_namespaced_account_never_publishes_to_another_accounts_arn() -> None:
+    config = ServiceConfig(
+        aws_access_key_id="000000000039",
+        sns_endpoint_url="http://127.0.0.1:4566",
+    )
+    real = "arn:aws:sns:us-east-1:026293068542:video_analysis_events"
+    other_ns = "arn:aws:sns:us-east-1:000000000040:bjj-video-analysis-integration-events"
+    legacy = "arn:aws:sns:us-east-1:000000000000:bjj-video-analysis-integration-events"
+    assert _sns_endpoint_url(config, real) is None
+    assert _sns_endpoint_url(config, other_ns) is None
+    assert _sns_endpoint_url(config, legacy) is None
+
+
+def test_default_key_still_targets_legacy_emulator_account_only() -> None:
+    config = ServiceConfig(aws_access_key_id="test", sns_endpoint_url="http://127.0.0.1:4566")
+    legacy = "arn:aws:sns:us-east-1:000000000000:bjj-video-analysis-integration-events"
+    assert _sns_endpoint_url(config, legacy) == "http://127.0.0.1:4566"
+    assert _sns_endpoint_url(config, _NS_ARN) is None

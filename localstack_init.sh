@@ -22,12 +22,15 @@ set -euo pipefail
 # ── Config ──────────────────────────────────────────────────────────────────
 ENDPOINT="${LOCALSTACK_ENDPOINT:-http://localhost:4566}"
 REGION="us-east-1"
-ACCOUNT_ID="000000000000"   # LocalStack fixed account ID
+# Shared local infra: the namespace's 12-digit AWS_ACCESS_KEY_ID *is* the LocalStack account
+# (eval "$(scripts/localinfra.sh ns env sNN)" from the umbrella repo). Unset/other => legacy account.
+AWS_KEY="${AWS_ACCESS_KEY_ID:-test}"
+if [[ "$AWS_KEY" =~ ^[0-9]{12}$ ]]; then ACCOUNT_ID="$AWS_KEY"; else AWS_KEY="test"; ACCOUNT_ID="000000000000"; fi
 
 TOPIC_NAME="video_analysis_events"
 QUEUE_NAME="video_analysis_events_db_consumer"
 DLQ_NAME="video_analysis_events_dlq"
-S3_BUCKET="bjj-video-analysis"
+S3_BUCKET="${VIDEO_STORAGE_BUCKET:-bjj-video-analysis}"   # namespaced runs: <nsid>-bjj-video-analysis
 
 QUEUE_VISIBILITY_TIMEOUT=60     # seconds — time to process a message before it reappears
 QUEUE_RETENTION_SECONDS=86400   # 1 day
@@ -51,7 +54,7 @@ ok()     { printf '  \033[0;32m✓\033[0m %s\n' "$*"; }
 
 # AWS CLI wrapper — always targets LocalStack with dummy credentials
 aws_local() {
-    AWS_ACCESS_KEY_ID=test \
+    AWS_ACCESS_KEY_ID="$AWS_KEY" \
     AWS_SECRET_ACCESS_KEY=test \
     AWS_DEFAULT_REGION="$REGION" \
     aws --endpoint-url="$ENDPOINT" --region="$REGION" --output json "$@"
@@ -209,7 +212,7 @@ blue "━━━━━━━━━━━━━━━━━━━━━━━━�
 cat <<EOF
 
 BJJ_AWS_REGION=${REGION}
-BJJ_AWS_ACCESS_KEY_ID=test
+BJJ_AWS_ACCESS_KEY_ID=${AWS_KEY}
 BJJ_AWS_SECRET_ACCESS_KEY=test
 BJJ_S3_ENDPOINT_URL=${ENDPOINT}
 BJJ_SNS_TOPIC_ARN=${TOPIC_ARN}
@@ -224,7 +227,7 @@ cat <<EOF
   DLQ URL   : ${DLQ_URL}
   Region    : ${REGION}
   Endpoint  : ${ENDPOINT}
-  Access key: test / test
+  Access key: ${AWS_KEY} / test
 
 EOF
 green "Done. LocalStack is ready."
