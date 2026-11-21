@@ -2,6 +2,7 @@
 
 Discovery is a hint. Immutable registration/current authority and lifecycle CAS
 still own dispatch. No auto-resume, new admission, expiry deletion or schema DDL.
+The one removal besides completion is a run whose baseline shared_lib has retired.
 """
 
 import asyncio
@@ -15,6 +16,7 @@ from cassandra import ConsistencyLevel
 from cassandra.policies import FallthroughRetryPolicy
 from cassandra.query import SimpleStatement
 from shared_lib.infrastructure.dag_admission_relay import run_io
+from shared_lib.models.analysis_metadata import RetiredAnnotationHistory
 
 from service.analysis_checkpoint_journal import _target
 
@@ -173,7 +175,25 @@ class PositionRunSchedule:
         run_id = UUID(row.job_id)
         if run_id.int % 16 != shard:
             raise ValueError("run in wrong shard")
-        run = await self._run(run_id)
+        try:
+            run = await self._run(run_id)
+        except RetiredAnnotationHistory:
+            # Admitted against content from before the taxonomy migration, so it can
+            # never be dispatched: a kept hint would repeat these reads every pass.
+            await self._execute(
+                f"DELETE FROM {self.index} WHERE recovery_state=%s AND heartbeat_bucket=%s AND last_heartbeat_at=%s AND job_id=%s",
+                [
+                    self.index_state,
+                    self._bucket(shard),
+                    _stamp(row.last_heartbeat_at),
+                    row.job_id,
+                ],
+            )
+            LOG.info(
+                "scheduled run %s retired: its baseline predates the taxonomy migration; discovery entry removed",
+                run_id,
+            )
+            return ScheduledAttempt(run_id, "retired")
         self._validate_candidate(row, run)
         state = await self._state(run)
         if state is not None and state.job_state == "COMPLETED":
