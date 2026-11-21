@@ -133,7 +133,7 @@ $('stop').textContent = D.stop_note;
 $('rounds').innerHTML = '<tr><th>#</th><th>Change</th><th>Measure</th><th>Before</th><th>After</th><th>Result</th></tr>' +
   D.rounds.map(r => `<tr><td class="n">${r[0]}</td><td class="txt">${esc(r[1])}</td><td class="txt">${esc(r[2])}</td><td class="n">${esc(r[3])}</td><td class="n">${esc(r[4])}</td><td><span class="pill ${r[5] === 'advance' ? 'good' : 'bad'}">${r[5]}</span></td></tr>`).join('');
 const T = D.identity.tuning, H = D.identity.heldout;
-$('dets').innerHTML = '<tr><th>Detector + identity stage</th><th>ms / frame</th><th>Peak GB</th><th>Tuning: fighter boxes right (of 201)</th><th>Held out (of 351)</th></tr>' +
+$('dets').innerHTML = '<tr><th>Detector + identity stage</th><th>ms / frame</th><th>Peak GB (host)</th><th>Tuning: fighter boxes right (of 201)</th><th>Held out (of 351)</th></tr>' +
   D.detectors.map(([k, name, ms, gb]) => { const t = T[k].ALL, h = H[k] && H[k].ALL;
     return `<tr><td>${esc(name)}</td><td class="n">${ms}</td><td class="n">${gb}</td><td class="n">${track(pct(t.right, t.boxed))}${t.right} · ${pct(t.right, t.boxed)}%</td><td class="n">${h ? track(pct(h.right, h.boxed)) + h.right + ' · ' + pct(h.right, h.boxed) + '%' : '<span class="rng">not run</span>'}</td></tr>`; }).join('');
 const kinds = [['right', 'Right box'], ['gt_shared', 'One box around both fighters (clinch, ground)'], ['third_person', 'Box on the referee or someone else'], ['swapped', 'A and B swapped'], ['missing', 'No box for a visible fighter'], ['gt_unboxed', 'No detector boxed him'], ['off', 'Box off the fighter']];

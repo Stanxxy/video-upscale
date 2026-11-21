@@ -111,7 +111,7 @@ def pose_check(data):
 
 def main(data):
     data = Path(data)
-    ident = dict(tuning={d: id_score(data, data / "idgt1", d, TUNE) for d in ("v1", "light", "pruned16", "repvit", "rtmo", "rtmoz")},
+    ident = dict(tuning={d: id_score(data, data / "idgt1", d, TUNE) for d in ("v1", "light", "pruned16", "repvit", "tinyvit", "rtmo", "rtmoz")},
                  heldout={d: id_score(data, data / "idgt2", d, HELD) for d in ("light", "rtmoz")})
     spend = {Path(p).stem: round(sum(json.loads(line).get("cost", 0) for line in open(p)), 2)
              for p in glob.glob(str(data / "runs" / "*.jsonl")) if Path(p).stem.startswith(("lean_", "slide_", "o2_"))}
