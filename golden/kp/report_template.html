@@ -1,0 +1,217 @@
+<title>Strike Sensing Bench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column for findings, full-width tables in scroll boxes, a card grid for the bad-case gallery.
+   A/B colours match the overlays drawn on the frames (A red, B blue). */
+:root {
+  --bg: #f3f2ef; --panel: #ffffff; --fg: #1d1f22; --muted: #5d6168; --line: #d9d7d2;
+  --a: #c8342b; --b: #2463c7; --ink: #2b3a4a; --good: #1e7a46; --warn: #a86a00; --bad: #b3261e; --chip: #e7e5e0;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15171a; --panel: #1e2125; --fg: #e8e6e1; --muted: #a3a7ad; --line: #34383e;
+  --a: #ef6b61; --b: #6b9cf0; --ink: #b8c7d8; --good: #5cc48a; --warn: #e0a640; --bad: #f07a70; --chip: #2a2e33; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15171a; --panel: #1e2125; --fg: #e8e6e1; --muted: #a3a7ad; --line: #34383e;
+  --a: #ef6b61; --b: #6b9cf0; --ink: #b8c7d8; --good: #5cc48a; --warn: #e0a640; --bad: #f07a70; --chip: #2a2e33; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 22px; font-weight: 700; margin-top: 44px; padding-top: 18px; border-top: 2px solid var(--fg); }
+h3 { font-size: 16px; font-weight: 700; }
+p { max-width: 68ch; margin: 8px 0; }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--muted); max-width: 72ch; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.answers { display: grid; gap: 14px; margin-top: 20px; }
+.answer { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; }
+.answer .q { font: 600 12px/1.3 var(--mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.answer .v { font-family: var(--display); font-weight: 700; font-size: 18px; }
+.answer ul { margin: 4px 0 0; padding-left: 18px; }
+.scroll { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px/1.3 var(--mono); color: var(--muted); letter-spacing: 0.03em; white-space: nowrap; }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.bar { display: inline-block; height: 8px; border-radius: 0 4px 4px 0; background: var(--ink); vertical-align: middle; margin-left: 6px; }
+.rng { color: var(--muted); font-size: 12px; }
+.pill { display: inline-block; font: 600 11px/1 var(--mono); padding: 4px 7px; border-radius: 999px; background: var(--chip); color: var(--fg); white-space: nowrap; }
+.pill.good { color: var(--good); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--bad); }
+.A { color: var(--a); font-weight: 600; } .B { color: var(--b); font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.filters button { font: 600 13px/1 var(--body); padding: 9px 12px; min-height: 40px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--fg); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.filters button:focus-visible, summary:focus-visible { outline: 2px solid var(--b); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.card img { display: block; width: 100%; height: auto; background: #000; }
+.card .body { padding: 12px 14px; display: grid; gap: 8px; font-size: 14px; min-width: 0; }
+.card .head { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; justify-content: space-between; }
+.card .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.calls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 520px) { .calls { grid-template-columns: 1fr; } }
+.calls div { background: var(--bg); border-radius: 4px; padding: 8px; min-width: 0; }
+.calls b, .lab { font: 600 11px/1.2 var(--mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+.note { color: var(--muted); }
+details summary { cursor: pointer; font-weight: 600; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
+.two > * { min-width: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 6px; }
+@media (prefers-reduced-motion: no-preference) { .card { transition: border-color .15s; } .card:hover { border-color: var(--ink); } }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow" id="meta"></div>
+  <h1>Strike Sensing Bench</h1>
+  <p class="lede" id="lede"></p>
+  <div class="answers" id="answers"></div>
+
+  <h2>Does sensing help Gemini Hydrogen classify?</h2>
+  <p>Founder minute (CW R2 3:50–4:52, 30 labelled attacks and 6 blocks/defence moments). Each condition sends the same short windows around the labelled moments, so detection loss is excluded. Means over repeats; the small grey range is min–max across repeats.</p>
+  <div class="scroll"><table id="ablation"></table></div>
+  <div class="legend"><span>right fighter = an attack by the labelled fighter within 0.7 s</span><span>name = the founder's technique name among them</span><span>specific = jab/cross/hook/overhand/kick names exactly right, of 23</span><span>blocks counted = defence called a strike (lower is better), of 6</span></div>
+  <div class="two">
+    <div><h3 style="margin-top:22px">Technique confusion, frames only</h3><div class="scroll"><table id="conf_raw"></table></div></div>
+    <div><h3 style="margin-top:22px">Technique confusion, frames + skeleton + trace</h3><div class="scroll"><table id="conf_trace"></table></div></div>
+  </div>
+
+  <h2>End to end on the founder minute</h2>
+  <p id="e2e_lede"></p>
+  <div class="scroll"><table id="e2e"></table></div>
+  <h3 style="margin-top:22px">Strike candidates before any LLM</h3>
+  <div class="scroll"><table id="sweep"></table></div>
+  <details style="margin-top:12px"><summary>Every labelled strike: found or why it was missed</summary><div class="scroll"><table id="misses"></table></div></details>
+
+  <h2>Stage health, five windows</h2>
+  <p>Automatic numbers per stage, then the agent judges' visual verdicts on the contact sheets. Peak memory is the largest single stage; stages run one after another on gx10.</p>
+  <div class="scroll"><table id="stages"></table></div>
+  <h3 style="margin-top:22px">What the judges saw</h3>
+  <div class="scroll"><table id="judgeagg"></table></div>
+
+  <h2>Fine-tune material collected</h2>
+  <div id="datasets"></div>
+
+  <h2>Bad cases</h2>
+  <p>Each card is one window: six frames from the judge sheet (A red, B blue, thick yellow = the flagged limb's last 0.4 s), Gemini's two calls, the judge's verdict and, on the founder minute, the founder's labels.</p>
+  <div class="filters" id="filters"></div>
+  <div class="grid" id="cards"></div>
+</div>
+
+<script>
+const S = /*DATA*/null;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pct = (x) => x == null ? "–" : (100 * x).toFixed(1) + "%";
+const fighter = (f) => `<span class="${esc(f)}">${esc(f)}</span>`;
+
+$("meta").textContent = `x-mmagold · ${S.date} · gx10 sensing + Gemini Hydrogen · spend $${S.cost.toFixed(2)}`;
+$("lede").textContent = S.lede;
+$("answers").innerHTML = S.answers.map((a) => `<div class="answer"><div class="q">${esc(a.q)}</div><div class="v">${esc(a.verdict)}</div><ul>${a.points.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></div>`).join("");
+
+// ablation
+const condName = { video: "Video clip, 12 fps", raw: "Frames only", id: "Frames + identity boxes", pose: "+ skeletons", trace: "+ limb trails + trace card" };
+const cols = [["right_fighter", "Right fighter", 30], ["right_kind", "Right fighter + kind", 30], ["name", "Name", 30], ["specific_right", "Specific name", 23], ["defence_counted", "Blocks counted", 6], ["wrong_fighter_only", "Wrong fighter only", 30]];
+let h = `<tr><th>Input</th>${cols.map((c) => `<th>${c[1]}</th>`).join("")}<th>Reps</th><th>Cost</th></tr>`;
+h += `<tr><td>Kimi K3.1 Pro, 20 s windows (G2 bake-off)</td><td class="n">21</td><td class="n">–</td><td class="n">13</td><td class="n">–</td><td class="n">5</td><td class="n">–</td><td class="n">1</td><td class="n">–</td></tr>`;
+for (const c of ["video", "raw", "id", "pose", "trace"]) {
+  const r = S.ablation[c]; if (!r) continue;
+  h += `<tr><td>${condName[c]}</td>` + cols.map(([k, , max]) => { const m = r.metrics[k]; return `<td class="n">${m.mean}<span class="bar" style="width:${Math.round(60 * m.mean / max)}px"></span> <span class="rng">${m.lo}–${m.hi}</span></td>`; }).join("") + `<td class="n">${r.reps}</td><td class="n">$${r.cost.toFixed(2)}</td></tr>`;
+}
+$("ablation").innerHTML = h;
+function confTable(id, conf) {
+  const names = ["jab", "cross", "hook", "overhand", "uppercut", "roundhouse", "side_kick", "teep", "calf_kick", "clinch_knee", "double_leg", "single_leg"];
+  const rows = Object.keys(conf).sort();
+  let t = `<tr><th>Founder says</th><th>Gemini said (all repeats)</th></tr>`;
+  for (const g of rows) { const d = conf[g]; const tot = Object.values(d).reduce((a, b) => a + b, 0);
+    t += `<tr><td>${esc(g)}</td><td>${Object.entries(d).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="pill ${k === g ? "good" : k === "(missed)" ? "warn" : "bad"}">${esc(k)} ${v}/${tot}</span>`).join(" ")}</td></tr>`; }
+  $(id).innerHTML = t;
+}
+confTable("conf_raw", S.ablation.raw.confusion); confTable("conf_trace", S.ablation.trace.confusion);
+
+// end to end
+$("e2e_lede").textContent = S.e2e_lede;
+let e = `<tr><th>Input on sensing windows</th><th>Windows</th><th>Right fighter</th><th>Right fighter + kind</th><th>Name</th><th>Specific name</th><th>Blocks counted</th><th>Attacks listed</th><th>Cost</th></tr>`;
+for (const [c, lab] of [["raw", "Frames only"], ["trace", "+ skeleton, trails, card"]]) { const r = S.endtoend[c]; if (!r) continue; const m = r.metrics;
+  e += `<tr><td>${lab}</td><td class="n">${r.windows}</td><td class="n">${m.right_fighter}/30</td><td class="n">${m.right_kind}/30</td><td class="n">${m.name}/30</td><td class="n">${m.specific_right}/23</td><td class="n">${m.defence_counted}/6</td><td class="n">${m.predicted}</td><td class="n">$${r.cost.toFixed(2)}</td></tr>`; }
+$("e2e").innerHTML = e;
+let sw = `<tr><th>Speed thresholds (punch / kick / knee, torso lengths per s)</th><th>Candidates</th><th>Any candidate ±0.3 s</th><th>Right fighter</th><th>Right fighter + limb</th></tr>`;
+for (const r of S.detection.sweep) sw += `<tr><td class="n">${r.thresholds.join(" / ")}</td><td class="n">${r.candidates}</td><td class="n">${r.any}/${S.detection.strikes}</td><td class="n">${r.right_fighter}/${S.detection.strikes}</td><td class="n">${r.right_fighter_limb}/${S.detection.strikes}</td></tr>`;
+$("sweep").innerHTML = sw;
+let ms = `<tr><th>Time</th><th>Fighter</th><th>Founder label</th><th>Result</th><th>Both tracked</th><th>Candidates nearby</th></tr>`;
+for (const m of S.detection.per_strike) ms += `<tr><td class="n">${m.t}</td><td>${fighter(m.fighter)}</td><td>${esc(m.name)}</td><td><span class="pill ${m.result === "found" ? "good" : m.result.startsWith("tracking") ? "bad" : "warn"}">${esc(m.result)}</span></td><td class="n">${pct(m.coverage)}</td><td>${esc(m.near.join("; "))}</td></tr>`;
+$("misses").innerHTML = ms;
+
+// stages
+const segs = Object.keys(S.segments).filter((s) => S.stats[s]);
+const srow = (lab, f) => `<tr><td>${lab}</td>${segs.map((s) => `<td class="n">${f(S.stats[s], s)}</td>`).join("")}</tr>`;
+$("stages").innerHTML = `<tr><th>Stage · measure</th>${segs.map((s) => `<th>${esc(S.segments[s].label)}</th>`).join("")}</tr>` +
+  srow("Identity · both fighters tracked", (x) => pct(x.identity.both_pct)) +
+  srow("Identity · camera gate (both ≥ 70%)", (x) => x.identity.camera_gate ? `<span class="pill good">pass</span>` : `<span class="pill bad">fail</span>`) +
+  srow("Identity · track switches / min", (x) => x.identity.switches) +
+  srow("Identity · kit conflicts (frames)", (x) => x.identity.kit_conflicts) +
+  srow("Identity · merged clinch blob (frames)", (x) => x.identity.merged) +
+  srow("Keypoints · limb joints below score 2.5", (x) => pct(x.keypoints.low_score_pct)) +
+  srow("Keypoints · limb joint inside opponent's mask", (x) => pct(x.keypoints.cross_mask_pct)) +
+  srow("Limb tracks · joint-frames from pose", (x) => pct(x.limbs.pose_pct)) +
+  srow("Limb tracks · filled by TAPNext++", (x) => pct(x.limbs.tracker_fill_pct)) +
+  srow("Limb tracks · no point at all", (x) => pct(x.limbs.none_pct)) +
+  srow("Limb tracks · pose and tracker disagree", (x) => pct(x.limbs.disagree_pct)) +
+  srow("Candidates / min", (x) => x.candidates) +
+  srow("Peak memory, GB (masks · pose · tracker)", (x) => `${x.stage.masks.peak_gb ?? "–"} · ${x.stage.keypoints.peak_gb ?? "–"} · ${x.stage.limbs.peak_gb ?? "–"}`);
+const jsegs = segs.filter((s) => S.judges[s]);
+const cnt = (o, keys) => keys.map((k) => o?.[k] ? `${k} ${o[k]}` : "").filter(Boolean).join(" · ") || "–";
+const jrow = (lab, f) => `<tr><td>${lab}</td>${jsegs.map((s) => `<td>${f(S.judges[s])}</td>`).join("")}</tr>`;
+$("judgeagg").innerHTML = `<tr><th>Judged windows</th>${jsegs.map((s) => `<th>${esc(S.segments[s].label)} (${S.judges[s].n})</th>`).join("")}</tr>` +
+  jrow("A box on A's kit", (j) => cnt(j.a_correct, ["yes", "partly", "no", "unclear"])) +
+  jrow("B box on B's kit", (j) => cnt(j.b_correct, ["yes", "partly", "no", "unclear"])) +
+  jrow("Skeleton A", (j) => cnt(j.skel_A, ["good", "minor", "bad", "absent"])) +
+  jrow("Skeleton B", (j) => cnt(j.skel_B, ["good", "minor", "bad", "absent"])) +
+  jrow("Flagged-limb trail follows the limb", (j) => cnt(j.trail, ["yes", "partly", "no", "no_trail"])) +
+  jrow("Camera cut in window", (j) => cnt(j.camera_cut, ["true"])) +
+  jrow("Gemini, frames only", (j) => cnt(j.gemini_frames, ["correct", "partly", "wrong", "unclear"])) +
+  jrow("Gemini, with overlays + card", (j) => cnt(j.gemini_overlays, ["correct", "partly", "wrong", "unclear"])) +
+  jrow("Gemini error types (overlays)", (j) => Object.entries(j.gemini_errors).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${esc(k)} ${v}`).join(" · ") || "–") +
+  jrow("Most common bad joints", (j) => Object.entries(j.bad_joints).slice(0, 5).map(([k, v]) => `${esc(k)} ${v}`).join("<br>") || "–");
+$("datasets").innerHTML = S.datasets_text.map((p) => `<p>${esc(p)}</p>`).join("");
+
+// gallery
+const tagsOf = (c) => { const t = []; const j = c.judge || {};
+  if (c.seg === "gold") t.push("Founder minute");
+  if (["no", "partly"].includes(j.identity?.a_correct) || ["no", "partly"].includes(j.identity?.b_correct) || (j.identity?.merged_frames || []).length) t.push("Identity");
+  if (["bad"].includes(j.skeleton?.A) || ["bad"].includes(j.skeleton?.B) || (j.skeleton?.bad_joints || []).length >= 2) t.push("Skeleton");
+  if (["no", "partly"].includes(j.trail?.focus_follows_limb)) t.push("Trail");
+  if (["wrong", "partly"].includes(j.gemini_check?.verdict)) t.push("Gemini wrong");
+  if (j.camera_cut === true) t.push("Camera cut");
+  return t; };
+const FILTERS = ["All", "Founder minute", "Identity", "Skeleton", "Trail", "Gemini wrong", "Camera cut"];
+let active = "All";
+try { active = localStorage.getItem("ssb-filter") || "All"; } catch (_) {}
+function callList(list) { if (!list) return `<span class="note">not run</span>`; if (!list.length) return `<span class="note">no attack</span>`;
+  return list.map((a) => `${fighter(a.fighter)} ${esc(a.technique)} <span class="num note">${Number(a.time_s).toFixed(2)}s</span>`).join("<br>"); }
+function cardHTML(c) { const j = c.judge; const tags = tagsOf(c);
+  const yt = `https://www.youtube.com/watch?v=${c.video}&t=${Math.floor(c.t0_s)}s`;
+  const verdict = j ? `<span class="pill ${j.gemini_check?.verdict === "correct" ? "good" : j.gemini_check?.verdict === "wrong" ? "bad" : "warn"}">judge: overlays ${esc(j.gemini_check?.verdict)} · frames ${esc(j.gemini_frames_only_verdict)}</span>` : `<span class="pill">not judged</span>`;
+  return `<article class="card"><img loading="lazy" src="img/${esc(c.window)}.jpg" alt="Six frames of window ${esc(c.window)}">
+  <div class="body"><div class="head"><h3>${esc(S.segments[c.seg].label)} · ${esc(c.start)} <span class="note num">+${c.length_s}s</span></h3><a href="${yt}" target="_blank" rel="noopener">source ↗</a></div>
+  <div class="tags">${tags.map((t) => `<span class="pill">${esc(t)}</span>`).join("")} ${verdict} <span class="pill">both tracked ${pct(c.coverage)}</span></div>
+  ${c.truth.length ? `<div><span class="lab">Founder</span>${c.truth.map((t) => `${fighter(t.fighter)} ${esc(t.name)} <span class="num note">${t.t.toFixed(2)}s</span>`).join(" · ")}</div>` : ""}
+  <div class="calls"><div><b>Gemini · frames only</b>${callList(c.gemini.raw)}</div><div><b>Gemini · overlays + card</b>${callList(c.gemini.trace)}</div></div>
+  ${j ? `<div><span class="lab">Judge</span>${esc(j.event?.what_happens)}${j.gemini_check?.note ? ` <span class="note">${esc(j.gemini_check.note)}</span>` : ""}${j.identity?.note ? `<br><span class="note">Identity: ${esc(j.identity.note)}</span>` : ""}${j.trail?.problem ? `<br><span class="note">Trail: ${esc(j.trail.problem)}</span>` : ""}</div>` : ""}
+  ${c.candidates.length ? `<details><summary>Detector candidates (${c.candidates.length})</summary>${c.candidates.map((k) => `${fighter(k.fighter)} ${esc(k.limb)} ${esc(k.lead_rear ?? "")} · ${k.speed} TL/s · curvature ${k.curvature ?? "–"} · ${k.contact ? "reaches" : "no contact"} · <span class="num">${k.t}s</span>`).join("<br>")}</details>` : ""}
+  </div></article>`; }
+function render() {
+  $("filters").innerHTML = FILTERS.map((f) => `<button type="button" aria-pressed="${f === active}" data-f="${f}">${f} <span class="num">${f === "All" ? S.cards.length : S.cards.filter((c) => tagsOf(c).includes(f)).length}</span></button>`).join("");
+  const list = S.cards.filter((c) => active === "All" || tagsOf(c).includes(active));
+  $("cards").innerHTML = list.map(cardHTML).join("");
+}
+$("filters").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (!b) return; active = b.dataset.f; try { localStorage.setItem("ssb-filter", active); } catch (_) {} render(); });
+render();
+</script>
