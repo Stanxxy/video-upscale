@@ -15,33 +15,13 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import tensorrt as trt
-import torch
 from rtmlib.tools.pose_estimation.post_processings import get_simcc_maximum
 from rtmlib.tools.pose_estimation.pre_processings import bbox_xyxy2cs, top_down_affine
 
+from trt_engine import Engine
+
 SIZE = (288, 384)    # model input w, h
 MEAN, STD = np.array([123.675, 116.28, 103.53]), np.array([58.395, 57.12, 57.375])
-
-
-class Engine:
-    def __init__(self, path):
-        rt = trt.Runtime(trt.Logger(trt.Logger.WARNING))
-        self.engine = rt.deserialize_cuda_engine(open(path, "rb").read())
-        self.ctx = self.engine.create_execution_context()
-        self.stream = torch.cuda.Stream()
-
-    def __call__(self, batch):   # batch: [N, 3, 384, 288] float32
-        n = batch.shape[0]
-        x = torch.from_numpy(batch).cuda().contiguous()
-        self.ctx.set_input_shape("input", tuple(x.shape))
-        sx = torch.empty((n, 133, 576), device="cuda")
-        sy = torch.empty((n, 133, 768), device="cuda")
-        for name, t in (("input", x), ("simcc_x", sx), ("simcc_y", sy)):
-            self.ctx.set_tensor_address(name, t.data_ptr())
-        self.ctx.execute_async_v3(self.stream.cuda_stream)
-        self.stream.synchronize()
-        return sx.cpu().numpy(), sy.cpu().numpy()
 
 
 def prep(img, box_xywh):

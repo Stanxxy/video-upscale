@@ -1,0 +1,174 @@
+<title>Strike Sensing Round 2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column for findings, full-width tables in scroll boxes, a card grid for the bad-case gallery.
+   A/B colours match the overlays drawn on the frames (A red, B blue). */
+:root {
+  --bg: #f3f2ef; --panel: #ffffff; --fg: #1d1f22; --muted: #5d6168; --line: #d9d7d2;
+  --a: #c8342b; --b: #2463c7; --ink: #2b3a4a; --good: #1e7a46; --warn: #a86a00; --bad: #b3261e; --chip: #e7e5e0;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15171a; --panel: #1e2125; --fg: #e8e6e1; --muted: #a3a7ad; --line: #34383e;
+  --a: #ef6b61; --b: #6b9cf0; --ink: #b8c7d8; --good: #5cc48a; --warn: #e0a640; --bad: #f07a70; --chip: #2a2e33; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15171a; --panel: #1e2125; --fg: #e8e6e1; --muted: #a3a7ad; --line: #34383e;
+  --a: #ef6b61; --b: #6b9cf0; --ink: #b8c7d8; --good: #5cc48a; --warn: #e0a640; --bad: #f07a70; --chip: #2a2e33; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.55 var(--body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -0.01em; }
+h2 { font-size: 22px; font-weight: 700; margin-top: 44px; padding-top: 18px; border-top: 2px solid var(--fg); }
+h3 { font-size: 16px; font-weight: 700; }
+p { max-width: 68ch; margin: 8px 0; }
+.eyebrow { font: 600 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--muted); max-width: 72ch; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.answers { display: grid; gap: 14px; margin-top: 20px; }
+.answer { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; }
+.answer .q { font: 600 12px/1.3 var(--mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.answer .v { font-family: var(--display); font-weight: 700; font-size: 18px; }
+.answer ul { margin: 4px 0 0; padding-left: 18px; }
+.scroll { overflow-x: auto; margin-top: 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 600 12px/1.3 var(--mono); color: var(--muted); letter-spacing: 0.03em; white-space: nowrap; }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+.bar { display: inline-block; height: 8px; border-radius: 0 4px 4px 0; background: var(--ink); vertical-align: middle; margin-left: 6px; }
+.rng { color: var(--muted); font-size: 12px; }
+.pill { display: inline-block; font: 600 11px/1 var(--mono); padding: 4px 7px; border-radius: 999px; background: var(--chip); color: var(--fg); white-space: nowrap; }
+.pill.good { color: var(--good); } .pill.warn { color: var(--warn); } .pill.bad { color: var(--bad); }
+.A { color: var(--a); font-weight: 600; } .B { color: var(--b); font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.filters button { font: 600 13px/1 var(--body); padding: 9px 12px; min-height: 40px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--fg); cursor: pointer; }
+.filters button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.filters button:focus-visible, summary:focus-visible { outline: 2px solid var(--b); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+.card img { display: block; width: 100%; height: auto; background: #000; }
+.card .body { padding: 12px 14px; display: grid; gap: 8px; font-size: 14px; min-width: 0; }
+.card .head { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; justify-content: space-between; }
+.card .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.calls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 520px) { .calls { grid-template-columns: 1fr; } }
+.calls div { background: var(--bg); border-radius: 4px; padding: 8px; min-width: 0; }
+.calls b, .lab { font: 600 11px/1.2 var(--mono); color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; display: block; margin-bottom: 4px; }
+.note { color: var(--muted); }
+details summary { cursor: pointer; font-weight: 600; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 820px) { .two { grid-template-columns: 1fr; } }
+.two > * { min-width: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 6px; }
+@media (prefers-reduced-motion: no-preference) { .card { transition: border-color .15s; } .card:hover { border-color: var(--ink); } }
+
+.track { display: inline-block; width: 120px; height: 8px; background: var(--chip); border-radius: 4px; vertical-align: middle; margin-right: 8px; overflow: hidden; }
+.track i { display: block; height: 100%; background: var(--ink); }
+.track i.good { background: var(--good); } .track i.bad { background: var(--bad); }
+td.txt { max-width: 46ch; }
+.miss { color: var(--bad); } .hit { color: var(--good); font-weight: 600; }
+ul.plain { margin: 8px 0; padding-left: 18px; max-width: 72ch; }
+.filters button { min-height: 44px; }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow" id="meta"></div>
+  <h1>Strike Sensing Round 2</h1>
+  <p class="lede" id="lede"></p>
+  <div class="answers" id="answers"></div>
+
+  <h2>Round by round</h2>
+  <p class="lede" id="stop"></p>
+  <div class="scroll"><table id="rounds"></table></div>
+
+  <h2>Tracking the right fighter</h2>
+  <p class="lede">Agent annotators marked, on every 60th frame, which numbered person box frames fighter A and which frames B. A stage is right for a fighter when its box overlaps the chosen one. "Tuning" is the five minutes from round one, used while building the stage; "held out" is the twelve new minutes.</p>
+  <div class="scroll"><table id="dets"></table></div>
+  <h3 style="margin-top:22px">Where the held-out fighter instances go</h3>
+  <div class="scroll"><table id="errs"></table></div>
+  <h3 style="margin-top:22px">Bad cases from the held-out minutes (RTMO + zoom)</h3>
+  <div class="legend"><span><span class="A">Red box</span>: what the stage called fighter A</span><span><span class="B">Blue box</span>: fighter B</span></div>
+  <div class="filters" id="filters" role="group" aria-label="Filter bad cases"></div>
+  <div class="grid" id="cards"></div>
+
+  <h2>Pose when the fighters overlap</h2>
+  <p class="lede" id="poselede"></p>
+  <div class="scroll"><table id="pose"></table></div>
+
+  <h2>Classifier candidates on the gold minute</h2>
+  <p class="lede">Strict: each prediction may match one founder label (same fighter and kind within 0.7 s) and unmatched predictions lower precision. Lenient: round one's measure, a matching attack by that fighter near the label, of 30.</p>
+  <div class="scroll"><table id="cls"></table></div>
+
+  <h2>Label by label</h2>
+  <p class="lede">The founder's 30 labels and the technique names each source gave for that fighter within 0.7 s. "H n/4" is how many of four Hydrogen repeats on founder-timed windows gave the founder's name.</p>
+  <div class="scroll"><table id="labels"></table></div>
+
+  <h2>Open-source students</h2>
+  <p class="lede" id="studlede"></p>
+  <div class="scroll"><table id="curve"></table></div>
+
+  <h2>The gold data to collect</h2>
+  <ul class="plain" id="gold"></ul>
+
+  <h2>Spend and limits</h2>
+  <p id="spend"></p>
+  <ul class="plain" id="limits"></ul>
+</div>
+<script>
+const D = /*DATA*/null;
+const $ = id => document.getElementById(id);
+const el = (tag, html, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; e.innerHTML = html; return e; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct = (a, b) => b ? Math.round(1000 * a / b) / 10 : 0;
+const track = (v, cls) => `<span class="track"><i class="${cls || ''}" style="width:${Math.max(0, Math.min(100, v))}%"></i></span>`;
+$('meta').textContent = 'x-mmagold · ' + D.date + ' · 17 minutes, 10 fights';
+$('lede').textContent = D.lede;
+for (const a of D.answers) $('answers').append(el('div', `<div class="q">${esc(a.q)}</div><div class="v">${esc(a.verdict)}</div><ul>${a.points.map(p => `<li>${esc(p)}</li>`).join('')}</ul>`, 'answer'));
+$('stop').textContent = D.stop_note;
+$('rounds').innerHTML = '<tr><th>#</th><th>Change</th><th>Measure</th><th>Before</th><th>After</th><th>Result</th></tr>' +
+  D.rounds.map(r => `<tr><td class="n">${r[0]}</td><td class="txt">${esc(r[1])}</td><td class="txt">${esc(r[2])}</td><td class="n">${esc(r[3])}</td><td class="n">${esc(r[4])}</td><td><span class="pill ${r[5] === 'advance' ? 'good' : 'bad'}">${r[5]}</span></td></tr>`).join('');
+const T = D.identity.tuning, H = D.identity.heldout;
+$('dets').innerHTML = '<tr><th>Detector + identity stage</th><th>ms / frame</th><th>Peak GB</th><th>Tuning: fighter boxes right (of 201)</th><th>Held out (of 351)</th></tr>' +
+  D.detectors.map(([k, name, ms, gb]) => { const t = T[k].ALL, h = H[k] && H[k].ALL;
+    return `<tr><td>${esc(name)}</td><td class="n">${ms}</td><td class="n">${gb}</td><td class="n">${track(pct(t.right, t.boxed))}${t.right} · ${pct(t.right, t.boxed)}%</td><td class="n">${h ? track(pct(h.right, h.boxed)) + h.right + ' · ' + pct(h.right, h.boxed) + '%' : '<span class="rng">not run</span>'}</td></tr>`; }).join('');
+const kinds = [['right', 'Right box'], ['gt_shared', 'One box around both fighters (clinch, ground)'], ['third_person', 'Box on the referee or someone else'], ['swapped', 'A and B swapped'], ['missing', 'No box for a visible fighter'], ['gt_unboxed', 'No detector boxed him'], ['off', 'Box off the fighter']];
+$('errs').innerHTML = '<tr><th>Outcome for a fighter who is in the frame</th><th>SAM 3 engine</th><th>RTMO + zoom</th></tr>' + kinds.map(([k, label]) => {
+  const cell = d => { const a = H[d].ALL, tot = a.boxed + a.gt_shared + a.gt_unboxed; return `<td class="n">${track(pct(a[k], tot), k === 'right' ? 'good' : 'bad')}${a[k]} · ${pct(a[k], tot)}%</td>`; };
+  return `<tr><td>${label}</td>${cell('light')}${cell('rtmoz')}</tr>`; }).join('');
+const VL = {gt_shared: 'shared box', third_person: 'third person', swapped: 'swapped', missing: 'missing', gt_unboxed: 'not boxed', off: 'off', false_box: 'box on nobody', right: 'right', absent_ok: 'absent'};
+const bad = c => Object.values(c.verdicts).filter(v => v !== 'right' && v !== 'absent_ok');
+const types = [...new Set(D.cards.flatMap(bad))];
+let cur = 'all';
+try { cur = localStorage.getItem('ssb2-filter') || 'all'; } catch (e) {}
+function draw() {
+  $('filters').innerHTML = '';
+  for (const t of ['all', ...types]) { const b = el('button', t === 'all' ? 'All' : VL[t]); b.setAttribute('aria-pressed', t === cur);
+    b.onclick = () => { cur = t; try { localStorage.setItem('ssb2-filter', t); } catch (e) {} draw(); }; $('filters').append(b); }
+  $('cards').innerHTML = '';
+  for (const c of D.cards.filter(c => cur === 'all' || bad(c).includes(cur)))
+    $('cards').append(el('div', `<img loading="lazy" src="img/${c.img}" alt="Frame ${c.frame} of ${c.seg} with the stage's boxes"><div class="body"><div class="head"><b>${c.seg} · frame ${c.frame}</b><span class="tags">${['a', 'b'].map(s => `<span class="pill ${c.verdicts[s] === 'right' ? 'good' : 'bad'}">${s.toUpperCase()}: ${VL[c.verdicts[s]]}</span>`).join('')}</span></div>${c.note ? `<div class="note">Annotator: ${esc(c.note)}</div>` : ''}</div>`, 'card'));
+}
+draw();
+const P = D.pose.variants, PN = {base: 'Plain pose on the fighter box', samask: 'Opponent greyed out with his SAM 3 mask', skmask: 'Opponent greyed out from his skeleton (no masks needed)'};
+$('poselede').textContent = `${D.pose.sheets} frames where the two fighter boxes overlap, from four segments. Two judges saw the three variants side by side in shuffled order and counted wrong wrists and ankles (8 per frame).`;
+$('pose').innerHTML = '<tr><th>Variant</th><th>Wrong wrists and ankles of 8 (mean)</th><th>Skeleton on the right person</th><th>Better / worse than plain</th></tr>' +
+  ['base', 'samask', 'skmask'].map(k => `<tr><td>${PN[k]}</td><td class="n">${track(P[k].mean_wrong / 8 * 100, 'bad')}${P[k].mean_wrong}</td><td class="n">${P[k].on_right_person} of ${P[k].of}</td><td class="n">${k === 'base' ? '' : P[k].better + ' / ' + P[k].worse}</td></tr>`).join('');
+$('cls').innerHTML = '<tr><th>Source</th><th>$ / fight min</th><th>Who + kind F1 (strict)</th><th>Precision / recall</th><th>Name F1 (strict)</th><th>Fighter / kind / name (lenient)</th><th>Listed</th><th>Repeats</th></tr>' +
+  D.classifier.map(r => `<tr><td>${esc(r.label)}</td><td class="n">${r.cost_per_min === null ? '<span class="rng">n/a</span>' : '$' + r.cost_per_min.toFixed(2)}</td><td class="n">${track(r.kind_f1 * 100)}${r.kind_f1.toFixed(2)}</td><td class="n">${r.kind_p.toFixed(2)} / ${r.kind_r.toFixed(2)}</td><td class="n">${track(r.name_f1 * 100)}${r.name_f1.toFixed(2)}</td><td class="n">${r.fighter} / ${r.kind} / ${r.name}</td><td class="n">${r.predicted}</td><td class="n">${r.reps}</td></tr>`).join('');
+const names = (xs, want) => xs.length ? xs.map(x => `<span class="${x === want ? 'hit' : ''}">${esc(x)}</span>`).join(', ') : '<span class="miss">none</span>';
+$('labels').innerHTML = '<tr><th>Time</th><th>Fighter</th><th>Founder</th><th>Teacher (sliding)</th><th>H n/4</th><th>Fable annotator</th><th>Sonnet annotator</th></tr>' +
+  D.labels.map(r => `<tr><td class="n">${r.t.toFixed(1)} s</td><td class="${r.fighter.toUpperCase()}">${r.fighter.toUpperCase()}</td><td><b>${esc(r.name)}</b></td><td>${names(r.teacher, r.name)}</td><td class="n">${r.hydrogen_right}/4</td><td>${names(r.fable, r.name)}</td><td>${names(r.sonnet, r.name)}</td></tr>`).join('');
+const S = D.students;
+$('studlede').textContent = `A pose-sequence network was trained on the teacher's ${S.events} silver labels and tested on videos it never saw. The table is its agreement with the silver labels as the training share grows (who + kind within 0.4 s, threshold 0.5, mean of the runs).`;
+$('curve').innerHTML = '<tr><th>Share of training minutes</th><th>Recall of silver labels</th><th>Precision</th><th>Technique right among matches</th><th>Runs</th></tr>' +
+  S.curve.map(c => `<tr><td class="n">${Math.round(c.frac * 100)}%</td><td class="n">${track(c.recall * 100)}${c.recall.toFixed(2)}</td><td class="n">${track(c.precision * 100)}${c.precision.toFixed(2)}</td><td class="n">${c.technique_acc.toFixed(2)}</td><td class="n">${c.runs}</td></tr>`).join('') +
+  (S.light ? `<tr><td>100%, pose from SAM 3 boxes</td><td class="n">${track(S.light.recall * 100)}${S.light.recall.toFixed(2)}</td><td class="n">${track(S.light.precision * 100)}${S.light.precision.toFixed(2)}</td><td class="n">${S.light.technique_acc.toFixed(2)}</td><td class="n">1</td></tr>` : '');
+for (const t of D.gold_text) $('gold').append(el('li', esc(t)));
+$('spend').textContent = `Gemini spend this round: $${D.spend_total.toFixed(2)} of the roughly $100 allowance (teacher pass $${D.spend.slide_raw.toFixed(2)}, the rest on configuration and overlay tests). Annotation and judging were done by agents: 2 Fable and 19 Sonnet.`;
+for (const t of D.limits) $('limits').append(el('li', esc(t)));
+</script>

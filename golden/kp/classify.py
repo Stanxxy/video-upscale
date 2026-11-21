@@ -5,7 +5,8 @@ measured trace facts of the sensing candidates in the window). The answer lists 
 window: fighter, action, technique, time, outcome. Blocks, parries and guard moves are not attacks.
 
 Runs on the Mac (the key stays here). Usage:
-  classify.py WINDOWS_JSON PACK_DIR COND OUT_JSONL [--repeat N] [--cands CANDS_DIR]
+  classify.py WINDOWS_JSON PACK_DIR COND OUT_JSONL [--repeat N] [--cands CANDS_DIR] [--model M] [--thinking LOW|HIGH]
+              [--res LOW|MEDIUM|HIGH] (--names A B | --segs SEGS_JSON)
 """
 import argparse
 import base64
@@ -16,9 +17,9 @@ from pathlib import Path
 
 import httpx
 
-MODEL = "gemini-4-hydrogen"
-PRICE_IN, PRICE_OUT = 1.50, 7.50        # $ per 1M tokens (thinking billed as output)
-URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
+# $ per 1M tokens in, out (thinking is billed as output)
+PRICES = {"gemini-4-hydrogen": (1.50, 7.50), "gemini-3.8-flash": (0.825, 4.125), "gemini-3.5-flash-lite": (0.30, 2.50)}
+URL = "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent"
 ACTIONS = ["strike_punch", "strike_kick", "strike_knee", "strike_elbow", "takedown_attempt", "clinch_entry"]
 TECHNIQUES = ["jab", "cross", "hook", "uppercut", "overhand", "roundhouse", "calf_kick", "teep", "side_kick",
               "front_kick", "clinch_knee", "straight_knee", "elbow", "double_leg", "single_leg", "body_lock",
@@ -105,21 +106,22 @@ def build(win, idx, cond, names, cands):
     return parts
 
 
-def call(parts, api_key):
+def call(parts, api_key, model="gemini-4-hydrogen", thinking="HIGH", res="HIGH"):
+    price_in, price_out = PRICES[model]
     body = {"contents": [{"role": "user", "parts": parts}],
             "generationConfig": {"responseMimeType": "application/json", "responseJsonSchema": SCHEMA,
-                                 "thinkingConfig": {"thinkingLevel": "HIGH"},
-                                 "mediaResolution": "MEDIA_RESOLUTION_HIGH"}}
+                                 "thinkingConfig": {"thinkingLevel": thinking},
+                                 "mediaResolution": f"MEDIA_RESOLUTION_{res}"}}
     for attempt in range(4):
         t = time.monotonic()
-        r = httpx.post(URL, json=body, headers={"x-goog-api-key": api_key}, timeout=300)
+        r = httpx.post(URL.format(model), json=body, headers={"x-goog-api-key": api_key}, timeout=300)
         if r.status_code == 200:
             v = r.json()
             u = v.get("usageMetadata", {})
             tin, tout = u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0) + u.get("thoughtsTokenCount", 0)
             text = v["candidates"][0]["content"]["parts"][-1]["text"]
             return dict(answer=json.loads(text), tokens_in=tin, tokens_out=tout,
-                        cost=round(tin * PRICE_IN / 1e6 + tout * PRICE_OUT / 1e6, 5),
+                        cost=round(tin * price_in / 1e6 + tout * price_out / 1e6, 5),
                         latency_s=round(time.monotonic() - t, 1), model_version=v.get("modelVersion"))
         if r.status_code in (429, 500, 503) and attempt < 3:
             time.sleep(10 * (attempt + 1))
@@ -132,7 +134,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("windows"); ap.add_argument("pack"); ap.add_argument("cond"); ap.add_argument("out")
     ap.add_argument("--repeat", type=int, default=1); ap.add_argument("--cands", default=None)
-    ap.add_argument("--names", nargs=2, required=True); ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument("--names", nargs=2); ap.add_argument("--workers", type=int, default=6)
+    ap.add_argument("--segs", help="segs.json: kit names per segment, instead of --names")
+    ap.add_argument("--model", default="gemini-4-hydrogen", choices=sorted(PRICES))
+    ap.add_argument("--thinking", default="HIGH"); ap.add_argument("--res", default="HIGH")
     a = ap.parse_args()
     PACK = Path(a.pack)
     wins = json.load(open(a.windows))
@@ -145,12 +150,13 @@ def main():
     if Path(a.out).exists():
         done = {(json.loads(l)["window"], json.loads(l)["rep"]) for l in open(a.out)}
     api_key = key()
+    seg_names = {k: v["names"] for k, v in json.load(open(a.segs)).items()} if a.segs else {}
     jobs = [(w, rep) for rep in range(a.repeat) for w in wins if (w["id"], rep) not in done]
 
     def run(job):
         w, rep = job
-        parts = build(w, index[w["id"]], a.cond, a.names, cands.get(w["seg"], []))
-        res = call(parts, api_key)
+        parts = build(w, index[w["id"]], a.cond, a.names or seg_names[w["seg"]], cands.get(w["seg"], []))
+        res = call(parts, api_key, a.model, a.thinking, a.res)
         return dict(window=w["id"], cond=a.cond, rep=rep, **res)
 
     total = 0.0

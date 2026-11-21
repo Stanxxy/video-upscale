@@ -1,9 +1,11 @@
-"""Build a TensorRT FP16 engine for RTMW-x (133 COCO-WholeBody keypoints) from the OpenMMLab ONNX export.
-Usage: build_rtmw_trt.py ONNX ENGINE  (batch 1-4, 384x288 input)"""
+"""Build a TensorRT FP16 engine from an ONNX export (RTMW-x pose, RTMO person+pose detector).
+Usage: build_trt.py ONNX ENGINE MIN OPT MAX     shapes as 1x3x384x288 (the input tensor is named "input")"""
 import sys
+
 import tensorrt as trt
 
 onnx_path, engine_path = sys.argv[1:3]
+shapes = [tuple(int(v) for v in s.split("x")) for s in sys.argv[3:6]]
 log = trt.Logger(trt.Logger.WARNING)
 builder = trt.Builder(log)
 net = builder.create_network(0)
@@ -14,7 +16,7 @@ cfg = builder.create_builder_config()
 cfg.set_flag(trt.BuilderFlag.FP16)
 cfg.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 4 << 30)
 prof = builder.create_optimization_profile()
-prof.set_shape("input", (1, 3, 384, 288), (2, 3, 384, 288), (4, 3, 384, 288))
+prof.set_shape("input", *shapes)
 cfg.add_optimization_profile(prof)
 plan = builder.build_serialized_network(net, cfg)
 if plan is None:

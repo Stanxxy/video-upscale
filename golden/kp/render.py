@@ -8,7 +8,9 @@ from the window start, in four conditions:
   trace  pose + the last 0.4 s of each fused wrist/ankle path (a thick trail for the candidate's limb)
 plus clip.mp4 (the raw window at 25 fps, same crop) for the video condition.
 
-Usage: render.py WINDOWS_JSON OUT_DIR   (window: id, seg, f0, f1, optional focus {fighter, li})
+Usage: render.py WINDOWS_JSON OUT_DIR [DET CONDS]   (window: id, seg, f0, f1, optional focus {fighter, li})
+With DET (light, rtmo, ...) the boxes and skeletons come from identity_<DET>.json and kp_<DET>.npz (round 2: no
+limb tracker, so no trace condition) and only the frames of the comma-separated CONDS are written.
 """
 import json
 import subprocess
@@ -26,7 +28,7 @@ TRAIL = [0, 1, 4, 5]                             # wrists, ankles in limbs.npz o
 FPS = 25
 
 
-def load(seg):
+def load(seg, det=None):
     d = K / "out" / seg
     cap = cv2.VideoCapture(str(K / "segs" / f"{seg}.mp4"))
     frames = []
@@ -35,6 +37,9 @@ def load(seg):
         if not ok:
             break
         frames.append(img)
+    if det:
+        return dict(frames=frames, ident=json.load(open(d / f"identity_{det}.json"))["frames"],
+                    kp=np.load(d / f"kp_{det}.npz"))
     return dict(frames=frames, ident=json.load(open(d / "identity.json"))["frames"],
                 kp=np.load(d / "kp_rtmw.npz"), limbs=np.load(d / "limbs.npz"))
 
@@ -68,7 +73,7 @@ def draw(img, data, f, cond, focus):
         return out
     fr = data["ident"][str(f)]
     kp, sc = data["kp"]["kp"], data["kp"]["score"]
-    fused = data["limbs"]["fused"]
+    fused = data["limbs"]["fused"] if cond == "trace" else None
     for j, s in enumerate(("a", "b")):
         if s not in fr:
             continue
@@ -93,7 +98,7 @@ def draw(img, data, f, cond, focus):
     return out
 
 
-def main(windows_path, out_dir):
+def main(windows_path, out_dir, det=None, conds="raw,id,pose,trace"):
     wins = json.load(open(windows_path))
     out_dir = Path(out_dir)
     cache = {}
@@ -101,7 +106,7 @@ def main(windows_path, out_dir):
     for wdef in wins:
         seg = wdef["seg"]
         if seg not in cache:
-            cache.clear(); cache[seg] = load(seg)
+            cache.clear(); cache[seg] = load(seg, det)
         data = cache[seg]
         f0, f1 = max(0, wdef["f0"]), min(len(data["frames"]) - 1, wdef["f1"])
         x0, y0, w, h = crop_box(data, f0, f1)
@@ -110,13 +115,17 @@ def main(windows_path, out_dir):
         d = out_dir / wdef["id"]
         d.mkdir(parents=True, exist_ok=True)
         scale = 640 / w
-        for cond in ("raw", "id", "pose", "trace"):
+        for cond in conds.split(","):
             for i, f in enumerate(picks):
                 img = draw(data["frames"][f], data, f, cond, wdef.get("focus"))[y0:y0 + h, x0:x0 + w]
                 img = cv2.resize(img, (640, int(h * scale)))
                 cv2.putText(img, f"t={(f - f0) / FPS:.2f}s", (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4)
                 cv2.putText(img, f"t={(f - f0) / FPS:.2f}s", (8, 24), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
                 cv2.imwrite(str(d / f"{cond}_{i:02d}.jpg"), img, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        index[wdef["id"]] = dict(seg=seg, f0=f0, f1=f1, picks=picks, crop=[x0, y0, w, h],
+                                 times=[round((f - f0) / FPS, 2) for f in picks])
+        if det:
+            continue
         # judge sheet: 6 trace frames around the flagged peak (or spread over the window), 3x2 at 480 px
         peak = wdef.get("peak_f")
         sel = [peak + o for o in (-12, -6, -2, 0, 4, 8)] if peak is not None else list(np.linspace(f0, f1, 6).astype(int))
@@ -138,11 +147,9 @@ def main(windows_path, out_dir):
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(d / "clip_raw.avi"), "-c:v", "libx264", "-crf", "23",
                         "-pix_fmt", "yuv420p", str(d / "clip.mp4")], check=True)
         (d / "clip_raw.avi").unlink()
-        index[wdef["id"]] = dict(seg=seg, f0=f0, f1=f1, picks=picks, crop=[x0, y0, w, h],
-                                 times=[round((f - f0) / FPS, 2) for f in picks])
     json.dump(index, open(out_dir / f"index_{Path(windows_path).stem}.json", "w"))
     print("rendered", len(index))
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:3])
+    main(*sys.argv[1:5])
