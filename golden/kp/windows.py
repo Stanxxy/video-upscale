@@ -11,7 +11,7 @@ sliding: 1.8 s windows every 1.4 s over whole segments, for labelling passes tha
   wrist, ankle or knee moves faster than 2 torso lengths per second relative to its owner's hips.
 
 Usage: windows.py oracle OUT_JSON | windows.py sensing CANDS_DIR OUT_JSON SEG...
-       windows.py sliding OUT_DIR DET OUT_JSON SEG...     (OUT_DIR/<seg>/kp_<DET>.npz)
+       windows.py sliding OUT_DIR DET OUT_JSON SEG... [--length FRAMES --stride FRAMES]   (OUT_DIR/<seg>/kp_<DET>.npz)
 """
 import json
 import sys
@@ -91,6 +91,11 @@ if __name__ == "__main__":
     if sys.argv[1] == "oracle":
         oracle(sys.argv[2])
     elif sys.argv[1] == "sliding":
-        sliding(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5:])
+        args, opts = sys.argv[5:], {}
+        while "--length" in args or "--stride" in args:
+            i = next(i for i, x in enumerate(args) if x in ("--length", "--stride"))
+            opts[args[i][2:]] = int(args[i + 1])
+            args = args[:i] + args[i + 2:]
+        sliding(sys.argv[2], sys.argv[3], sys.argv[4], args, **opts)
     else:
         sensing(sys.argv[2], sys.argv[3], sys.argv[4:])

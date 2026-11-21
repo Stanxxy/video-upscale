@@ -8,7 +8,7 @@ from the window start, in four conditions:
   trace  pose + the last 0.4 s of each fused wrist/ankle path (a thick trail for the candidate's limb)
 plus clip.mp4 (the raw window at 25 fps, same crop) for the video condition.
 
-Usage: render.py WINDOWS_JSON OUT_DIR [DET CONDS]   (window: id, seg, f0, f1, optional focus {fighter, li})
+Usage: render.py WINDOWS_JSON OUT_DIR [DET CONDS MAX_FRAMES]   (window: id, seg, f0, f1, optional focus {fighter, li})
 With DET (light, rtmo, ...) the boxes and skeletons come from identity_<DET>.json and kp_<DET>.npz (round 2: no
 limb tracker, so no trace condition) and only the frames of the comma-separated CONDS are written.
 """
@@ -98,7 +98,7 @@ def draw(img, data, f, cond, focus):
     return out
 
 
-def main(windows_path, out_dir, det=None, conds="raw,id,pose,trace"):
+def main(windows_path, out_dir, det=None, conds="raw,id,pose,trace", max_frames="16"):
     wins = json.load(open(windows_path))
     out_dir = Path(out_dir)
     cache = {}
@@ -110,7 +110,7 @@ def main(windows_path, out_dir, det=None, conds="raw,id,pose,trace"):
         data = cache[seg]
         f0, f1 = max(0, wdef["f0"]), min(len(data["frames"]) - 1, wdef["f1"])
         x0, y0, w, h = crop_box(data, f0, f1)
-        step = max(2, int(np.ceil((f1 - f0 + 1) / 16)))
+        step = max(2, int(np.ceil((f1 - f0 + 1) / int(max_frames))))
         picks = list(range(f0, f1 + 1, step))
         d = out_dir / wdef["id"]
         d.mkdir(parents=True, exist_ok=True)
@@ -152,4 +152,4 @@ def main(windows_path, out_dir, det=None, conds="raw,id,pose,trace"):
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:5])
+    main(*sys.argv[1:6])
