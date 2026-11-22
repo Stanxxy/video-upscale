@@ -47,6 +47,8 @@ from shared_lib.models.analysis_contracts import AnalysisRunSpecV1
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 from service.analysis_gemini import GeminiProvider, S3GeminiArtifacts
+from service.analysis_gemini_batch import BatchGeminiProvider
+from bjj_analysis_core.execution import ProviderWaiting
 from service.analysis_media import S3RunMedia
 from service.analysis_preset import (
     gemini38_mma_preset,
@@ -103,6 +105,7 @@ def studio_models():
 # the same table s34 VLM Studio used. Thinking tokens bill as output. An unlisted
 # model has no estimate (shown as unknown, never zero).
 _PROMO_END = date(2026, 12, 31)
+BATCH_SHARE = 0.5  # Gemini Batch API requests bill at half the interactive price
 
 
 def _rate(model: str | None, on: date):
@@ -147,6 +150,8 @@ class CoreRunIn(BaseModel):
     # (each sees the scan's previous state) or one at a time (previous confirmed state).
     parallel_position_checks: Optional[bool] = None
     label: Optional[str] = Field(default=None, max_length=80)
+    # "batch" sends model calls through the Gemini Batch API (half price, ready later).
+    delivery: Literal["fast", "batch"] = "fast"
 
 
 def _require_env(name):
@@ -495,15 +500,28 @@ class CoreRuns:
             qualified = studio_models()
             async with media.open(run) as verified:
                 artifacts = S3GeminiArtifacts(run, self.client, bucket=self.settings.bucket)
-                provider = GeminiProvider(verified, artifacts, api_key=self.settings.api_key,
-                                          qualified_models=qualified, guard=guard)
+                provider_type = BatchGeminiProvider if request.delivery == "batch" else GeminiProvider
+                provider = provider_type(verified, artifacts, api_key=self.settings.api_key,
+                                         qualified_models=qualified, guard=guard)
                 try:
                     host = DurableGeminiRun(run, config_bytes, journal=journal, provider=provider, sink=job.sink,
                                             guard=guard, mime_type="video/mp4",
                                             max_parallel_calls=request.max_parallel_calls)
                     job.state = "running"
                     self._save(job)
-                    result = await host.execute(retry_failed=not fresh, reissue_unknown=not fresh)
+                    while True:
+                        try:
+                            result = await host.execute(retry_failed=not fresh, reissue_unknown=not fresh)
+                            break
+                        except ProviderWaiting as waiting:
+                            # Ready later in Studio: wait in-process, then continue the same run.
+                            job.state = "waiting"
+                            self._save(job)
+                            delay = (waiting.wake_at - datetime.now(timezone.utc)).total_seconds()
+                            await asyncio.sleep(max(1.0, delay))
+                            await guard()
+                            job.state = "running"
+                            self._save(job)
                     job.sink.revisions["positions"] = result.positions.model_dump(mode="json")
                     job.sink.revisions["techniques"] = result.techniques.model_dump(mode="json")
                     await host.cleanup()
@@ -559,6 +577,8 @@ class CoreRuns:
                 node["output_tokens"] += use.output_tokens or 0
                 node["thinking_tokens"] += use.thinking_tokens or 0
                 rate = _rate(use.model, use.recorded_at.date())
+                if rate is not None and use.provider == BatchGeminiProvider.name:
+                    rate = {k: v * BATCH_SHARE for k, v in rate.items()}
                 if rate is None or use.input_tokens is None or use.output_tokens is None:
                     node["unknown_cost_calls"] += 1
                 else:

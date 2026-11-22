@@ -90,6 +90,9 @@ class S3GeminiArtifacts:
             "file_get",
             "file_delete",
             "generate",
+            "batch_ledger",
+            "batch_create",
+            "batch_get",
         }:
             raise ValueError("unknown receipt kind")
         identity = UUID(str(identity))
@@ -665,6 +668,14 @@ class GeminiProvider:
         )
         # Retain first, parse second. No post-call guard discards paid usage;
         # the checkpoint executor reauthorizes before subsequent work/publication.
+        return self._reply(raw, receipt, request, execution_id, call_id)
+
+    def _reply(self, raw, receipt, request, execution_id, call_id):
+        """Parse one retained generateContent response into a bound reply.
+
+        Shared by the interactive call and the Batch API delivery, so both paths
+        apply the same qualification, usage binding and time mapping.
+        """
         value = strict_json(raw)
         if not isinstance(value, dict):
             raise GeminiBoundaryError(

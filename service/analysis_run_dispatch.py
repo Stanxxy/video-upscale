@@ -23,6 +23,7 @@ from shared_lib.models.analysis_contracts import PrivateArtifactRef
 
 from service.analysis_checkpoint_journal import KeyspacesCheckpointJournal
 from service.analysis_gemini import GeminiProvider, S3GeminiArtifacts
+from service.analysis_gemini_batch import BatchGeminiProvider
 from service.analysis_media import (
     DeterministicPreparationRejected,
     S3RunMedia,
@@ -193,7 +194,9 @@ class PositionRunDispatcher:
             guard=run_guard,
         )
         async with media_store.open(run) as media:
-            provider = GeminiProvider(
+            # The admitted spec, never the browser, decides how model calls go out.
+            provider_type = BatchGeminiProvider if run.spec.delivery == "later" else GeminiProvider
+            provider = provider_type(
                 media,
                 S3GeminiArtifacts(run, self.s3, bucket=self.bucket),
                 api_key=self.api_key,

@@ -49,6 +49,10 @@ class StepCheckpointV1(VersionedAnalysisContract):
     reply: ProviderReplyV1 | None = None
     result_json: StrictStr | None = None
     retryable: StrictBool = False
+    # Ready later (Gemini Batch): the provider accepted the call and answers
+    # later. The step stays "running" in the same attempt until it is checked
+    # again at or after this time; no failure, no attempt spent.
+    waiting_until: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def consistent_checkpoint(self):
@@ -74,6 +78,8 @@ class StepCheckpointV1(VersionedAnalysisContract):
             raise ValueError("success needs retained result")
         if self.retryable and self.phase != "failed":
             raise ValueError("only known failures can be retryable")
+        if self.waiting_until is not None and (self.phase != "running" or self.request is None):
+            raise ValueError("only a dispatched model step can wait on its provider")
         return self
 
 
@@ -108,6 +114,22 @@ class Provider(Protocol):
         adapter must be qualified before deployment; this protocol is not one.
         """
         ...
+
+
+class ProviderWaiting(RuntimeError):
+    """The provider accepted the call and answers later (Gemini Batch API).
+
+    Not a failure: the step keeps its attempt, the run parks, and a later
+    execution asks the provider again for the same call at or after ``wake_at``.
+    """
+
+    def __init__(self, wake_at, *, submitted_at):
+        self.wake_at = TypeAdapter(AwareDatetime).validate_python(wake_at)
+        # When the provider accepted the work, for "sent at" and the latest-ready bound.
+        self.submitted_at = TypeAdapter(AwareDatetime).validate_python(submitted_at)
+        if self.submitted_at > self.wake_at:
+            raise ValueError("a provider cannot be asked again before it accepted the work")
+        super().__init__(f"provider answers later; check again at {self.wake_at.isoformat()}")
 
 
 class CheckpointConflict(RuntimeError):
@@ -186,6 +208,8 @@ class StepRunner:
                 )
             if previous.phase in ("succeeded", "responded"):
                 return previous
+            if previous.phase == "running" and previous.waiting_until is not None:
+                return previous  # the provider holds this attempt's call: ask it again
             if previous.phase == "running" and request is not None and (
                 not self.reissue_unknown
                 or previous.progress.attempt >= self.config.max_call_attempts
@@ -275,6 +299,7 @@ class StepRunner:
                 "error_code": changes.pop("error_code", None),
             }
         )
+        changes.setdefault("waiting_until", None)  # waiting holds only until the next write
         return await self._save(
             record,
             {
@@ -356,6 +381,9 @@ class StepRunner:
                 raise
             except asyncio.CancelledError:
                 await self._update(record, "cancelled")
+                raise
+            except ProviderWaiting as waiting:
+                await self._update(record, "running", waiting_until=waiting.wake_at)
                 raise
             except Exception:
                 await self._update(record, "failed", error_code="DISPATCH_UNCERTAIN")

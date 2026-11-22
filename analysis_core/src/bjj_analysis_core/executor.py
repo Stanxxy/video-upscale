@@ -71,6 +71,7 @@ class ExecutionResultV1(VersionedAnalysisContract):
 # Upper bound a host may request; each in-flight call is one uncertain-spend item
 # if the attempt is interrupted, so the bound is deliberately small.
 MAX_PARALLEL_CALLS = 16
+BATCH_STAGE_LIMIT = 4096
 
 
 async def _ordered(steps, limit):
@@ -132,6 +133,10 @@ async def execute_pipeline(
             f"max_parallel_calls must be an integer from 1 to {MAX_PARALLEL_CALLS}"
         )
     limit = max_parallel_calls
+    if getattr(provider, "collects_batches", False):
+        # Batch delivery submits what a stage dispatches together as one job, so the
+        # whole stage must be in flight at once; the provider bounds the job size.
+        limit = BATCH_STAGE_LIMIT
     runner = StepRunner(
         run,
         config_bytes,

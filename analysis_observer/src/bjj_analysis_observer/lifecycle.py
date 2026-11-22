@@ -1,6 +1,7 @@
 """Read-only lifecycle/heartbeat composition; not a public API or atomic snapshot."""
 
 import asyncio
+import json
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -34,6 +35,9 @@ class LifecycleView:
     completed_at: datetime | None
     # Sanitized deterministic preparation rejection that stopped the run, else None.
     stop_reason: str | None = None
+    # Ready later: when Google accepted the work and when the engine looks again.
+    provider_submitted_at: datetime | None = None
+    waiting_until: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -52,9 +56,11 @@ class _Lifecycle:
     updated: datetime
     completed: datetime | None
     stop_reason: str | None = None
+    provider_submitted_at: datetime | None = None
+    waiting_until: datetime | None = None
 
     def identity(self):
-        return self.state, self.owner, self.started, self.completed
+        return self.state, self.owner, self.started, self.completed, self.waiting_until
 
 
 def _timestamp(value):
@@ -98,15 +104,26 @@ class KeyspacesLifecycleReader:
         ):
             raise StatusEvidenceError("lifecycle identity differs from admitted run")
         state, owner = row.job_state, row.owner_instance_id
-        if state not in {"PENDING", "RUNNING", "INTERRUPTED", "COMPLETED"}:
+        if state not in {"PENDING", "RUNNING", "INTERRUPTED", "COMPLETED", "WAITING_PROVIDER"}:
             raise StatusEvidenceError("unsupported position lifecycle state")
-        if (state == "PENDING" and owner != "") or (
-            state != "PENDING"
+        unowned = state in {"PENDING", "WAITING_PROVIDER"}  # a parked run released its lease
+        if (unowned and owner != "") or (
+            not unowned
             and (
                 not isinstance(owner, str) or not owner.startswith("position-attempt:")
             )
         ):
             raise StatusEvidenceError("invalid lifecycle attempt identity")
+        submitted = waiting = None
+        if state == "WAITING_PROVIDER":
+            try:
+                times = json.loads(row.stage_message or "")
+                if row.stage != "provider_batch" or set(times) != {"wake_at", "submitted_at"}:
+                    raise ValueError("unexpected waiting evidence")
+                waiting = TypeAdapter(AwareDatetime).validate_python(times["wake_at"]).astimezone(timezone.utc)
+                submitted = TypeAdapter(AwareDatetime).validate_python(times["submitted_at"]).astimezone(timezone.utc)
+            except ValueError as error:
+                raise StatusEvidenceError("invalid provider waiting evidence") from error
         value = _Lifecycle(
             state,
             owner,
@@ -115,6 +132,8 @@ class KeyspacesLifecycleReader:
             _timestamp(row.updated_at),
             None if row.completed_at is None else _timestamp(row.completed_at),
             row.error_message or None,
+            submitted,
+            waiting,
         )
         if not value.started <= value.heartbeat <= value.updated:
             raise StatusEvidenceError("inconsistent lifecycle timestamp order")
@@ -202,6 +221,8 @@ async def read_status(
             expires,
             None if after is None else after.completed,
             None if after is None or after.state != "INTERRUPTED" else after.stop_reason,
+            None if after is None else after.provider_submitted_at,
+            None if after is None else after.waiting_until,
         ),
         progress,
     )

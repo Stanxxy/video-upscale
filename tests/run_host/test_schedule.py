@@ -409,3 +409,56 @@ async def test_cancelled_dispatch_drains_media_and_retains_discovery(
     assert (await queue._state(run)).job_state == "RUNNING"
     page = await confirmed_page(queue, run.spec.run_id.int % 16)
     assert page.attempts[0].status == "running" and len(wire.generates()) == 0
+
+
+async def _park(queue, run, wake_at):
+    from service.analysis_run_worker import KeyspacesRunLease as Lease
+
+    lease = Lease(run, queue.dispatcher.session, keyspace=queue.dispatcher.keyspace,
+                  authority=queue.dispatcher._authority, lease_seconds=60)
+    await lease.register()
+    await lease.acquire()
+    await lease.park(wake_at, submitted_at=datetime.now(timezone.utc) - timedelta(minutes=1))
+
+
+async def _hints(queue, run):
+    return await queue._execute(
+        f"SELECT * FROM {queue.index} WHERE recovery_state=%s AND heartbeat_bucket=%s", queue._key(run)[:2]
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_parked_run_waits_for_its_wake_time_and_keeps_its_hint(setup_dispatch, schedule_table):
+    """x-aiquota M3.2: Ready later runs hold nothing while Google works."""
+    queue, run, wire = schedule(setup_dispatch)
+    await queue.enqueue(run.spec.run_id)
+    await _park(queue, run, datetime.now(timezone.utc) + timedelta(minutes=5))
+    page = await confirmed_page(queue, run.spec.run_id.int % 16)
+    assert [a.status for a in page.attempts] == ["waiting"]
+    assert wire.calls == [] and len(await _hints(queue, run)) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_due_parked_run_is_dispatched_normally_and_completes(setup_dispatch, schedule_table):
+    queue, run, wire = schedule(setup_dispatch)
+    await queue.enqueue(run.spec.run_id)
+    await _park(queue, run, datetime.now(timezone.utc))
+    page = await confirmed_page(queue, run.spec.run_id.int % 16)
+    assert [a.status for a in page.attempts] == ["completed"]
+    assert (await queue._state(run)).job_state == "COMPLETED" and await _hints(queue, run) == []
+
+
+@pytest.mark.asyncio
+async def test_a_dispatch_that_parks_reports_waiting_and_keeps_the_hint(setup_dispatch, schedule_table):
+    from service.analysis_run_worker import ParkedAttempt
+
+    queue, run, wire = schedule(setup_dispatch)
+    await queue.enqueue(run.spec.run_id)
+
+    async def parks(run_id, **_):
+        return ParkedAttempt(wake_at=datetime.now(timezone.utc) + timedelta(minutes=1))
+
+    queue.dispatcher.dispatch = parks
+    page = await confirmed_page(queue, run.spec.run_id.int % 16)
+    assert [a.status for a in page.attempts] == ["waiting"]
+    assert len(await _hints(queue, run)) == 1
