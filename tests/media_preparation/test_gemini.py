@@ -331,7 +331,7 @@ async def test_reopen_upload_and_explicit_delete(gemini, resolver, inputs, s3):
 
 
 @pytest.mark.asyncio
-async def test_executor_retains_malformed_usage_and_never_retries_implicitly(
+async def test_executor_retains_malformed_usage_and_reasks_once_within_the_attempt_budget(
     gemini, resolver, inputs, s3, tmp_path
 ):
     path = (
@@ -352,10 +352,10 @@ async def test_executor_retains_malformed_usage_and_never_retries_implicitly(
         )
         wire.result["candidates"][0]["content"]["parts"] = [{"text": "not JSON"}]
         with pytest.raises(ValueError):
-            await runner.model(request_for(media))
+            await runner.model(request_for(media))  # answer, invalid; one re-ask, invalid
         with pytest.raises(RecoveryRequired):
             await runner.model(request_for(media))
-        assert len(wire.generates()) == 1
+        assert len(wire.generates()) == 2  # max_call_attempts, never a third call
         history = journal.records(history=True)
         assert history[-1].usage.input_tokens == 101
         assert history[-1].reply.text == "not JSON"

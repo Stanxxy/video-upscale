@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bjj-analysis-core"
-version = "0.3.0.post10"
+version = "0.3.0.post11"
 description = "Portable BJJ position/technique inference contracts and normalization"
 requires-python = ">=3.12"
 dependencies = ["shared-lib>=1.16.0,<1.19", "pydantic>=2.10,<3"]

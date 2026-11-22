@@ -298,17 +298,18 @@ async def test_malformed_reply_retains_paid_usage_and_attempt_budget(
         return provider.reply(run, req, eid, cid, "not json")
 
     provider.failures["position_scan"] = malformed
-    for retry in (False, True):
-        with pytest.raises(ValueError):
-            await execute_pipeline(
-                run,
-                configuration,
-                journal=journal,
-                provider=provider,
-                sink=sink,
-                clock=clock,
-                retry_failed=retry,
-            )
+    # The first run asks once more in-run (x-aiquota re-ask); both answers are
+    # malformed, so the attempt budget is spent and recovery cannot ask again.
+    with pytest.raises(ValueError):
+        await execute_pipeline(
+            run,
+            configuration,
+            journal=journal,
+            provider=provider,
+            sink=sink,
+            clock=clock,
+        )
+    assert len(provider.calls) == 2
     with pytest.raises(RecoveryRequired):
         await execute_pipeline(
             run,
@@ -698,3 +699,85 @@ async def test_changed_input_and_corrupt_journal_fail_closed(run, configuration,
     with pytest.raises(ValueError, match="checksum"):
         await runner.model(request)
     assert len(provider.calls) == 1
+
+
+UNPUBLISHABLE = {
+    "empty_actions": dict(action_classes=[]),
+    "repeated_actions": dict(action_classes=["submission_choke", "submission_choke"]),
+    "unknown_actor": dict(actor_player_id="nobody"),
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad", sorted(UNPUBLISHABLE))
+async def test_an_unpublishable_technique_answer_is_reasked_once_and_the_run_completes(
+    run, configuration, setup, bad
+):
+    """x-aiquota: one invalid technique used to fail the whole run at normalize,
+    after every call was paid; now that one call is re-asked inside the run."""
+    _, journal, clock, sink, provider = setup
+    answers = []
+
+    async def once_invalid(run_, request, execution_id, call_id):
+        context = json.loads(request.initial_prompt)["stage_context"]
+        changes = UNPUBLISHABLE[bad] if not answers else {}
+        answers.append(changes)
+        data = technique(bounds=context["bounds"], outcome_bounds=dict(start_ms=7400, end_ms=7500), **changes)
+        return provider.reply(run_, request, execution_id, call_id, json.dumps(data))
+
+    provider.failures["technique_analyze"] = once_invalid
+    result = await execute_pipeline(
+        run, configuration, journal=journal, provider=provider, sink=sink, clock=clock
+    )
+    assert len(result.techniques.techniques) == 1
+    assert [n for n, _ in provider.calls].count("technique_analyze") == 2
+    analyze = [r for r in journal.records(history=True) if r.progress.node_id == "technique_analyze"]
+    failed = [r for r in analyze if r.phase == "failed"]
+    assert [r.progress.error_code for r in failed] == ["INVALID_MODEL_OUTPUT"]
+    assert failed[0].reply is not None and failed[0].usage.cost_nano_usd == 12  # paid answer kept
+    assert {r.progress.attempt for r in analyze} == {1, 2}
+
+
+@pytest.mark.asyncio
+async def test_a_second_invalid_answer_fails_the_step_without_a_third_call(
+    run, configuration, setup
+):
+    _, journal, clock, sink, provider = setup
+
+    async def always_invalid(run_, request, execution_id, call_id):
+        context = json.loads(request.initial_prompt)["stage_context"]
+        data = technique(bounds=context["bounds"], outcome_bounds=dict(start_ms=7400, end_ms=7500), action_classes=[])
+        return provider.reply(run_, request, execution_id, call_id, json.dumps(data))
+
+    provider.failures["technique_analyze"] = always_invalid
+    with pytest.raises(ValueError):
+        await execute_pipeline(
+            run, configuration, journal=journal, provider=provider, sink=sink, clock=clock
+        )
+    assert "positions" in sink.outputs and "techniques" not in sink.outputs
+    with pytest.raises(RecoveryRequired):
+        await execute_pipeline(
+            run, configuration, journal=journal, provider=provider, sink=sink, clock=clock,
+            retry_failed=True,
+        )
+    assert [n for n, _ in provider.calls].count("technique_analyze") == 2
+
+
+@pytest.mark.asyncio
+async def test_a_validator_correction_that_cannot_publish_is_reasked(run, configuration, setup):
+    _, journal, clock, sink, provider = setup
+    calls = []
+
+    async def correcting(run_, request, execution_id, call_id):
+        context = json.loads(request.initial_prompt)["stage_context"]
+        corrected = dict(context["proposed"], action_classes=[] if not calls else ["submission_choke"])
+        calls.append(call_id)
+        data = dict(candidate_id=context["candidate_id"], verdict="correct",
+                    intentional_technique_visible=True, technique=corrected, reason="tap visible")
+        return provider.reply(run_, request, execution_id, call_id, json.dumps(data))
+
+    provider.failures["technique_validate"] = correcting
+    result = await execute_pipeline(
+        run, configuration, journal=journal, provider=provider, sink=sink, clock=clock
+    )
+    assert len(calls) == 2 and len(result.techniques.techniques) == 1

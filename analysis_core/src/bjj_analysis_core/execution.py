@@ -160,7 +160,7 @@ class StepRunner:
             raise CheckpointConflict("checkpoint changed concurrently")
         return record
 
-    async def _begin(self, node, item, request, inputs, total):
+    async def _begin(self, node, item, request, inputs, total, *, reask=False):
         if self.guard is not None:
             await self.guard()  # host checks current authority, cancellation/lease
         step_id = uuid5(self.run.spec.run_id, f"step:v1:{node}:{item or ''}")
@@ -201,8 +201,16 @@ class StepRunner:
                 and previous.phase == "failed"
                 and previous.progress.error_code == "DISPATCH_UNCERTAIN"
             )
+            # One in-run re-ask of a call whose answer arrived but was invalid
+            # (paid, retained, unusable); bounded by max_call_attempts like any retry.
+            invalid_answer = (
+                reask
+                and previous.phase == "failed"
+                and previous.retryable
+                and previous.progress.error_code == "INVALID_MODEL_OUTPUT"
+            )
             if previous.phase in ("failed", "cancelled") and (
-                not (unknown_outcome or (self.retry_failed and previous.retryable))
+                not (unknown_outcome or invalid_answer or (self.retry_failed and previous.retryable))
                 or previous.progress.attempt >= self.config.max_call_attempts
             ):
                 raise RecoveryRequired(
@@ -278,7 +286,7 @@ class StepRunner:
             },
         )
 
-    async def model(self, request, *, item=None):
+    async def model(self, request, *, item=None, _reask=False):
         request = PreparedCallV1.model_validate(request)
         bundle = prompt_bundle(pack_for(self.run))
         initial = strict_json(request.initial_prompt)
@@ -326,7 +334,7 @@ class StepRunner:
             raise RecoveryRequired(
                 "prepared call differs from admitted run/configuration"
             )
-        record = await self._begin(request.node_id, item, request, {}, 1)
+        record = await self._begin(request.node_id, item, request, {}, 1, reask=_reask)
         if record.phase == "succeeded":
             parsed = parse_response(request, record.reply.text)
             if parsed.model_dump_json() != record.result_json:
@@ -371,13 +379,17 @@ class StepRunner:
         try:
             parsed = parse_response(request, reply.text)
         except ValueError:
-            await self._update(
+            record = await self._update(
                 record,
                 "failed",
                 usage=usage,
                 error_code="INVALID_MODEL_OUTPUT",
                 retryable=True,
             )
+            # An unusable answer would otherwise fail the whole run after every
+            # other call was paid for: ask this one call once more (x-aiquota).
+            if not _reask and record.progress.attempt < self.config.max_call_attempts:
+                return await self.model(request, item=item, _reask=True)
             raise
         record = await self._update(
             record, "succeeded", usage=usage, result_json=parsed.model_dump_json()
