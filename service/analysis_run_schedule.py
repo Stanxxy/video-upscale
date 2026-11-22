@@ -19,6 +19,7 @@ from shared_lib.infrastructure.dag_admission_relay import run_io
 from shared_lib.models.analysis_metadata import RetiredAnnotationHistory
 
 from service.analysis_checkpoint_journal import _target
+from service.analysis_run_worker import WAITING_PROVIDER, ParkedAttempt, parked_until
 
 INDEX_STATE = "POSITION_NEW_RUN_V1"
 LOG = logging.getLogger(__name__)
@@ -199,7 +200,12 @@ class PositionRunSchedule:
         if state is not None and state.job_state == "COMPLETED":
             await self._retire_completed(run)
             return ScheduledAttempt(run_id, "completed")
-        if state is not None and state.job_state != "PENDING":
+        if state is not None and state.job_state == WAITING_PROVIDER:
+            # Ready later: Google holds the run's calls. Skip until it is due, then
+            # dispatch normally; the batch ledger means no call is sent twice.
+            if datetime.now(timezone.utc) < parked_until(state):
+                return ScheduledAttempt(run_id, "waiting")
+        elif state is not None and state.job_state != "PENDING":
             if state.job_state == "RUNNING":
                 expires = _stamp(state.last_heartbeat_at) + timedelta(
                     seconds=self.dispatcher.lease_seconds
@@ -221,7 +227,9 @@ class PositionRunSchedule:
             return ScheduledAttempt(run_id, status)
         # Never pass recover/retry_failed here. A competing scheduler still must
         # win the lifecycle claim, and expired work is never silently reclaimed.
-        await self.dispatcher.dispatch(run_id)
+        outcome = await self.dispatcher.dispatch(run_id)
+        if isinstance(outcome, ParkedAttempt):
+            return ScheduledAttempt(run_id, "waiting")  # the hint stays: it wakes the run
         await self._retire_completed(run)
         return ScheduledAttempt(run_id, "completed")
 

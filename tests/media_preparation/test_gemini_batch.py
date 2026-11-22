@@ -9,7 +9,8 @@ import httpx
 import pytest
 
 from service.analysis_gemini import GeminiBoundaryError, S3GeminiArtifacts
-from service.analysis_gemini_batch import BatchGeminiProvider
+from bjj_analysis_core.execution import ProviderWaiting
+from service.analysis_gemini_batch import MAX_WAIT, BatchGeminiProvider, wake_after
 
 from test_gemini import Wire, receipt_value, request_for, uploaded
 
@@ -83,7 +84,6 @@ async def batch_case(resolver, inputs, s3, wire=None):
             guard=resolver.guard,
             transport=httpx.MockTransport(wire),
             settle_seconds=0.05,
-            poll_seconds=0.01,
         )
         try:
             yield provider, wire, media
@@ -95,6 +95,16 @@ def ids(n):
     return [(uuid4(), uuid4()) for _ in range(n)]
 
 
+async def answered(provider, run, request, execution_id, call_id):
+    """Ask again after each ProviderWaiting, as the scheduler does when the run wakes."""
+    for _ in range(20):
+        try:
+            return await provider.generate(run, request, execution_id, call_id)
+        except ProviderWaiting:
+            continue
+    raise AssertionError("batch never answered")
+
+
 @pytest.mark.asyncio
 async def test_a_stage_is_one_batch_job_with_the_interactive_reply(resolver, inputs, s3):
     async with batch_case(resolver, inputs, s3) as (provider, wire, media):
@@ -102,7 +112,7 @@ async def test_a_stage_is_one_batch_job_with_the_interactive_reply(resolver, inp
         request = request_for(media)
         steps = ids(3)
         replies = await asyncio.gather(*(
-            provider.generate(media.run, request, execution_id, call_id) for execution_id, call_id in steps
+            answered(provider, media.run, request, execution_id, call_id) for execution_id, call_id in steps
         ))
         assert len(wire.batch_creates()) == 1
         assert wire.generates() == []  # no interactive generateContent
@@ -126,18 +136,13 @@ async def test_a_resumed_step_waits_for_its_recorded_job_and_never_resubmits(res
         request = request_for(media)
         execution_id = uuid4()
         wire.polls_before_done = 10**6  # the job is still running when the engine dies
-        waiting = asyncio.ensure_future(provider.generate(media.run, request, execution_id, uuid4()))
-        while not wire.batch_creates():
-            await asyncio.sleep(0.01)
-        await asyncio.sleep(0.05)  # ledger written
-        waiting.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await waiting
+        with pytest.raises(ProviderWaiting):
+            await provider.generate(media.run, request, execution_id, uuid4())
         wire.polls_before_done = 1
         # A fresh provider (engine restart) with a new attempt id for the same step.
         async with batch_case(resolver, inputs, s3, wire=wire) as (resumed, _, _):
             await uploaded(resumed)
-            reply = await resumed.generate(media.run, request, execution_id, call_id := uuid4())
+            reply = await answered(resumed, media.run, request, execution_id, call_id := uuid4())
         assert len(wire.batch_creates()) == 1
         assert reply.usage.call_id == call_id
 
@@ -148,8 +153,8 @@ async def test_a_reask_after_a_delivered_answer_is_a_new_job(resolver, inputs, s
         await uploaded(provider)
         request = request_for(media)
         execution_id = uuid4()
-        await provider.generate(media.run, request, execution_id, uuid4())
-        await provider.generate(media.run, request, execution_id, uuid4())  # invalid answer: ask again
+        await answered(provider, media.run, request, execution_id, uuid4())
+        await answered(provider, media.run, request, execution_id, uuid4())  # invalid answer: ask again
         assert len(wire.batch_creates()) == 2
 
 
@@ -163,5 +168,43 @@ async def test_failed_jobs_and_items_fail_the_step(resolver, inputs, s3, failure
         else:
             wire.item_error = {"code": 400, "message": "fixture item failure"}
         with pytest.raises(GeminiBoundaryError):
-            await provider.generate(media.run, request_for(media), uuid4(), uuid4())
+            await answered(provider, media.run, request_for(media), uuid4(), uuid4())
         assert wire.generates() == []
+
+
+@pytest.mark.asyncio
+async def test_a_pending_job_parks_the_step_with_a_backoff_and_no_second_submission(resolver, inputs, s3):
+    async with batch_case(resolver, inputs, s3) as (provider, wire, media):
+        await uploaded(provider)
+        request, execution_id, call_id = request_for(media), uuid4(), uuid4()
+        wire.polls_before_done = 3
+        for _ in range(3):
+            before = provider.now()
+            with pytest.raises(ProviderWaiting) as waiting:
+                await provider.generate(media.run, request, execution_id, call_id)
+            assert waiting.value.wake_at - before >= wake_after(provider.now() - before)
+        reply = await provider.generate(media.run, request, execution_id, call_id)
+        assert reply.usage.call_id == call_id
+        assert len(wire.batch_creates()) == 1
+        assert sum(1 for c in wire.calls if "/v1beta/batches/" in c[1]) == 4  # one check per ask
+
+
+@pytest.mark.asyncio
+async def test_an_unanswered_job_fails_the_step_after_the_cutoff(resolver, inputs, s3):
+    async with batch_case(resolver, inputs, s3) as (provider, wire, media):
+        await uploaded(provider)
+        request, execution_id = request_for(media), uuid4()
+        wire.polls_before_done = 10**6
+        with pytest.raises(ProviderWaiting):
+            await provider.generate(media.run, request, execution_id, uuid4())
+        later = provider.now() + MAX_WAIT + wake_after(MAX_WAIT)
+        provider.clock = lambda: later
+        with pytest.raises(GeminiBoundaryError, match="unanswered"):
+            await provider.generate(media.run, request, execution_id, uuid4())
+        assert len(wire.batch_creates()) == 1
+
+
+def test_checks_back_off_as_a_job_ages():
+    from datetime import timedelta as td
+    waits = [wake_after(td(minutes=m)) for m in (0, 4, 6, 20, 120, 2000)]
+    assert waits == sorted(waits) and waits[0] == td(minutes=1) and waits[-1] == td(minutes=10)

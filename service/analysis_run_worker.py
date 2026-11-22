@@ -5,9 +5,13 @@ to one attempt, never to a process; all mutations compare that token and heartbe
 """
 
 import asyncio
+import json
 import math
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
+
+from bjj_analysis_core.execution import ProviderWaiting
 
 from cassandra import ConsistencyLevel
 from cassandra.policies import FallthroughRetryPolicy
@@ -17,6 +21,35 @@ from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 from service.analysis_checkpoint_journal import _target
 from service.analysis_media import DeterministicPreparationRejected
+
+
+# Ready later (x-aiquota M3.2): the run's model calls sit in a Gemini batch job.
+# The run holds no lease, slot or heartbeat; the scheduler wakes it at wake_at.
+WAITING_PROVIDER = "WAITING_PROVIDER"
+PROVIDER_BATCH_STAGE = "provider_batch"
+
+
+@dataclass(frozen=True)
+class ParkedAttempt:
+    """An attempt that handed its run to the provider and released everything."""
+
+    wake_at: datetime
+
+
+def parked_until(row):
+    """The wake time of a WAITING_PROVIDER lifecycle row (typed JSON in stage_message)."""
+    if row.job_state != WAITING_PROVIDER or row.stage != PROVIDER_BATCH_STAGE:
+        raise ValueError("lifecycle row is not waiting on its provider")
+    value = json.loads(row.stage_message or "")
+    if set(value) != {"wake_at", "submitted_at"}:
+        raise ValueError("waiting lifecycle row carries unexpected fields")
+    return TypeAdapter(AwareDatetime).validate_python(value["wake_at"])
+
+
+def provider_submitted_at(row):
+    """When the provider accepted the waiting work (same typed JSON as parked_until)."""
+    parked_until(row)
+    return TypeAdapter(AwareDatetime).validate_python(json.loads(row.stage_message)["submitted_at"])
 
 
 class LeaseLost(RuntimeError):
@@ -163,7 +196,9 @@ class KeyspacesRunLease:
             await self.authority(self.run)
             row = await self._read()
             now, heartbeat = self._now(), self._heartbeat(row)
-            eligible = row.job_state == "PENDING"
+            eligible = row.job_state == "PENDING" or (
+                row.job_state == WAITING_PROVIDER and now >= parked_until(row)
+            )
             if recover:
                 eligible |= row.job_state == "INTERRUPTED" or (
                     row.job_state == "RUNNING"
@@ -175,7 +210,8 @@ class KeyspacesRunLease:
                 applied = await self._mutate(
                     row,
                     "job_state='RUNNING',owner_instance_id=%s,"
-                    "last_heartbeat_at=%s,updated_at=%s,completed_at=null",
+                    "last_heartbeat_at=%s,updated_at=%s,completed_at=null,"
+                    "stage='',stage_message=''",
                     [self.token, now, now],
                 )
                 if not applied:
@@ -218,6 +254,28 @@ class KeyspacesRunLease:
             ):
                 raise LeaseLost("heartbeat lost ownership")
             await self.guard()
+
+    async def park(self, wake_at, *, submitted_at):
+        """Hand the run to its provider: no owner, no heartbeat, woken at wake_at."""
+        wake_at = TypeAdapter(AwareDatetime).validate_python(wake_at)
+        submitted_at = TypeAdapter(AwareDatetime).validate_python(submitted_at)
+        async with self._lock:
+            await self.guard()
+            row = await self._read()
+            self._live(row)
+            now = self._now()
+            try:
+                if not await self._mutate(
+                    row,
+                    "job_state=%s,owner_instance_id='',last_heartbeat_at=%s,updated_at=%s,"
+                    "stage=%s,stage_message=%s",
+                    [WAITING_PROVIDER, now, now, PROVIDER_BATCH_STAGE,
+                     json.dumps({"wake_at": max(wake_at, now).isoformat(),
+                                 "submitted_at": submitted_at.isoformat()})],
+                ):
+                    raise LeaseLost("park transition lost ownership")
+            finally:
+                self.closed = True
 
     async def finish(self, *, completed, stop_reason=None):
         """Caller supplies success only after DurableGeminiRun.execute returns."""
@@ -297,7 +355,15 @@ async def run_position_attempt(
         if heart in done:
             await heart  # propagate heartbeat/authority failure
             raise LeaseLost("heartbeat stopped before worker completion")
-        result = await work
+        try:
+            result = await work
+        except ProviderWaiting as waiting:
+            # The host context already closed media and provider. Stop the
+            # heartbeat, then release the run in one guarded CAS.
+            stop.set()
+            await heart
+            await lease.park(waiting.wake_at, submitted_at=waiting.submitted_at)
+            return ParkedAttempt(wake_at=waiting.wake_at)
         stop.set()
         await heart
         await lease.finish(completed=True)

@@ -20,7 +20,7 @@ from service.analysis_run_schedule import (
     ScheduledAttempt,
     _stamp,
 )
-from service.analysis_run_worker import LeaseLost
+from service.analysis_run_worker import WAITING_PROVIDER, LeaseLost
 
 LOG = logging.getLogger(__name__)
 
@@ -64,8 +64,8 @@ class OwnerRunRecovery:
         return self.schedule.dispatcher
 
     def _classify(self, state):
-        if state is None or state.job_state in {"PENDING", "COMPLETED"}:
-            return NOT_STALLED
+        if state is None or state.job_state in {"PENDING", "COMPLETED", WAITING_PROVIDER}:
+            return NOT_STALLED  # a waiting run is with Google; the scheduler wakes it
         if state.job_state == "INTERRUPTED":
             return STALLED
         if state.job_state == "RUNNING":

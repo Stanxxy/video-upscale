@@ -48,6 +48,7 @@ from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 from service.analysis_gemini import GeminiProvider, S3GeminiArtifacts
 from service.analysis_gemini_batch import BatchGeminiProvider
+from bjj_analysis_core.execution import ProviderWaiting
 from service.analysis_media import S3RunMedia
 from service.analysis_preset import (
     gemini38_mma_preset,
@@ -508,7 +509,19 @@ class CoreRuns:
                                             max_parallel_calls=request.max_parallel_calls)
                     job.state = "running"
                     self._save(job)
-                    result = await host.execute(retry_failed=not fresh, reissue_unknown=not fresh)
+                    while True:
+                        try:
+                            result = await host.execute(retry_failed=not fresh, reissue_unknown=not fresh)
+                            break
+                        except ProviderWaiting as waiting:
+                            # Ready later in Studio: wait in-process, then continue the same run.
+                            job.state = "waiting"
+                            self._save(job)
+                            delay = (waiting.wake_at - datetime.now(timezone.utc)).total_seconds()
+                            await asyncio.sleep(max(1.0, delay))
+                            await guard()
+                            job.state = "running"
+                            self._save(job)
                     job.sink.revisions["positions"] = result.positions.model_dump(mode="json")
                     job.sink.revisions["techniques"] = result.techniques.model_dump(mode="json")
                     await host.cleanup()

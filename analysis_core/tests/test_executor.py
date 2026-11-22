@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 from bjj_analysis_core.execution import (
     CheckpointConflict,
+    ProviderWaiting,
     ExecutionCancelled,
     NotDispatched,
     ProviderReplyV1,
@@ -781,3 +782,76 @@ async def test_a_validator_correction_that_cannot_publish_is_reasked(run, config
         run, configuration, journal=journal, provider=provider, sink=sink, clock=clock
     )
     assert len(calls) == 2 and len(result.techniques.techniques) == 1
+
+
+
+def _answer_after(provider, node, waits):
+    """The provider answers ``node`` only after ``waits`` checks, like a batch job."""
+    checks = {}
+    original = FixtureProvider.generate
+
+    async def batch(run_, request, execution_id, call_id):
+        checks.setdefault(call_id, 0)
+        checks[call_id] += 1
+        if checks[call_id] <= waits:
+            at = provider.clock()
+            raise ProviderWaiting(at, submitted_at=at)
+        del provider.failures[node]
+        try:
+            return await original(provider, run_, request, execution_id, call_id)
+        finally:
+            provider.failures[node] = batch
+
+    provider.failures[node] = batch
+    return checks
+
+
+@pytest.mark.asyncio
+async def test_a_waiting_provider_parks_the_run_and_the_same_attempt_completes_later(
+    run, configuration, setup
+):
+    """x-aiquota M3.2: a batch answer arrives on a later execution of the run,
+    in the same attempt, with no recovery flags and no attempt spent."""
+    _, journal, clock, sink, provider = setup
+    checks = _answer_after(provider, "technique_analyze", waits=1)
+    with pytest.raises(ProviderWaiting):
+        await execute_pipeline(run, configuration, journal=journal, provider=provider, sink=sink, clock=clock)
+    [waiting] = [r for r in journal.records() if r.progress.node_id == "technique_analyze" and r.request]
+    assert (waiting.phase, waiting.progress.attempt) == ("running", 1)
+    assert waiting.waiting_until is not None and waiting.progress.error_code is None
+    assert "positions" in sink.outputs and "techniques" not in sink.outputs
+
+    result = await execute_pipeline(run, configuration, journal=journal, provider=provider, sink=sink, clock=clock)
+    assert len(result.techniques.techniques) == 1
+    [done] = [r for r in journal.records() if r.progress.node_id == "technique_analyze" and r.request]
+    assert (done.phase, done.progress.attempt, done.waiting_until) == ("succeeded", 1, None)
+    assert list(checks.values()) == [2]  # one call id, asked twice
+    assert [n for n, _ in provider.calls].count("position_scan") == 1  # finished work is not redone
+
+
+@pytest.mark.asyncio
+async def test_repeated_waits_never_spend_the_attempt_budget(run, configuration, setup):
+    _, journal, clock, sink, provider = setup
+    limit = StepRunner(run, configuration, journal, provider, clock=clock).config.max_call_attempts
+    _answer_after(provider, "technique_analyze", waits=limit + 3)
+    for _ in range(limit + 3):
+        with pytest.raises(ProviderWaiting):
+            await execute_pipeline(run, configuration, journal=journal, provider=provider, sink=sink, clock=clock)
+    result = await execute_pipeline(run, configuration, journal=journal, provider=provider, sink=sink, clock=clock)
+    assert len(result.techniques.techniques) == 1
+    attempts = {r.progress.attempt for r in journal.records(history=True)
+                if r.progress.node_id == "technique_analyze" and r.request}
+    assert attempts == {1}
+
+
+def test_only_a_dispatched_model_step_can_wait(run, configuration, setup):
+    _, journal, clock, sink, provider = setup
+    from bjj_analysis_core.execution import StepCheckpointV1
+    import asyncio as _asyncio
+
+    _asyncio.run(execute_pipeline(run, configuration, journal=journal, provider=provider, sink=sink, clock=clock))
+    succeeded = next(r for r in journal.records() if r.phase == "succeeded" and r.request is not None)
+    deterministic = next(r for r in journal.records() if r.request is None)
+    for record in (succeeded, deterministic):
+        with pytest.raises(ValueError, match="can wait"):
+            StepCheckpointV1.model_validate({**record.model_dump(), "waiting_until": clock()})

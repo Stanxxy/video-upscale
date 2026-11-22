@@ -21,8 +21,10 @@ import base64
 import hashlib
 import json
 import logging
-import time
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
+
+from bjj_analysis_core.execution import ProviderWaiting
 
 from bjj_analysis_core.requests import PreparedCallV1, canonical_json, strict_json
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
@@ -48,19 +50,35 @@ ENDED = {
 }
 MAX_BATCH_INPUT_BYTES = 512 * 1024 * 1024
 MAX_BATCH_OUTPUT_BYTES = 256 * 1024 * 1024
+MAX_WAIT = timedelta(hours=48)  # Google keeps a batch at most 24 h; two stages per run
+
+
+def wake_after(age):
+    """How long a parked run waits before checking its batch job again.
+
+    Jobs measured in M3.0 returned in 2.4-4.0 min, so the first checks come
+    quickly and later ones back off to keep a stuck job cheap to watch.
+    """
+    if age < timedelta(minutes=5):
+        return timedelta(minutes=1)
+    if age < timedelta(minutes=15):
+        return timedelta(minutes=2)
+    if age < timedelta(hours=1):
+        return timedelta(minutes=5)
+    return timedelta(minutes=10)
 
 
 class BatchGeminiProvider(GeminiProvider):
     name = "google-gemini-batch-v1"
     collects_batches = True  # the executor dispatches whole stages at once
 
-    def __init__(self, *args, settle_seconds=3.0, poll_seconds=20.0, max_wait_seconds=48 * 3600, **kwargs):
+    def __init__(self, *args, settle_seconds=3.0, **kwargs):
         super().__init__(*args, **kwargs)
-        self.settle_seconds, self.poll_seconds, self.max_wait = settle_seconds, poll_seconds, max_wait_seconds
-        self._pending = {}  # execution_id -> (model, body, future)
+        self.settle_seconds = settle_seconds
+        self._pending = {}  # execution_id -> (model, body, call_id, future)
         self._timer = None
-        self._jobs = {}  # job name -> task resolving {execution_id: raw response bytes}
-        self.submitted = []  # job names, in order (spike evidence)
+        self._jobs = {}  # job name -> one check: answers when done, None while pending
+        self.submitted = []  # job names, in order
 
     # -- generate ---------------------------------------------------------------
     async def generate(self, run, request, execution_id, call_id):
@@ -70,13 +88,21 @@ class BatchGeminiProvider(GeminiProvider):
         execution_id, call_id = UUID(str(execution_id)), UUID(str(call_id))
         body = self._request_body(request)
         await self.guard(self.run)
-        job = await self._ledger_job(execution_id)
-        if job is None:
+        recorded = await self._ledger_job(execution_id)
+        if recorded is None:
             future = asyncio.get_running_loop().create_future()
             self._pending[execution_id] = (request.config.model, body, call_id, future)
             self._arm()
-            job = await future
+            recorded = await future
+        job, submitted_at = recorded
         answers = await self._job_answers(job)
+        if answers is None:
+            # Not done: the run parks and a later execution asks again. The
+            # ledger keeps the job, so asking again never submits twice.
+            age = self.now() - submitted_at
+            if age > MAX_WAIT:
+                raise GeminiBoundaryError(f"batch {job} unanswered after {MAX_WAIT}")
+            raise ProviderWaiting(self.now() + wake_after(age), submitted_at=submitted_at)
         item = answers.get(str(execution_id))
         if item is None:
             raise GeminiBoundaryError(f"batch {job} returned no answer for this step")
@@ -155,16 +181,18 @@ class BatchGeminiProvider(GeminiProvider):
         if response.status_code != 200:
             raise GeminiBoundaryError(f"batch create HTTP {response.status_code}; receipt retained")
         job = response.json()["name"]
+        submitted_at = self.now()
         # Ledger before anyone waits: a resume finds the job instead of resubmitting.
         await asyncio.gather(*(
             self.artifacts.retain("batch_ledger", execution_id,
                                   dict(run_id=str(self.run.spec.run_id), execution_id=str(execution_id),
-                                       call_id=str(call_id), batch=job, create_receipt=created.key))
+                                       call_id=str(call_id), batch=job, create_receipt=created.key,
+                                       submitted_at=submitted_at.isoformat()))
             for execution_id, _, call_id, _ in items
         ))
         self.submitted.append(job)
         logger.info("batch %s submitted: %d requests, model %s, receipt %s", job, len(items), model, created.key)
-        return job
+        return job, submitted_at
 
     async def _upload_jsonl(self, data):
         start = await self.http.post(
@@ -196,7 +224,7 @@ class BatchGeminiProvider(GeminiProvider):
 
         def find():
             listed = client.list_objects_v2(Bucket=bucket, Prefix=f"{root}/batch_ledger/{execution_id}/")
-            undelivered = set()
+            undelivered = {}
             for item in listed.get("Contents", []):
                 body = client.get_object(Bucket=bucket, Key=item["Key"])["Body"]
                 try:
@@ -207,36 +235,33 @@ class BatchGeminiProvider(GeminiProvider):
                     Bucket=bucket, Prefix=f"{root}/generate/{entry['call_id']}/", MaxKeys=1
                 ).get("KeyCount", 0)
                 if not answered:
-                    undelivered.add(entry["batch"])
+                    undelivered[entry["batch"]] = datetime.fromisoformat(entry["submitted_at"])
             if len(undelivered) > 1:
                 raise GeminiBoundaryError("step waits on more than one batch")
-            return next(iter(undelivered), None)
+            return next(iter(undelivered.items()), None)
 
         return await _blocking(find)
 
     def _job_answers(self, job):
+        """One shared check per job for every step of the stage in this execution."""
         if job not in self._jobs:
-            self._jobs[job] = asyncio.ensure_future(self._wait(job))
+            self._jobs[job] = asyncio.ensure_future(self._check(job))
         return self._jobs[job]
 
-    async def _wait(self, job):
-        started = time.monotonic()
-        while True:
-            await self.guard(self.run)
-            response = await self.http.get(self._url(f"{ORIGIN}/v1beta/{job}"))
-            if response.status_code != 200:
-                raise GeminiBoundaryError(f"batch get HTTP {response.status_code}")
-            value = response.json()
-            meta = value.get("metadata", value)
-            state = meta.get("state") or value.get("state")
-            if state in SUCCEEDED:
-                break
-            if state in ENDED:
-                await self.artifacts.retain("batch_get", uuid4(), dict(run_id=str(self.run.spec.run_id), body=value))
-                raise GeminiBoundaryError(f"batch {job} ended {state}")
-            if time.monotonic() - started > self.max_wait:
-                raise GeminiBoundaryError(f"batch {job} still {state} after {self.max_wait}s")
-            await asyncio.sleep(self.poll_seconds)
+    async def _check(self, job):
+        await self.guard(self.run)
+        response = await self.http.get(self._url(f"{ORIGIN}/v1beta/{job}"))
+        if response.status_code != 200:
+            raise GeminiBoundaryError(f"batch get HTTP {response.status_code}")
+        value = response.json()
+        meta = value.get("metadata", value)
+        state = meta.get("state") or value.get("state")
+        if state in ENDED:
+            await self.artifacts.retain("batch_get", uuid4(), dict(run_id=str(self.run.spec.run_id), body=value))
+            raise GeminiBoundaryError(f"batch {job} ended {state}")
+        if state not in SUCCEEDED:
+            self._jobs.pop(job, None)  # the next execution checks again
+            return None
         await self.artifacts.retain("batch_get", uuid4(), dict(run_id=str(self.run.spec.run_id), body=value))
         output = value.get("response") or meta.get("output") or {}
         name = output.get("responsesFile") or (meta.get("dest") or {}).get("fileName")
@@ -252,5 +277,5 @@ class BatchGeminiProvider(GeminiProvider):
             if line.strip():
                 item = json.loads(line)
                 answers[item.get("key") or (item.get("metadata") or {}).get("key")] = item
-        logger.info("batch %s done after %.1f min: %d answers", job, (time.monotonic() - started) / 60, len(answers))
+        logger.info("batch %s done: %d answers", job, len(answers))
         return answers

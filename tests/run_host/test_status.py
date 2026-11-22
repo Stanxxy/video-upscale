@@ -400,3 +400,34 @@ async def test_unknown_run_is_not_an_empty_status(setup_dispatch):
     with pytest.raises(AnnotationNotFound):
         await dispatch.status(uuid4())
     assert wire.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_parked_run_reads_as_waiting_on_its_provider_not_running(setup_dispatch):
+    """x-aiquota M3.2: the snapshot says Google has the work and when the engine looks again."""
+    dispatch, run, wire, _, _, _ = setup_dispatch
+    lease = await registered(dispatch, run, running=True)
+    submitted = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(minutes=2)
+    wake = submitted + timedelta(minutes=5)
+    await lease.park(wake, submitted_at=submitted)
+    view = await dispatch.status(run.spec.run_id)
+    assert view.lifecycle.recorded_state == "WAITING_PROVIDER"
+    assert view.lifecycle.heartbeat_freshness == "not_running"
+    assert view.lifecycle.lease_expires_at is None
+    assert (view.lifecycle.provider_submitted_at, view.lifecycle.waiting_until) == (submitted, wake)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage, message", [
+    ("provider_batch", "not json"),
+    ("provider_batch", '{"wake_at": "2026-11-22T10:00:00+00:00"}'),
+    ("", '{"wake_at": "2026-11-22T10:00:00+00:00", "submitted_at": "2026-11-22T09:00:00+00:00"}'),
+])
+async def test_malformed_waiting_evidence_fails_closed(setup_dispatch, stage, message):
+    dispatch, run, wire, _, _, _ = setup_dispatch
+    lease = await registered(dispatch, run, running=True)
+    now = datetime.now(timezone.utc)
+    await lease.park(now + timedelta(minutes=1), submitted_at=now)
+    update(dispatch, run, "stage=%s, stage_message=%s", [stage, message])
+    with pytest.raises(StatusEvidenceError):
+        await dispatch.status(run.spec.run_id)

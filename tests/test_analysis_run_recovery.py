@@ -101,6 +101,7 @@ def _recovery(states, **kwargs):
         (_state("FAILED"), NOT_RECOVERABLE),
         (_state("CANCELLED"), NOT_RECOVERABLE),
         (_state("AWAITING_CORRECTION"), NOT_RECOVERABLE),
+        (_state("WAITING_PROVIDER", heartbeat_age=3600), NOT_STALLED),  # Ready later: with Google
     ],
 )
 def test_eligibility_follows_the_lifecycle_row(state, expected):

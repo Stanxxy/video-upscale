@@ -5,9 +5,14 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from test_host import case
 
+from bjj_analysis_core.execution import ProviderWaiting
 from service.analysis_run_worker import (
+    WAITING_PROVIDER,
     KeyspacesRunLease,
     LeaseLost,
+    ParkedAttempt,
+    parked_until,
+    provider_submitted_at,
     run_position_attempt,
 )
 from service.analysis_media import DeterministicPreparationRejected
@@ -21,7 +26,7 @@ def leases(checkpoint_database, inputs, resolver):
         job_id text PRIMARY KEY, video_id text, user_id text, pipeline_kind text,
         job_state text, owner_instance_id text, last_heartbeat_at timestamp,
         started_at timestamp, updated_at timestamp, completed_at timestamp,
-        stage text, progress_percent double, error_message text
+        stage text, progress_percent double, error_message text, stage_message text
     )""")
     authority = resolver.guard
 
@@ -510,3 +515,71 @@ async def test_completed_dag_survives_lifecycle_commit_loss_without_more_inferen
         assert result.techniques.techniques == ()
         assert seen["wire"].calls == [] and seen["published"] == []
         assert (await replacement._read()).job_state == "COMPLETED"
+
+
+
+def waiting_host(run, wake_at, submitted_at):
+    """A host whose model calls are with Google (Ready later): execute parks."""
+    closed = []
+
+    class Host:
+        def __init__(self):
+            self.run = run
+
+        async def execute(self, **_):
+            raise ProviderWaiting(wake_at, submitted_at=submitted_at)
+
+    @asynccontextmanager
+    async def factory(guard):
+        try:
+            yield Host()
+        finally:
+            closed.append(True)
+
+    return factory, closed
+
+
+@pytest.mark.asyncio
+async def test_a_waiting_provider_parks_the_run_and_releases_its_lease(leases):
+    """x-aiquota M3.2: no owner, no heartbeat, nobody claims it before wake_at."""
+    lease = leases()
+    await lease.register()
+    now = datetime.now(timezone.utc)
+    factory, closed = waiting_host(lease.run, now + timedelta(minutes=5), now - timedelta(seconds=30))
+    outcome = await run_position_attempt(lease, factory, heartbeat_seconds=0.01)
+    assert isinstance(outcome, ParkedAttempt) and closed == [True]  # media/provider closed
+    row = await lease._read()
+    assert (row.job_state, row.owner_instance_id, row.stage) == (WAITING_PROVIDER, "", "provider_batch")
+    assert parked_until(row) == outcome.wake_at
+    assert provider_submitted_at(row) == now - timedelta(seconds=30)
+    for recover in (False, True):
+        with pytest.raises(LeaseLost):
+            await leases().acquire(recover=recover)
+
+
+@pytest.mark.asyncio
+async def test_a_due_parked_run_is_claimed_by_exactly_one_worker(leases):
+    lease = leases()
+    await lease.register()
+    now = datetime.now(timezone.utc)
+    factory, _ = waiting_host(lease.run, now, now)  # due at once
+    await run_position_attempt(lease, factory, heartbeat_seconds=0.01)
+    first, second = leases(), leases()
+    outcomes = await asyncio.gather(first.acquire(), second.acquire(), return_exceptions=True)
+    assert sum(o is None for o in outcomes) == 1
+    assert sum(isinstance(o, LeaseLost) for o in outcomes) == 1
+    winner = first if outcomes[0] is None else second
+    row = await winner._read()
+    assert (row.job_state, row.owner_instance_id, row.stage, row.stage_message) == ("RUNNING", winner.token, "", "")
+    await winner.finish(completed=True)
+
+
+@pytest.mark.asyncio
+async def test_a_stale_owner_cannot_park_a_run_it_lost(leases):
+    lease = leases()
+    await lease.register()
+    await lease.acquire()
+    lease.closed = True  # e.g. a heartbeat failure latched the attempt
+    with pytest.raises(LeaseLost):
+        await lease.park(datetime.now(timezone.utc), submitted_at=datetime.now(timezone.utc))
+    assert (await lease._read()).job_state == "RUNNING"
