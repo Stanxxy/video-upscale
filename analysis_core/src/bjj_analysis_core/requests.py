@@ -7,6 +7,7 @@ This module performs no network I/O and imports no lab, service or database code
 import hashlib
 import json
 from functools import cache
+from uuid import UUID
 from typing import Literal
 
 from bjj_analysis_core import CORE_VERSION
@@ -44,7 +45,7 @@ from shared_lib.models.analysis_contracts import (
     TimeRangeMs,
     VersionedAnalysisContract,
 )
-from shared_lib.models.analysis_results import AnalysisRevisionV1
+from shared_lib.models.analysis_results import AnalysisRevisionV1, TechniqueEventV1
 from shared_lib.models.analysis_run_record import RegisteredAIRunV1
 
 NodeId = Literal[
@@ -367,6 +368,32 @@ def prepare_call(
     )
 
 
+_PROBE_ID = UUID(int=0)  # validation only; normalization assigns the real identities
+
+
+def _publishable(technique, pack, prepared):
+    """Reject a technique answer that normalization could never publish.
+
+    Builds the event exactly as ``normalization.normalize_techniques`` will, so a
+    model answer that breaks a ``TechniqueEventV1`` rule (empty or repeated action
+    classes, an actor outside the two players, ...) fails this one provider call as
+    invalid output, where it can be re-asked, instead of failing the whole run's
+    deterministic publish after every call was paid for.
+    """
+    players = tuple(p["player_id"] for p in strict_json(prepared.initial_prompt)["ordered_players"])
+    TechniqueEventV1(
+        analysis_id=_PROBE_ID,
+        scope_id=_PROBE_ID,
+        source_run_id=_PROBE_ID,
+        item_id=_PROBE_ID,
+        origin="ai",
+        bounds=technique.bounds,
+        player_ids=players,
+        taxonomy_id=pack.taxonomy_id,
+        **technique.model_dump(exclude={"schema_version", "bounds"}),
+    )
+
+
 def parse_response(prepared, response_text):
     """Reject malformed JSON/schema/window violations; no repairs or code fences."""
     prepared = PreparedCallV1.model_validate(prepared)
@@ -471,6 +498,7 @@ def parse_response(prepared, response_text):
     elif isinstance(result, TechniqueAnalysisV1):
         if result.bounds != window:
             raise ValueError("analysis must preserve the authoritative temporal bounds")
+        _publishable(result, pack, prepared)
     elif isinstance(result, TechniqueDecisionV1):
         if result.candidate_id != context["candidate_id"]:
             raise ValueError("validator addresses a different candidate")
@@ -478,4 +506,6 @@ def parse_response(prepared, response_text):
             result.technique.bounds
         ):
             raise ValueError("validated technique exceeds observation window")
+        if result.technique is not None:
+            _publishable(result.technique, pack, prepared)
     return result
