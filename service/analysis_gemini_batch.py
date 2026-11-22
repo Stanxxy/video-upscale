@@ -5,10 +5,13 @@ Same requests as ``GeminiProvider`` (``_request_body``), same response handling
 collected for ``settle_seconds`` after the last arrival, written as one JSONL file,
 and submitted as one ``batchGenerateContent`` job (half the interactive price).
 
-Durability: before a job is created, a ``batch_ledger`` receipt is retained for
-every step (keyed by ``execution_id``, which survives a resume; ``call_id`` does
-not). A resumed ``generate`` for a step already in a ledger polls that job and
-never submits the call again. Each answer is retained as an ordinary ``generate``
+Durability: before anyone waits on a job, a ``batch_ledger`` receipt is retained
+for every step (keyed by ``execution_id``, which survives a resume; ``call_id``
+does not) naming the job and the attempt's ``call_id``. A resumed ``generate`` for
+a step whose recorded job never delivered its answer polls that job and never
+submits the call again. Once an attempt's answer was retained (a ``generate``
+receipt exists for its ``call_id``), a later attempt is a re-ask after an invalid
+answer and is submitted fresh. Each answer is retained as an ordinary ``generate``
 receipt whose context says ``delivery: batch``, so cost reports price it at the
 batch rate.
 """
@@ -70,7 +73,7 @@ class BatchGeminiProvider(GeminiProvider):
         job = await self._ledger_job(execution_id)
         if job is None:
             future = asyncio.get_running_loop().create_future()
-            self._pending[execution_id] = (request.config.model, body, future)
+            self._pending[execution_id] = (request.config.model, body, call_id, future)
             self._arm()
             job = await future
         answers = await self._job_answers(job)
@@ -113,17 +116,17 @@ class BatchGeminiProvider(GeminiProvider):
     async def _flush(self):
         pending, self._pending, self._timer = self._pending, {}, None
         by_model = {}
-        for execution_id, (model, body, future) in pending.items():
-            by_model.setdefault(model, []).append((execution_id, body, future))
+        for execution_id, (model, body, call_id, future) in pending.items():
+            by_model.setdefault(model, []).append((execution_id, body, call_id, future))
         for model, items in by_model.items():
             try:
                 job = await self._submit(model, items)
             except BaseException as error:  # every waiting step sees the failure
-                for _, _, future in items:
+                for *_, future in items:
                     if not future.done():
                         future.set_exception(error)
                 continue
-            for _, _, future in items:
+            for *_, future in items:
                 if not future.done():
                     future.set_result(job)
 
@@ -133,7 +136,7 @@ class BatchGeminiProvider(GeminiProvider):
         self._file(strict_json(raw), mime_type=self.uploaded.mime_type, expected_name=self.uploaded.name)
         lines = "".join(
             json.dumps({"key": str(execution_id), "request": body}, separators=(",", ":")) + "\n"
-            for execution_id, body, _ in items
+            for execution_id, body, _, _ in items
         ).encode()
         if len(lines) > MAX_BATCH_INPUT_BYTES:
             raise GeminiBoundaryError("batch input exceeds limit")
@@ -147,7 +150,7 @@ class BatchGeminiProvider(GeminiProvider):
             uuid4(),
             dict(run_id=str(self.run.spec.run_id), status=response.status_code, model=model,
                  input_file=input_file, input_sha256=hashlib.sha256(lines).hexdigest(),
-                 keys=[str(e) for e, _, _ in items], body=response.text[:MAX_RESPONSE_BYTES]),
+                 keys=[str(e) for e, *_ in items], body=response.text[:MAX_RESPONSE_BYTES]),
         )
         if response.status_code != 200:
             raise GeminiBoundaryError(f"batch create HTTP {response.status_code}; receipt retained")
@@ -156,8 +159,8 @@ class BatchGeminiProvider(GeminiProvider):
         await asyncio.gather(*(
             self.artifacts.retain("batch_ledger", execution_id,
                                   dict(run_id=str(self.run.spec.run_id), execution_id=str(execution_id),
-                                       batch=job, create_receipt=created.key))
-            for execution_id, _, _ in items
+                                       call_id=str(call_id), batch=job, create_receipt=created.key))
+            for execution_id, _, call_id, _ in items
         ))
         self.submitted.append(job)
         logger.info("batch %s submitted: %d requests, model %s, receipt %s", job, len(items), model, created.key)
@@ -188,22 +191,26 @@ class BatchGeminiProvider(GeminiProvider):
 
     # -- ledger and results ---------------------------------------------------------
     async def _ledger_job(self, execution_id):
-        prefix = (
-            f"analysis-provider/v1/{self.run.spec.analysis_id}/{self.run.spec.run_id}/batch_ledger/{execution_id}/"
-        )
+        root = f"analysis-provider/v1/{self.run.spec.analysis_id}/{self.run.spec.run_id}"
+        client, bucket = self.artifacts.client, self.artifacts.bucket
 
         def find():
-            listed = self.artifacts.client.list_objects_v2(Bucket=self.artifacts.bucket, Prefix=prefix)
-            jobs = set()
+            listed = client.list_objects_v2(Bucket=bucket, Prefix=f"{root}/batch_ledger/{execution_id}/")
+            undelivered = set()
             for item in listed.get("Contents", []):
-                body = self.artifacts.client.get_object(Bucket=self.artifacts.bucket, Key=item["Key"])["Body"]
+                body = client.get_object(Bucket=bucket, Key=item["Key"])["Body"]
                 try:
-                    jobs.add(strict_json(body.read(MAX_RESPONSE_BYTES))["batch"])
+                    entry = strict_json(body.read(MAX_RESPONSE_BYTES))
                 finally:
                     body.close()
-            if len(jobs) > 1:
-                raise GeminiBoundaryError("step recorded in more than one batch")
-            return next(iter(jobs), None)
+                answered = client.list_objects_v2(
+                    Bucket=bucket, Prefix=f"{root}/generate/{entry['call_id']}/", MaxKeys=1
+                ).get("KeyCount", 0)
+                if not answered:
+                    undelivered.add(entry["batch"])
+            if len(undelivered) > 1:
+                raise GeminiBoundaryError("step waits on more than one batch")
+            return next(iter(undelivered), None)
 
         return await _blocking(find)
 

@@ -125,14 +125,32 @@ async def test_a_resumed_step_waits_for_its_recorded_job_and_never_resubmits(res
         await uploaded(provider)
         request = request_for(media)
         execution_id = uuid4()
-        await provider.generate(media.run, request, execution_id, uuid4())
-        assert len(wire.batch_creates()) == 1
+        wire.polls_before_done = 10**6  # the job is still running when the engine dies
+        waiting = asyncio.ensure_future(provider.generate(media.run, request, execution_id, uuid4()))
+        while not wire.batch_creates():
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.05)  # ledger written
+        waiting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiting
+        wire.polls_before_done = 1
         # A fresh provider (engine restart) with a new attempt id for the same step.
         async with batch_case(resolver, inputs, s3, wire=wire) as (resumed, _, _):
             await uploaded(resumed)
             reply = await resumed.generate(media.run, request, execution_id, call_id := uuid4())
         assert len(wire.batch_creates()) == 1
         assert reply.usage.call_id == call_id
+
+
+@pytest.mark.asyncio
+async def test_a_reask_after_a_delivered_answer_is_a_new_job(resolver, inputs, s3):
+    async with batch_case(resolver, inputs, s3) as (provider, wire, media):
+        await uploaded(provider)
+        request = request_for(media)
+        execution_id = uuid4()
+        await provider.generate(media.run, request, execution_id, uuid4())
+        await provider.generate(media.run, request, execution_id, uuid4())  # invalid answer: ask again
+        assert len(wire.batch_creates()) == 2
 
 
 @pytest.mark.asyncio
