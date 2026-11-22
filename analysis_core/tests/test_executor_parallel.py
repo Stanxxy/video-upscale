@@ -412,3 +412,25 @@ async def test_without_check_nodes_the_first_pass_is_published_with_no_check_cal
     assert [p.bounds for p in result.positions.positions] == [p.bounds for p in checked.positions.positions]
     assert len(result.techniques.techniques) == len(checked.techniques.techniques) == len(EVENTS)
     assert [t.bounds for t in result.techniques.techniques] == [t.bounds for t in checked.techniques.techniques]
+
+
+@pytest.mark.asyncio
+async def test_a_batching_provider_receives_each_stage_at_once_with_identical_results(
+    run, configuration, lanes
+):
+    """Batch delivery (x-aiquota M3.0): the run-wide bound is lifted so a stage is one job."""
+    delays = dict.fromkeys(
+        ("technique_scan", "technique_critique", "technique_analyze", "technique_validate"),
+        0.02,
+    )
+    serial, batched = lanes("serial"), lanes("batched", delays=delays)
+    batched[3].collects_batches = True
+    one = await execute(run, configuration, serial)
+    many = await execute(run, configuration, batched, max_parallel_calls=1)
+
+    assert identity(serial[0]) == identity(batched[0])
+    assert one.techniques.techniques == many.techniques.techniques
+    # Every analyze item of the stage was in flight together, far above the bound of 1.
+    analyze = sum(1 for node, _ in batched[3].calls if node == "technique_analyze")
+    assert analyze >= len(EVENTS)
+    assert batched[3].max_by_node["technique_analyze"] == analyze
