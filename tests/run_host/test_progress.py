@@ -345,14 +345,33 @@ async def test_revocation_during_read_returns_no_partial_projection(setup_dispat
     async def revoked(candidate):
         nonlocal count
         count += 1
-        if count == 5:
+        # The last check runs after every checkpoint read: revoking there must
+        # still return nothing that was read.
+        if count == 3:
             raise PermissionError("read access revoked")
         await authority(candidate)
 
     dispatch._authority = revoked
     with pytest.raises(PermissionError):
         await dispatch.progress(run.spec.run_id)
-    assert count == 5 and wire.calls == []
+    assert count == 3 and wire.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_snapshot_checks_access_a_fixed_number_of_times(setup_dispatch):
+    """Production 2026-11-27: checking around every step made one MMA snapshot take
+    about 19 s. Access is checked before and after the whole read, not per step."""
+    dispatch, run, _, _, _, _ = setup_dispatch
+    authority, count = dispatch._authority, 0
+
+    async def counted(candidate):
+        nonlocal count
+        count += 1
+        await authority(candidate)
+
+    dispatch._authority = counted
+    view = await dispatch.progress(run.spec.run_id)
+    assert len(view.nodes) > 3 and count == 3
 
 
 @pytest.mark.asyncio
