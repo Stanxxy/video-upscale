@@ -8,6 +8,7 @@ from uuid import UUID
 
 from bjj_analysis_observer.checkpoints import KeyspacesCheckpointReader
 from bjj_analysis_observer.lifecycle import read_status
+from bjj_analysis_observer.progress import checked_by_snapshot
 from shared_lib.infrastructure.annotation_store import AnnotationNotFound
 from shared_lib.models.analysis_contracts import PrincipalRef
 
@@ -58,7 +59,7 @@ class AuthorizedRunObserver:
             self.s3,
             keyspace=self.keyspace,
             bucket=self.bucket,
-            guard=guard,
+            guard=checked_by_snapshot,
             timeout=self.timeout,
         )
         return await read_status(

@@ -4,6 +4,7 @@ Checkpoint statuses are last recorded facts, NOT worker liveness. Callers must
 separately project lifecycle/heartbeat and delivery readiness. No synthetic percent.
 """
 
+import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ from shared_lib.models.analysis_progress import FANOUT_NODES, SKIPPABLE_NODES, W
 HOST_NODES = {"provider_upload", "dag_complete", "provider_cleanup"}
 FANOUTS = FANOUT_NODES
 SUPPORTED_CORE_VERSION = "0.3.0"
+PARALLEL_ITEM_READS = 8
 
 
 class ProgressEvidenceError(ValueError):
@@ -49,6 +51,11 @@ class ProgressView:
     nodes: tuple[NodeView, ...]
 
 
+async def checked_by_snapshot():
+    """Journal guard for snapshot reads: read_progress/read_status check authority
+    before the first and after the last read of the whole snapshot instead."""
+
+
 def _step(run_id, node, item=None):
     suffix = f"host:v1:{node}" if node in HOST_NODES else f"step:v1:{node}:{item or ''}"
     return uuid5(run_id, suffix)
@@ -57,8 +64,11 @@ def _step(run_id, node, item=None):
 async def read_progress(journal, *, guard, max_item_reads=2000):
     """Reconstruct bounded topology from durable discovery, never replay execution.
 
-    The guard must reauthorize the registered run/current reader on every I/O;
-    completed runs are readable without granting a worker lease. No raw prompts,
+    The guard reauthorizes the registered run/current reader before the first read
+    and again after the last one; nothing read in between is returned unless that
+    final check passes. (Rechecking around every step made one snapshot of an MMA
+    run take about 19 s of sequential round trips, longer than the stream allows.)
+    Completed runs are readable without granting a worker lease. No raw prompts,
     results, usage prices or private object references leave this projection.
     """
     run = journal.run
@@ -80,6 +90,7 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
     except ValueError as error:
         raise ProgressEvidenceError("registered run has a mismatched taxonomy") from error
     order = WORKFLOW_NODE_ORDERS[run.spec.workflow_id]
+    await guard()
     # The run's own admitted configuration says which check steps it leaves out and,
     # for the MMA workflows, where its strike or sequence windows and ground phases are.
     config_bytes = await journal.config_bytes()
@@ -101,7 +112,6 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
             raise ProgressEvidenceError("registered run configuration is unusable") from error
 
     async def read(node, item=None):
-        await guard()
         step = _step(run.spec.run_id, node, item)
         record = await journal.read(step)
         if record is not None and (
@@ -114,8 +124,13 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
             or (node in HOST_NODES and record.request is not None)
         ):
             raise ProgressEvidenceError("checkpoint differs from expected execution")
-        await guard()
         return record
+
+    reads = asyncio.Semaphore(PARALLEL_ITEM_READS)
+
+    async def read_item(node, item):
+        async with reads:
+            return await read(node, item)
 
     # Read topology sources before their dependent summaries. A racing read that
     # cannot justify a summary fails explicitly rather than claiming empty success.
@@ -199,7 +214,8 @@ async def read_progress(journal, *, guard, max_item_reads=2000):
             continue
         if len(ids) != len(set(ids)):
             raise ProgressEvidenceError("duplicate fanout execution identities")
-        records = [await read(node, item) for item in ids]
+        # Fan-out items are independent of each other: read them in parallel, in order.
+        records = await asyncio.gather(*(read_item(node, item) for item in ids))
         done = sum(
             record is not None and record.phase == "succeeded" for record in records
         )

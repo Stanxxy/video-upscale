@@ -17,7 +17,7 @@ from bjj_analysis_core.executor import MAX_PARALLEL_CALLS
 from bjj_analysis_core.requests import NodeId
 from bjj_analysis_observer.checkpoints import KeyspacesCheckpointReader
 from bjj_analysis_observer.lifecycle import read_status
-from bjj_analysis_observer.progress import read_progress
+from bjj_analysis_observer.progress import checked_by_snapshot, read_progress
 from bjj_analysis_observer.results import read_result_status
 from shared_lib.models.analysis_contracts import PrivateArtifactRef
 
@@ -258,7 +258,7 @@ class PositionRunDispatcher:
             self.s3,
             bucket=self.bucket,
             keyspace=self.keyspace,
-            guard=guard,
+            guard=checked_by_snapshot,
             timeout=self.checkpoint_timeout,
         )
         return await read_progress(journal, guard=guard, max_item_reads=max_item_reads)
@@ -278,7 +278,7 @@ class PositionRunDispatcher:
             self.s3,
             bucket=self.bucket,
             keyspace=self.keyspace,
-            guard=guard,
+            guard=checked_by_snapshot,
             timeout=self.checkpoint_timeout,
         )
         return await read_status(
